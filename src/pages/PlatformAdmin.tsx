@@ -1,26 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowUpRight, Building2, Check, CircleDollarSign, Clock,
-  Pencil as Edit2, Gauge, Layers, LineChart, Loader2, LogOut, Mail, MessageSquare, Pause, Plus,
+  Activity, ArrowUpRight, Building2, Check, CircleDollarSign, Clock,
+  Pencil as Edit2, Gauge, LineChart, Loader2, LogOut, Mail, MessageSquare, Pause, Plus,
   Power, Search, Send, Shield, RotateCcw, Trash2, Users, X,
-  Wrench as Wrench_, Store as Store_, ShoppingBag as ShoppingBag_, Shirt as Shirt_, Cpu as Cpu_,
+  ShoppingBag as ShoppingBag_,
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
-  Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
-  ShoppingCart, Truck, BarChart3, Monitor, Globe, ImagePlus, HeartPulse, Bell, ArrowRightLeft,
-  Bug, RefreshCw, Lock, HardDrive, ChevronLeft, ChevronRight, Menu, MoreHorizontal,
+  Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Library,
+  BarChart3, Monitor, Globe, HeartPulse, Bell, ArrowRightLeft,
+  RefreshCw, Lock, HardDrive, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Menu,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { useApp } from '../context/AppContext';
 import './PlatformAdmin.css';
-import { Modal, ConfirmDialog } from '../components/Modal';
+import { PlatformConfirmation, PlatformWorkPage } from '../components/PlatformWorkPage';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { formatSubscriptionDiscount } from '../lib/subscriptionPayments';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
 import { AdminSubscriptionPayments } from '../components/AdminSubscriptionPayments';
 import { CentralizedBackups } from '../components/CentralizedBackups';
-import { LandingConfigSection as LandingConfigSectionNew } from '../components/LandingConfigSection';
-import { LOGIN_ICON_MAP, DEFAULT_LOGIN_MODULES, type LoginModule, type TextAccent } from '../lib/loginConfig';
+import { LandingConfigSection } from '../components/LandingConfigSection';
+import { LOGIN_ICON_MAP, DEFAULT_LOGIN_CONFIG, DEFAULT_LOGIN_MODULES, type LoginConfig, type LoginModule, type TextAccent } from '../lib/loginConfig';
+import { AccentedText } from '../components/AccentedText';
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const doFetch = async (accessToken: string) => {
@@ -52,12 +53,9 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
   return data;
 }
 
-const SEV = {
-  info: { bg: 'bg-neutral-50', border: 'border-neutral-200', text: 'text-neutral-800', icon: 'text-neutral-700', label: 'Info' },
-  success: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800', icon: 'text-emerald-600', label: 'Succès' },
-  warning: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-800', icon: 'text-amber-600', label: 'Avertissement' },
-  critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', icon: 'text-red-600', label: 'Critique' },
-} as const;
+const messageTypes: Record<string, string> = {
+  info: 'Information', success: 'Succès', warning: 'Avertissement', critical: 'Critique',
+};
 
 const navigation = [
   {
@@ -106,30 +104,31 @@ function PlatformLoading() {
 
 export function PlatformAdmin() {
   const { profile, signOut } = useApp();
+  const { setInlineTarget } = useToast();
   const [section, setSection] = useState<Section>('overview');
   const [subscription, setSubscription] = useState<SubscriptionSelection>({ tab: 'followup', filter: 'all' });
   const [collapsed, setCollapsed] = useState(false);
-  const drawer = useRef<HTMLDialogElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
   const title = navigationItems.find(item => item.key === section)?.label;
   const operator = profile?.full_name || 'Super-administrateur';
 
   useEffect(() => {
     const desktop = window.matchMedia('(min-width: 1024px)');
-    const closeDrawer = () => {
-      if (desktop.matches && drawer.current?.open) drawer.current.close();
+    const closeMenu = () => {
+      if (desktop.matches) setMenuOpen(false);
     };
-    desktop.addEventListener('change', closeDrawer);
-    return () => desktop.removeEventListener('change', closeDrawer);
+    desktop.addEventListener('change', closeMenu);
+    return () => desktop.removeEventListener('change', closeMenu);
   }, []);
 
   useEffect(() => {
     if (scroll.current) scroll.current.scrollTop = 0;
-  }, [section, subscription.tab]);
+  }, [section, subscription.tab, menuOpen]);
 
   const goTo = (next: Section) => {
     setSection(next);
-    if (drawer.current?.open) drawer.current.close();
+    setMenuOpen(false);
   };
 
   const openSubscriptions = (filter: SubscriptionFilter = 'all', tenantId?: string) => {
@@ -157,56 +156,49 @@ export function PlatformAdmin() {
 
   return (
     <div className="platform-console" data-collapsed={collapsed || undefined}>
-      <aside className="pa-sidebar" aria-label="Menu de la console">
-        <div className="pa-sidebar-brand">
-          <img src={collapsed ? '/newlogoo.png' : '/newlogo.png'} alt="Waarwi" className="w-platform-logo" />
-        </div>
-        {menu(collapsed)}
-        <footer className="pa-sidebar-footer">
-          <div className="pa-operator" title={operator}>
-            <span>{operator}</span>
-            {profile?.full_name && <small>Super-administrateur</small>}
-          </div>
-          <button type="button" className="pa-icon-button" onClick={() => setCollapsed(value => !value)}
-            aria-label={collapsed ? 'Développer le menu' : 'Réduire le menu'} aria-expanded={!collapsed}
-            title={collapsed ? 'Développer le menu' : 'Réduire le menu'}>
-            {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
-          </button>
-        </footer>
-      </aside>
-
-      <dialog className="pa-drawer" ref={drawer} aria-label="Menu de la console"
-        onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
-        <div className="pa-drawer-content">
-          <div className="pa-sidebar-brand">
-            <img src="/newlogo.png" alt="Waarwi" className="w-platform-logo" />
-            <button type="button" className="pa-icon-button" aria-label="Fermer le menu" onClick={() => drawer.current?.close()}>
-              <X size={18} />
-            </button>
-          </div>
-          {menu()}
-          <footer className="pa-sidebar-footer"><span className="pa-muted">{operator}</span></footer>
-        </div>
-      </dialog>
-
-      <div className="pa-workspace">
-        <header className="pa-topbar">
-          <button type="button" className="pa-icon-button pa-menu-trigger" aria-label="Ouvrir le menu"
-            aria-haspopup="dialog" onClick={() => drawer.current?.showModal()}>
-            <Menu size={20} />
-          </button>
-          <img src="/newlogoo.png" alt="Waarwi" className="pa-mobile-logo w-platform-logo" />
+      <header className="pa-topbar">
+        <button type="button" className="pa-icon-button pa-menu-trigger"
+          aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={menuOpen} aria-controls="platform-mobile-menu"
+          onClick={() => setMenuOpen(value => !value)}>
+          {menuOpen ? <X size={19} /> : <Menu size={19} />}
+        </button>
+        <picture className="pa-brand">
+          <source media="(max-width: 600px)" srcSet="/newlogoo.png" />
+          <img src="/newlogo.png" alt="Waarwi" className="w-platform-logo" />
+        </picture>
+        <div className="pa-topbar-body">
           <span className="pa-topbar-context">Administration</span>
-          <h1>{title}</h1>
-          <button type="button" className="pa-topbar-logout pa-icon-button" onClick={() => void signOut()}
+          <div ref={setInlineTarget} className="pa-notice-slot" />
+        </div>
+        <div className="pa-topbar-user">
+          {profile?.full_name && <span className="pa-header-operator" title={operator}>{operator}</span>}
+          <button type="button" className="pa-topbar-logout pa-link" onClick={() => void signOut()}
             aria-label="Déconnexion" title="Déconnexion">
             <LogOut size={16} aria-hidden="true" />
             <span>Déconnexion</span>
           </button>
-        </header>
+        </div>
+      </header>
+      <aside className="pa-sidebar" aria-label="Menu de la console">
+        {menu(collapsed)}
+        <footer className="pa-sidebar-footer">
+          <button type="button" className="pa-icon-button" onClick={() => setCollapsed(value => !value)}
+            aria-label={collapsed ? 'Développer le menu' : 'Réduire le menu'} aria-expanded={!collapsed}
+            title={collapsed ? 'Développer le menu' : 'Réduire le menu'}>
+            {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+            <span className="pa-nav-item-label text-xs">Réduire le menu</span>
+          </button>
+        </footer>
+      </aside>
 
-        <div ref={scroll} className="pa-scroll" role="region" aria-label={title}>
-          <div className="pa-content">
+      <div ref={scroll} className="pa-scroll" role="region" aria-label={menuOpen ? 'Menu' : title}>
+        <div className="pa-content">
+          <div id="platform-mobile-menu" className="pa-mobile-menu" hidden={!menuOpen}>
+            <h1 className="pa-page-title">Menu</h1>
+            {menu()}
+          </div>
+          <div hidden={menuOpen}>
+            <h1 className="pa-page-title">{title}</h1>
             {section === 'overview' && <OverviewSection onNavigate={goTo} onSubscriptions={openSubscriptions} />}
             {section === 'tenants' && <TenantsSection onOpenSubscription={id => openSubscriptions('all', id)} />}
             {section === 'subscriptions' && (
@@ -233,11 +225,11 @@ export function PlatformAdmin() {
             )}
             {section === 'messages' && <MessagesSection />}
             {section === 'activity' && <ActivitySection />}
-            {section === 'login_config' && <div className="pa-configuration"><LoginConfigSection /></div>}
-            {section === 'landing' && <div className="pa-configuration"><LandingConfigSectionNew /></div>}
-            {section === 'master_catalogs' && <div className="pa-configuration"><MasterCatalogAdmin /></div>}
-            {section === 'releases' && <div className="pa-configuration"><ReleasesSection /></div>}
-            {section === 'backups' && <div className="pa-configuration"><CentralizedBackups focusMode={collapsed} onToggleFocus={() => setCollapsed(value => !value)} /></div>}
+            {section === 'login_config' && <LoginConfigSection />}
+            {section === 'landing' && <LandingConfigSection />}
+            {section === 'master_catalogs' && <MasterCatalogAdmin />}
+            {section === 'releases' && <ReleasesSection />}
+            {section === 'backups' && <CentralizedBackups />}
           </div>
         </div>
       </div>
@@ -410,7 +402,6 @@ function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId:
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [detailId, setDetailId] = useState<string>();
-  const [actionsOpen, setActionsOpen] = useState<string>();
   const [suspending, setSuspending] = useState<any>(null);
   const [suspensionReason, setSuspensionReason] = useState('');
   const [updating, setUpdating] = useState(false);
@@ -446,7 +437,6 @@ function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId:
   const detail = tenants.find(tenant => tenant.id === detailId);
 
   const startDelete = (tenant: any) => {
-    setActionsOpen(undefined);
     setDeleting(tenant);
     setDeleteConfirmName('');
     setDeleteReason('');
@@ -466,7 +456,7 @@ function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId:
   const normalizeName = (name: string) => (name || '').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, ' ').replace(/\s+/g, ' ').trim();
 
   const deleteTenant = async () => {
-    if (!deleting) return;
+    if (!deleting || deleteLoading || normalizeName(deleteConfirmName) !== normalizeName(deleting.name)) return;
     setDeleteLoading(true);
     try {
       const response = await call('delete_tenant', { tenant_id: deleting.id, reason: deleteReason });
@@ -479,6 +469,56 @@ function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId:
     } catch (cause) { error((cause as Error).message); }
     finally { setDeleteLoading(false); }
   };
+
+  if (deleting) {
+    return (
+      <PlatformWorkPage title={'Supprimer ' + deleting.name} backLabel="Retour à la fiche" onBack={() => setDeleting(null)} busy={deleteLoading}>
+        <p className="pa-copy">La suppression est définitive. Elle efface les données commerciales, comptables et de caisse, les comptes utilisateurs, les abonnements et les sauvegardes de cette entreprise.</p>
+        <form className="pa-form" onSubmit={event => { event.preventDefault(); void deleteTenant(); }}>
+          <label className="pa-field-label">Motif de la suppression
+            <input className="w-input-ul" value={deleteReason} onChange={event => setDeleteReason(event.target.value)} />
+          </label>
+          <label className="pa-field-label">
+            <span>Tape <strong>{normalizeName(deleting.name)}</strong> pour confirmer</span>
+            <input className="w-input-ul" value={deleteConfirmName} autoComplete="off" spellCheck={false}
+              onChange={event => setDeleteConfirmName(event.target.value)} />
+          </label>
+          <div className="pa-form-actions">
+            <button type="submit" className="pa-link pa-danger" disabled={deleteLoading || normalizeName(deleteConfirmName) !== normalizeName(deleting.name)}>
+              {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Supprimer définitivement
+            </button>
+          </div>
+        </form>
+      </PlatformWorkPage>
+    );
+  }
+
+  if (suspending) {
+    return (
+      <PlatformWorkPage title={'Suspendre ' + suspending.name} backLabel="Retour à la fiche" onBack={() => setSuspending(null)} busy={updating}>
+        <p className="pa-copy">La suspension bloque l’accès à Waarwi pour les utilisateurs de l’entreprise.</p>
+        <form className="pa-form" onSubmit={event => { event.preventDefault(); void updateAccess(suspending, 'suspend_tenant'); }}>
+          <label className="pa-field-label">Motif de la suspension
+            <textarea rows={3} className="w-input-ul" value={suspensionReason} onChange={event => setSuspensionReason(event.target.value)} />
+          </label>
+          <div className="pa-form-actions">
+            <button type="submit" className="pa-link pa-danger" disabled={updating}>
+              {updating ? <Loader2 size={16} className="animate-spin" /> : <Pause size={16} />} Suspendre l’accès
+            </button>
+          </div>
+        </form>
+      </PlatformWorkPage>
+    );
+  }
+
+  if (detail) {
+    return (
+      <TenantDetailPage key={detail.id} tenant={detail} plans={plans} onClose={() => setDetailId(undefined)}
+        onRefresh={load} onDelete={startDelete} onOpenSubscription={onOpenSubscription}
+        onSuspend={() => { setSuspensionReason(''); setSuspending(detail); }}
+        onReactivate={() => void updateAccess(detail, 'reactivate_tenant')} accessBusy={updating} />
+    );
+  }
 
   return (
     <div className="pa-page">
@@ -525,26 +565,6 @@ function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId:
                     ) : (
                       <button type="button" className="pa-link" onClick={() => setDetailId(tenant.id)}>Ouvrir <ArrowUpRight size={13} /></button>
                     )}
-                    <div className="relative" onKeyDown={event => { if (event.key === 'Escape') setActionsOpen(undefined); }}>
-                      <button type="button" className="pa-icon-button" aria-label={'Actions de ' + tenant.name}
-                        aria-expanded={actionsOpen === tenant.id} onClick={() => setActionsOpen(actionsOpen === tenant.id ? undefined : tenant.id)}>
-                        <MoreHorizontal size={18} />
-                      </button>
-                      {actionsOpen === tenant.id && (
-                        <>
-                          <div className="fixed inset-0 z-30" onClick={() => setActionsOpen(undefined)} />
-                          <div className="pa-popover">
-                            <button type="button" onClick={() => { setActionsOpen(undefined); onOpenSubscription(tenant.id); }}>Gérer l’abonnement</button>
-                            {status !== 'pending' && (tenant.is_active ? (
-                              <button type="button" onClick={() => { setActionsOpen(undefined); setSuspensionReason(''); setSuspending(tenant); }}>Suspendre</button>
-                            ) : (
-                              <button type="button" disabled={updating} onClick={() => { setActionsOpen(undefined); void updateAccess(tenant, 'reactivate_tenant'); }}>Réactiver</button>
-                            ))}
-                            <button type="button" className="pa-danger" onClick={() => startDelete(tenant)}>Supprimer</button>
-                          </div>
-                        </>
-                      )}
-                    </div>
                   </div>
                 </div>
               );
@@ -554,127 +574,27 @@ function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId:
         </>
       )}
 
-      {detail && (
-        <TenantDetailModal key={detail.id} tenant={detail} plans={plans} onClose={() => setDetailId(undefined)}
-          onRefresh={load} onDelete={startDelete} onOpenSubscription={onOpenSubscription} />
-      )}
-      {suspending && (
-        <Modal open title={'Suspendre ' + suspending.name} size="sm" variant="flat" layer="top" panelClassName="pa-modal"
-          onClose={() => { if (!updating) setSuspending(null); }}
-          footer={
-            <button type="button" className="pa-button pa-danger" disabled={updating}
-              onClick={() => void updateAccess(suspending, 'suspend_tenant')}>Suspendre l’accès</button>
-          }>
-          <label className="pa-field-label">
-            Motif de la suspension
-            <textarea rows={3} className="pa-field" value={suspensionReason} onChange={event => setSuspensionReason(event.target.value)} />
-          </label>
-        </Modal>
-      )}
-
-      {/* Delete tenant confirmation modal */}
-      <Modal open={!!deleting} onClose={() => { if (!deleteLoading) { setDeleting(null); setDeleteConfirmName(''); setDeleteReason(''); } }} title="Supprimer une entreprise" size="md" footer={null} variant="flat" layer="top" panelClassName="pa-modal">
-        {deleting && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#FEF2F2] flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5 text-[#DC2626]" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-[var(--w-text)]">Supprimer définitivement</h3>
-                <p className="text-xs text-[#DC2626]">Cette action est irréversible</p>
-              </div>
-            </div>
-
-            <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-lg p-4 space-y-2">
-              <p className="text-xs text-[#991B1B] font-semibold">Toutes les données suivantes seront supprimées :</p>
-              <ul className="text-[11px] text-[#991B1B] space-y-1 ml-4 list-disc">
-                <li>Tous les articles, catégories et compatibilités</li>
-                <li>Toutes les ventes, factures, devis et avoirs</li>
-                <li>Tous les clients, fournisseurs et commandes</li>
-                <li>Tout le stock, mouvements et sessions de caisse</li>
-                <li>La boutique en ligne et les commandes</li>
-                <li>La comptabilité et les écritures</li>
-                <li>Les abonnements et sauvegardes</li>
-                <li>Tous les comptes utilisateurs du tenant</li>
-              </ul>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-[var(--w-text)] mb-1">Motif de la suppression</label>
-              <input
-                value={deleteReason}
-                onChange={e => setDeleteReason(e.target.value)}
-                className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] placeholder:text-[var(--w-text-muted)] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
-                placeholder="Ex: Demande du client, compte test, doublon..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-[var(--w-text)] mb-1">
-                Tapez <span className="font-mono font-bold bg-[#FEF2F2] text-[#DC2626] px-1.5 py-0.5 rounded">{normalizeName(deleting.name)}</span> pour confirmer
-              </label>
-              <input
-                value={deleteConfirmName}
-                onChange={e => setDeleteConfirmName(e.target.value)}
-                className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] font-mono placeholder:text-[var(--w-text-muted)] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
-                placeholder={normalizeName(deleting.name)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-
-            <div className="flex gap-2 justify-end pt-2">
-              <button
-                onClick={() => { setDeleting(null); setDeleteConfirmName(''); setDeleteReason(''); }}
-                disabled={deleteLoading}
-                className="btn-icon" title="Annuler"
-              ><X className="w-4 h-4" /></button>
-              <button
-                onClick={deleteTenant}
-                disabled={normalizeName(deleteConfirmName) !== normalizeName(deleting.name) || deleteLoading}
-                className="btn-icon-danger-solid" title="Supprimer définitivement"
-              >
-                {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
 
-const ACTIVITY_ICONS: Record<string, any> = {
-  auto_parts: Wrench_,
-  alimentaire: ShoppingBag_,
-  electromenager: Cpu_,
-  textile: Shirt_,
-  cosmetique: ShoppingBag_,
-  librairie: BookOpen_,
-  mercerie: Package_,
-  quincaillerie: Wrench_,
-  services: Layers,
-  generic: Store_,
-};
-
-const MODULE_DEFS: { key: string; name: string; desc: string; icon: any; color: string }[] = [
-  { key: 'dashboard', name: 'Tableau de bord', desc: 'KPIs et vue d\'ensemble', icon: Gauge, color: 'sky' },
-  { key: 'pos', name: 'Caisse (POS)', desc: 'Encaissement, ventes', icon: CreditCard_, color: 'emerald' },
-  { key: 'cash_history', name: 'Historique caisse', desc: 'Sessions, ouvertures/clôtures', icon: Clock, color: 'slate' },
-  { key: 'vault', name: 'Coffre', desc: 'Coffre physique par point de vente', icon: Lock, color: 'slate' },
-  { key: 'sales', name: 'Journal des ventes', desc: 'Liste et rapports ventes', icon: LineChart, color: 'sky' },
-  { key: 'articles', name: 'Articles', desc: 'Catalogue produits', icon: Package_, color: 'amber' },
-  { key: 'stock', name: 'Stock', desc: 'Inventaire, mouvements', icon: Boxes_, color: 'amber' },
-  { key: 'billing', name: 'Facturation', desc: 'Devis, factures, avoirs', icon: FileText_, color: 'emerald' },
-  { key: 'online_orders', name: 'Commandes en ligne', desc: 'Boutique en ligne', icon: Globe_, color: 'emerald' },
-  { key: 'tiers', name: 'Tiers', desc: 'Clients & fournisseurs', icon: Users, color: 'sky' },
-  { key: 'supplier_orders', name: 'Achats', desc: 'Approvisionnement', icon: ShoppingBag_, color: 'slate' },
-  { key: 'accounting', name: 'Comptabilité', desc: 'Plan comptable SYSCOHADA', icon: BookOpen_, color: 'amber' },
-  { key: 'reports', name: 'États / Rapports', desc: 'Statistiques et rapports', icon: BarChart3, color: 'sky' },
-  { key: 'ipm', name: 'IPM / Tiers payant', desc: 'Gestion mutuelle pharmacie', icon: HeartPulse, color: 'emerald' },
-  { key: 'money_transfer', name: 'Transfert d\'argent', desc: 'Gestion des transferts nationaux et internationaux', icon: ArrowRightLeft, color: 'sky' },
-  { key: 'settings', name: 'Paramètres', desc: 'Configuration tenant', icon: Settings_, color: 'slate' },
+const MODULE_DEFS: { key: string; name: string; desc: string; icon: typeof Gauge }[] = [
+  { key: 'dashboard', name: 'Tableau de bord', desc: 'KPIs et vue d\'ensemble', icon: Gauge },
+  { key: 'pos', name: 'Caisse (POS)', desc: 'Encaissement, ventes', icon: CreditCard_ },
+  { key: 'cash_history', name: 'Historique caisse', desc: 'Sessions, ouvertures/clôtures', icon: Clock },
+  { key: 'vault', name: 'Coffre', desc: 'Coffre physique par point de vente', icon: Lock },
+  { key: 'sales', name: 'Journal des ventes', desc: 'Liste et rapports ventes', icon: LineChart },
+  { key: 'articles', name: 'Articles', desc: 'Catalogue produits', icon: Package_ },
+  { key: 'stock', name: 'Stock', desc: 'Inventaire, mouvements', icon: Boxes_ },
+  { key: 'billing', name: 'Facturation', desc: 'Devis, factures, avoirs', icon: FileText_ },
+  { key: 'online_orders', name: 'Commandes en ligne', desc: 'Boutique en ligne', icon: Globe_ },
+  { key: 'tiers', name: 'Tiers', desc: 'Clients & fournisseurs', icon: Users },
+  { key: 'supplier_orders', name: 'Achats', desc: 'Approvisionnement', icon: ShoppingBag_ },
+  { key: 'accounting', name: 'Comptabilité', desc: 'Plan comptable SYSCOHADA', icon: BookOpen_ },
+  { key: 'reports', name: 'États / Rapports', desc: 'Statistiques et rapports', icon: BarChart3 },
+  { key: 'ipm', name: 'IPM / Tiers payant', desc: 'Gestion mutuelle pharmacie', icon: HeartPulse },
+  { key: 'money_transfer', name: 'Transfert d\'argent', desc: 'Gestion des transferts nationaux et internationaux', icon: ArrowRightLeft },
+  { key: 'settings', name: 'Paramètres', desc: 'Configuration tenant', icon: Settings_ },
 ];
 
 function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
@@ -703,122 +623,78 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
     business_type: a.legacy_business_type || a.slug,
   });
 
+  const currentType = activityTypes.find(item => form.business_activity_type_id
+    ? form.business_activity_type_id === item.id
+    : form.business_type === (item.legacy_business_type || item.slug));
+
   return (
-    <div className="space-y-6">
-      {/* Activity type */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h4 className="text-sm font-semibold text-[var(--w-text)]">Type de commerce</h4>
-            <p className="text-[11px] text-[var(--w-text-sec)] mt-0.5">Determine le catalogue maitre importable pour ce tenant.</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {activityTypes.map(a => {
-            const active = form.business_activity_type_id
-              ? form.business_activity_type_id === a.id
-              : form.business_type === (a.legacy_business_type || a.slug);
-            const I = ACTIVITY_ICONS[a.slug] || ACTIVITY_ICONS[a.legacy_business_type || ''] || Store_;
-            return (
-              <button key={a.id} onClick={() => selectActivity(a)}
-                className={`text-left p-3 rounded-lg border transition-all ${active ? 'border-[#0F172A] bg-[#0F172A] text-white' : 'border-[var(--w-separator)] bg-[var(--w-surface)] hover:border-[var(--w-text-disabled)]'}`}>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <I className={`w-3.5 h-3.5 ${active ? 'text-white/70' : 'text-[var(--w-text-sec)]'}`} />
-                  <span className="font-medium text-xs">{a.name}</span>
-                </div>
-                {a.description && <div className={`text-[10px] leading-snug ${active ? 'text-white/60' : 'text-[var(--w-text-muted)]'}`}>{a.description}</div>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+    <div className="pa-page">
+      <label className="pa-field-label pa-form">Type de commerce
+        <select className="w-input-ul" value={currentType?.id || ''} onChange={event => {
+          const activity = activityTypes.find(item => item.id === event.target.value);
+          if (activity) selectActivity(activity);
+        }}>
+          <option value="" disabled>Choisir une activité</option>
+          {activityTypes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+      </label>
 
-      {/* Modules */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h4 className="text-sm font-semibold text-[var(--w-text)]">Modules accessibles</h4>
-            <p className="text-[11px] text-[var(--w-text-sec)] mt-0.5">Pages visibles dans la barre laterale du tenant.</p>
-          </div>
-          <div className="flex gap-1.5">
-            <button onClick={minimal} className="text-[11px] px-2.5 py-1 rounded-md border border-[var(--w-separator)] text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] font-medium">Minimal</button>
-            <button onClick={allOn} className="text-[11px] px-2.5 py-1 rounded-md bg-[#0F172A] text-white hover:bg-[#1E293B] font-medium">Tout activer</button>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-          {MODULE_DEFS.map(m => {
-            const on = modules.includes(m.key);
-            const I = m.icon;
-            return (
-              <button key={m.key} onClick={() => toggle(m.key)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${on ? 'border-[#0F172A] bg-[var(--w-surface-el)]' : 'border-[var(--w-separator)] bg-[var(--w-surface)] hover:border-[var(--w-text-disabled)]'}`}>
-                <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${on ? 'bg-[#0F172A] text-white' : 'bg-[var(--w-hover)] text-[var(--w-text-sec)]'}`}>
-                  <I className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-xs text-[var(--w-text)] truncate">{m.name}</div>
-                  <div className="text-[10px] text-[var(--w-text-muted)] truncate">{m.desc}</div>
-                </div>
-                <div className={`shrink-0 w-8 h-4.5 rounded-full relative transition-colors ${on ? 'bg-[#0F172A]' : 'bg-[#E2E8F0]'}`}>
-                  <span className={`absolute top-0.5 ${on ? 'right-0.5' : 'left-0.5'} w-3.5 h-3.5 bg-[var(--w-surface)] rounded-full shadow-sm transition-all`} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Usage */}
       {usage && (
-        <div className="rounded-lg border border-[var(--w-separator)] p-4 bg-[var(--w-surface-el)]">
-          <div className="text-[11px] font-semibold text-[var(--w-text-sec)] mb-3">Usage vs limites du plan ({usage.plan_code || 'aucun'})</div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <UsageBar label="Magasins" current={usage.sites_count} limit={usage.plan_limits?.sites} />
-            <UsageBar label="Utilisateurs" current={usage.users_count} limit={usage.plan_limits?.users} />
-            <UsageBar label="Articles" current={usage.articles_count} limit={usage.plan_limits?.articles} />
-          </div>
-        </div>
+        <section className="pa-panel">
+          <h3 className="pa-heading">Utilisation de l’offre</h3>
+          <dl className="pa-record-summary">
+            <UsageLine label="Magasins" current={usage.sites_count} limit={usage.plan_limits?.sites} />
+            <UsageLine label="Utilisateurs" current={usage.users_count} limit={usage.plan_limits?.users} />
+            <UsageLine label="Articles" current={usage.articles_count} limit={usage.plan_limits?.articles} />
+          </dl>
+        </section>
       )}
 
-      <div className="flex justify-end pt-2">
-        <button onClick={onSave} disabled={saving} className="btn-icon-primary" title="Enregistrer">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+      <section className="pa-panel">
+        <div className="pa-section-head">
+          <h3 className="pa-heading">Modules accessibles</h3>
+          <div className="pa-inline">
+            <button type="button" onClick={minimal} className="pa-link">Sélection minimale</button>
+            <button type="button" onClick={allOn} className="pa-link">Tout activer</button>
+          </div>
+        </div>
+        <div className="pa-toggle-list">
+          {MODULE_DEFS.map(({ key, name, desc, icon: Icon }) => (
+            <label className="pa-toggle-row" key={key}>
+              <Icon size={16} aria-hidden="true" />
+              <span><strong>{name}</strong><small>{desc}</small></span>
+              <input type="checkbox" checked={modules.includes(key)} onChange={() => toggle(key)} />
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <div className="pa-form-actions">
+        <button type="button" onClick={onSave} disabled={saving} className="pa-button" data-variant="primary">
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Enregistrer les modules
         </button>
       </div>
     </div>
   );
 }
 
-function UsageBar({ label, current, limit }: { label: string; current: number; limit: number | undefined }) {
-  const unlimited = limit === -1 || limit === undefined;
-  const pct = unlimited ? 20 : Math.min(100, (current / Math.max(1, limit!)) * 100);
-  const reached = !unlimited && current >= limit!;
-  return (
-    <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg p-2.5">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-medium text-[var(--w-text-sec)]">{label}</span>
-        <span className={`text-[11px] font-semibold ${reached ? 'text-[#DC2626]' : 'text-[var(--w-text)]'}`}>
-          {current}{unlimited ? ' / --' : ` / ${limit}`}
-        </span>
-      </div>
-      <div className="h-1 rounded-full bg-[var(--w-hover)] overflow-hidden">
-        <div className={`h-full rounded-full ${reached ? 'bg-[#DC2626]' : 'bg-[#0F172A]'} transition-all`} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
+function UsageLine({ label, current, limit }: { label: string; current?: number; limit?: number }) {
+  return <div><dt>{label}</dt><dd>{current ?? 0}{limit != null && limit >= 0 ? ' / ' + limit : ' · sans limite'}</dd></div>;
 }
 
-function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete, onOpenSubscription, subscriptionMode = false, noticeActions }: {
+function TenantDetailPage({ tenant, plans, onClose, onRefresh, onDelete, onOpenSubscription, subscriptionMode = false, noticeActions, onSuspend, onReactivate, accessBusy }: {
   tenant: any; plans: any[]; onClose: () => void; onRefresh: () => void;
   onDelete?: (tenant: any) => void; onOpenSubscription?: (tenantId: string) => void;
   subscriptionMode?: boolean;
+  onSuspend?: () => void;
+  onReactivate?: () => void;
+  accessBusy?: boolean;
   noticeActions?: { busy: 'reminder' | 'email' | null; send: (kind: 'reminder' | 'email') => void };
 }) {
   const [detail, setDetail] = useState<any>(null);
   const [tab, setTab] = useState<'info' | 'sub' | 'modules' | 'users' | 'history' | 'danger'>(subscriptionMode ? 'sub' : 'info');
   const [form, setForm] = useState<any>({
     ...tenant,
-    plan_expires_at: tenant.plan_expires_at?.slice(0, 10) || '',
     business_type: tenant.business_type || 'auto_parts',
     business_activity_type_id: tenant.business_activity_type_id || null,
     enabled_modules: Array.isArray(tenant.enabled_modules) ? tenant.enabled_modules : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports'],
@@ -895,7 +771,6 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete, onOpen
         tenant_id: tenant.id,
         patch: {
           name: form.name, legal_name: form.legal_name, email: form.email, phone: form.phone, whatsapp_phone: form.whatsapp_phone,
-          status: form.status, is_active: form.is_active,
           business_type: form.business_type,
           business_activity_type_id: form.business_activity_type_id || null,
           enabled_modules: form.enabled_modules,
@@ -903,7 +778,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete, onOpen
           custom_domain: form.custom_domain || null,
         },
       });
-      success('Tenant mis à jour');
+      success('Entreprise mise à jour');
       onRefresh();
     } catch (e: any) { error(e.message); }
     setSaving(false);
@@ -951,22 +826,23 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete, onOpen
   };
 
   const tabs: { k: typeof tab; l: string }[] = [
-    { k: 'info', l: 'Résumé' },
+    { k: 'info', l: 'Identité' },
     { k: 'modules', l: 'Modules' },
     { k: 'users', l: 'Utilisateurs' },
     { k: 'history', l: 'Historique' },
-    { k: 'danger', l: 'Accès et sécurité' },
+    { k: 'danger', l: 'Accès' },
   ];
 
   return (
-    <Modal open onClose={onClose} title={tenant.name} size="lg" footer={null} fullMobile variant="flat" layer="top" panelClassName="pa-modal">
+    <PlatformWorkPage title={tenant.name} backLabel={subscriptionMode ? 'Retour aux abonnements' : 'Retour aux entreprises'}
+      onBack={onClose} busy={saving} actions={!subscriptionMode && onOpenSubscription && (
+        <button type="button" className="pa-link" onClick={() => onOpenSubscription(tenant.id)}>
+          Gérer l’abonnement <ChevronRight size={15} />
+        </button>
+      )}>
       <div className="pa-page">
         {!subscriptionMode && (
           <>
-            <div className="pa-section-head text-sm">
-              <span className="pa-muted pa-break">{tenant.email || '—'}</span>
-              <button type="button" className="pa-link" onClick={() => onOpenSubscription?.(tenant.id)}>Gérer l’abonnement <ArrowUpRight size={14} /></button>
-            </div>
             <nav className="pa-tabs" aria-label="Fiche de l’entreprise">
               {tabs.map(item => <button type="button" key={item.k} aria-current={tab === item.k ? 'page' : undefined} onClick={() => setTab(item.k)}>{item.l}</button>)}
             </nav>
@@ -975,59 +851,30 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete, onOpen
         <div>
           {!detail ? <PlatformLoading /> : (
             <>
-          {tab === 'info' && (
-                <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Nom</label>
-                      <input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Raison sociale</label>
-                      <input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Email</label>
-                      <input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Téléphone</label>
-                      <input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">WhatsApp</label>
-                      <input value={form.whatsapp_phone || ''} onChange={e => setForm({ ...form, whatsapp_phone: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Statut</label>
-                      <select value={form.status || 'active'} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]">
-                        <option value="active">Actif</option><option value="suspended">Suspendu</option><option value="cancelled">Annulé</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Sous-domaine</label>
-                      <div className="flex items-center gap-1.5">
-                        <input value={form.subdomain || ''} onChange={e => setForm({ ...form, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} placeholder="nom" className="flex-1 h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                        <span className="text-[11px] text-[var(--w-text-muted)]">.votreapp.com</span>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Domaine personnalisé</label>
-                      <input value={form.custom_domain || ''} onChange={e => setForm({ ...form, custom_domain: e.target.value.toLowerCase().trim() })} placeholder="caisse.domain.sn" className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="flex items-center gap-2 text-xs text-[var(--w-text)] cursor-pointer">
-                        <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-[var(--w-separator)]" />
-                        Tenant actif (accès à l'application)
+              {tab === 'info' && (
+                <form className="pa-form" onSubmit={event => { event.preventDefault(); void saveInfo(); }}>
+                  <div className="pa-form-grid">
+                    {([['name', 'Nom'], ['legal_name', 'Raison sociale'], ['email', 'E-mail'], ['phone', 'Téléphone'], ['whatsapp_phone', 'WhatsApp']] as const).map(([key, label]) => (
+                      <label key={key} className="pa-field-label">{label}
+                        <input className="w-input-ul" value={form[key] || ''} required={key === 'name'}
+                          onChange={event => setForm({ ...form, [key]: event.target.value })} />
                       </label>
-                    </div>
-                    <div className="sm:col-span-2 flex justify-end pt-2">
-                      <button onClick={saveInfo} disabled={saving} className="btn-icon-primary" title="Enregistrer">
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                      </button>
-                    </div>
+                    ))}
+                    <label className="pa-field-label">Sous-domaine
+                      <input className="w-input-ul" value={form.subdomain || ''}
+                        onChange={event => setForm({ ...form, subdomain: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} />
+                    </label>
+                    <label className="pa-field-label">Domaine personnalisé
+                      <input className="w-input-ul" value={form.custom_domain || ''}
+                        onChange={event => setForm({ ...form, custom_domain: event.target.value.toLowerCase().trim() })} />
+                    </label>
                   </div>
-                </div>
+                  <div className="pa-form-actions">
+                    <button type="submit" className="pa-button" data-variant="primary" disabled={saving}>
+                      {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Enregistrer l’identité
+                    </button>
+                  </div>
+                </form>
               )}
 
               {tab === 'sub' && (
@@ -1192,116 +1039,77 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete, onOpen
               )}
 
               {tab === 'users' && (
-                <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl divide-y divide-[#F1F5F9]">
-                  {(detail.users || []).length === 0 ? (
-                    <div className="py-10 text-center">
-                      <Users className="w-8 h-8 text-[var(--w-text-disabled)] mx-auto mb-2" />
-                      <p className="text-xs text-[var(--w-text-muted)]">Aucun utilisateur.</p>
-                    </div>
-                  ) : (detail.users || []).map((u: any) => (
-                    <div key={u.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="w-8 h-8 rounded-md bg-[var(--w-hover)] text-[var(--w-text)] font-semibold text-xs flex items-center justify-center shrink-0">
-                        {(u.full_name || u.email).charAt(0).toUpperCase()}
+                (detail.users || []).length === 0 ? <p className="pa-empty">Aucun utilisateur.</p> : (
+                  <div className="pa-divided">
+                    {detail.users.map((user: any) => (
+                      <div className="pa-setting-row" key={user.id}>
+                        <div className="min-w-0">
+                          <strong className="pa-break">{user.full_name || user.email}</strong>
+                          {user.full_name && <p className="pa-row-subtitle pa-break">{user.email}</p>}
+                        </div>
+                        <span className="pa-muted">{user.role} · {user.is_active ? 'Actif' : 'Inactif'}</span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-[var(--w-text)] truncate">{u.full_name || u.email}</div>
-                        <div className="text-[11px] text-[var(--w-text-sec)] truncate">{u.email}</div>
-                      </div>
-                      <span className="text-[10px] font-medium text-[var(--w-text-sec)] bg-[var(--w-surface-el)] border border-[var(--w-separator)] px-2 py-0.5 rounded">{u.role}</span>
-                      {!u.is_active && <span className="text-[10px] bg-[#FEF2F2] text-[#DC2626] px-1.5 py-0.5 rounded font-medium">Inactif</span>}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
 
               {tab === 'history' && (
-                <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
-                  {(detail.events || []).length === 0 ? (
-                    <div className="py-10 text-center">
-                      <Activity className="w-8 h-8 text-[var(--w-text-disabled)] mx-auto mb-2" />
-                      <p className="text-xs text-[var(--w-text-muted)]">Aucun historique disponible pour ce tenant.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {(detail.events || []).map((ev: any) => <EventRow key={ev.id} ev={ev} />)}
-                    </div>
-                  )}
-                </div>
+                (detail.events || []).length === 0 ? <p className="pa-empty">Aucun événement pour cette entreprise.</p> : (
+                  <div className="pa-divided">
+                    {detail.events.map((event: PlatformEvent) => <EventRow key={event.id} ev={event} />)}
+                  </div>
+                )
               )}
 
               {tab === 'danger' && (
-                <div className="space-y-4">
-                  <div className="bg-[var(--w-surface)] border border-[#FECACA] rounded-xl p-5">
-                    <div className="flex items-start gap-3 mb-4">
-                      <div className="w-9 h-9 rounded-lg bg-[#FEF2F2] flex items-center justify-center shrink-0">
-                        <AlertTriangle className="w-4.5 h-4.5 text-[#DC2626]" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-semibold text-[var(--w-text)]">Zone de danger</h4>
-                        <p className="text-[11px] text-[var(--w-text-sec)] mt-0.5">Ces actions peuvent affecter l'acces du tenant ou supprimer definitivement ses donnees.</p>
-                      </div>
+                <div className="pa-divided">
+                  <div className="pa-setting-row">
+                    <div>
+                      <strong>Restauration et réinitialisation</strong>
+                      <p className="pa-row-subtitle">Accès aux opérations de restauration, de réinitialisation et d’import pour cette entreprise.</p>
                     </div>
-
-                    <div className="space-y-3">
-                      {/* Activation lock for backup/restore */}
-                      <div className="flex items-center justify-between py-3 border-t border-[var(--w-hover)]">
-                        <div>
-                          <div className="text-xs font-medium text-[var(--w-text)]">Verrou sauvegarde / restauration</div>
-                          <div className="text-[11px] text-[var(--w-text-sec)]">Autorise les opérations destructrices (restauration, réinitialisation, import) pour ce tenant.</div>
-                        </div>
-                        <button
-                          onClick={toggleActivation}
-                          disabled={activationLoading || activationLock === null}
-                          className="shrink-0 relative"
-                        >
-                          <div className={`w-9 h-5 rounded-full transition-colors relative ${activationLock ? 'bg-[#16A34A]' : 'bg-[#D1D5DB]'}`}>
-                            <div className={`absolute top-0.5 bg-[var(--w-surface)] rounded-full h-4 w-4 transition-transform shadow-sm ${activationLock ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                          </div>
+                    <label className="pa-inline">
+                      <input type="checkbox" checked={activationLock === true} disabled={activationLoading || activationLock === null}
+                        onChange={() => void toggleActivation()} />
+                      Autoriser
+                    </label>
+                  </div>
+                  {tenant.approval_status !== 'pending' && (
+                    <div className="pa-setting-row">
+                      <div>
+                        <strong>Accès à Waarwi</strong>
+                        <p className="pa-row-subtitle">{tenant.is_active ? 'L’entreprise peut utiliser son espace.' : 'L’accès de l’entreprise est suspendu.'}</p>
+                      </div>
+                      {tenant.is_active ? (
+                        <button type="button" onClick={onSuspend} disabled={accessBusy} className="pa-link">
+                          <Pause size={16} /> Suspendre
                         </button>
-                      </div>
-
-                      {/* Suspend / Reactivate */}
-                      <div className="flex items-center justify-between py-3 border-t border-[var(--w-hover)]">
-                        <div>
-                          <div className="text-xs font-medium text-[var(--w-text)]">{tenant.is_active ? 'Suspendre le tenant' : 'Réactiver le tenant'}</div>
-                          <div className="text-[11px] text-[var(--w-text-sec)]">{tenant.is_active ? 'Bloque l\'acces a l\'application pour tous les utilisateurs.' : 'Restaure l\'acces a l\'application.'}</div>
-                        </div>
-                        {tenant.is_active ? (
-                          <button
-                            onClick={() => { const reason = prompt('Raison de la suspension ?') || ''; if (reason || confirm('Suspendre sans motif ?')) { call('suspend_tenant', { tenant_id: tenant.id, reason }).then(() => { onRefresh(); onClose(); }); } }}
-                            className="h-8 px-3 rounded-md border border-[#FDE68A] bg-[#FFFBEB] text-[#D97706] text-xs font-medium hover:bg-[#FEF3C7] transition-colors flex items-center gap-1.5"
-                          ><Pause className="w-3.5 h-3.5" />Suspendre</button>
-                        ) : (
-                          <button
-                            onClick={() => { call('reactivate_tenant', { tenant_id: tenant.id }).then(() => { onRefresh(); onClose(); }); }}
-                            className="h-8 px-3 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] text-[#16A34A] text-xs font-medium hover:bg-[#DCFCE7] transition-colors flex items-center gap-1.5"
-                          ><Power className="w-3.5 h-3.5" />Réactiver</button>
-                        )}
-                      </div>
-
-                      {/* Delete */}
-                      {onDelete && (
-                        <div className="flex items-center justify-between py-3 border-t border-[#FECACA]">
-                          <div>
-                            <div className="text-xs font-medium text-[#DC2626]">Supprimer definitivement</div>
-                            <div className="text-[11px] text-[var(--w-text-sec)]">Supprime toutes les donnees du tenant de maniere irreversible.</div>
-                          </div>
-                          <button
-                            onClick={() => { onClose(); setTimeout(() => onDelete(tenant), 150); }}
-                            className="btn-icon-danger"
-                            title="Supprimer"
-                          ><Trash2 className="w-4 h-4" /></button>
-                        </div>
+                      ) : (
+                        <button type="button" onClick={onReactivate} disabled={accessBusy} className="pa-link">
+                          <Power size={16} /> Réactiver
+                        </button>
                       )}
                     </div>
-                  </div>
+                  )}
+                  {onDelete && (
+                    <div className="pa-setting-row">
+                      <div>
+                        <strong>Suppression de l’entreprise</strong>
+                        <p className="pa-row-subtitle">Efface définitivement son espace et ses données.</p>
+                      </div>
+                      <button type="button" onClick={() => onDelete(tenant)} className="pa-link pa-danger">
+                        <Trash2 size={16} /> Supprimer
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </>
           )}
         </div>
       </div>
-    </Modal>
+    </PlatformWorkPage>
   );
 }
 
@@ -1380,6 +1188,124 @@ function PlansSection() {
     ['has_whatsapp', 'Notifications WhatsApp'], ['has_multi_store', 'Multi-magasins'], ['has_advanced_reports', 'Rapports avancés'],
     ['has_accounting_export', 'Export comptable']] as const;
 
+  if (toDelete) {
+    return (
+      <PlatformConfirmation title="Supprimer cette offre ?" backLabel="Retour à l’offre" onBack={() => setToDelete(null)}
+        message={'Supprimer l’offre « ' + toDelete.name + ' » du catalogue.'} label="Supprimer l’offre" danger
+        onConfirm={async () => {
+          await call('delete_plan', { code: toDelete.code });
+          success('Offre supprimée');
+          setToDelete(null);
+          setForm(null);
+          await load();
+        }} />
+    );
+  }
+
+  if (form) {
+    return (
+      <PlatformWorkPage title={editing ? 'Modifier l’offre' : 'Nouvelle offre'} backLabel="Retour aux offres"
+        onBack={() => setForm(null)} busy={saving}>
+        <form className="pa-form pa-plan-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+          <div className="pa-plan-meta">
+            <label className="pa-field-label">Code de l’offre
+              <input className="pa-field" required readOnly={editing} value={form.code}
+                onChange={event => setForm({ ...form, code: event.target.value })} />
+            </label>
+            <label className="pa-field-label">Nom
+              <input className="pa-field" required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />
+            </label>
+          </div>
+
+          <section className="pa-panel space-y-3">
+            <h3 className="pa-heading">Tarifs</h3>
+            <div className="pa-plan-values">
+              {([['price_monthly', 'Mensuel (FCFA)'], ['price_yearly', 'Annuel (FCFA)'], ['price_lifetime', 'À vie (FCFA)']] as const).map(([key, label]) => (
+                <label key={key} className="pa-field-label">{label}
+                  <input className="pa-field" type="number" min={0} step="1" value={form[key] ?? ''}
+                    onChange={event => setForm({ ...form, [key]: event.target.value })} />
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="pa-panel space-y-3">
+            <div>
+              <h3 className="pa-heading">Remises sur le paiement d’avance</h3>
+              <p className="pa-row-subtitle">Montants calculés au tarif de l’offre.</p>
+            </div>
+            <div className="pa-plan-values">
+              {prepaidPeriods.map(months => {
+                const key = discountField(months);
+                const rate = Math.round(Number(form[key] || 0) * 100);
+                const quote = Math.round(Number(form.price_monthly || 0) * months * (10000 - rate) / 10000);
+                return (
+                  <div key={months}>
+                    <label className="pa-field-label">Remise {months} mois (%)
+                      <input className="pa-field" type="number" min={0} max={99.99} step={0.01}
+                        value={form[key] ?? 0} onChange={event => setForm({ ...form, [key]: event.target.value })} />
+                    </label>
+                    <p className="pa-row-subtitle mt-1">{formatFCFA(quote)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="pa-panel pa-plan-meta">
+            <label className="pa-inline text-sm">
+              <input type="checkbox" checked={form.is_public !== false}
+                onChange={event => setForm({ ...form, is_public: event.target.checked })} />
+              Visible à l’inscription
+            </label>
+            <label className="pa-field-label">Ordre d’affichage
+              <input className="pa-field" type="number" value={form.sort_order ?? 0}
+                onChange={event => setForm({ ...form, sort_order: event.target.value })} />
+            </label>
+          </section>
+
+          <details className="pa-panel">
+            <summary className="pa-expander">Description, limites et modules</summary>
+            <div className="pa-form-grid mb-3">
+              <label className="pa-field-label">Description
+                <input className="w-input-ul" value={form.description || ''} onChange={event => setForm({ ...form, description: event.target.value })} />
+              </label>
+              <label className="pa-field-label">Fonctionnalités affichées, une par ligne
+                <textarea className="w-input-ul" rows={2} value={form.features} onChange={event => setForm({ ...form, features: event.target.value })} />
+              </label>
+            </div>
+            <p className="pa-row-subtitle mt-2">Saisir −1 pour une limite illimitée.</p>
+            <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 mt-3">
+              {limits.map(([key, label]) => (
+                <label className="pa-field-label" key={key}>{label}
+                  <input className="pa-field" type="number" min={-1} placeholder="-1" value={form.limits?.[key] ?? ''}
+                    onChange={event => setForm({ ...form, limits: { ...form.limits, [key]: event.target.value } })} />
+                </label>
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 mt-4">
+              {features.map(([key, label]) => (
+                <label key={key} className="pa-inline text-sm">
+                  <input type="checkbox" checked={!!form.limits?.[key]}
+                    onChange={event => setForm({ ...form, limits: { ...form.limits, [key]: event.target.checked } })} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </details>
+
+          <div className="pa-form-actions">
+            {editing && <button type="button" className="pa-link pa-danger mr-auto" disabled={saving}
+              onClick={() => setToDelete({ code: form.code, name: form.name })}>Supprimer l’offre</button>}
+            <button type="submit" className="pa-button" data-variant="primary" disabled={saving}>
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Enregistrer l’offre
+            </button>
+          </div>
+        </form>
+      </PlatformWorkPage>
+    );
+  }
+
   return (
     <div className="pa-page">
       <div className="pa-section-head">
@@ -1415,111 +1341,6 @@ function PlansSection() {
         </div>
       )}
 
-      {form && (
-        <Modal open onClose={() => { if (!saving) setForm(null); }} title={editing ? 'Modifier l’offre' : 'Nouvelle offre'}
-          variant="flat" layer="top" panelClassName="pa-modal" size="lg" fullMobile
-          footer={<>
-            {editing && <button type="button" className="pa-link pa-danger mr-auto" disabled={saving} onClick={() => {
-              setToDelete({ code: form.code, name: form.name });
-              setForm(null);
-            }}>Supprimer l’offre</button>}
-            <button type="button" className="pa-link" disabled={saving} onClick={() => setForm(null)}>Annuler</button>
-            <button type="submit" form="platform-offer-form" className="pa-button" data-variant="primary" disabled={saving}>Enregistrer l’offre</button>
-          </>}>
-          <form id="platform-offer-form" className="pa-page" onSubmit={event => { event.preventDefault(); void save(); }}>
-            <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
-              <label className="pa-field-label">Code de l’offre
-                <input className="pa-field" required readOnly={editing} value={form.code}
-                  onChange={event => setForm({ ...form, code: event.target.value })} />
-              </label>
-              <label className="pa-field-label">Nom
-                <input className="pa-field" required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />
-              </label>
-              <label className="pa-field-label sm:col-span-2">Description
-                <input className="pa-field" value={form.description || ''} onChange={event => setForm({ ...form, description: event.target.value })} />
-              </label>
-            </div>
-
-            <section className="pa-panel space-y-3">
-              <h4 className="pa-heading">Tarifs</h4>
-              <div className="grid gap-x-5 gap-y-3 sm:grid-cols-3">
-                {([['price_monthly', 'Mensuel (FCFA)'], ['price_yearly', 'Annuel (FCFA)'], ['price_lifetime', 'À vie (FCFA)']] as const).map(([key, label]) => (
-                  <label key={key} className="pa-field-label">{label}
-                    <input className="pa-field" type="number" min={0} step="1" value={form[key] ?? ''}
-                      onChange={event => setForm({ ...form, [key]: event.target.value })} />
-                  </label>
-                ))}
-              </div>
-            </section>
-
-            <section className="pa-panel space-y-3">
-              <h4 className="pa-heading">Remises sur le paiement d’avance</h4>
-              <div className="grid gap-x-5 gap-y-3 sm:grid-cols-3">
-                {prepaidPeriods.map(months => {
-                  const key = discountField(months);
-                  const rate = Math.round(Number(form[key] || 0) * 100);
-                  const quote = Math.round(Number(form.price_monthly || 0) * months * (10000 - rate) / 10000);
-                  return (
-                    <div key={months}>
-                      <label className="pa-field-label">Remise {months} mois (%)
-                        <input className="pa-field" type="number" min={0} max={99.99} step={0.01}
-                          value={form[key] ?? 0} onChange={event => setForm({ ...form, [key]: event.target.value })} />
-                      </label>
-                      <p className="pa-row-subtitle mt-1">{formatFCFA(quote)} au tarif de l’offre</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="pa-panel grid gap-3 sm:grid-cols-2">
-              <label className="pa-inline text-sm">
-                <input type="checkbox" checked={form.is_public !== false}
-                  onChange={event => setForm({ ...form, is_public: event.target.checked })} />
-                Visible à l’inscription
-              </label>
-              <label className="pa-field-label">Ordre d’affichage
-                <input className="pa-field" type="number" value={form.sort_order ?? 0}
-                  onChange={event => setForm({ ...form, sort_order: event.target.value })} />
-              </label>
-            </section>
-
-            <details className="pa-panel">
-              <summary className="pa-heading cursor-pointer">Limites et modules</summary>
-              <p className="pa-row-subtitle mt-2">Saisir −1 pour une limite illimitée.</p>
-              <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 mt-3">
-                {limits.map(([key, label]) => (
-                  <label className="pa-field-label" key={key}>{label}
-                    <input className="pa-field" type="number" min={-1} placeholder="-1" value={form.limits?.[key] ?? ''}
-                      onChange={event => setForm({ ...form, limits: { ...form.limits, [key]: event.target.value } })} />
-                  </label>
-                ))}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 mt-4">
-                {features.map(([key, label]) => (
-                  <label key={key} className="pa-inline text-sm">
-                    <input type="checkbox" checked={!!form.limits?.[key]}
-                      onChange={event => setForm({ ...form, limits: { ...form.limits, [key]: event.target.checked } })} />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </details>
-
-            <label className="pa-field-label">Fonctionnalités affichées, une par ligne
-              <textarea className="pa-field" rows={3} value={form.features} onChange={event => setForm({ ...form, features: event.target.value })} />
-            </label>
-          </form>
-        </Modal>
-      )}
-
-      <ConfirmDialog open={!!toDelete} onClose={() => setToDelete(null)}
-        onConfirm={async () => {
-          if (!toDelete) return;
-          try { await call('delete_plan', { code: toDelete.code }); success('Offre supprimée'); setToDelete(null); await load(); }
-          catch (cause) { error((cause as Error).message); }
-        }}
-        title="Supprimer cette offre ?" message={'L’offre « ' + toDelete?.name + ' » sera supprimée.'} danger />
     </div>
   );
 }
@@ -1701,21 +1522,58 @@ function SubscriptionsSection({ initialFilter, focusTenantId, onFocusConsumed }:
 
   const selectFilter = (filter: SubscriptionFilter) => { setStatusFilter(filter); setPage(0); };
 
+  if (selected) {
+    return (
+      <TenantDetailPage key={selected.id} tenant={selected} plans={plans} subscriptionMode
+        onClose={() => setSelectedId(undefined)} onRefresh={refresh}
+        noticeActions={reminderIds.has(selected.id) ? { busy: sending, send: kind => void sendNotice(selected.id, kind) } : undefined} />
+    );
+  }
+
+  if (rulesOpen) {
+    return (
+      <PlatformWorkPage title="Règles de suivi" backLabel="Retour aux abonnements" onBack={() => setRulesOpen(false)} busy={!!rulesBusy}>
+        {!rules ? <PlatformLoading /> : <div className="pa-page">
+          <form className="space-y-3" onSubmit={event => { event.preventDefault(); void saveRules(); }}>
+            <label className="pa-inline text-sm">
+              <input type="checkbox" checked={rules.enabled} onChange={event => setRules({ ...rules, enabled: event.target.checked })} />
+              Suspendre les abonnements après expiration
+            </label>
+            <label className="pa-field-label w-fit">Délai de grâce en jours
+              <input type="number" className="pa-field w-24" min={1} max={90} required value={rules.days || ''}
+                onChange={event => setRules({ ...rules, days: Number(event.target.value) })} />
+            </label>
+            <button type="submit" className="pa-button" data-variant="primary" disabled={!!rulesBusy}>Enregistrer les règles</button>
+          </form>
+          <div className="pa-panel">
+            <button type="button" className="pa-button" disabled={!!rulesBusy} onClick={() => void runLifecycle()}>
+              {rulesBusy === 'run' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              Exécuter le traitement quotidien
+            </button>
+            {lastResult && <p className="pa-feedback" role="status">
+              {lastResult.renewed || 0} renouvelés · {lastResult.expired || 0} expirés · {lastResult.suspended || 0} suspendus · {lastResult.reminders_sent || 0} rappels
+            </p>}
+          </div>
+        </div>}
+      </PlatformWorkPage>
+    );
+  }
+
   return (
     <div className="pa-page">
-      <dl className="pa-metrics">
+      <nav className="pa-status-strip" aria-label="Accès rapide aux statuts">
         {([
           ['pending', 'Inscriptions à valider', rows.filter(row => row.status === 'pending').length],
           ['due', 'Échéances sous ' + reminderDays + ' jours', dueLoading ? '—' : dueIds.size],
           ['expired', 'Abonnements expirés', rows.filter(row => row.status === 'expired').length],
           ['active', 'Abonnements actifs', rows.filter(row => row.status === 'active').length],
         ] as const).map(([key, label, count]) => (
-          <div key={key}><dt>{label}</dt><dd>
-            <button type="button" className="pa-link" aria-label={label + ' ' + count}
-              aria-pressed={statusFilter === key} onClick={() => selectFilter(statusFilter === key ? 'all' : key)}>{count}</button>
-          </dd></div>
+          <button type="button" className="pa-link" key={key} aria-label={label + ' ' + count}
+            aria-pressed={statusFilter === key} onClick={() => selectFilter(statusFilter === key ? 'all' : key)}>
+            <span>{label}</span> <strong>{count}</strong>
+          </button>
         ))}
-      </dl>
+      </nav>
 
       <div className="pa-toolbar">
         <label className="pa-search">
@@ -1778,40 +1636,6 @@ function SubscriptionsSection({ initialFilter, focusTenantId, onFocusConsumed }:
           <PlatformPagination page={currentPage} total={filtered.length} onPage={setPage} />
         </>
       )}
-      {selected && (
-        <TenantDetailModal key={selected.id} tenant={selected} plans={plans} subscriptionMode
-          onClose={() => setSelectedId(undefined)} onRefresh={refresh}
-          noticeActions={reminderIds.has(selected.id) ? {
-            busy: sending, send: kind => void sendNotice(selected.id, kind),
-          } : undefined} />
-      )}
-      {rulesOpen && (
-        <Modal open size="md" title="Règles de suivi" variant="flat" panelClassName="pa-modal" layer="top"
-          onClose={() => { if (!rulesBusy) setRulesOpen(false); }}>
-          {!rules ? <PlatformLoading /> : <div className="pa-page">
-            <form className="space-y-3" onSubmit={event => { event.preventDefault(); void saveRules(); }}>
-              <label className="pa-inline text-sm">
-                <input type="checkbox" checked={rules.enabled} onChange={event => setRules({ ...rules, enabled: event.target.checked })} />
-                Suspendre les abonnements après expiration
-              </label>
-              <label className="pa-field-label w-fit">Délai de grâce en jours
-                <input type="number" className="pa-field w-24" min={1} max={90} required value={rules.days || ''}
-                  onChange={event => setRules({ ...rules, days: Number(event.target.value) })} />
-              </label>
-              <button type="submit" className="pa-button" data-variant="primary" disabled={!!rulesBusy}>Enregistrer les règles</button>
-            </form>
-            <div className="pa-panel">
-              <button type="button" className="pa-button" disabled={!!rulesBusy} onClick={() => void runLifecycle()}>
-                {rulesBusy === 'run' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                Exécuter le traitement quotidien
-              </button>
-              {lastResult && <p className="pa-feedback" role="status">
-                {lastResult.renewed || 0} renouvelés · {lastResult.expired || 0} expirés · {lastResult.suspended || 0} suspendus · {lastResult.reminders_sent || 0} rappels
-              </p>}
-            </div>
-          </div>}
-        </Modal>
-      )}
     </div>
   );
 }
@@ -1822,6 +1646,7 @@ function MessagesSection() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [form, setForm] = useState<any>({ severity: 'info', target: 'all', requires_ack: true });
   const [preview, setPreview] = useState<any>(null);
   const [toDelete, setToDelete] = useState<any>(null);
@@ -1838,13 +1663,113 @@ function MessagesSection() {
   useEffect(() => { load(); }, []);
 
   const save = async () => {
-    if (!form.title) { error('Titre requis'); return; }
+    if (!form.title?.trim() || publishing) return;
+    setPublishing(true);
     try {
       await call('create_message', { ...form, expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null });
       success('Message publié');
       setOpen(false); setForm({ severity: 'info', target: 'all', requires_ack: true }); load();
     } catch (e: any) { error(e.message); }
+    finally { setPublishing(false); }
   };
+
+  if (toDelete) {
+    return (
+      <PlatformConfirmation title="Supprimer ce message ?" backLabel="Retour aux messages" onBack={() => setToDelete(null)}
+        message={'Le message « ' + toDelete.title + ' » cessera d’être affiché.'} label="Supprimer le message" danger
+        onConfirm={async () => {
+          await call('delete_message', { id: toDelete.id });
+          success('Message supprimé');
+          setToDelete(null);
+          setPreview(null);
+          await load();
+        }} />
+    );
+  }
+
+  if (preview) {
+    const target = preview.target === 'tenant' ? preview.tenants?.name || 'Entreprise sélectionnée'
+      : preview.target === 'plan' ? plans.find(plan => plan.code === preview.plan_code)?.name || preview.plan_code : 'Toutes les entreprises';
+    return (
+      <PlatformWorkPage title={preview.title} backLabel="Retour aux messages" onBack={() => setPreview(null)}
+        actions={<button type="button" className="pa-link pa-danger" onClick={() => setToDelete(preview)}><Trash2 size={16} /> Supprimer</button>}>
+        <dl className="pa-record-summary">
+          <div><dt>Destinataires</dt><dd>{target}</dd></div>
+          <div><dt>Type</dt><dd>{messageTypes[preview.severity] || messageTypes.info}</dd></div>
+          <div><dt>Publié le</dt><dd>{formatDateTime(preview.created_at)}</dd></div>
+          {preview.expires_at && <div><dt>Expiration</dt><dd>{formatDateTime(preview.expires_at)}</dd></div>}
+        </dl>
+        <p className="pa-copy whitespace-pre-wrap">{preview.body}</p>
+        {preview.cta_label && (
+          <dl className="pa-keyvals">
+            <div><dt>Bouton</dt><dd>{preview.cta_label}</dd></div>
+            {preview.cta_url && <div><dt>Adresse</dt><dd>{preview.cta_url}</dd></div>}
+          </dl>
+        )}
+      </PlatformWorkPage>
+    );
+  }
+
+  if (open) {
+    return (
+      <PlatformWorkPage title="Nouveau message" backLabel="Retour aux messages" onBack={() => setOpen(false)} busy={publishing}>
+        <form className="pa-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+          <label className="pa-field-label">Titre
+            <input className="w-input-ul" required value={form.title || ''} onChange={event => setForm({ ...form, title: event.target.value })} />
+          </label>
+          <label className="pa-field-label">Message
+            <textarea rows={4} className="w-input-ul" value={form.body || ''} onChange={event => setForm({ ...form, body: event.target.value })} />
+          </label>
+          <div className="pa-form-grid">
+            <label className="pa-field-label">Type
+              <select className="w-input-ul" value={form.severity} onChange={event => setForm({ ...form, severity: event.target.value })}>
+                {Object.entries(messageTypes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+            </label>
+            <label className="pa-field-label">Destinataires
+              <select className="w-input-ul" value={form.target} onChange={event => setForm({ ...form, target: event.target.value })}>
+                <option value="all">Toutes les entreprises</option><option value="tenant">Une entreprise</option><option value="plan">Les abonnés à une offre</option>
+              </select>
+            </label>
+            {form.target === 'tenant' && (
+              <label className="pa-field-label">Entreprise
+                <select className="w-input-ul" required value={form.tenant_id || ''} onChange={event => setForm({ ...form, tenant_id: event.target.value })}>
+                  <option value="">Choisir une entreprise</option>
+                  {tenants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+            )}
+            {form.target === 'plan' && (
+              <label className="pa-field-label">Offre
+                <select className="w-input-ul" required value={form.plan_code || ''} onChange={event => setForm({ ...form, plan_code: event.target.value })}>
+                  <option value="">Choisir une offre</option>
+                  {plans.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}
+                </select>
+              </label>
+            )}
+            <label className="pa-field-label">Expiration
+              <input className="w-input-ul" type="datetime-local" value={form.expires_at || ''} onChange={event => setForm({ ...form, expires_at: event.target.value })} />
+            </label>
+            <label className="pa-field-label">Libellé du bouton
+              <input className="w-input-ul" value={form.cta_label || ''} onChange={event => setForm({ ...form, cta_label: event.target.value })} />
+            </label>
+            <label className="pa-field-label">Adresse du bouton
+              <input className="w-input-ul" value={form.cta_url || ''} onChange={event => setForm({ ...form, cta_url: event.target.value })} />
+            </label>
+          </div>
+          <label className="pa-inline">
+            <input type="checkbox" checked={form.requires_ack !== false} onChange={event => setForm({ ...form, requires_ack: event.target.checked })} />
+            Demander un accusé de lecture
+          </label>
+          <div className="pa-form-actions">
+            <button type="submit" className="pa-button" data-variant="primary" disabled={publishing}>
+              {publishing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Publier le message
+            </button>
+          </div>
+        </form>
+      </PlatformWorkPage>
+    );
+  }
 
   return (
     <div className="pa-page">
@@ -1855,7 +1780,7 @@ function MessagesSection() {
       {loading ? <PlatformLoading /> : messages.length === 0 ? <p className="pa-empty">Aucun message publié.</p> : (
         <div className="pa-divided">
           {messages.map(message => {
-            const severity = SEV[message.severity as keyof typeof SEV] || SEV.info;
+            const severity = messageTypes[message.severity] || messageTypes.info;
             const expired = message.expires_at && Date.parse(message.expires_at) < Date.now();
             const target = message.target === 'all' ? 'Toutes les entreprises' : message.target === 'tenant'
               ? message.tenants?.name || 'Entreprise' : message.plan_code;
@@ -1863,7 +1788,7 @@ function MessagesSection() {
               <article className="pa-message-row" key={message.id}>
                 <div className="min-w-0">
                   <button type="button" onClick={() => setPreview(message)} className="pa-name-button">{message.title}</button>
-                  <p className="pa-row-subtitle">{target} · {severity.label} · {formatDateTime(message.created_at)}{expired ? ' · Expiré' : ''}</p>
+                  <p className="pa-row-subtitle">{target} · {severity} · {formatDateTime(message.created_at)}{expired ? ' · Expiré' : ''}</p>
                   {message.body && <p className="pa-muted text-sm line-clamp-2 mt-1">{message.body}</p>}
                 </div>
                 <div className="pa-row-actions">
@@ -1877,77 +1802,6 @@ function MessagesSection() {
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Nouveau message" size="md" variant="flat" layer="top" panelClassName="pa-modal flat-form"
-        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} className="btn-icon-primary" title="Publier"><Send className="w-4 h-4" /></button></>}>
-        <div className="space-y-3">
-          <div><label className="label">Titre *</label><input value={form.title || ''} onChange={e => setForm({ ...form, title: e.target.value })} className="input" placeholder="Ex: Maintenance planifiée" /></div>
-          <div><label className="label">Contenu</label><textarea value={form.body || ''} onChange={e => setForm({ ...form, body: e.target.value })} className="input resize-none" rows={4} /></div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="label">Sévérité</label>
-              <select value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })} className="input">
-                <option value="info">Info</option><option value="success">Succès</option><option value="warning">Avertissement</option><option value="critical">Critique</option>
-              </select>
-            </div>
-            <div><label className="label">Cible</label>
-              <select value={form.target} onChange={e => setForm({ ...form, target: e.target.value })} className="input">
-                <option value="all">Tous les tenants</option><option value="tenant">Tenant spécifique</option><option value="plan">Plan spécifique</option>
-              </select>
-            </div>
-          </div>
-          {form.target === 'tenant' && (
-            <div><label className="label">Tenant</label>
-              <select value={form.tenant_id || ''} onChange={e => setForm({ ...form, tenant_id: e.target.value })} className="input">
-                <option value="">— Choisir —</option>
-                {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-          )}
-          {form.target === 'plan' && (
-            <div><label className="label">Plan</label>
-              <select value={form.plan_code || ''} onChange={e => setForm({ ...form, plan_code: e.target.value })} className="input">
-                <option value="">— Choisir —</option>
-                {plans.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
-              </select>
-            </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="label">Libellé bouton</label><input value={form.cta_label || ''} onChange={e => setForm({ ...form, cta_label: e.target.value })} className="input" placeholder="En savoir plus" /></div>
-            <div><label className="label">URL bouton</label><input value={form.cta_url || ''} onChange={e => setForm({ ...form, cta_url: e.target.value })} className="input" placeholder="https://…" /></div>
-          </div>
-          <div><label className="label">Expire le (optionnel)</label><input type="datetime-local" value={form.expires_at || ''} onChange={e => setForm({ ...form, expires_at: e.target.value })} className="input" /></div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={form.requires_ack !== false} onChange={e => setForm({ ...form, requires_ack: e.target.checked })} className="rounded" />
-            Requiert un accusé de lecture (popup bloquante)
-          </label>
-        </div>
-      </Modal>
-
-      {preview && (
-        <Modal open onClose={() => setPreview(null)} title="Aperçu du message" size="sm" variant="flat" layer="top" panelClassName="pa-modal" footer={<button onClick={() => setPreview(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
-          <MessagePreview m={preview} />
-        </Modal>
-      )}
-
-      <ConfirmDialog open={!!toDelete} onClose={() => setToDelete(null)}
-        onConfirm={async () => {
-          try { await call('delete_message', { id: toDelete.id }); success('Message supprimé'); setToDelete(null); load(); }
-          catch (e: any) { error(e.message); }
-        }}
-        title="Supprimer ce message ?" message={`"${toDelete?.title}" ne sera plus affiché.`} danger />
-    </div>
-  );
-}
-
-function MessagePreview({ m }: { m: any }) {
-  const sev = SEV[m.severity as keyof typeof SEV] || SEV.info;
-  return (
-    <div className={`${sev.bg} ${sev.border} border rounded-2xl p-5`}>
-      <div className="flex items-center gap-2 mb-2">
-        <AlertTriangle className={`w-5 h-5 ${sev.icon}`} />
-        <span className={`font-bold ${sev.text}`}>{m.title}</span>
-      </div>
-      <p className={`text-sm ${sev.text}`}>{m.body}</p>
-      {m.cta_label && <button className="mt-3 btn-primary text-xs">{m.cta_label}</button>}
     </div>
   );
 }
@@ -2026,10 +1880,6 @@ function ActivitySection() {
 
 /* ============== LOGIN CONFIG ============== */
 
-const ICON_MAP_ADMIN = LOGIN_ICON_MAP;
-
-const ALL_APP_FEATURES = DEFAULT_LOGIN_MODULES.map(m => ({ ...m, color: 'text-teal-600 bg-teal-50' }));
-
 const AVAILABLE_ICONS = [
   { value: 'ShoppingCart', label: 'Panier (POS)' },
   { value: 'Package', label: 'Colis (Stock)' },
@@ -2047,547 +1897,292 @@ const AVAILABLE_ICONS = [
   { value: 'Receipt', label: 'Reçu' },
 ];
 
+const accentNames: Record<TextAccent['effect'], string> = {
+  underline: 'Soulignement', wavyUnderline: 'Soulignement ondulé', shortUnderline: 'Trait court',
+  paint: 'Peinture', paintStroke: 'Coup de pinceau', marker: 'Marqueur', highlight: 'Surlignage',
+  brush: 'Trait épais', circle: 'Cercle', starburst: 'Rayons', boxed: 'Encadré',
+  glow: 'Lueur', splash: 'Couleur en italique', strikethrough: 'Barré',
+};
+
+type LoginEditorTab = 'textes' | 'modules' | 'effets' | 'apercu';
+type EditableLogin = Pick<LoginConfig, 'headline' | 'headline_accent' | 'eyebrow' | 'subtitle' | 'login_title' | 'login_subtitle' | 'login_bg_url' | 'modules' | 'text_accents'>;
+type LoginRowDraft =
+  | { kind: 'module'; index: number | null; value: LoginModule }
+  | { kind: 'accent'; index: number | null; value: TextAccent };
+
+const loginTabs: { key: LoginEditorTab; label: string }[] = [
+  { key: 'textes', label: 'Textes et image' }, { key: 'modules', label: 'Modules' },
+  { key: 'effets', label: 'Mise en forme' }, { key: 'apercu', label: 'Aperçu' },
+];
+
 function LoginConfigSection() {
   const { success, error } = useToast();
+  const [config, setConfig] = useState<EditableLogin | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [headline, setHeadline] = useState('');
-  const [headlineAccent, setHeadlineAccent] = useState('');
-  const [subtitle, setSubtitle] = useState('');
-  const [loginBgUrl, setLoginBgUrl] = useState<string | null>(null);
-  const [modules, setModules] = useState<LoginModule[]>([]);
-  const [eyebrow, setEyebrow] = useState('');
-  const [textAccents, setTextAccents] = useState<TextAccent[]>([]);
-  const [loginTitle, setLoginTitle] = useState('');
-  const [loginSubtitle, setLoginSubtitle] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [tab, setTab] = useState<LoginEditorTab>('textes');
+  const [draft, setDraft] = useState<LoginRowDraft | null>(null);
   const [previewSlide, setPreviewSlide] = useState(0);
-  const [previewAnim, setPreviewAnim] = useState<'in' | 'out'>('in');
-  const [activeTab, setActiveTab] = useState<'textes' | 'modules' | 'effets'>('textes');
 
   useEffect(() => {
-    (async () => {
-      try {
-        const data = await call('get_login_config');
-        setHeadline(data.headline || '');
-        setHeadlineAccent(data.headline_accent || '');
-        setSubtitle(data.subtitle || '');
-        setLoginBgUrl(data.login_bg_url || null);
-        setModules(data.modules || []);
-        setEyebrow(data.eyebrow || '');
-        setTextAccents(data.text_accents || []);
-        setLoginTitle(data.login_title || '');
-        setLoginSubtitle(data.login_subtitle || '');
-      } catch (e: any) { error(e.message); }
-      setLoading(false);
-    })();
+    call('get_login_config').then(data => setConfig({
+      headline: data.headline ?? '', headline_accent: data.headline_accent ?? '',
+      subtitle: data.subtitle ?? '', eyebrow: data.eyebrow ?? '',
+      login_title: data.login_title ?? '', login_subtitle: data.login_subtitle ?? '',
+      login_bg_url: data.login_bg_url ?? null,
+      modules: Array.isArray(data.modules) ? data.modules : [],
+      text_accents: Array.isArray(data.text_accents) ? data.text_accents : [],
+    })).catch(cause => error(cause.message)).finally(() => setLoading(false));
   }, []);
 
+  if (loading) return <PlatformLoading />;
+  if (!config) return <p className="pa-empty">La configuration de la connexion est indisponible.</p>;
+
+  const update = <K extends keyof EditableLogin,>(key: K, value: EditableLogin[K]) => {
+    setConfig(previous => previous && { ...previous, [key]: value });
+  };
   const save = async () => {
     setSaving(true);
     try {
-      await call('update_login_config', { headline, headline_accent: headlineAccent, subtitle, modules, login_bg_url: loginBgUrl, eyebrow, text_accents: textAccents, login_title: loginTitle, login_subtitle: loginSubtitle });
-      success('Configuration de l\'écran de connexion enregistrée');
-    } catch (e: any) { error(e.message); }
-    setSaving(false);
+      await call('update_login_config', config);
+      success('Configuration de l’écran de connexion enregistrée');
+    } catch (cause) { error((cause as Error).message); }
+    finally { setSaving(false); }
   };
-
-  const updateModule = (idx: number, field: keyof LoginModule, value: string) => {
-    setModules(prev => prev.map((m, i) => i === idx ? { ...m, [field]: value } : m));
+  const upload = async (file: File) => {
+    if (file.size > 3 * 1024 * 1024) { error('Image trop lourde. Taille maximale de 3 Mo.'); return; }
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = 'platform/login-bg-' + Date.now() + '.' + ext;
+      const bucket = supabase.storage.from('tenant-logos');
+      const { error: uploadError } = await bucket.upload(path, file, { cacheControl: '86400', upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      update('login_bg_url', bucket.getPublicUrl(path).data.publicUrl);
+      success('Image chargée');
+    } catch (cause) { error((cause as Error).message); }
+    finally { setUploading(false); }
   };
-
-  const removeModule = (idx: number) => setModules(prev => prev.filter((_, i) => i !== idx));
-
-  const addModule = () => {
-    setModules(prev => [...prev, { icon: 'ShoppingCart', label: '', desc: '' }]);
-  };
-
-  const useAllDefaults = () => setModules(ALL_APP_FEATURES.map(f => ({ icon: f.icon, label: f.label, desc: f.desc })));
-
-  const moveModule = (idx: number, dir: -1 | 1) => {
-    const next = idx + dir;
+  const moveModule = (index: number, step: -1 | 1) => {
+    const modules = config.modules.slice();
+    const next = index + step;
     if (next < 0 || next >= modules.length) return;
-    setModules(prev => {
-      const a = [...prev];
-      [a[idx], a[next]] = [a[next], a[idx]];
-      return a;
-    });
+    [modules[index], modules[next]] = [modules[next], modules[index]];
+    update('modules', modules);
   };
-
-  const previewModules = modules.length > 0 ? modules : ALL_APP_FEATURES.map(f => ({ icon: f.icon, label: f.label, desc: f.desc }));
-  const totalSlides = Math.ceil(previewModules.length / 3);
-  const slideModules = previewModules.slice(previewSlide * 3, previewSlide * 3 + 3);
-
-  const advancePreview = (idx: number) => {
-    setPreviewAnim('out');
-    setTimeout(() => { setPreviewSlide(idx); setPreviewAnim('in'); }, 260);
+  const applyDraft = () => {
+    if (draft?.kind === 'module') {
+      const modules = config.modules.slice();
+      modules[draft.index ?? modules.length] = { ...draft.value, label: draft.value.label.trim() };
+      update('modules', modules);
+    } else if (draft) {
+      const accents = config.text_accents.slice();
+      accents[draft.index ?? accents.length] = { ...draft.value, text: draft.value.text.trim() };
+      update('text_accents', accents);
+    }
+    setDraft(null);
   };
-
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {/* Left: Editor */}
-        <div className="space-y-4">
-          {/* Tabs */}
-          <div className="pa-tabs" aria-label="Configuration de la connexion">
-            <button
-              onClick={() => setActiveTab('textes')}
-              aria-current={activeTab === 'textes' ? 'page' : undefined}
-            >
-              Textes
-            </button>
-            <button
-              onClick={() => setActiveTab('effets')}
-              aria-current={activeTab === 'effets' ? 'page' : undefined}
-            >
-              Effets
-            </button>
-            <button
-              onClick={() => setActiveTab('modules')}
-              aria-current={activeTab === 'modules' ? 'page' : undefined}
-            >
-              Modules ({modules.length})
-            </button>
-          </div>
-
-          {activeTab === 'textes' && (
-            <div className="pa-panel space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Titre principal</label>
-                <input
-                  value={headline}
-                  onChange={e => setHeadline(e.target.value)}
-                  placeholder="La plateforme qui simplifie,"
-                  className="w-full pa-field"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">Première ligne du titre</p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Accent (en couleur turquoise)</label>
-                <input
-                  value={headlineAccent}
-                  onChange={e => setHeadlineAccent(e.target.value)}
-                  placeholder="connecte et propulse votre business."
-                  className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-teal-600 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">Partie affichée en turquoise</p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre</label>
-                <textarea
-                  value={subtitle}
-                  onChange={e => setSubtitle(e.target.value)}
-                  rows={2}
-                  placeholder="Gérez vos ventes, stocks, clients et finances..."
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Eyebrow (petit texte au-dessus du titre)</label>
-                <input
-                  value={eyebrow}
-                  onChange={e => setEyebrow(e.target.value)}
-                  placeholder="LA PLATEFORME QUI AVANCE AVEC VOUS"
-                  className="w-full pa-field"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">Texte en petites capitales au-dessus du titre principal</p>
-              </div>
-              <div className="border-t border-[var(--w-separator)] pt-4 mt-2">
-                <p className="text-xs font-bold text-slate-700 mb-3">Zone de connexion (droite)</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Titre connexion</label>
-                    <input
-                      value={loginTitle}
-                      onChange={e => setLoginTitle(e.target.value)}
-                      placeholder="Accédez à votre espace"
-                      className="w-full pa-field"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre connexion</label>
-                    <input
-                      value={loginSubtitle}
-                      onChange={e => setLoginSubtitle(e.target.value)}
-                      placeholder="Connectez-vous pour gérer votre activité."
-                      className="w-full pa-field"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Image de fond</label>
-                <div className="flex items-center gap-3">
-                  {loginBgUrl && (
-                    <img src={loginBgUrl} alt="Fond" className="w-24 h-14 object-cover rounded-xl border border-slate-200" />
-                  )}
-                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-[var(--w-surface-el)] hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
-                    <ImagePlus className="w-4 h-4 text-slate-500" />
-                    {loginBgUrl ? 'Changer' : 'Uploader une image'}
-                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.size > 3 * 1024 * 1024) { error('Image trop lourde (max 3 Mo)'); return; }
-                      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-                      const path = `platform/login-bg-${Date.now()}.${ext}`;
-                      const { error: upErr } = await supabase.storage.from('tenant-logos').upload(path, file, { cacheControl: '86400', upsert: true, contentType: file.type });
-                      if (upErr) { error(upErr.message); return; }
-                      const { data: { publicUrl } } = supabase.storage.from('tenant-logos').getPublicUrl(path);
-                      setLoginBgUrl(publicUrl);
-                      success('Image uploadee');
-                    }} />
-                  </label>
-                  {loginBgUrl && (
-                    <button type="button" onClick={() => setLoginBgUrl(null)} className="text-xs text-red-500 hover:text-red-700 font-semibold">
-                      Supprimer
-                    </button>
-                  )}
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1.5">Affichee en arriere-plan avec transparence. JPG/WebP recommande, max 3 Mo. Si absente, le fond par defaut s'applique.</p>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'effets' && (
-            <div className="pa-panel space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-bold text-slate-700">Effets graphiques sur le texte</p>
-                  <button
-                    type="button"
-                    onClick={() => setTextAccents(prev => [...prev, { text: '', effect: 'underline', color: '#0f766e' }])}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Ajouter un effet
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-400 mb-3">Appliquez des effets visuels (soulignement, surlignage, peinture...) sur des mots ou portions de texte dans le titre ou sous-titre de la page de connexion.</p>
-              </div>
-
-              {textAccents.length === 0 && (
-                <div className="text-center py-8 space-y-2">
-                  <p className="text-xs text-slate-400">Aucun effet configuré.</p>
-                  <p className="text-[10px] text-slate-400">Les titres s'afficheront sans mise en valeur particulière.</p>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {textAccents.map((accent, idx) => (
-                  <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-2.5 group">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase w-5 shrink-0">#{idx + 1}</span>
-                      <input
-                        value={accent.text}
-                        onChange={e => setTextAccents(prev => prev.map((a, i) => i === idx ? { ...a, text: e.target.value } : a))}
-                        placeholder="Texte à mettre en valeur"
-                        className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[12px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setTextAccents(prev => prev.filter((_, i) => i !== idx))}
-                        className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={accent.effect}
-                        onChange={e => setTextAccents(prev => prev.map((a, i) => i === idx ? { ...a, effect: e.target.value as TextAccent['effect'] } : a))}
-                        className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-[var(--w-surface)] focus:outline-none focus:ring-1 focus:ring-brand-400"
-                      >
-                        <option value="underline">Soulignement peinture</option>
-                        <option value="wavyUnderline">Soulignement ondule</option>
-                        <option value="shortUnderline">Trait court centre</option>
-                        <option value="paint">Peinture / surlignage peint</option>
-                        <option value="paintStroke">Coup de pinceau</option>
-                        <option value="marker">Marqueur epais</option>
-                        <option value="highlight">Surlignage clair</option>
-                        <option value="brush">Trait solide en bas</option>
-                        <option value="circle">Cercle autour du mot</option>
-                        <option value="starburst">Rayons / etoile</option>
-                        <option value="boxed">Encadre</option>
-                        <option value="glow">Lueur / glow</option>
-                        <option value="splash">Couleur + italique</option>
-                        <option value="strikethrough">Barre / raye</option>
-                      </select>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="color"
-                          value={accent.color}
-                          onChange={e => setTextAccents(prev => prev.map((a, i) => i === idx ? { ...a, color: e.target.value } : a))}
-                          className="w-7 h-7 rounded-lg border border-slate-200 cursor-pointer p-0.5"
-                        />
-                        <span className="text-[10px] text-slate-500 font-mono">{accent.color}</span>
-                      </div>
-                    </div>
-                    {/* Preview */}
-                    {accent.text && (
-                      <div className="pt-1 border-t border-[var(--w-separator)]">
-                        <p className="text-[10px] text-slate-400 mb-1">Aperçu :</p>
-                        <span className="text-sm font-bold text-slate-900 relative inline-block" style={
-                          accent.effect === 'underline' ? {
-                            backgroundImage: `linear-gradient(to right, ${accent.color}60, ${accent.color}60)`,
-                            backgroundSize: '100% 4px',
-                            backgroundRepeat: 'no-repeat',
-                            backgroundPosition: 'bottom',
-                            paddingBottom: '4px',
-                          } : accent.effect === 'paint' ? {
-                            background: `${accent.color}25`,
-                            padding: '1px 5px',
-                            display: 'inline',
-                            borderRadius: '3px',
-                            transform: 'skewX(-2deg)',
-                          } : accent.effect === 'highlight' ? {
-                            background: `${accent.color}22`,
-                            padding: '2px 6px',
-                            borderRadius: '2px',
-                          } : accent.effect === 'brush' ? {
-                            borderBottom: `3px solid ${accent.color}`,
-                            paddingBottom: '2px',
-                          } : accent.effect === 'splash' ? {
-                            color: accent.color,
-                            fontStyle: 'italic',
-                          } : accent.effect === 'marker' ? {
-                            background: `linear-gradient(transparent 40%, ${accent.color}88 40%, ${accent.color}88 85%, transparent 85%)`,
-                            padding: '0 2px',
-                          } : accent.effect === 'wavyUnderline' ? {
-                            textDecoration: 'underline wavy',
-                            textDecorationColor: accent.color,
-                            textUnderlineOffset: '4px',
-                            textDecorationThickness: '2px',
-                          } : accent.effect === 'shortUnderline' ? {
-                            borderBottom: `4px solid ${accent.color}`,
-                            paddingBottom: '3px',
-                            borderImage: `linear-gradient(to right, transparent 25%, ${accent.color} 25%, ${accent.color} 75%, transparent 75%) 1`,
-                          } : accent.effect === 'paintStroke' ? {
-                            background: `linear-gradient(95deg, ${accent.color}55 0%, ${accent.color}35 40%, ${accent.color}55 70%, ${accent.color}30 100%)`,
-                            padding: '2px 4px',
-                            borderRadius: '4px 2px 4px 2px',
-                            transform: 'rotate(-0.5deg)',
-                          } : accent.effect === 'circle' ? {
-                            border: `2.5px dashed ${accent.color}`,
-                            borderRadius: '50%',
-                            padding: '2px 10px',
-                          } : accent.effect === 'starburst' ? {
-                            color: accent.color,
-                            textShadow: `2px 2px 0 ${accent.color}33, -2px -2px 0 ${accent.color}33`,
-                            fontWeight: 900,
-                          } : accent.effect === 'boxed' ? {
-                            border: `2.5px solid ${accent.color}`,
-                            padding: '1px 8px',
-                            borderRadius: '4px',
-                          } : accent.effect === 'glow' ? {
-                            color: accent.color,
-                            textShadow: `0 0 8px ${accent.color}66, 0 0 20px ${accent.color}33`,
-                          } : accent.effect === 'strikethrough' ? {
-                            textDecoration: 'line-through',
-                            textDecorationColor: accent.color,
-                            textDecorationThickness: '3px',
-                          } : {}
-                        }>
-                          {accent.text}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'modules' && (
-            <div className="pa-panel space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-slate-700">Modules affichés ({modules.length})</p>
-                  <p className="text-[10px] text-slate-400">Ils défilent 3 par 3 sur l'écran de connexion</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={useAllDefaults}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200 transition-colors"
-                  >
-                    <RotateCcw className="w-3 h-3" /> Tout rétablir
-                  </button>
-                  <button
-                    onClick={addModule}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Ajouter
-                  </button>
-                </div>
-              </div>
-
-              {modules.length === 0 && (
-                <div className="text-center py-6 space-y-2">
-                  <p className="text-xs text-slate-400">Aucun module configuré.</p>
-                  <button onClick={useAllDefaults} className="text-xs font-semibold text-brand-600 hover:text-brand-700">
-                    Utiliser tous les modules par défaut →
-                  </button>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {modules.map((mod, idx) => {
-                  const IconComp = ICON_MAP_ADMIN[mod.icon] || Shield;
-                  return (
-                    <div key={idx} className="p-2.5 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group space-y-2">
-                      <div className="flex items-center gap-2">
-                        {/* Drag handle / order */}
-                        <div className="flex flex-col gap-0.5 shrink-0">
-                          <button onClick={() => moveModule(idx, -1)} disabled={idx === 0} className="text-slate-400 hover:text-slate-600 disabled:opacity-20 transition-colors">
-                            <ArrowUpRight className="w-3 h-3 rotate-[-90deg]" />
-                          </button>
-                          <button onClick={() => moveModule(idx, 1)} disabled={idx === modules.length - 1} className="text-slate-400 hover:text-slate-600 disabled:opacity-20 transition-colors">
-                            <ArrowUpRight className="w-3 h-3 rotate-90" />
-                          </button>
-                        </div>
-                        {/* Icon preview */}
-                        <div className="w-8 h-8 rounded-lg bg-[var(--w-surface)] border border-slate-200 flex items-center justify-center shrink-0">
-                          <IconComp className="w-3.5 h-3.5 text-teal-600" />
-                        </div>
-                        {/* Icon select */}
-                        <select
-                          value={mod.icon}
-                          onChange={e => updateModule(idx, 'icon', e.target.value)}
-                          className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-[var(--w-surface)] focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0"
-                        >
-                          {AVAILABLE_ICONS.map(ic => (
-                            <option key={ic.value} value={ic.value}>{ic.label}</option>
-                          ))}
-                        </select>
-                        {/* Delete */}
-                        <button onClick={() => removeModule(idx)} className="shrink-0 ml-auto p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        {/* Label */}
-                        <input
-                          value={mod.label}
-                          onChange={e => updateModule(idx, 'label', e.target.value)}
-                          placeholder="Nom du module"
-                          className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
-                        />
-                        {/* Desc */}
-                        <input
-                          value={mod.desc}
-                          onChange={e => updateModule(idx, 'desc', e.target.value)}
-                          placeholder="Description"
-                          className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Live Preview */}
-        <div className="sticky top-4">
-          <div className="pa-panel overflow-hidden">
-            <div className="px-4 py-3 border-b border-[var(--w-separator)] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-bold text-slate-700">Aperçu en direct</span>
-              </div>
-              <span className="text-[10px] text-slate-400">Écran de connexion</span>
-            </div>
-            <div className="p-4 bg-[#f0f4f8]">
-              {/* Mini mockup of login screen left panel */}
-              <div className="rounded-xl bg-[var(--w-surface)] border border-slate-200 shadow-sm p-4 space-y-3">
-                {/* Logo */}
-                <div>
-                  <img src="/newlogo.png" alt="WAARWI" className="h-8 w-auto object-contain" />
-                  <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wider mt-1">Plateforme Business 2.0</p>
-                </div>
-                {/* Headline */}
-                <div>
-                  <p className="text-sm font-extrabold text-slate-900 leading-tight">
-                    {headline || 'La plateforme qui simplifie,'}
-                    {headlineAccent && <span className="text-teal-600"> {headlineAccent}</span>}
-                  </p>
-                  {subtitle && <p className="text-[9px] text-slate-500 mt-1 leading-relaxed">{subtitle}</p>}
-                </div>
-                {/* Feature carousel preview */}
-                <div>
-                  <div
-                    className="grid grid-cols-3 gap-1.5"
-                    style={{
-                      opacity: previewAnim === 'in' ? 1 : 0,
-                      transform: previewAnim === 'in' ? 'translateY(0)' : 'translateY(4px)',
-                      transition: 'opacity 0.26s ease, transform 0.26s ease',
-                    }}
-                  >
-                    {slideModules.map((m, i) => {
-                      const feat = ALL_APP_FEATURES.find(f => f.icon === m.icon);
-                      const colorCls = feat?.color || 'text-teal-600 bg-teal-50';
-                      const IconC = ICON_MAP_ADMIN[m.icon] || Shield;
-                      return (
-                        <div key={`${previewSlide}-${i}`} className={`rounded-lg border p-2 ${colorCls} border-current/20`}>
-                          <div className={`w-5 h-5 rounded flex items-center justify-center mb-1 ${colorCls}`}>
-                            <IconC className="w-3 h-3" />
-                          </div>
-                          <p className="text-[8px] font-bold text-slate-800 truncate">{m.label || '—'}</p>
-                          <p className="text-[7px] text-slate-400 leading-tight truncate">{m.desc || '—'}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {/* Slide indicators */}
-                  {totalSlides > 1 && (
-                    <div className="flex items-center justify-center gap-1 mt-2">
-                      {Array.from({ length: totalSlides }).map((_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => advancePreview(i)}
-                          className={`rounded-full transition-all ${i === previewSlide ? 'w-3 h-1 bg-teal-500' : 'w-1 h-1 bg-slate-300'}`}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {/* Mini stats mockup */}
-                <div className="grid grid-cols-3 gap-1 mt-1">
-                  {[
-                    { label: 'Slide actuel', val: `${previewSlide + 1} / ${totalSlides}` },
-                    { label: 'Modules total', val: `${previewModules.length}` },
-                    { label: 'Groupes de 3', val: `${totalSlides}` },
-                  ].map((s, i) => (
-                    <div key={i} className="rounded-lg p-1.5 bg-[var(--w-surface-el)] border border-[var(--w-separator)]">
-                      <p className="text-[7px] text-slate-400 font-medium uppercase">{s.label}</p>
-                      <p className="text-[9px] font-black text-slate-700">{s.val}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="pa-page">
+      <div className="pa-editor-nav">
+        <nav className="pa-tabs" aria-label="Configuration de la connexion">
+          {loginTabs.map(item => (
+            <button type="button" key={item.key} aria-current={tab === item.key ? 'page' : undefined}
+              onClick={() => { setDraft(null); setTab(item.key); }}>{item.label}</button>
+          ))}
+        </nav>
+        {!draft && <button type="button" className="pa-button" data-variant="primary" onClick={() => void save()} disabled={saving || uploading}>
+          {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Enregistrer les modifications
+        </button>}
       </div>
 
-      {/* Save button */}
-      <div className="flex justify-end">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-700 text-white text-sm font-semibold hover:bg-brand-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          Enregistrer les modifications
-        </button>
-      </div>
+      {draft ? (
+        <PlatformWorkPage title={draft.kind === 'module' ? (draft.index === null ? 'Ajouter un module' : 'Modifier le module')
+          : (draft.index === null ? 'Ajouter une mise en forme' : 'Modifier la mise en forme')}
+          backLabel={draft.kind === 'module' ? 'Retour aux modules' : 'Retour aux mises en forme'} onBack={() => setDraft(null)}>
+          <form className="pa-form" onSubmit={event => { event.preventDefault(); applyDraft(); }}>
+            {draft.kind === 'module' ? (
+              <div className="pa-form-grid">
+                <label className="pa-field-label">Nom du module
+                  <input required className="w-input-ul" value={draft.value.label} onChange={event => setDraft({ ...draft, value: { ...draft.value, label: event.target.value } })} />
+                </label>
+                <label className="pa-field-label">Icône
+                  <select className="w-input-ul" value={draft.value.icon} onChange={event => setDraft({ ...draft, value: { ...draft.value, icon: event.target.value } })}>
+                    {AVAILABLE_ICONS.map(icon => <option value={icon.value} key={icon.value}>{icon.label}</option>)}
+                  </select>
+                </label>
+                <label className="pa-field-label">Description
+                  <input className="w-input-ul" value={draft.value.desc} onChange={event => setDraft({ ...draft, value: { ...draft.value, desc: event.target.value } })} />
+                </label>
+              </div>
+            ) : (
+              <div className="pa-form-grid">
+                <label className="pa-field-label">Texte à mettre en valeur
+                  <input required className="w-input-ul" value={draft.value.text} onChange={event => setDraft({ ...draft, value: { ...draft.value, text: event.target.value } })} />
+                </label>
+                <label className="pa-field-label">Style
+                  <select className="w-input-ul" value={draft.value.effect}
+                    onChange={event => setDraft({ ...draft, value: { ...draft.value, effect: event.target.value as TextAccent['effect'] } })}>
+                    {Object.entries(accentNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
+                <label className="pa-field-label">Couleur
+                  <input type="color" value={draft.value.color} onChange={event => setDraft({ ...draft, value: { ...draft.value, color: event.target.value } })} />
+                </label>
+                {draft.value.text && <p className="pa-copy"><AccentedText text={draft.value.text} accents={[draft.value]} /></p>}
+              </div>
+            )}
+            <div className="pa-form-actions">
+              <button type="submit" className="pa-button" data-variant="primary"><Check size={16} /> Appliquer</button>
+            </div>
+          </form>
+        </PlatformWorkPage>
+      ) : tab === 'textes' ? (
+        <div className="pa-form">
+          <section className="space-y-2">
+            <h2 className="pa-heading">Présentation de Waarwi</h2>
+            <div className="pa-form-grid">
+              {([['headline', 'Début du titre'], ['headline_accent', 'Suite du titre'], ['eyebrow', 'Texte au-dessus du titre']] as const).map(([key, label]) => (
+                <label className="pa-field-label" key={key}>{label}
+                  <input className="w-input-ul" value={config[key]} placeholder={DEFAULT_LOGIN_CONFIG[key]} onChange={event => update(key, event.target.value)} />
+                </label>
+              ))}
+              <label className="pa-field-label">Texte de présentation
+                <textarea className="w-input-ul" rows={2} value={config.subtitle} onChange={event => update('subtitle', event.target.value)} />
+              </label>
+            </div>
+          </section>
+          <section className="pa-panel space-y-2">
+            <h2 className="pa-heading">Formulaire de connexion</h2>
+            <div className="pa-form-grid">
+              <label className="pa-field-label">Titre de la connexion
+                <input className="w-input-ul" value={config.login_title} placeholder={DEFAULT_LOGIN_CONFIG.login_title} onChange={event => update('login_title', event.target.value)} />
+              </label>
+              <label className="pa-field-label">Sous-titre de la connexion
+                <input className="w-input-ul" value={config.login_subtitle} onChange={event => update('login_subtitle', event.target.value)} />
+              </label>
+            </div>
+          </section>
+          <section className="pa-panel">
+            <h2 className="pa-heading">Image de fond</h2>
+            <div className="pa-setting-row">
+              {config.login_bg_url && <img src={config.login_bg_url} alt="Image de fond enregistrée" className="h-16 max-w-40 object-contain" />}
+              <label className="pa-field-label">Choisir une image, 3 Mo maximum
+                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} className="pa-file"
+                  onChange={event => {
+                    const file = event.target.files?.[0];
+                    if (file) void upload(file);
+                    event.target.value = '';
+                  }} />
+              </label>
+              {config.login_bg_url && <button type="button" className="pa-link pa-danger" onClick={() => update('login_bg_url', null)}>Retirer l’image</button>}
+              {uploading && <Loader2 size={16} className="animate-spin" />}
+            </div>
+          </section>
+        </div>
+      ) : tab === 'modules' ? (
+        <section className="pa-page">
+          <div className="pa-section-head">
+            <h2 className="pa-heading">Modules affichés</h2>
+            <div className="pa-inline">
+              <button type="button" className="pa-link" onClick={() => update('modules', DEFAULT_LOGIN_MODULES.slice())}><RotateCcw size={15} /> Rétablir la liste</button>
+              <button type="button" className="pa-button" data-variant="primary" onClick={() => setDraft({ kind: 'module', index: null, value: { icon: 'ShoppingCart', label: '', desc: '' } })}>
+                <Plus size={16} /> Ajouter un module
+              </button>
+            </div>
+          </div>
+          {config.modules.length === 0 ? <p className="pa-empty">La liste de modules par défaut s’affiche à la connexion.</p> : (
+            <div className="pa-divided">
+              {config.modules.map((module, index) => {
+                const Icon = LOGIN_ICON_MAP[module.icon] || Shield;
+                return (
+                  <div className="pa-setting-row" key={index}>
+                    <div className="pa-inline">
+                      <Icon size={16} aria-hidden="true" />
+                      <div><button type="button" className="pa-name-button"
+                        onClick={() => setDraft({ kind: 'module', index, value: module })}>{module.label || 'Module sans nom'}</button>
+                        <p className="pa-row-subtitle">{module.desc}</p></div>
+                    </div>
+                    <div className="pa-row-actions">
+                      <button type="button" aria-label={'Monter ' + module.label} className="pa-icon-button" disabled={index === 0} onClick={() => moveModule(index, -1)}><ChevronUp size={16} /></button>
+                      <button type="button" aria-label={'Descendre ' + module.label} className="pa-icon-button" disabled={index >= config.modules.length - 1} onClick={() => moveModule(index, 1)}><ChevronDown size={16} /></button>
+                      <button type="button" aria-label={'Modifier ' + module.label} className="pa-icon-button" onClick={() => setDraft({ kind: 'module', index, value: module })}><Edit2 size={16} /></button>
+                      <button type="button" aria-label={'Retirer ' + module.label} className="pa-icon-button pa-danger" onClick={() => update('modules', config.modules.filter((_, i) => i !== index))}><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ) : tab === 'effets' ? (
+        <section className="pa-page">
+          <div className="pa-section-head">
+            <h2 className="pa-heading">Mise en forme des textes publics</h2>
+            <button type="button" className="pa-button" data-variant="primary"
+              onClick={() => setDraft({ kind: 'accent', index: null, value: { text: '', effect: 'underline', color: '#141414' } })}>
+              <Plus size={16} /> Ajouter une mise en forme
+            </button>
+          </div>
+          {config.text_accents.length === 0 ? <p className="pa-empty">Aucune mise en forme personnalisée.</p> : (
+            <div className="pa-divided">
+              {config.text_accents.map((accent, index) => (
+                <div className="pa-setting-row" key={index}>
+                  <div>
+                    <button type="button" className="pa-name-button" onClick={() => setDraft({ kind: 'accent', index, value: accent })}>{accent.text || 'Texte à renseigner'}</button>
+                    <p className="pa-row-subtitle">{accentNames[accent.effect]}</p>
+                  </div>
+                  <div className="pa-row-actions">
+                    <button type="button" aria-label={'Modifier ' + accent.text} className="pa-icon-button" onClick={() => setDraft({ kind: 'accent', index, value: accent })}><Edit2 size={16} /></button>
+                    <button type="button" aria-label={'Retirer ' + accent.text} className="pa-icon-button pa-danger" onClick={() => update('text_accents', config.text_accents.filter((_, i) => i !== index))}><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <LoginContentPreview config={config} slide={previewSlide} onSlide={setPreviewSlide} />
+      )}
     </div>
   );
 }
 
-// Legacy inline LandingConfigSection removed — now uses src/components/LandingConfigSection.tsx
-
-// ─── Releases Section ────────────────────────────────────────────────────────
+function LoginContentPreview({ config, slide, onSlide }: { config: EditableLogin; slide: number; onSlide: (value: number) => void }) {
+  const modules = config.modules.length > 0 ? config.modules : DEFAULT_LOGIN_MODULES;
+  const slides = Math.ceil(modules.length / 3);
+  const current = Math.min(slide, slides - 1);
+  const accents = config.text_accents.filter(item => item.text);
+  const headline = (config.headline || DEFAULT_LOGIN_CONFIG.headline) + ' ' + (config.headline_accent || DEFAULT_LOGIN_CONFIG.headline_accent);
+  return (
+    <div className="pa-overview-grid">
+      <section className="space-y-3">
+        <h2 className="pa-heading">Présentation</h2>
+        <p className="pa-muted text-xs">{config.eyebrow || DEFAULT_LOGIN_CONFIG.eyebrow}</p>
+        <p className="pa-preview-heading"><AccentedText text={headline} accents={accents} /></p>
+        <p className="pa-copy"><AccentedText text={config.subtitle || DEFAULT_LOGIN_CONFIG.subtitle} accents={accents} /></p>
+        <div className="pa-divided">
+          {modules.slice(current * 3, current * 3 + 3).map((module, index) => {
+            const Icon = LOGIN_ICON_MAP[module.icon] || Shield;
+            return <div className="pa-setting-row justify-start" key={index}><Icon size={16} /><div><strong>{module.label}</strong><p className="pa-row-subtitle">{module.desc}</p></div></div>;
+          })}
+        </div>
+        {slides > 1 && <nav className="pa-inline text-xs" aria-label="Aperçu des modules">
+          <button type="button" className="pa-icon-button" aria-label="Modules précédents" disabled={current === 0} onClick={() => onSlide(current - 1)}><ChevronLeft size={16} /></button>
+          <span>{current + 1} / {slides}</span>
+          <button type="button" className="pa-icon-button" aria-label="Modules suivants" disabled={current === slides - 1} onClick={() => onSlide(current + 1)}><ChevronRight size={16} /></button>
+        </nav>}
+      </section>
+      <section className="space-y-3">
+        <h2 className="pa-heading">Connexion</h2>
+        <p className="pa-preview-heading"><AccentedText text={config.login_title || DEFAULT_LOGIN_CONFIG.login_title} accents={accents} /></p>
+        <p className="pa-copy"><AccentedText text={config.login_subtitle || DEFAULT_LOGIN_CONFIG.login_subtitle} accents={accents} /></p>
+      </section>
+    </div>
+  );
+}
 
 interface AppRelease {
   id: string;
@@ -2666,20 +2261,61 @@ function ReleasesSection() {
 
   const togglePublish = async (r: AppRelease) => {
     const newState = !r.is_published;
-    await supabase.from('app_releases').update({
+    const { error: failure } = await supabase.from('app_releases').update({
       is_published: newState,
       published_at: newState ? new Date().toISOString() : null,
     }).eq('id', r.id);
+    if (failure) { error(failure.message); return; }
     success(newState ? 'Publiée ! Les utilisateurs verront la notification.' : 'Dépubliée.');
     load();
   };
 
   const deleteRelease = async (id: string) => {
-    await supabase.from('app_releases').delete().eq('id', id);
+    const { error: failure } = await supabase.from('app_releases').delete().eq('id', id);
+    if (failure) throw failure;
     setDeleteConfirm(null);
     success('Supprimée');
     load();
   };
+
+  if (deleteConfirm) {
+    return (
+      <PlatformConfirmation title="Supprimer cette mise à jour ?" backLabel="Retour aux versions" onBack={() => setDeleteConfirm(null)}
+        message="La suppression est définitive." label="Supprimer la version" danger onConfirm={() => deleteRelease(deleteConfirm)} />
+    );
+  }
+
+  if (editOpen) {
+    return (
+      <PlatformWorkPage title={editId ? 'Modifier la mise à jour' : 'Nouvelle mise à jour'} backLabel="Retour aux versions"
+        busy={saving} onBack={() => setEditOpen(false)}>
+        <form className="pa-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+          <div className="pa-form-grid">
+            <label className="pa-field-label">Version
+              <input className="w-input-ul" required value={form.version} onChange={event => setForm({ ...form, version: event.target.value })} />
+            </label>
+            <label className="pa-field-label">Date
+              <input className="w-input-ul" type="date" value={form.release_date} onChange={event => setForm({ ...form, release_date: event.target.value })} />
+            </label>
+          </div>
+          <label className="pa-field-label">Titre
+            <input className="w-input-ul" value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} />
+          </label>
+          <label className="pa-field-label">Nouveautés, une par ligne
+            <textarea className="w-input-ul" rows={4} value={form.features} onChange={event => setForm({ ...form, features: event.target.value })} />
+          </label>
+          <label className="pa-field-label">Corrections, une par ligne
+            <textarea className="w-input-ul" rows={4} value={form.fixes} onChange={event => setForm({ ...form, fixes: event.target.value })} />
+          </label>
+          <div className="pa-form-actions">
+            <button type="submit" disabled={saving} className="pa-button" data-variant="primary">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Enregistrer la version
+            </button>
+          </div>
+        </form>
+      </PlatformWorkPage>
+    );
+  }
 
   return (
     <div className="pa-page">
@@ -2711,56 +2347,6 @@ function ReleasesSection() {
         </div>
       )}
 
-      {/* Edit/Create Modal */}
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title={editId ? 'Modifier la mise à jour' : 'Nouvelle mise à jour'} size="lg" variant="flat" layer="top" panelClassName="pa-modal flat-form">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Version *</label>
-              <input value={form.version} onChange={e => setForm({ ...form, version: e.target.value })} placeholder="ex: 2.5.0" className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Date</label>
-              <input type="date" value={form.release_date} onChange={e => setForm({ ...form, release_date: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Titre</label>
-            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Mise à jour majeure" className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              <span className="flex items-center gap-1.5">Nouveautés</span>
-            </label>
-            <textarea value={form.features} onChange={e => setForm({ ...form, features: e.target.value })} rows={4} placeholder="Une nouveauté par ligne..." className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none resize-none" />
-            <p className="text-[10px] text-slate-400 mt-0.5">Une nouveauté par ligne</p>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              <span className="flex items-center gap-1.5"><Bug className="w-3.5 h-3.5 text-sky-500" />Corrections</span>
-            </label>
-            <textarea value={form.fixes} onChange={e => setForm({ ...form, fixes: e.target.value })} rows={4} placeholder="Une correction par ligne..." className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none resize-none" />
-            <p className="text-[10px] text-slate-400 mt-0.5">Une correction par ligne</p>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setEditOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-            <button onClick={save} disabled={saving} className="btn-icon-primary" title={editId ? 'Enregistrer' : 'Créer'}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Delete confirmation */}
-      <ConfirmDialog
-        open={!!deleteConfirm}
-        onClose={() => setDeleteConfirm(null)}
-        onConfirm={() => deleteConfirm && deleteRelease(deleteConfirm)}
-        title="Supprimer cette mise à jour ?"
-        message="Cette action est irréversible."
-        confirmLabel="Supprimer"
-        danger
-      />
     </div>
   );
 }

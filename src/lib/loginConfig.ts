@@ -57,7 +57,7 @@ export const DEFAULT_LOGIN_MODULES: LoginModule[] = [
   { icon: 'Shield', label: 'Sécurité', desc: 'Rôles et permissions' },
 ];
 
-const DEFAULTS: LoginConfig = {
+export const DEFAULT_LOGIN_CONFIG: LoginConfig = {
   headline: 'Tout votre business,',
   headline_accent: 'simplement.',
   subtitle: 'Ventes, stock et équipe réunis dans un espace clair pour vous aider à rester concentré sur l\'essentiel.',
@@ -73,7 +73,7 @@ const DEFAULTS: LoginConfig = {
 };
 
 export function useLoginConfig() {
-  const [config, setConfig] = useState<LoginConfig>(DEFAULTS);
+  const [config, setConfig] = useState<LoginConfig>(DEFAULT_LOGIN_CONFIG);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,16 +88,16 @@ export function useLoginConfig() {
         if (cancelled) return;
         if (data && !error) {
           setConfig({
-            headline: data.headline || DEFAULTS.headline,
-            headline_accent: data.headline_accent || DEFAULTS.headline_accent,
-            subtitle: data.subtitle || DEFAULTS.subtitle,
-            eyebrow: data.eyebrow || DEFAULTS.eyebrow,
+            headline: data.headline || DEFAULT_LOGIN_CONFIG.headline,
+            headline_accent: data.headline_accent || DEFAULT_LOGIN_CONFIG.headline_accent,
+            subtitle: data.subtitle || DEFAULT_LOGIN_CONFIG.subtitle,
+            eyebrow: data.eyebrow || DEFAULT_LOGIN_CONFIG.eyebrow,
             text_accents: (data.text_accents && Array.isArray(data.text_accents)) ? data.text_accents : [],
-            carousel_interval_ms: data.carousel_interval_ms || DEFAULTS.carousel_interval_ms,
-            login_title: data.login_title || DEFAULTS.login_title,
-            login_subtitle: data.login_subtitle || DEFAULTS.login_subtitle,
+            carousel_interval_ms: data.carousel_interval_ms || DEFAULT_LOGIN_CONFIG.carousel_interval_ms,
+            login_title: data.login_title || DEFAULT_LOGIN_CONFIG.login_title,
+            login_subtitle: data.login_subtitle || DEFAULT_LOGIN_CONFIG.login_subtitle,
             login_bg_url: data.login_bg_url || null,
-            modules: (data.modules && data.modules.length > 0) ? data.modules : DEFAULTS.modules,
+            modules: (data.modules && data.modules.length > 0) ? data.modules : DEFAULT_LOGIN_CONFIG.modules,
             footer_links: (data.footer_links && Array.isArray(data.footer_links)) ? data.footer_links : [],
             footer_copyright: data.footer_copyright || '',
           });

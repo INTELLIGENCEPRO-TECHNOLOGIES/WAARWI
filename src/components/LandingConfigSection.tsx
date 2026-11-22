@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Check, Globe, Eye, Loader2, Plus, RotateCcw, Trash2, Shield, Image as ImageIcon, Users, MessageSquare, HelpCircle, Sparkles, ShoppingCart, Package, FileText, Truck, BarChart3, TrendingUp, Zap, Wallet, Layers, Monitor, Receipt, MapPin, Headphones, RefreshCw, Store, Boxes, BookOpen, Shirt, Cpu, HeartPulse, Building2, Gem, Wrench, Upload, Replace, Scale, Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, Link2, Eye as EyeIcon, Palette } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  ArrowUpRight, BarChart3, Bold, BookOpen, Boxes, Building2, Check, ChevronDown, ChevronRight, ChevronUp, Cpu, FileText,
+  Gem, Globe, Heading1, Heading2, Heading3, Headphones, HeartPulse, Italic, Layers, Link2, List, ListOrdered, Loader2,
+  MapPin, Monitor, Package, Plus, Receipt, RefreshCw, RotateCcw, Shield, Shirt, ShoppingCart, Sparkles, Store, Trash2,
+  TrendingUp, Truck, Users, Wallet, Wrench, Zap,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { renderMarkdown } from '../lib/markdown';
+import { PlatformWorkPage } from './PlatformWorkPage';
 import { DEFAULT_LEGAL_MENTIONS, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE } from '../lib/legalContent';
 
 type LandingFeatureItem = { icon: string; title: string; desc: string; image_url?: string; image_alt?: string; image_position?: 'left' | 'center' | 'right' };
@@ -110,7 +116,6 @@ const DEFAULT_FAQ: FaqItem[] = [
   { q: 'Peut-on être accompagné lors du démarrage ?', a: 'Oui. Notre équipe vous accompagne dans la configuration de votre compte, votre catalogue et votre caisse pour démarrer sereinement.' },
 ];
 
-const inputCls = "w-full pa-field";
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const doFetch = async (accessToken: string) => {
@@ -147,98 +152,6 @@ const POSITION_OPTIONS = [
   { value: 'left', label: 'Gauche' },
   { value: 'right', label: 'Droite' },
 ] as const;
-
-function CardImageManager({
-  imageUrl, imageAlt, imagePosition, uploading, onUpload, onReplace, onRemove, onAlt, onPosition,
-}: {
-  imageUrl?: string | null;
-  imageAlt?: string | null;
-  imagePosition?: string | null;
-  uploading: boolean;
-  onUpload: (f: File) => void;
-  onReplace: (f: File) => void;
-  onRemove: () => void;
-  onAlt: (v: string) => void;
-  onPosition: (v: 'left' | 'center' | 'right') => void;
-}) {
-  const has = !!imageUrl;
-  const pos = (imagePosition === 'left' || imagePosition === 'right') ? imagePosition : 'center';
-  return (
-    <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-2.5">
-      <div className="flex items-start gap-3">
-        <div className="shrink-0 w-24 h-16 rounded-lg overflow-hidden border border-slate-200 bg-[var(--w-surface-el)] flex items-center justify-center">
-          {has ? (
-            <img src={imageUrl!} alt={imageAlt || ''} className="w-full h-full object-cover" style={{ objectPosition: pos }} />
-          ) : (
-            <ImageIcon className="w-5 h-5 text-slate-300" />
-          )}
-        </div>
-        <div className="flex-1 space-y-1.5 min-w-0">
-          <div className="flex flex-wrap gap-1.5">
-            {!has && (
-              <label className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-brand-50 text-brand-700 text-[10px] font-semibold hover:bg-brand-100 cursor-pointer transition-colors">
-                {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                Ajouter une image
-                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ''; }} disabled={uploading} />
-              </label>
-            )}
-            {has && (
-              <>
-                <label className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-[10px] font-semibold hover:bg-slate-200 cursor-pointer transition-colors">
-                  {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Replace className="w-3 h-3" />}
-                  Remplacer
-                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onReplace(f); e.currentTarget.value = ''; }} disabled={uploading} />
-                </label>
-                <button onClick={onRemove} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-red-600 hover:bg-red-50 text-[10px] font-semibold transition-colors">
-                  <Trash2 className="w-3 h-3" /> Supprimer
-                </button>
-              </>
-            )}
-          </div>
-          {has && (
-            <>
-              <input value={imageAlt || ''} onChange={e => onAlt(e.target.value)} placeholder="Texte alternatif (obligatoire)" className="w-full h-7 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-500 font-semibold">Position</span>
-                {POSITION_OPTIONS.map(o => (
-                  <button key={o.value} onClick={() => onPosition(o.value)} className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors ${pos === o.value ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{o.label}</button>
-                ))}
-              </div>
-            </>
-          )}
-          {!has && <p className="text-[10px] text-slate-400">Aucune image — l'icône actuelle sert de secours. PNG, JPEG ou WebP (max 5 Mo).</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CardPreview({ imageUrl, imageAlt, imagePosition, title, desc, fallback }: {
-  imageUrl?: string | null;
-  imageAlt?: string | null;
-  imagePosition?: string | null;
-  title: string;
-  desc: string;
-  fallback: React.ReactNode;
-}) {
-  const has = !!imageUrl;
-  const pos = (imagePosition === 'left' || imagePosition === 'right') ? imagePosition : 'center';
-  return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white flex h-28">
-      {has ? (
-        <div className="w-[38%] shrink-0 bg-slate-100 overflow-hidden">
-          <img src={imageUrl!} alt={imageAlt || ''} className="w-full h-full object-cover" style={{ objectPosition: pos }} />
-        </div>
-      ) : (
-        <div className="w-[38%] shrink-0 bg-teal-50 flex items-center justify-center">{fallback}</div>
-      )}
-      <div className="flex-1 p-3 flex flex-col justify-center min-w-0">
-        <p className="text-xs font-bold text-slate-900 leading-snug truncate">{title || 'Titre'}</p>
-        <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3 mt-1">{desc || 'Description'}</p>
-      </div>
-    </div>
-  );
-}
 
 async function uploadLandingMedia(file: File, folder: string): Promise<{ url: string; path: string }> {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
@@ -286,6 +199,8 @@ export function LandingConfigSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('contenu');
+  const [document, setDocument] = useState<string>();
+  const [loaded, setLoaded] = useState(false);
   const [heroHeadline, setHeroHeadline] = useState('');
   const [heroAccent, setHeroAccent] = useState('');
   const [heroSubtitle, setHeroSubtitle] = useState('');
@@ -353,6 +268,7 @@ export function LandingConfigSection() {
         setPrivacyPolicy(data.privacy_policy || '');
         setTermsOfService(data.terms_of_service || '');
         setGlobalEffects(data.global_effects ? { ...DEFAULT_EFFECTS, ...data.global_effects } : DEFAULT_EFFECTS);
+        setLoaded(true);
       } catch (e: any) { error(e.message); }
       setLoading(false);
     })();
@@ -460,16 +376,10 @@ export function LandingConfigSection() {
         legal_mentions: legalMentions, privacy_policy: privacyPolicy, terms_of_service: termsOfService,
         global_effects: globalEffects,
       });
-      success('Landing page enregistrée. Visible sur waarwi.com');
+      success('Site vitrine enregistré');
     } catch (e: any) { error(e.message); }
     setSaving(false);
   };
-
-  const updateFeature = (idx: number, field: keyof LandingFeatureItem, value: string) =>
-    setFeatures(features.map((m, i) => i === idx ? { ...m, [field]: value } : m));
-  const removeFeature = (idx: number) => setFeatures(features.filter((_, i) => i !== idx));
-  const addFeature = () => setFeatures([...features, { icon: 'ShoppingCart', title: '', desc: '' }]);
-  const useDefaultFeatures = () => setFeatures(DEFAULT_LANDING_FEATURES.map(f => ({ ...f })));
 
   const uploadShot = async (file: File, kind: 'desktop' | 'mobile') => {
     setUploadingKey(kind);
@@ -543,610 +453,427 @@ export function LandingConfigSection() {
     if (oldUrl) await removeLandingMedia(oldUrl);
   };
 
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
+  if (loading) return <p className="pa-empty" role="status"><Loader2 size={16} className="animate-spin" /> Chargement…</p>;
+  if (!loaded) return <p className="pa-empty">La configuration du site vitrine est indisponible.</p>;
 
-  const tabs: { k: Tab; label: string; count?: number }[] = [
-    { k: 'contenu', label: 'Contenu' },
-    { k: 'modules', label: 'Fonctionnalités', count: features.length },
-    { k: 'secteurs', label: 'Secteurs', count: sectors.length },
-    { k: 'demo', label: 'Démonstration', count: demoDesktop.length + demoMobile.length },
-    { k: 'preuves', label: 'Preuves', count: clientLogos.length + testimonials.length },
-    { k: 'whyfaq', label: 'Pourquoi & FAQ', count: whyWaarwi.length + faqItems.length },
-    { k: 'legal', label: 'Mentions légales' },
-    { k: 'effets', label: 'Effets' },
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'contenu', label: 'Accueil' }, { key: 'modules', label: 'Modules' }, { key: 'secteurs', label: 'Secteurs' },
+    { key: 'demo', label: 'Captures' }, { key: 'preuves', label: 'Références clients' }, { key: 'whyfaq', label: 'Avantages et FAQ' },
+    { key: 'legal', label: 'Documents légaux' }, { key: 'effets', label: 'Filtres visuels' },
   ];
+  const legalDocuments = [
+    { slug: '/mentions-legales', label: 'Mentions légales', value: legalMentions, set: setLegalMentions, initial: DEFAULT_LEGAL_MENTIONS },
+    { slug: '/confidentialite', label: 'Politique de confidentialité', value: privacyPolicy, set: setPrivacyPolicy, initial: DEFAULT_PRIVACY_POLICY },
+    { slug: '/cgu', label: 'Conditions générales d’utilisation', value: termsOfService, set: setTermsOfService, initial: DEFAULT_TERMS_OF_SERVICE },
+  ];
+  const currentDocument = legalDocuments.find(item => item.slug === document);
+  const busy = saving || uploadingKey !== null || sectorBusy !== null;
+  const saveAction = (
+    <button type="button" className="pa-button" data-variant="primary" disabled={busy} onClick={() => void save()}>
+      {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Enregistrer le site vitrine
+    </button>
+  );
 
-  return (
-    <div className="space-y-5">
-      <div className="pa-section-head">
-        <span className="pa-muted text-sm">waarwi.com</span>
-        <a href="https://waarwi.com" target="_blank" rel="noreferrer" className="pa-link"><ArrowUpRight size={15} /> Ouvrir le site public</a>
-      </div>
-
-      <nav className="pa-tabs" aria-label="Configuration du site vitrine">
-        {tabs.map(item => (
-          <button type="button" key={item.k} aria-current={activeTab === item.k ? 'page' : undefined} onClick={() => setActiveTab(item.k)}>
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      {activeTab === 'contenu' && (
-        <div className="pa-panel space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Titre hero (première ligne)</label>
-            <input value={heroHeadline} onChange={e => setHeroHeadline(e.target.value)} placeholder="La plateforme qui simplifie, connecte et propulse" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Accent (en turquoise)</label>
-            <input value={heroAccent} onChange={e => setHeroAccent(e.target.value)} placeholder="votre business." className={`${inputCls} text-teal-600 font-semibold`} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre hero</label>
-            <textarea value={heroSubtitle} onChange={e => setHeroSubtitle(e.target.value)} rows={2} placeholder="Gestion commerciale tout-en-un..." className={`${inputCls} h-auto py-2.5 resize-none`} />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Label bouton CTA</label>
-              <input value={heroCtaLabel} onChange={e => setHeroCtaLabel(e.target.value)} placeholder="Démarrer gratuitement" className={inputCls} />
-            </div>
-            <div className="space-y-3">
-              <label className="block text-xs font-semibold text-slate-700">Image hero (version bureau)</label>
-              <div className="flex items-start gap-3">
-                <div className="w-32 h-20 rounded-lg overflow-hidden border border-slate-200 bg-[var(--w-surface-el)] flex-shrink-0 flex items-center justify-center">
-                  {heroImageUrl ? (
-                    <img src={heroImageUrl} alt="Hero desktop" className="w-full h-full object-cover" />
-                  ) : (
-                    <ImageIcon className="w-6 h-6 text-slate-300" />
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => document.getElementById('hero-desktop-upload')?.click()} disabled={uploadingKey === 'hero-desktop'}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-50">
-                    {uploadingKey === 'hero-desktop' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                    {heroImageUrl ? 'Remplacer' : 'Téléverser'}
-                  </button>
-                  <input id="hero-desktop-upload" type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadHeroImage(f); e.currentTarget.value = ''; }} disabled={uploadingKey === 'hero-desktop'} />
-                  {heroImageUrl && (
-                    <button type="button" onClick={removeHeroImage} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">
-                      <Trash2 className="w-3 h-3" /> Retirer
-                    </button>
-                  )}
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400">Laisser vide pour utiliser l'image par défaut (<code>/desktop.png</code>).</p>
-            </div>
-
-            <div className="space-y-3 border-t border-[var(--w-separator)] pt-3">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-700">Superposition mobile (petite image flottante)</label>
-                <button type="button" onClick={() => setHeroMobileVisible(v => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${heroMobileVisible ? 'bg-teal-600' : 'bg-slate-300'}`}>
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${heroMobileVisible ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </button>
-              </div>
-              {heroMobileVisible && (
-                <>
-                  <div className="flex items-start gap-3">
-                    <div className="w-16 h-28 rounded-lg overflow-hidden border border-slate-200 bg-[var(--w-surface-el)] flex-shrink-0 flex items-center justify-center">
-                      {heroMobileImageUrl ? (
-                        <img src={heroMobileImageUrl} alt="Hero mobile" className="w-full h-full object-cover" />
-                      ) : (
-                        <ImageIcon className="w-5 h-5 text-slate-300" />
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => document.getElementById('hero-mobile-upload')?.click()} disabled={uploadingKey === 'hero-mobile'}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-50">
-                        {uploadingKey === 'hero-mobile' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                        {heroMobileImageUrl ? 'Remplacer' : 'Téléverser'}
-                      </button>
-                      <input id="hero-mobile-upload" type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadHeroMobileImage(f); e.currentTarget.value = ''; }} disabled={uploadingKey === 'hero-mobile'} />
-                      {heroMobileImageUrl && (
-                        <button type="button" onClick={removeHeroMobileImage} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">
-                          <Trash2 className="w-3 h-3" /> Retirer
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-400">Laisser vide pour utiliser l'image par défaut (<code>/mobile.png</code>).</p>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <p className="text-xs font-bold text-slate-700 mb-3">Libellés des statistiques</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Compteur tenants</label>
-                <input value={statsTenants} onChange={e => setStatsTenants(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Compteur secteurs</label>
-                <input value={statsSectors} onChange={e => setStatsSectors(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Compteur uptime</label>
-                <input value={statsUptime} onChange={e => setStatsUptime(e.target.value)} className={inputCls} />
-              </div>
-            </div>
-          </div>
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Tagline footer</label>
-            <input value={footerTagline} onChange={e => setFooterTagline(e.target.value)} placeholder="Conçu au Sénégal..." className={inputCls} />
-          </div>
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <p className="text-xs font-bold text-slate-700 mb-3">Coordonnées de contact</p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">WhatsApp (URL)</label>
-                  <input value={whatsappUrl} onChange={e => setWhatsappUrl(e.target.value)} placeholder="https://wa.me/221..." className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">Téléphone (affiché)</label>
-                  <input value={phoneDisplay} onChange={e => setPhoneDisplay(e.target.value)} placeholder="77 525 41 01" className={inputCls} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">Téléphone (lien tel:)</label>
-                  <input value={phoneTel} onChange={e => setPhoneTel(e.target.value)} placeholder="+221775254101" className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">Email contact</label>
-                  <input value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="contact@waarwi.com" className={inputCls} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Horaires / disponibilité</label>
-                <input value={contactHours} onChange={e => setContactHours(e.target.value)} placeholder="Lun–Sam, 8h–19h" className={inputCls} />
-              </div>
-            </div>
-          </div>
-          <div className="border-t border-[var(--w-separator)] pt-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-slate-700">Section tarifs visible</p>
-              <p className="text-[10px] text-slate-400">Affiche les plans publics sur la landing</p>
-            </div>
-            <button onClick={() => setPricingVisible(!pricingVisible)} className={`relative w-11 h-6 rounded-full transition-colors ${pricingVisible ? 'bg-brand-700' : 'bg-slate-200'}`}>
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${pricingVisible ? 'translate-x-5' : ''}`} />
+  const renderFeatures = (kind: 'modules' | 'why') => {
+    const isModules = kind === 'modules';
+    const list = isModules ? features : whyWaarwi;
+    const setList = isModules ? setFeatures : setWhyWaarwi;
+    return (
+      <section className="pa-page">
+        <div className="pa-section-head">
+          <h2 className="pa-heading">{isModules ? 'Modules présentés' : 'Pourquoi Waarwi'}</h2>
+          <div className="pa-inline">
+            <button type="button" className="pa-link" disabled={busy} onClick={() => setList((isModules ? DEFAULT_LANDING_FEATURES : DEFAULT_WHY).map(item => ({ ...item })))}>
+              <RotateCcw size={15} /> Rétablir la liste
+            </button>
+            <button type="button" className="pa-button" data-variant="primary" disabled={busy}
+              onClick={() => setList([...list, { icon: isModules ? 'ShoppingCart' : 'MapPin', title: '', desc: '' }])}>
+              <Plus size={16} /> {isModules ? 'Ajouter un module' : 'Ajouter un avantage'}
             </button>
           </div>
         </div>
-      )}
-
-      {activeTab === 'modules' && (
-        <div className="pa-panel space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-slate-700">Fonctionnalités affichées ({features.length})</p>
-              <p className="text-[10px] text-slate-400">Grille de 3 colonnes sur la landing · images optionnelles (sinon icône)</p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={useDefaultFeatures} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200 transition-colors">
-                <RotateCcw className="w-3 h-3" /> Tout rétablir
-              </button>
-              <button onClick={addFeature} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors">
-                <Plus className="w-3.5 h-3.5" /> Ajouter
-              </button>
-            </div>
-          </div>
-          {features.length === 0 && (
-            <div className="text-center py-6 space-y-2">
-              <p className="text-xs text-slate-400">Aucune fonctionnalité configurée.</p>
-              <button onClick={useDefaultFeatures} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Utiliser les modules par défaut →</button>
-            </div>
-          )}
-          <div className="space-y-3">
-            {features.map((f, idx) => {
-              const IconComp = ICON_MAP_ADMIN[f.icon] || Shield;
+        {list.length === 0 ? <p className="pa-empty">Aucun élément personnalisé.</p> : (
+          <div className="pa-divided">
+            {list.map((item, index) => {
+              const Icon = ICON_MAP_ADMIN[item.icon] || Shield;
+              const update = (patch: Partial<LandingFeatureItem>) => setList(previous => previous.map((row, i) => i === index ? { ...row, ...patch } : row));
+              const uploadImage = isModules ? uploadFeatureImage : uploadWhyImage;
+              const removeImage = isModules ? removeFeatureImage : removeWhyImage;
               return (
-                <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group space-y-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex flex-col gap-0.5 shrink-0">
-                      <button onClick={() => setFeatures(move(features, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
-                      <button onClick={() => setFeatures(move(features, idx, 1))} disabled={idx === features.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
-                    </div>
-                    <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
-                      <IconComp className="w-3.5 h-3.5 text-teal-600" />
-                    </div>
-                    <select value={f.icon} onChange={e => updateFeature(idx, 'icon', e.target.value)} className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0">
-                      {AVAILABLE_ICONS.map(ic => <option key={ic.value} value={ic.value}>{ic.label}</option>)}
-                    </select>
-                    <button onClick={() => removeFeature(idx)} className="shrink-0 ml-auto p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
+                <LandingEntry key={index} title={item.title || (isModules ? 'Nouveau module' : 'Nouvel avantage')}
+                  icon={<Icon size={16} />} initiallyOpen={!item.title}>
+                  <div className="pa-form-grid">
+                    <TextControl label="Titre" value={item.title} onChange={title => update({ title })} />
+                    <label className="pa-field-label">Icône
+                      <select className="w-input-ul" value={item.icon} onChange={event => update({ icon: event.target.value })}>
+                        {AVAILABLE_ICONS.map(icon => <option key={icon.value} value={icon.value}>{icon.label}</option>)}
+                      </select>
+                    </label>
+                    <TextControl label="Description" value={item.desc} onChange={desc => update({ desc })} rows={2} />
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input value={f.title} onChange={e => updateFeature(idx, 'title', e.target.value)} placeholder="Titre" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
-                    <input value={f.desc} onChange={e => updateFeature(idx, 'desc', e.target.value)} placeholder="Description" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
-                  </div>
-                  <CardImageManager
-                    imageUrl={f.image_url} imageAlt={f.image_alt} imagePosition={f.image_position || 'center'}
-                    uploading={uploadingKey === `feat-${idx}`}
-                    onUpload={file => uploadFeatureImage(idx, file, false)}
-                    onReplace={file => uploadFeatureImage(idx, file, true)}
-                    onRemove={() => removeFeatureImage(idx)}
-                    onAlt={v => updateFeature(idx, 'image_alt', v)}
-                    onPosition={v => updateFeature(idx, 'image_position', v)}
-                  />
-                  <CardPreview imageUrl={f.image_url} imageAlt={f.image_alt} imagePosition={f.image_position} title={f.title} desc={f.desc} fallback={<IconComp className="w-5 h-5 text-teal-600" />} />
-                </div>
+                  <ImageFields url={item.image_url} alt={item.image_alt} position={item.image_position}
+                    busy={busy} onFile={file => uploadImage(index, file, !!item.image_url)} onRemove={() => removeImage(index)}
+                    onAlt={image_alt => update({ image_alt })} onPosition={image_position => update({ image_position })} />
+                  <OrderActions index={index} count={list.length} busy={busy}
+                    onMove={step => setList(move(list, index, step))} onRemove={() => setList(list.filter((_, i) => i !== index))} />
+                </LandingEntry>
               );
             })}
           </div>
+        )}
+      </section>
+    );
+  };
+
+  return (
+    <div className="pa-page">
+      <div className="pa-editor-nav">
+        <nav className="pa-tabs" aria-label="Configuration du site vitrine">
+          {tabs.map(item => (
+            <button type="button" key={item.key} aria-current={activeTab === item.key ? 'page' : undefined}
+              onClick={() => { setActiveTab(item.key); setDocument(undefined); }}>{item.label}</button>
+          ))}
+        </nav>
+        {!currentDocument && saveAction}
+      </div>
+
+      {activeTab === 'contenu' && (
+        <div className="pa-form">
+          <section className="space-y-2">
+            <div className="pa-section-head">
+              <h2 className="pa-heading">En-tête du site</h2>
+              <a href="https://waarwi.com" target="_blank" rel="noreferrer" className="pa-link">Ouvrir le site public <ArrowUpRight size={15} /></a>
+            </div>
+            <div className="pa-form-grid">
+              <TextControl label="Début du titre" value={heroHeadline} onChange={setHeroHeadline} />
+              <TextControl label="Suite du titre" value={heroAccent} onChange={setHeroAccent} />
+              <TextControl label="Texte de présentation" rows={2} value={heroSubtitle} onChange={setHeroSubtitle} />
+              <TextControl label="Libellé du bouton d’inscription" value={heroCtaLabel} onChange={setHeroCtaLabel} />
+            </div>
+          </section>
+
+          <section className="pa-panel space-y-2">
+            <h2 className="pa-heading">Images de présentation</h2>
+            <div className="pa-form-grid">
+              <div>
+                <FileControl label="Image pour ordinateur" busy={busy} onFile={uploadHeroImage} />
+                {heroImageUrl && <div className="pa-inline">
+                  <img src={heroImageUrl} alt="Présentation sur ordinateur" className="pa-media-thumb" />
+                  <button type="button" className="pa-link pa-danger" disabled={busy} onClick={() => void removeHeroImage()}>Retirer l’image</button>
+                </div>}
+              </div>
+              <div>
+                <label className="pa-inline text-sm">
+                  <input type="checkbox" checked={heroMobileVisible} onChange={event => setHeroMobileVisible(event.target.checked)} /> Afficher la superposition mobile
+                </label>
+                {heroMobileVisible && <FileControl label="Image de la superposition" busy={busy} onFile={uploadHeroMobileImage} />}
+                {heroMobileVisible && heroMobileImageUrl && <div className="pa-inline">
+                  <img src={heroMobileImageUrl} alt="Présentation sur téléphone" className="pa-media-thumb pa-media-phone" />
+                  <button type="button" className="pa-link pa-danger" disabled={busy} onClick={() => void removeHeroMobileImage()}>Retirer l’image mobile</button>
+                </div>}
+              </div>
+            </div>
+          </section>
+
+          <section className="pa-panel space-y-2">
+            <h2 className="pa-heading">Chiffres et offres</h2>
+            <div className="pa-form-grid">
+              <TextControl label="Libellé des entreprises" value={statsTenants} onChange={setStatsTenants} />
+              <TextControl label="Libellé des secteurs" value={statsSectors} onChange={setStatsSectors} />
+              <TextControl label="Libellé de l’accompagnement" value={statsUptime} onChange={setStatsUptime} />
+              <label className="pa-inline text-sm">
+                <input type="checkbox" checked={pricingVisible} onChange={event => setPricingVisible(event.target.checked)} /> Afficher les offres publiques
+              </label>
+            </div>
+          </section>
+
+          <section className="pa-panel space-y-2">
+            <h2 className="pa-heading">Contact et pied de page</h2>
+            <div className="pa-form-grid">
+              <TextControl label="Texte du pied de page" value={footerTagline} onChange={setFooterTagline} />
+              <TextControl label="Adresse WhatsApp" value={whatsappUrl} onChange={setWhatsappUrl} />
+              <TextControl label="Téléphone affiché" value={phoneDisplay} onChange={setPhoneDisplay} />
+              <TextControl label="Numéro à appeler" value={phoneTel} onChange={setPhoneTel} />
+              <TextControl label="E-mail de contact" value={contactEmail} onChange={setContactEmail} />
+              <TextControl label="Horaires" value={contactHours} onChange={setContactHours} />
+            </div>
+          </section>
         </div>
       )}
 
+      {activeTab === 'modules' && renderFeatures('modules')}
+
       {activeTab === 'secteurs' && (
-        <div className="pa-panel space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-slate-700">Secteurs d’activité ({sectors.length})</p>
-              <p className="text-[10px] text-slate-400">Images des cartes « Secteurs » sur la landing. Titres et descriptions non modifiables ici.</p>
-            </div>
-            {!sectorsLoaded && (
-              <button onClick={loadSectors} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors">
-                <Eye className="w-3.5 h-3.5" /> Charger les secteurs
-              </button>
-            )}
+        <section className="pa-page">
+          <div className="pa-section-head">
+            <h2 className="pa-heading">Images des secteurs d’activité</h2>
+            {!sectorsLoaded && <button type="button" className="pa-link" onClick={() => void loadSectors()}><RefreshCw size={15} /> Charger les secteurs</button>}
           </div>
-          {!sectorsLoaded ? (
-            <p className="text-xs text-slate-400 py-6 text-center">Cliquez sur « Charger les secteurs » pour gérer les images.</p>
-          ) : sectors.length === 0 ? (
-            <p className="text-xs text-slate-400 py-6 text-center">Aucun secteur configuré.</p>
-          ) : (
-            <div className="space-y-3">
-              {sectors.map((s) => {
-                const SecIcon = SECTOR_ICONS_ADMIN[s.slug] || Store;
-                return (
-                  <div key={s.id} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
-                        <SecIcon className="w-3.5 h-3.5 text-teal-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-bold text-slate-900 truncate">{s.name}</p>
-                        <p className="text-[10px] text-slate-400 truncate">{s.description || s.slug}</p>
-                      </div>
-                      {sectorBusy === s.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-700 shrink-0" />}
-                    </div>
-                    <CardImageManager
-                      imageUrl={s.image_url} imageAlt={s.image_alt} imagePosition={s.image_position || 'center'}
-                      uploading={sectorBusy === s.id}
-                      onUpload={file => uploadSectorImage(s.id, file, false)}
-                      onReplace={file => uploadSectorImage(s.id, file, true)}
-                      onRemove={() => removeSectorImage(s.id)}
-                      onAlt={v => saveSectorMeta(s.id, { image_alt: v })}
-                      onPosition={v => saveSectorMeta(s.id, { image_position: v })}
-                    />
-                    <CardPreview imageUrl={s.image_url} imageAlt={s.image_alt} imagePosition={s.image_position} title={s.name} desc={s.description || ''} fallback={<SecIcon className="w-5 h-5 text-teal-600" />} />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+          {sectorsLoaded && sectors.length === 0 && <p className="pa-empty">Aucun secteur configuré.</p>}
+          <div className="pa-divided">
+            {sectors.map(item => {
+              const Icon = SECTOR_ICONS_ADMIN[item.slug] || Store;
+              return (
+                <LandingEntry key={item.id} title={item.name} icon={<Icon size={16} />} note={item.image_url ? 'Image enregistrée' : undefined}>
+                  {item.description && <p className="pa-copy">{item.description}</p>}
+                  <ImageFields url={item.image_url} alt={item.image_alt} position={item.image_position} busy={busy} saveOnBlur
+                    onFile={file => uploadSectorImage(item.id, file, !!item.image_url)} onRemove={() => removeSectorImage(item.id)}
+                    onAlt={value => saveSectorMeta(item.id, { image_alt: value })} onPosition={value => saveSectorMeta(item.id, { image_position: value })} />
+                </LandingEntry>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {activeTab === 'demo' && (
-        <div className="pa-panel">
-          <div className="flex items-center gap-2 mb-1">
-            <ImageIcon className="w-4 h-4 text-brand-700" />
-            <h3 className="text-sm font-bold text-slate-900">Captures d'écran</h3>
-          </div>
-          <p className="text-xs text-slate-500 mb-4">PNG, JPEG ou WebP (max 5 Mo). Desktop = carrousel horizontal, Mobile = cartes empilées verticales. La navigation dans la lightbox se fait par colonne (desktop seul ou mobile seul).</p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <DemoColumn title="Captures desktop" kind="desktop" items={demoDesktop} setItems={setDemoDesktop} onUpload={uploadShot} onReplace={replaceShot} uploading={uploadingKey === 'desktop'} uploadingKey={uploadingKey} />
-            <DemoColumn title="Captures mobile" kind="mobile" items={demoMobile} setItems={setDemoMobile} onUpload={uploadShot} onReplace={replaceShot} uploading={uploadingKey === 'mobile'} uploadingKey={uploadingKey} />
-          </div>
+        <div className="pa-overview-grid">
+          <DemoColumn title="Captures sur ordinateur" kind="desktop" items={demoDesktop} setItems={setDemoDesktop} busy={busy} onUpload={uploadShot} onReplace={replaceShot} />
+          <DemoColumn title="Captures sur téléphone" kind="mobile" items={demoMobile} setItems={setDemoMobile} busy={busy} onUpload={uploadShot} onReplace={replaceShot} />
         </div>
       )}
 
       {activeTab === 'preuves' && (
-        <div className="space-y-4">
-          <div className="pa-panel space-y-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-brand-700" />
-              <h3 className="text-sm font-bold text-slate-900">Logos clients</h3>
-            </div>
-            <p className="text-xs text-slate-500">Logos en niveaux de gris sur la landing. PNG, JPEG ou WebP (max 5 Mo).</p>
-            <div className="flex gap-2">
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors cursor-pointer">
-                {uploadingKey === 'logo' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                Uploader un logo
-                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.currentTarget.value = ''; }} disabled={uploadingKey === 'logo'} />
-              </label>
-            </div>
-            {clientLogos.length === 0 ? (
-              <p className="text-xs text-slate-400 py-4 text-center">Aucun logo client. La section reste masquée tant qu'aucun logo n'est ajouté.</p>
-            ) : (
-              <div className="space-y-2">
-                {clientLogos.map((logo, idx) => (
-                  <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group">
-                    <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
-                      {logo.logo_url ? <img src={logo.logo_url} alt={logo.name} className="w-full h-full object-contain" /> : <ImageIcon className="w-4 h-4 text-slate-300" />}
-                    </div>
-                    <input value={logo.name} onChange={e => setClientLogos(clientLogos.map((l, i) => i === idx ? { ...l, name: e.target.value } : l))} placeholder="Nom du client" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
-                    <div className="flex flex-col gap-0.5 shrink-0">
-                      <button onClick={() => setClientLogos(move(clientLogos, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
-                      <button onClick={() => setClientLogos(move(clientLogos, idx, 1))} disabled={idx === clientLogos.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
-                    </div>
-                    <button onClick={() => setClientLogos(clientLogos.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
+        <div className="pa-overview-grid">
+          <section className="pa-page">
+            <h2 className="pa-heading">Logos clients</h2>
+            <FileControl label="Ajouter un logo" busy={busy} onFile={uploadLogo} />
+            {clientLogos.length === 0 ? <p className="pa-empty">Aucun logo ajouté.</p> : (
+              <div className="pa-divided">
+                {clientLogos.map((logo, index) => (
+                  <LandingEntry key={index} title={logo.name || 'Logo client'}>
+                    {logo.logo_url && <img src={logo.logo_url} alt={logo.name || ''} className="pa-media-thumb" />}
+                    <TextControl label="Nom du client" value={logo.name}
+                      onChange={name => setClientLogos(previous => previous.map((item, i) => i === index ? { ...item, name } : item))} />
+                    <OrderActions index={index} count={clientLogos.length} busy={busy} onMove={step => setClientLogos(move(clientLogos, index, step))}
+                      onRemove={() => setClientLogos(clientLogos.filter((_, i) => i !== index))} />
+                  </LandingEntry>
                 ))}
               </div>
             )}
-          </div>
-
-          <div className="pa-panel space-y-4">
-            <div className="flex items-center gap-2 mb-1">
-              <MessageSquare className="w-4 h-4 text-brand-700" />
-              <h3 className="text-sm font-bold text-slate-900">Témoignages</h3>
+          </section>
+          <section className="pa-page">
+            <div className="pa-section-head">
+              <h2 className="pa-heading">Témoignages</h2>
+              <button type="button" className="pa-button" data-variant="primary"
+                onClick={() => setTestimonials([...testimonials, { quote: '', author: '' }])}><Plus size={16} /> Ajouter un témoignage</button>
             </div>
-            <p className="text-xs text-slate-500">Citations de clients. La section s'affiche uniquement si au moins un témoignage est renseigné.</p>
-            <div className="flex justify-end">
-              <button onClick={() => setTestimonials([...testimonials, { quote: '', author: '' }])} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors">
-                <Plus className="w-3.5 h-3.5" /> Ajouter
-              </button>
-            </div>
-            {testimonials.length === 0 ? (
-              <p className="text-xs text-slate-400 py-4 text-center">Aucun témoignage.</p>
-            ) : (
-              <div className="space-y-3">
-                {testimonials.map((t, idx) => (
-                  <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-2 group">
-                    <textarea value={t.quote} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, quote: e.target.value } : x))} rows={2} placeholder="Citation..." className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 resize-none" />
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <input value={t.author} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, author: e.target.value } : x))} placeholder="Auteur" className="h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                      <input value={t.role || ''} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, role: e.target.value } : x))} placeholder="Rôle" className="h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                      <input value={t.company || ''} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, company: e.target.value } : x))} placeholder="Société" className="h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                    </div>
-                    <div className="flex justify-end">
-                      <button onClick={() => setTestimonials(testimonials.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </div>
-                ))}
+            {testimonials.length === 0 ? <p className="pa-empty">Aucun témoignage.</p> : (
+              <div className="pa-divided">
+                {testimonials.map((item, index) => {
+                  const update = (patch: Partial<Testimonial>) => setTestimonials(previous => previous.map((row, i) => i === index ? { ...row, ...patch } : row));
+                  return (
+                    <LandingEntry key={index} title={item.author || 'Nouveau témoignage'} initiallyOpen={!item.author}>
+                      <TextControl label="Citation" value={item.quote} onChange={quote => update({ quote })} rows={3} />
+                      <div className="pa-form-grid">
+                        <TextControl label="Auteur" value={item.author} onChange={author => update({ author })} />
+                        <TextControl label="Fonction" value={item.role || ''} onChange={role => update({ role })} />
+                        <TextControl label="Entreprise" value={item.company || ''} onChange={company => update({ company })} />
+                      </div>
+                      <button type="button" className="pa-link pa-danger" onClick={() => setTestimonials(testimonials.filter((_, i) => i !== index))}><Trash2 size={15} /> Retirer le témoignage</button>
+                    </LandingEntry>
+                  );
+                })}
               </div>
             )}
-          </div>
+          </section>
         </div>
       )}
 
       {activeTab === 'whyfaq' && (
-        <div className="space-y-4">
-          <div className="pa-panel space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-900">Pourquoi Waarwi ({whyWaarwi.length})</h3>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setWhyWaarwi(DEFAULT_WHY.map(w => ({ ...w })))} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200 transition-colors">
-                  <RotateCcw className="w-3 h-3" /> Rétablir
-                </button>
-                <button onClick={() => setWhyWaarwi([...whyWaarwi, { icon: 'MapPin', title: '', desc: '' }])} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors">
-                  <Plus className="w-3.5 h-3.5" /> Ajouter
-                </button>
+        <div className="pa-page">
+          {renderFeatures('why')}
+          <section className="pa-panel space-y-2">
+            <div className="pa-section-head">
+              <h2 className="pa-heading">Questions fréquentes</h2>
+              <div className="pa-inline">
+                <button type="button" className="pa-link" onClick={() => setFaqItems(DEFAULT_FAQ.map(item => ({ ...item })))}><RotateCcw size={15} /> Rétablir la liste</button>
+                <button type="button" className="pa-button" data-variant="primary" onClick={() => setFaqItems([...faqItems, { q: '', a: '' }])}><Plus size={16} /> Ajouter une question</button>
               </div>
             </div>
-            <div className="space-y-3">
-              {whyWaarwi.map((w, idx) => {
-                const IconComp = ICON_MAP_ADMIN[w.icon] || Shield;
+            <div className="pa-divided">
+              {faqItems.map((item, index) => {
+                const update = (patch: Partial<FaqItem>) => setFaqItems(previous => previous.map((row, i) => i === index ? { ...row, ...patch } : row));
                 return (
-                  <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group space-y-2.5">
-                    <div className="flex items-start gap-2">
-                      <div className="flex flex-col gap-0.5 shrink-0 pt-1">
-                        <button onClick={() => setWhyWaarwi(move(whyWaarwi, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
-                        <button onClick={() => setWhyWaarwi(move(whyWaarwi, idx, 1))} disabled={idx === whyWaarwi.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
-                      </div>
-                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
-                        <IconComp className="w-3.5 h-3.5 text-teal-600" />
-                      </div>
-                      <div className="flex-1 space-y-1.5 min-w-0">
-                        <select value={w.icon} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, icon: e.target.value } : x))} className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400">
-                          {AVAILABLE_ICONS.map(ic => <option key={ic.value} value={ic.value}>{ic.label}</option>)}
-                        </select>
-                        <input value={w.title} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))} placeholder="Titre" className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                        <input value={w.desc} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, desc: e.target.value } : x))} placeholder="Description" className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                      </div>
-                      <button onClick={() => setWhyWaarwi(whyWaarwi.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100 mt-1"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                    <CardImageManager
-                      imageUrl={w.image_url} imageAlt={w.image_alt} imagePosition={w.image_position || 'center'}
-                      uploading={uploadingKey === `why-${idx}`}
-                      onUpload={file => uploadWhyImage(idx, file, false)}
-                      onReplace={file => uploadWhyImage(idx, file, true)}
-                      onRemove={() => removeWhyImage(idx)}
-                      onAlt={v => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, image_alt: v } : x))}
-                      onPosition={v => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, image_position: v } : x))}
-                    />
-                    <CardPreview imageUrl={w.image_url} imageAlt={w.image_alt} imagePosition={w.image_position} title={w.title} desc={w.desc} fallback={<IconComp className="w-5 h-5 text-teal-600" />} />
-                  </div>
+                  <LandingEntry key={index} title={item.q || 'Nouvelle question'} initiallyOpen={!item.q}>
+                    <TextControl label="Question" value={item.q} onChange={q => update({ q })} />
+                    <TextControl label="Réponse" value={item.a} onChange={a => update({ a })} rows={3} />
+                    <OrderActions index={index} count={faqItems.length} onMove={step => setFaqItems(move(faqItems, index, step))}
+                      onRemove={() => setFaqItems(faqItems.filter((_, i) => i !== index))} />
+                  </LandingEntry>
                 );
               })}
             </div>
-          </div>
-
-          <div className="pa-panel space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <HelpCircle className="w-4 h-4 text-brand-700" />
-                <h3 className="text-sm font-bold text-slate-900">FAQ ({faqItems.length})</h3>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setFaqItems(DEFAULT_FAQ.map(f => ({ ...f })))} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200 transition-colors">
-                  <RotateCcw className="w-3 h-3" /> Rétablir
-                </button>
-                <button onClick={() => setFaqItems([...faqItems, { q: '', a: '' }])} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors">
-                  <Plus className="w-3.5 h-3.5" /> Ajouter
-                </button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {faqItems.map((f, idx) => (
-                <div key={idx} className="p-2.5 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-1.5 group">
-                  <div className="flex items-center gap-2">
-                    <div className="flex flex-col gap-0.5 shrink-0">
-                      <button onClick={() => setFaqItems(move(faqItems, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
-                      <button onClick={() => setFaqItems(move(faqItems, idx, 1))} disabled={idx === faqItems.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
-                    </div>
-                    <input value={f.q} onChange={e => setFaqItems(faqItems.map((x, i) => i === idx ? { ...x, q: e.target.value } : x))} placeholder="Question" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                    <button onClick={() => setFaqItems(faqItems.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
-                  <textarea value={f.a} onChange={e => setFaqItems(faqItems.map((x, i) => i === idx ? { ...x, a: e.target.value } : x))} rows={2} placeholder="Réponse" className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 resize-none" />
-                </div>
-              ))}
-            </div>
-          </div>
+          </section>
         </div>
       )}
 
-      {activeTab === 'legal' && (
-        <div className="pa-panel space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Scale className="w-4 h-4 text-brand-700" />
-            <h3 className="text-sm font-bold text-slate-900">Documents juridiques</h3>
-          </div>
-          <p className="text-xs text-slate-500 mb-4">Contenu des pages légales publiques (waarwi.com/mentions-legales, /confidentialite, /cgu). Édition en Markdown : **gras**, *italique*, # titre, - liste, [texte](url).</p>
-          <MarkdownEditorPanel
-            label="Mentions légales"
-            slug="/mentions-legales"
-            value={legalMentions}
-            onChange={setLegalMentions}
-            onReset={() => setLegalMentions(DEFAULT_LEGAL_MENTIONS)}
-          />
-          <MarkdownEditorPanel
-            label="Politique de confidentialité"
-            slug="/confidentialite"
-            value={privacyPolicy}
-            onChange={setPrivacyPolicy}
-            onReset={() => setPrivacyPolicy(DEFAULT_PRIVACY_POLICY)}
-          />
-          <MarkdownEditorPanel
-            label="Conditions générales d'utilisation"
-            slug="/cgu"
-            value={termsOfService}
-            onChange={setTermsOfService}
-            onReset={() => setTermsOfService(DEFAULT_TERMS_OF_SERVICE)}
-          />
-        </div>
-      )}
-
-      {activeTab === 'effets' && (
-        <div className="pa-panel space-y-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Palette className="w-4 h-4 text-brand-700" />
-              <h3 className="text-sm font-bold text-slate-900">Effets visuels de la landing</h3>
-            </div>
-            <button onClick={() => setGlobalEffects({ ...globalEffects, enabled: !globalEffects.enabled })}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${globalEffects.enabled ? 'bg-brand-700' : 'bg-slate-300'}`}>
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${globalEffects.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-          <p className="text-xs text-slate-500">Appliquez des filtres graphiques (luminosité, contraste, saturation, flou, nuances) sur toute la page d'accueil publique. Aperçu en temps réel ci-dessous.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {(([
-              { key: 'brightness', label: 'Luminosité', min: 0, max: 200, step: 5, unit: '%' },
-              { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 5, unit: '%' },
-              { key: 'saturate', label: 'Saturation', min: 0, max: 200, step: 5, unit: '%' },
-              { key: 'blur', label: 'Flou', min: 0, max: 20, step: 1, unit: 'px' },
-              { key: 'grayscale', label: 'Niveaux de gris', min: 0, max: 100, step: 5, unit: '%' },
-              { key: 'sepia', label: 'Sépia', min: 0, max: 100, step: 5, unit: '%' },
-              { key: 'hueRotate', label: 'Teinte (rotation)', min: 0, max: 360, step: 15, unit: '°' },
-            ] as const).map(prop => (
-              <div key={prop.key} className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700">{prop.label}</label>
-                  <span className="text-[11px] text-slate-500 font-mono">{globalEffects[prop.key]}{prop.unit}</span>
-                </div>
-                <input type="range" min={prop.min} max={prop.max} step={prop.step} value={globalEffects[prop.key]}
-                  onChange={e => setGlobalEffects({ ...globalEffects, [prop.key]: Number(e.target.value) })}
-                  disabled={!globalEffects.enabled}
-                  className="w-full disabled:opacity-40" />
-              </div>
-            )))}
-          </div>
-          <div className="flex justify-end">
-            <button onClick={() => setGlobalEffects(DEFAULT_EFFECTS)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors">
-              <RotateCcw className="w-3.5 h-3.5" /> Réinitialiser les effets
-            </button>
-          </div>
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <p className="text-xs font-bold text-slate-700 mb-2">Aperçu</p>
-            <div className="rounded-xl overflow-hidden border border-slate-200 bg-[var(--w-surface-el)]">
-              <img src={heroImageUrl || '/desktop.png'} alt="Aperçu effet" className="w-full h-48 object-cover transition-all duration-300"
-                style={{ filter: buildFilterString(globalEffects) }} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-end">
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-700 text-white text-sm font-semibold hover:bg-brand-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          Enregistrer
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function DemoColumn({ title, kind, items, setItems, onUpload, onReplace, uploading, uploadingKey }: {
-  title: string;
-  kind: 'desktop' | 'mobile';
-  items: DemoShot[];
-  setItems: (i: DemoShot[]) => void;
-  onUpload: (f: File, kind: 'desktop' | 'mobile') => void;
-  onReplace: (f: File, kind: 'desktop' | 'mobile', idx: number) => void;
-  uploading: boolean;
-  uploadingKey: string | null;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-bold text-slate-700">{title} ({items.length})</p>
-        <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors cursor-pointer">
-          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Uploader
-          <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f, kind); e.currentTarget.value = ''; }} disabled={uploading} />
-        </label>
-      </div>
-      {items.length === 0 ? (
-        <div className="text-center py-8 rounded-xl border-2 border-dashed border-slate-200">
-          <ImageIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-          <p className="text-xs text-slate-400">Aucune capture {kind}. Cliquez sur "Uploader".</p>
-        </div>
+      {activeTab === 'legal' && (currentDocument ? (
+        <PlatformWorkPage key={currentDocument.slug} title={currentDocument.label} backLabel="Retour aux documents légaux"
+          onBack={() => setDocument(undefined)} actions={saveAction} busy={saving}>
+          <MarkdownEditorPanel label={currentDocument.label} value={currentDocument.value}
+            onChange={currentDocument.set} onReset={() => currentDocument.set(currentDocument.initial)} />
+        </PlatformWorkPage>
       ) : (
-        <div className="space-y-2">
-          {items.map((shot, idx) => (
-            <div key={idx} className="flex items-center gap-2 p-2 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group">
-              <div className={`shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-white ${kind === 'desktop' ? 'w-16 h-10' : 'w-10 h-16'}`}>
-                <img src={shot.src} alt={shot.alt || shot.label} className="w-full h-full object-cover" />
+        <div className="pa-divided">
+          {legalDocuments.map(item => (
+            <div key={item.slug} className="pa-setting-row">
+              <div>
+                <button type="button" className="pa-name-button" onClick={() => setDocument(item.slug)}>{item.label}</button>
+                <p className="pa-row-subtitle">waarwi.com{item.slug}</p>
               </div>
-              <div className="flex-1 space-y-1 min-w-0">
-                <input value={shot.label} onChange={e => setItems(items.map((s, i) => i === idx ? { ...s, label: e.target.value } : s))} placeholder="Label (ex: Tableau de bord)" className="w-full h-7 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                <input value={shot.alt} onChange={e => setItems(items.map((s, i) => i === idx ? { ...s, alt: e.target.value } : s))} placeholder="Texte alternatif (accessibilité)" className="w-full h-7 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-500 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-              </div>
-              <div className="flex flex-col gap-0.5 shrink-0">
-                <button onClick={() => setItems(move(items, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
-                <button onClick={() => setItems(move(items, idx, 1))} disabled={idx === items.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
-              </div>
-              <label className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer" title="Remplacer cette image">
-                {uploadingKey === `${kind}-${idx}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Replace className="w-3.5 h-3.5" />}
-                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onReplace(f, kind, idx); e.currentTarget.value = ''; }} disabled={uploadingKey === `${kind}-${idx}`} />
-              </label>
-              <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
+              <button type="button" className="pa-link" onClick={() => setDocument(item.slug)} aria-label={'Modifier ' + item.label}>Modifier <ChevronRight size={15} /></button>
             </div>
           ))}
         </div>
+      ))}
+
+      {activeTab === 'effets' && (
+        <section className="pa-form">
+          <div className="pa-section-head">
+            <label className="pa-inline text-sm">
+              <input type="checkbox" checked={globalEffects.enabled}
+                onChange={event => setGlobalEffects({ ...globalEffects, enabled: event.target.checked })} /> Activer les filtres du site public
+            </label>
+            <button type="button" className="pa-link" onClick={() => setGlobalEffects(DEFAULT_EFFECTS)}><RotateCcw size={15} /> Réinitialiser</button>
+          </div>
+          <div className="pa-form-grid">
+            {([
+              { key: 'brightness', label: 'Luminosité', min: 0, max: 200, step: 5, unit: '%' },
+              { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 5, unit: '%' },
+              { key: 'saturate', label: 'Saturation', min: 0, max: 200, step: 5, unit: '%' },
+              { key: 'blur', label: 'Flou', min: 0, max: 20, step: 1, unit: ' px' },
+              { key: 'grayscale', label: 'Niveaux de gris', min: 0, max: 100, step: 5, unit: '%' },
+              { key: 'sepia', label: 'Sépia', min: 0, max: 100, step: 5, unit: '%' },
+              { key: 'hueRotate', label: 'Teinte', min: 0, max: 360, step: 15, unit: '°' },
+            ] as const).map(item => (
+              <label key={item.key} className="pa-field-label">
+                <span className="pa-section-head">{item.label}<span>{globalEffects[item.key]}{item.unit}</span></span>
+                <input type="range" min={item.min} max={item.max} step={item.step} value={globalEffects[item.key]} disabled={!globalEffects.enabled}
+                  onChange={event => setGlobalEffects({ ...globalEffects, [item.key]: Number(event.target.value) })} />
+              </label>
+            ))}
+          </div>
+          <details className="pa-panel">
+            <summary className="pa-expander">Aperçu des filtres</summary>
+            <img src={heroImageUrl || '/desktop.png'} alt="Aperçu de l’image du site public" className="max-h-64 object-contain"
+              style={{ filter: buildFilterString(globalEffects) }} />
+          </details>
+        </section>
       )}
     </div>
   );
 }
 
-function MarkdownEditorPanel({ label, slug, value, onChange, onReset }: {
+function TextControl({ label, value, onChange, rows }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) {
+  return <label className="pa-field-label">{label}
+    {rows ? <textarea className="w-input-ul" rows={rows} value={value} onChange={event => onChange(event.target.value)} />
+      : <input className="w-input-ul" value={value} onChange={event => onChange(event.target.value)} />}
+  </label>;
+}
+
+function FileControl({ label, onFile, busy }: { label: string; onFile: (file: File) => void; busy?: boolean }) {
+  return (
+    <label className="pa-field-label">{label}
+      <input type="file" disabled={busy} accept="image/png,image/jpeg,image/webp" className="pa-file"
+        onChange={event => {
+          const file = event.target.files?.[0];
+          if (file) onFile(file);
+          event.target.value = '';
+        }} />
+    </label>
+  );
+}
+
+function LandingEntry({ title, note, icon, children, initiallyOpen }: { title: string; note?: string; icon?: ReactNode; children: ReactNode; initiallyOpen?: boolean }) {
+  const [expanded, setExpanded] = useState(!!initiallyOpen);
+  return (
+    <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
+      <summary className="pa-expander">
+        <span className="pa-inline">{icon}<strong>{title}</strong></span>
+        {note && <span className="pa-row-subtitle">{note}</span>}
+      </summary>
+      <div className="pa-form pb-3">{children}</div>
+    </details>
+  );
+}
+
+function OrderActions({ index, count, onMove, onRemove, busy }: { index: number; count: number; onMove: (step: -1 | 1) => void; onRemove: () => void; busy?: boolean }) {
+  return (
+    <div className="pa-inline">
+      <button type="button" className="pa-link" disabled={busy || index === 0} onClick={() => onMove(-1)}><ChevronUp size={15} /> Monter</button>
+      <button type="button" className="pa-link" disabled={busy || index === count - 1} onClick={() => onMove(1)}><ChevronDown size={15} /> Descendre</button>
+      <button type="button" className="pa-link pa-danger" disabled={busy} onClick={onRemove}><Trash2 size={15} /> Retirer</button>
+    </div>
+  );
+}
+
+type ImagePosition = 'left' | 'center' | 'right';
+function ImageFields({ url, alt, position, onAlt, onPosition, onFile, onRemove, busy, saveOnBlur }: {
+  url?: string | null; alt?: string | null; position?: string | null; onAlt: (value: string) => void; onPosition: (value: ImagePosition) => void;
+  onFile: (file: File) => void; onRemove: () => void; busy?: boolean; saveOnBlur?: boolean;
+}) {
+  const pos = position === 'left' || position === 'right' ? position : 'center';
+  return (
+    <div className="pa-form-grid">
+      <div>
+        <FileControl label={url ? 'Remplacer l’image' : 'Ajouter une image'} onFile={onFile} busy={busy} />
+        {url && <div className="pa-inline">
+          <img src={url} alt={alt || ''} className="pa-media-thumb object-cover" style={{ objectPosition: pos }} />
+          <button type="button" className="pa-link pa-danger" disabled={busy} onClick={onRemove}>Retirer l’image</button>
+        </div>}
+      </div>
+      {url && <div className="pa-form">
+        {saveOnBlur ? (
+          <label className="pa-field-label">Texte alternatif
+            <input className="w-input-ul" key={url} defaultValue={alt || ''} onBlur={event => {
+              if (event.target.value !== (alt || '')) onAlt(event.target.value);
+            }} />
+          </label>
+        ) : <TextControl label="Texte alternatif" value={alt || ''} onChange={onAlt} />}
+        <label className="pa-field-label">Cadrage de l’image
+          <select className="w-input-ul" value={pos} onChange={event => onPosition(event.target.value as ImagePosition)}>
+            {POSITION_OPTIONS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+      </div>}
+    </div>
+  );
+}
+
+function DemoColumn({ title, kind, items, setItems, onUpload, onReplace, busy }: {
+  title: string; kind: 'desktop' | 'mobile'; items: DemoShot[]; setItems: (items: DemoShot[]) => void; busy: boolean;
+  onUpload: (file: File, kind: 'desktop' | 'mobile') => void; onReplace: (file: File, kind: 'desktop' | 'mobile', index: number) => void;
+}) {
+  return (
+    <section className="pa-page">
+      <h2 className="pa-heading">{title}</h2>
+      <FileControl label="Ajouter une capture" busy={busy} onFile={file => onUpload(file, kind)} />
+      {items.length === 0 ? <p className="pa-empty">Aucune capture enregistrée.</p> : (
+        <div className="pa-divided">
+          {items.map((item, index) => {
+            const update = (patch: Partial<DemoShot>) => setItems(items.map((shot, i) => i === index ? { ...shot, ...patch } : shot));
+            return (
+              <LandingEntry key={index} title={item.label || 'Capture sans titre'}>
+                <div className="pa-form-grid">
+                  <img src={item.src} alt={item.alt || ''} className={kind === 'mobile' ? 'pa-media-thumb pa-media-phone' : 'pa-media-thumb'} />
+                  <FileControl label="Remplacer la capture" busy={busy} onFile={file => onReplace(file, kind, index)} />
+                  <TextControl label="Titre de la capture" value={item.label} onChange={label => update({ label })} />
+                  <TextControl label="Texte alternatif" value={item.alt} onChange={alt => update({ alt })} />
+                </div>
+                <OrderActions index={index} count={items.length} busy={busy} onMove={step => setItems(move(items, index, step))}
+                  onRemove={() => setItems(items.filter((_, i) => i !== index))} />
+              </LandingEntry>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MarkdownEditorPanel({ label, value, onChange, onReset }: {
   label: string;
-  slug: string;
   value: string;
   onChange: (v: string) => void;
   onReset: () => void;
@@ -1182,68 +909,41 @@ function MarkdownEditorPanel({ label, slug, value, onChange, onReset }: {
     });
   };
 
-  const ToolBtn = ({ onClick: action, children, title }: { onClick: () => void; children: React.ReactNode; title: string }) => (
-    <button type="button" onClick={action} title={title} className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-      {children}
-    </button>
-  );
+  const buttons = [
+    { label: 'Titre 1', action: () => prefixLine('# '), icon: Heading1 },
+    { label: 'Titre 2', action: () => prefixLine('## '), icon: Heading2 },
+    { label: 'Titre 3', action: () => prefixLine('### '), icon: Heading3 },
+    { label: 'Gras', action: () => wrap('**', '**', 'gras'), icon: Bold },
+    { label: 'Italique', action: () => wrap('*', '*', 'italique'), icon: Italic },
+    { label: 'Liste à puces', action: () => prefixLine('- '), icon: List },
+    { label: 'Liste numérotée', action: () => prefixLine('1. '), icon: ListOrdered },
+    { label: 'Insérer un lien', action: () => wrap('[', '](https://)', 'texte du lien'), icon: Link2 },
+  ];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-[var(--w-surface-el)]/40 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-white">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-slate-900 truncate">{label}</div>
-          <div className="text-[10px] text-slate-400 truncate">waarwi.com{slug}</div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button type="button" onClick={onReset} title="Rétablir le modèle par défaut" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-            <RotateCcw className="w-3 h-3" /> Modèle
-          </button>
-          <div className="flex rounded-lg bg-slate-100 p-0.5">
-            <button type="button" onClick={() => setView('edit')} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${view === 'edit' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Éditer</button>
-            <button type="button" onClick={() => setView('preview')} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${view === 'preview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><EyeIcon className="w-3 h-3" /> Aperçu</button>
-          </div>
-        </div>
+    <div className="pa-page">
+      <div className="pa-editor-nav">
+        <nav className="pa-tabs" aria-label="Édition du document">
+          <button type="button" aria-current={view === 'edit' ? 'page' : undefined} onClick={() => setView('edit')}>Texte</button>
+          <button type="button" aria-current={view === 'preview' ? 'page' : undefined} onClick={() => setView('preview')}>Aperçu</button>
+        </nav>
+        <button type="button" className="pa-link" onClick={onReset}><RotateCcw size={15} /> Rétablir le modèle</button>
       </div>
 
       {view === 'edit' ? (
-        <>
-          <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-slate-200 bg-white/80">
-            <ToolBtn onClick={() => prefixLine('# ')} title="Titre 1"><Heading1 className="w-3.5 h-3.5" /></ToolBtn>
-            <ToolBtn onClick={() => prefixLine('## ')} title="Titre 2"><Heading2 className="w-3.5 h-3.5" /></ToolBtn>
-            <ToolBtn onClick={() => prefixLine('### ')} title="Titre 3"><Heading3 className="w-3.5 h-3.5" /></ToolBtn>
-            <div className="w-px h-4 bg-slate-200 mx-1" />
-            <ToolBtn onClick={() => wrap('**', '**', 'gras')} title="Gras"><Bold className="w-3.5 h-3.5" /></ToolBtn>
-            <ToolBtn onClick={() => wrap('*', '*', 'italique')} title="Italique"><Italic className="w-3.5 h-3.5" /></ToolBtn>
-            <div className="w-px h-4 bg-slate-200 mx-1" />
-            <ToolBtn onClick={() => prefixLine('- ')} title="Liste à puces"><List className="w-3.5 h-3.5" /></ToolBtn>
-            <ToolBtn onClick={() => prefixLine('1. ')} title="Liste numérotée"><ListOrdered className="w-3.5 h-3.5" /></ToolBtn>
-            <div className="w-px h-4 bg-slate-200 mx-1" />
-            <ToolBtn onClick={() => wrap('[', '](https://)', 'texte du lien')} title="Lien"><Link2 className="w-3.5 h-3.5" /></ToolBtn>
+        <div>
+          <div className="pa-inline" role="group" aria-label="Mise en forme Markdown">
+            {buttons.map(({ label, action, icon: Icon }) => (
+              <button type="button" key={label} className="pa-icon-button" title={label} aria-label={label} onClick={action}><Icon size={16} /></button>
+            ))}
           </div>
-          <textarea
-            ref={ref}
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            rows={16}
-            spellLang="fr"
-            className="w-full px-4 py-3 bg-white text-[13px] text-slate-800 leading-relaxed font-mono resize-y focus:outline-none focus:ring-1 focus:ring-brand-400 border-0"
-            style={{ fontFamily: "'JetBrains Mono', 'Menlo', monospace" }}
-            placeholder={`Saisissez le contenu de « ${label} » en Markdown…`}
-          />
-          <div className="px-4 py-1.5 border-t border-slate-200 bg-white text-[10px] text-slate-400 text-right">
-            {value.length} caractères
-          </div>
-        </>
-      ) : (
-        <div className="bg-white px-5 py-4 max-h-[28rem] overflow-y-auto">
-          {value.trim() ? (
-            <div className="legal-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(value) }} />
-          ) : (
-            <p className="text-sm text-slate-400 italic">Aucun contenu. Basculez sur « Éditer » pour saisir le document.</p>
-          )}
+          <textarea ref={ref} value={value} onChange={event => onChange(event.target.value)} rows={16} lang="fr"
+            className="pa-markdown w-input-ul font-mono" aria-label={label} />
+          <p className="pa-row-subtitle">{value.length} caractères</p>
         </div>
-      )}
+      ) : value.trim() ? (
+        <div className="legal-prose pa-markdown-preview" dangerouslySetInnerHTML={{ __html: renderMarkdown(value) }} />
+      ) : <p className="pa-empty">Aucun contenu.</p>}
     </div>
   );
 }

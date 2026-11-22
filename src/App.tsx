@@ -415,10 +415,14 @@ function Inner() {
         {route === 'representatives' && <Representatives />}
         {route === 'platform_admin' && isSuperAdmin && <PlatformAdmin />}
       </Suspense>
-      <TenantMessagePopup />
-      <MultiCashAnnouncement key={`${user.id}:${tenant?.id || ''}`} route={route}
-        onConfigure={() => { setSettingsEntry(e => ({ n: e.n + 1, toRegisters: true })); setRoute('settings'); }} />
-      <UpdateNotification />
+      {route !== 'platform_admin' && (
+        <>
+          <TenantMessagePopup />
+          <MultiCashAnnouncement key={`${user.id}:${tenant?.id || ''}`} route={route}
+            onConfigure={() => { setSettingsEntry(e => ({ n: e.n + 1, toRegisters: true })); setRoute('settings'); }} />
+          <UpdateNotification />
+        </>
+      )}
     </Shell>
     </>
   );
