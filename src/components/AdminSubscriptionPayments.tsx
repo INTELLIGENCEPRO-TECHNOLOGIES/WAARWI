@@ -13,6 +13,7 @@ type PaymentList = {
   total: number;
   page_size: number;
   environment: 'prod' | 'test' | null;
+  configuration?: { missing: string[]; invalid: string[] };
 };
 
 const statuses = [
@@ -105,7 +106,15 @@ export function AdminSubscriptionPayments() {
       </header>
 
       {result && !result.environment && (
-        <p className="border-l-2 border-amber-500 pl-3 text-sm text-[var(--w-text-sec)]">PayTech est en attente de configuration.</p>
+        <div className="space-y-1 border-l-2 border-amber-500 pl-3 text-sm text-[var(--w-text-sec)]">
+          <p>PayTech est en attente de configuration.</p>
+          {!!result.configuration?.missing.length && (
+            <p>Ajoute {result.configuration.missing.join(', ')} dans les secrets Supabase.</p>
+          )}
+          {!!result.configuration?.invalid.length && (
+            <p>Vérifie la valeur de {result.configuration.invalid.join(', ')} dans Supabase.</p>
+          )}
+        </div>
       )}
 
       <div className="flex flex-wrap items-end gap-x-5 gap-y-3">

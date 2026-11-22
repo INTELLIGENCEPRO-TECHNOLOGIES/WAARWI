@@ -31,18 +31,32 @@ export type PaymentOrder = {
 
 export type TerminalState = "paid" | "cancelled" | "refunded";
 
-export function getPayTechConfig(): PayTechConfig | null {
-  const key = Deno.env.get("PAYTECH_API_KEY");
-  const secret = Deno.env.get("PAYTECH_API_SECRET");
-  const environment = Deno.env.get("PAYTECH_ENV");
-  const appUrl = Deno.env.get("WAARWI_BILLING_APP_URL");
-  if (!key || !secret || !appUrl || (environment !== "test" && environment !== "prod")) return null;
+export function getPayTechConfiguration() {
+  const variables = {
+    PAYTECH_API_KEY: Deno.env.get("PAYTECH_API_KEY")?.trim(),
+    PAYTECH_API_SECRET: Deno.env.get("PAYTECH_API_SECRET")?.trim(),
+    PAYTECH_ENV: Deno.env.get("PAYTECH_ENV")?.trim(),
+    WAARWI_BILLING_APP_URL: Deno.env.get("WAARWI_BILLING_APP_URL")?.trim(),
+  };
+  const key = variables.PAYTECH_API_KEY;
+  const secret = variables.PAYTECH_API_SECRET;
+  const environment = variables.PAYTECH_ENV;
+  const appUrl = variables.WAARWI_BILLING_APP_URL;
+  const missing = Object.entries(variables).filter(([, value]) => !value).map(([name]) => name);
+  const invalid: string[] = [];
+  const validEnvironment = environment === "test" || environment === "prod";
+  const url = appUrl && URL.canParse(appUrl) ? new URL(appUrl) : null;
+  const validUrl = url?.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
+  if (environment && !validEnvironment) invalid.push("PAYTECH_ENV");
+  if (appUrl && !validUrl) invalid.push("WAARWI_BILLING_APP_URL");
+  const config: PayTechConfig | null = key && secret && validEnvironment && validUrl
+    ? { key, secret, environment, appUrl: url }
+    : null;
+  return { config, missing, invalid };
+}
 
-  const url = new URL(appUrl);
-  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
-    throw new Error("WAARWI_BILLING_APP_URL doit être une URL HTTPS sans paramètres");
-  }
-  return { key, secret, environment, appUrl: url };
+export function getPayTechConfig(): PayTechConfig | null {
+  return getPayTechConfiguration().config;
 }
 
 function record(value: unknown): Record<string, unknown> {

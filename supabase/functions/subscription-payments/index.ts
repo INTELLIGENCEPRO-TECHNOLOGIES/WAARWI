@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
-  createPayTechCheckout, getPayTechConfig, getPayTechStatus, isUuid, PAYTECH_ORDER_TABLE,
+  createPayTechCheckout, getPayTechConfiguration, getPayTechStatus, isUuid, PAYTECH_ORDER_TABLE,
   type PaymentOrder, type PayTechConfig,
 } from "../_shared/subscriptionPaytech.ts";
 
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = body?.action;
-    const config = getPayTechConfig();
+    const { config, missing, invalid } = getPayTechConfiguration();
 
     async function reconcile(order: PaymentOrder, provider: PayTechConfig) {
       const status = await getPayTechStatus(provider, order);
@@ -96,7 +96,10 @@ Deno.serve(async (req) => {
       const { data, count, error: listError } = await query.order("activity_at", { ascending: false })
         .order("id", { ascending: false }).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
       if (listError) throw listError;
-      return json({ payments: data, total: count ?? 0, page_size: PAGE_SIZE, environment: config?.environment ?? null });
+      return json({
+        payments: data, total: count ?? 0, page_size: PAGE_SIZE,
+        environment: config?.environment ?? null, configuration: { missing, invalid },
+      });
     }
 
     if (action !== "context" && action !== "start" && action !== "reconcile") {
