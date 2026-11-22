@@ -91,58 +91,34 @@ function Spinner() {
 // ============================================================
 // ROOT
 // ============================================================
-export function CentralizedBackups() {
+export function CentralizedBackups({ focusMode, onToggleFocus }: { focusMode: boolean; onToggleFocus: () => void }) {
   const [tab, setTab] = useState<Tab>('supervision');
-  const [focusMode, setFocusMode] = useState(false);
 
   const tabs: { k: Tab; l: string }[] = [
     { k: 'supervision', l: 'Supervision' },
-    { k: 'tenants', l: 'Tenants' },
+    { k: 'tenants', l: 'Entreprises' },
     { k: 'executions', l: 'Exécutions' },
     { k: 'lws', l: 'Copie distante LWS' },
     { k: 'settings', l: 'Paramètres' },
   ];
 
   return (
-    <div className={focusMode ? '-mx-5 sm:-mx-8 -mt-5 sm:-mt-8' : ''}>
-      {/* Page head */}
-      <div className={`${focusMode ? 'px-5 sm:px-8 pt-5 sm:pt-6' : ''}`}>
-        <div className="text-[9px] font-bold text-[#9098a3] tracking-[.16em] uppercase mb-2">Système / Sauvegardes</div>
-        <div className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="text-[clamp(22px,2vw,30px)] font-bold text-[#101318] tracking-tight leading-none">Centre de sauvegarde</h2>
-            <p className="text-[11px] text-[#67707c] mt-2 leading-relaxed">Surveillance globale des sauvegardes locales, du chiffrement et des copies distantes LWS.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFocusMode(!focusMode)}
-              className="h-[34px] px-3 border border-[#cfd3d9] bg-white text-[10px] font-semibold text-[#101318] inline-flex items-center gap-[7px] hover:bg-[#f7f8f9] transition-colors"
-            >
-              {focusMode ? <Minimize2 className="w-[14px] h-[14px]" /> : <Maximize2 className="w-[14px] h-[14px]" />}
-              {focusMode ? 'Quitter supervision' : 'Mode supervision'}
-            </button>
-          </div>
-        </div>
+    <div className="pa-page pa-backup-console">
+      <div className="pa-section-head">
+        <span className="pa-muted text-sm">Sauvegardes locales et copies distantes</span>
+        <button type="button" onClick={onToggleFocus} className="pa-button" aria-pressed={focusMode}>
+          {focusMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          {focusMode ? 'Quitter le mode supervision' : 'Mode supervision'}
+        </button>
       </div>
-
-      {/* Tabs */}
-      <nav className={`flex items-center gap-6 border-b border-[#e5e7eb] mt-6 overflow-x-auto ${focusMode ? 'px-5 sm:px-8' : ''}`}>
-        {tabs.map(t => (
-          <button
-            key={t.k}
-            onClick={() => setTab(t.k)}
-            className={`relative h-10 text-[11px] font-semibold whitespace-nowrap transition-colors ${
-              tab === t.k ? 'text-[#101318]' : 'text-[#7c838d] hover:text-[#101318]'
-            }`}
-          >
-            {t.l}
-            {tab === t.k && <span className="absolute left-0 right-0 bottom-[-1px] h-[2px] bg-[#101318]" />}
-          </button>
+      <nav className="pa-tabs" aria-label="Sauvegardes de la plateforme">
+        {tabs.map(item => (
+          <button type="button" key={item.k} aria-current={tab === item.k ? 'page' : undefined} onClick={() => setTab(item.k)}>{item.l}</button>
         ))}
       </nav>
 
       {/* Views */}
-      <div className={focusMode ? 'px-5 sm:px-8 pb-8' : ''}>
+      <div>
         {tab === 'supervision' && <SupervisionTab />}
         {tab === 'tenants' && <TenantsTab />}
         {tab === 'executions' && <HistoryTab />}

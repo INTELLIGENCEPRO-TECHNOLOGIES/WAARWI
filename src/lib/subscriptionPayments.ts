@@ -7,6 +7,7 @@ export type SubscriptionPayment = {
   plan_code: string;
   billing_cycle: SubscriptionCycle;
   billing_months?: number | null;
+  monthly_rate?: number | null;
   purpose: 'initial' | 'renewal';
   amount: number;
   environment: 'prod' | 'test';
@@ -28,7 +29,7 @@ export type SubscriptionPaymentContext = {
     amount: number;
     billing_cycle: SubscriptionCycle;
     purpose: SubscriptionPayment['purpose'];
-    billing_options?: { months: number; amount: number }[] | null;
+    billing_options?: { months: number; amount: number; discount_percent?: number }[] | null;
   } | null;
 };
 
@@ -36,6 +37,12 @@ export function subscriptionPaymentDuration(payment: Pick<SubscriptionPayment, '
   return payment.billing_cycle === 'lifetime'
     ? 'À vie'
     : (payment.billing_months ?? (payment.billing_cycle === 'yearly' ? 12 : 1)) + ' mois';
+}
+
+const discountFormatter = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+
+export function formatSubscriptionDiscount(percent: number) {
+  return discountFormatter.format(percent) + ' %';
 }
 
 export const subscriptionCycleLabels: Record<SubscriptionCycle, string> = {

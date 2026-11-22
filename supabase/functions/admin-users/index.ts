@@ -348,12 +348,16 @@ Deno.serve(async (req: Request) => {
     if (action === "platform_overview") {
       const now = new Date();
       const in7 = new Date(Date.now() + 7 * 86400000).toISOString();
-      const [tenantsRes, usersRes, subsActive, expiringRes, suspendedRes, mrrRes, recentEvents] = await Promise.all([
+      const [tenantsRes, usersRes, subsActive, expiringRes, suspendedRes, pendingRes, mrrRes, recentEvents] = await Promise.all([
         admin.from("tenants").select("id,plan,is_active,status,plan_expires_at,created_at"),
         admin.from("profiles").select("id", { count: "exact", head: true }),
         admin.from("tenant_subscriptions").select("id,plan_code,amount,billing_cycle", { count: "exact" }).eq("status", "active"),
-        admin.from("tenants").select("id,name,plan_expires_at").lte("plan_expires_at", in7).gte("plan_expires_at", now.toISOString()),
-        admin.from("tenants").select("id", { count: "exact", head: true }).eq("is_active", false),
+        admin.from("tenants").select("id,name,plan_expires_at")
+          .eq("is_active", true).eq("approval_status", "approved").neq("billing_cycle", "lifetime")
+          .lte("plan_expires_at", in7).gte("plan_expires_at", now.toISOString()).order("plan_expires_at"),
+        admin.from("tenants").select("id", { count: "exact", head: true }).eq("approval_status", "approved")
+          .or("is_active.eq.false,status.eq.suspended"),
+        admin.from("tenants").select("id", { count: "exact", head: true }).eq("approval_status", "pending"),
         admin.from("tenant_subscriptions").select("amount,billing_cycle,tenants(name)").eq("status", "active").neq("billing_cycle", "lifetime"),
         admin.from("platform_events").select("*").order("created_at", { ascending: false }).limit(10),
       ]);
@@ -366,7 +370,8 @@ Deno.serve(async (req: Request) => {
         .reduce((s: number, r: any) => s + Number(r.amount || 0) / (r.billing_cycle === "yearly" ? 12 : 1), 0);
       return json({
         tenants_total: tenants.length, tenants_active: tenants.filter((t: any) => t.is_active).length,
-        tenants_suspended: suspendedRes.count || 0, users_total: usersRes.count || 0,
+        tenants_suspended: suspendedRes.count || 0, tenants_pending: pendingRes.count || 0,
+        users_total: usersRes.count || 0,
         subscriptions_active: subsActive.count || 0, by_plan: byPlan, mrr: Math.round(mrr),
         expiring_soon: expiringRes.data || [], recent_events: recentEvents.data || [],
       });

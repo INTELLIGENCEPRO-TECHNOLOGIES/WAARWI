@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 // Shared stack for "top-layer" modals opened above the desktop window system.
 // Each entry represents one open modal; the last entry is the visible top.
@@ -15,14 +15,14 @@ export function useTopLayer(open: boolean): { isTop: boolean; zIndex: number } {
   const idRef = useRef<symbol | null>(null);
   const [, force] = useState(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const id = Symbol('modal');
     idRef.current = id;
     stack.push(id);
-    notify();
     const listener = () => force((t) => t + 1);
     listeners.add(listener);
+    notify();
     return () => {
       const i = stack.indexOf(id);
       if (i >= 0) stack.splice(i, 1);

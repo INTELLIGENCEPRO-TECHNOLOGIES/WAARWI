@@ -1,25 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowUpRight, Ban, Building2, Check, CircleDollarSign, Clock,
-  CreditCard as Edit2, Gauge, Layers, LineChart, Loader2, LogOut, Mail, MessageSquare, Pause, Plus,
-  Power, Search, Send, Shield, RotateCcw, Trash2, TrendingUp, Users, Zap, X,
+  Activity, AlertTriangle, ArrowUpRight, Building2, Check, CircleDollarSign, Clock,
+  Pencil as Edit2, Gauge, Layers, LineChart, Loader2, LogOut, Mail, MessageSquare, Pause, Plus,
+  Power, Search, Send, Shield, RotateCcw, Trash2, Users, X,
   Wrench as Wrench_, Store as Store_, ShoppingBag as ShoppingBag_, Shirt as Shirt_, Cpu as Cpu_,
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
-  ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse, Bell, ArrowRightLeft,
-  Rocket, Sparkles, Bug, RefreshCw, Lock, HardDrive,
+  ShoppingCart, Truck, BarChart3, Monitor, Globe, ImagePlus, HeartPulse, Bell, ArrowRightLeft,
+  Bug, RefreshCw, Lock, HardDrive, ChevronLeft, ChevronRight, Menu, MoreHorizontal,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
+import { useApp } from '../context/AppContext';
+import './PlatformAdmin.css';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
+import { formatSubscriptionDiscount } from '../lib/subscriptionPayments';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
 import { AdminSubscriptionPayments } from '../components/AdminSubscriptionPayments';
 import { CentralizedBackups } from '../components/CentralizedBackups';
 import { LandingConfigSection as LandingConfigSectionNew } from '../components/LandingConfigSection';
 import { LOGIN_ICON_MAP, DEFAULT_LOGIN_MODULES, type LoginModule, type TextAccent } from '../lib/loginConfig';
-
-type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'subscription_payments' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'landing' | 'releases' | 'backups';
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const doFetch = async (accessToken: string) => {
@@ -58,612 +59,521 @@ const SEV = {
   critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', icon: 'text-red-600', label: 'Critique' },
 } as const;
 
-const sidebarGroups = [
+const navigation = [
   {
-    label: 'PILOTAGE',
+    label: 'Gestion',
     items: [
-      { k: 'overview' as Section, l: 'Vue d\'ensemble', icon: Gauge },
-      { k: 'tenants' as Section, l: 'Entreprises', icon: Building2 },
+      { key: 'overview' as const, label: 'Vue d’ensemble', icon: Gauge },
+      { key: 'tenants' as const, label: 'Entreprises', icon: Building2 },
+      { key: 'subscriptions' as const, label: 'Abonnements', icon: CircleDollarSign },
+      { key: 'messages' as const, label: 'Messages', icon: MessageSquare },
     ],
   },
   {
-    label: 'ABONNEMENTS',
+    label: 'Configuration',
     items: [
-      { k: 'subscriptions' as Section, l: 'Échéances', icon: CircleDollarSign },
-      { k: 'subscription_payments' as Section, l: 'Encaissements', icon: Receipt },
-      { k: 'plans' as Section, l: 'Plans & tarifs', icon: Layers },
+      { key: 'master_catalogs' as const, label: 'Catalogues métiers', icon: Library },
+      { key: 'login_config' as const, label: 'Écran de connexion', icon: Monitor },
+      { key: 'landing' as const, label: 'Site vitrine', icon: Globe },
+      { key: 'releases' as const, label: 'Mises à jour', icon: FileText_ },
     ],
   },
   {
-    label: 'CONFIGURATION',
+    label: 'Supervision',
     items: [
-      { k: 'master_catalogs' as Section, l: 'Catalogues métiers', icon: Library },
-      { k: 'login_config' as Section, l: 'Écran d\'accueil', icon: Monitor },
-      { k: 'landing' as Section, l: 'Landing page', icon: Globe },
-      { k: 'releases' as Section, l: 'Mises à jour', icon: Rocket },
-      { k: 'messages' as Section, l: 'Messages', icon: MessageSquare },
-    ],
-  },
-  {
-    label: 'SURVEILLANCE',
-    items: [
-      { k: 'activity' as Section, l: 'Activité', icon: Activity },
-      { k: 'backups' as Section, l: 'Sauvegardes', icon: HardDrive },
+      { key: 'activity' as const, label: 'Activité', icon: Activity },
+      { key: 'backups' as const, label: 'Sauvegardes', icon: HardDrive },
     ],
   },
 ];
 
+type NavigationItem = typeof navigation[number]['items'][number];
+type Section = NavigationItem['key'];
+const navigationItems = navigation.flatMap<NavigationItem>(group => group.items);
+type SubscriptionTab = 'followup' | 'payments' | 'plans';
+type SubscriptionFilter = 'all' | 'pending' | 'due' | 'expired' | 'active' | 'trial' | 'suspended' | 'rejected' | 'cancelled' | 'completed' | 'none';
+type SubscriptionSelection = { tab: SubscriptionTab; filter: SubscriptionFilter; tenantId?: string };
+
+const subscriptionTabs: { key: SubscriptionTab; label: string }[] = [
+  { key: 'followup', label: 'Suivi' },
+  { key: 'payments', label: 'Encaissements' },
+  { key: 'plans', label: 'Offres et tarifs' },
+];
+
+function PlatformLoading() {
+  return <div className="pa-empty" role="status"><Loader2 className="h-4 w-4 animate-spin" /> Chargement…</div>;
+}
+
 export function PlatformAdmin() {
+  const { profile, signOut } = useApp();
   const [section, setSection] = useState<Section>('overview');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionSelection>({ tab: 'followup', filter: 'all' });
+  const [collapsed, setCollapsed] = useState(false);
+  const drawer = useRef<HTMLDialogElement>(null);
+  const scroll = useRef<HTMLDivElement>(null);
+  const title = navigationItems.find(item => item.key === section)?.label;
+  const operator = profile?.full_name || 'Super-administrateur';
+
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const closeDrawer = () => {
+      if (desktop.matches && drawer.current?.open) drawer.current.close();
+    };
+    desktop.addEventListener('change', closeDrawer);
+    return () => desktop.removeEventListener('change', closeDrawer);
+  }, []);
+
+  useEffect(() => {
+    if (scroll.current) scroll.current.scrollTop = 0;
+  }, [section, subscription.tab]);
+
+  const goTo = (next: Section) => {
+    setSection(next);
+    if (drawer.current?.open) drawer.current.close();
+  };
+
+  const openSubscriptions = (filter: SubscriptionFilter = 'all', tenantId?: string) => {
+    setSubscription({ tab: 'followup', filter, tenantId });
+    goTo('subscriptions');
+  };
+
+  const menu = (compact = false) => (
+    <nav aria-label="Navigation de la plateforme" className="pa-nav">
+      {navigation.map(group => (
+        <div key={group.label} className="pa-nav-group">
+          <div className="pa-nav-group-label">{group.label}</div>
+          {group.items.map(({ key, label, icon: Icon }) => (
+            <button key={key} type="button" className="pa-nav-item"
+              aria-label={label} aria-current={key === section ? 'page' : undefined}
+              title={compact ? label : undefined} onClick={() => goTo(key)}>
+              <Icon size={17} strokeWidth={1.75} aria-hidden="true" />
+              <span className="pa-nav-item-label">{label}</span>
+            </button>
+          ))}
+        </div>
+      ))}
+    </nav>
+  );
 
   return (
-    <div className="flex h-full min-h-screen lg:min-h-0">
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      <aside className={`fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-screen w-[220px] bg-[var(--w-surface)] border-r border-[var(--w-separator)] flex flex-col overflow-y-auto transition-transform lg:transition-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="h-14 flex items-center gap-2.5 px-5 border-b border-[var(--w-separator)] shrink-0">
-          <img src="/newlogo.png" alt="Waarwi" className="w-6 h-6 object-contain w-platform-logo" />
-          <span className="text-[13px] font-semibold text-[var(--w-text)]">Waarwi</span>
-          <span className="text-[10px] text-[var(--w-text-muted)] font-medium ml-auto">Admin</span>
+    <div className="platform-console" data-collapsed={collapsed || undefined}>
+      <aside className="pa-sidebar" aria-label="Menu de la console">
+        <div className="pa-sidebar-brand">
+          <img src={collapsed ? '/newlogoo.png' : '/newlogo.png'} alt="Waarwi" className="w-platform-logo" />
         </div>
-
-        <nav className="flex-1 py-4 space-y-5 overflow-y-auto">
-          {sidebarGroups.map(group => (
-            <div key={group.label}>
-              <div className="text-[10px] font-semibold text-[var(--w-text-muted)] tracking-wider uppercase px-5 mb-1">{group.label}</div>
-              {group.items.map(item => {
-                const I = item.icon;
-                const active = section === item.k;
-                return (
-                  <button
-                    key={item.k}
-                    aria-current={active ? 'page' : undefined}
-                    onClick={() => { setSection(item.k); setSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-[7px] text-[13px] transition-colors border-l-2 ${
-                      active
-                        ? 'border-[#111] text-[var(--w-text)] font-semibold bg-[var(--w-surface-el)]'
-                        : 'border-transparent text-[var(--w-text-sec)] hover:text-[var(--w-text)] hover:bg-[var(--w-hover)] font-medium'
-                    }`}
-                  >
-                    <I className="w-[15px] h-[15px] shrink-0" />
-                    <span>{item.l}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-
-        <div className="px-5 py-3 border-t border-[var(--w-separator)] shrink-0">
-          <div className="flex items-center gap-1.5 text-[11px] text-[var(--w-text-muted)]">
-            <Shield className="w-3 h-3" />
-            <span>Super admin</span>
+        {menu(collapsed)}
+        <footer className="pa-sidebar-footer">
+          <div className="pa-operator" title={operator}>
+            <span>{operator}</span>
+            {profile?.full_name && <small>Super-administrateur</small>}
           </div>
-        </div>
+          <button type="button" className="pa-icon-button" onClick={() => setCollapsed(value => !value)}
+            aria-label={collapsed ? 'Développer le menu' : 'Réduire le menu'} aria-expanded={!collapsed}
+            title={collapsed ? 'Développer le menu' : 'Réduire le menu'}>
+            {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+          </button>
+        </footer>
       </aside>
 
-      <main className="flex-1 min-w-0 bg-[var(--w-surface)]">
-        <header className="sticky top-0 z-30 h-14 bg-[var(--w-surface)] border-b border-[var(--w-separator)] px-5 sm:px-8 flex items-center gap-3">
-          <button type="button" aria-label="Ouvrir la navigation" onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 text-[var(--w-text-sec)] hover:text-[var(--w-text)]">
-            <Layers className="w-5 h-5" />
+      <dialog className="pa-drawer" ref={drawer} aria-label="Menu de la console"
+        onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
+        <div className="pa-drawer-content">
+          <div className="pa-sidebar-brand">
+            <img src="/newlogo.png" alt="Waarwi" className="w-platform-logo" />
+            <button type="button" className="pa-icon-button" aria-label="Fermer le menu" onClick={() => drawer.current?.close()}>
+              <X size={18} />
+            </button>
+          </div>
+          {menu()}
+          <footer className="pa-sidebar-footer"><span className="pa-muted">{operator}</span></footer>
+        </div>
+      </dialog>
+
+      <div className="pa-workspace">
+        <header className="pa-topbar">
+          <button type="button" className="pa-icon-button pa-menu-trigger" aria-label="Ouvrir le menu"
+            aria-haspopup="dialog" onClick={() => drawer.current?.showModal()}>
+            <Menu size={20} />
           </button>
-          <h1 className="text-[15px] font-semibold text-[var(--w-text)] flex-1 min-w-0">
-            {sidebarGroups.flatMap(g => g.items).find(i => i.k === section)?.l || 'Console'}
-          </h1>
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-[var(--w-text-sec)] hover:text-[var(--w-text)] transition-colors"
-            title="Déconnexion"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Déconnexion</span>
+          <img src="/newlogoo.png" alt="Waarwi" className="pa-mobile-logo w-platform-logo" />
+          <span className="pa-topbar-context">Administration</span>
+          <h1>{title}</h1>
+          <button type="button" className="pa-topbar-logout pa-icon-button" onClick={() => void signOut()}
+            aria-label="Déconnexion" title="Déconnexion">
+            <LogOut size={16} aria-hidden="true" />
+            <span>Déconnexion</span>
           </button>
         </header>
 
-        <div className="p-5 sm:p-8">
-          {section === 'overview' && <OverviewSection onNavigate={setSection} />}
-          {section === 'tenants' && <TenantsSection />}
-          {section === 'plans' && <PlansSection />}
-          {section === 'subscriptions' && <SubscriptionsSection />}
-          {section === 'subscription_payments' && <AdminSubscriptionPayments />}
-          {section === 'messages' && <MessagesSection />}
-          {section === 'login_config' && <LoginConfigSection />}
-          {section === 'landing' && <LandingConfigSectionNew />}
-          {section === 'master_catalogs' && <MasterCatalogAdmin />}
-          {section === 'releases' && <ReleasesSection />}
-          {section === 'activity' && <ActivitySection />}
-          {section === 'backups' && <CentralizedBackups />}
+        <div ref={scroll} className="pa-scroll" role="region" aria-label={title}>
+          <div className="pa-content">
+            {section === 'overview' && <OverviewSection onNavigate={goTo} onSubscriptions={openSubscriptions} />}
+            {section === 'tenants' && <TenantsSection onOpenSubscription={id => openSubscriptions('all', id)} />}
+            {section === 'subscriptions' && (
+              <>
+                <nav className="pa-tabs" aria-label="Gestion des abonnements">
+                  {subscriptionTabs.map(item => (
+                    <button key={item.key} type="button"
+                      aria-current={subscription.tab === item.key ? 'page' : undefined}
+                      onClick={() => setSubscription(current => ({ ...current, tab: item.key, tenantId: undefined }))}>
+                      {item.label}
+                    </button>
+                  ))}
+                </nav>
+                {subscription.tab === 'followup' && (
+                  <SubscriptionsSection
+                    initialFilter={subscription.filter}
+                    focusTenantId={subscription.tenantId}
+                    onFocusConsumed={() => setSubscription(current => ({ ...current, tenantId: undefined }))}
+                  />
+                )}
+                {subscription.tab === 'payments' && <AdminSubscriptionPayments />}
+                {subscription.tab === 'plans' && <PlansSection />}
+              </>
+            )}
+            {section === 'messages' && <MessagesSection />}
+            {section === 'activity' && <ActivitySection />}
+            {section === 'login_config' && <div className="pa-configuration"><LoginConfigSection /></div>}
+            {section === 'landing' && <div className="pa-configuration"><LandingConfigSectionNew /></div>}
+            {section === 'master_catalogs' && <div className="pa-configuration"><MasterCatalogAdmin /></div>}
+            {section === 'releases' && <div className="pa-configuration"><ReleasesSection /></div>}
+            {section === 'backups' && <div className="pa-configuration"><CentralizedBackups focusMode={collapsed} onToggleFocus={() => setCollapsed(value => !value)} /></div>}
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
 
-/* ============== OVERVIEW ============== */
-function OverviewSection({ onNavigate }: { onNavigate: (section: Section) => void }) {
-  const [data, setData] = useState<any>(null);
+type PlatformEvent = {
+  id: string;
+  action: string;
+  tenant_id?: string;
+  tenants?: { name?: string };
+  payload?: { name?: string };
+  created_at: string;
+};
+
+type OverviewData = {
+  tenants_total: number;
+  tenants_active: number;
+  tenants_pending?: number;
+  tenants_suspended: number;
+  users_total: number;
+  mrr: number;
+  by_plan: Record<string, number>;
+  expiring_soon: { id: string; name: string; plan_expires_at: string }[];
+  recent_events: PlatformEvent[];
+};
+
+function OverviewSection({ onNavigate, onSubscriptions }: {
+  onNavigate: (section: Section) => void;
+  onSubscriptions: (filter?: SubscriptionFilter, tenantId?: string) => void;
+}) {
+  const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const { error } = useToast();
 
   useEffect(() => {
-    (async () => {
-      try { setData(await call('platform_overview')); }
-      catch (e: any) { error(e.message); }
-      setLoading(false);
-    })();
+    let current = true;
+    call('platform_overview').then(result => {
+      if (current) setData(result);
+    }).catch(cause => {
+      if (current) error(cause.message);
+    }).finally(() => {
+      if (current) setLoading(false);
+    });
+    return () => { current = false; };
   }, []);
 
-  if (loading) return <div className="py-20 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-sec)]" /></div>;
-  if (!data) return null;
-
-  const planColors: Record<string, string> = {
-    trial: 'bg-[#94A3B8]',
-    starter: 'bg-[#0F172A]',
-    pro: 'bg-[#10B981]',
-    enterprise: 'bg-[#F59E0B]',
-  };
-
-  const pendingTenants = data.tenants_total - data.tenants_active - data.tenants_suspended;
-  const hasAlerts = data.tenants_suspended > 0 || data.expiring_soon?.length > 0;
+  if (loading) return <PlatformLoading />;
+  if (!data) return <p className="pa-empty">La vue d’ensemble est indisponible.</p>;
 
   return (
-    <div className="space-y-5">
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={Building2} label="Tenants actifs" value={data.tenants_active} sub={`${data.tenants_total} total`} />
-        <KpiCard icon={Wallet} label="Revenu mensuel prévu" value={formatCompactFCFA(data.mrr)} sub="Abonnements actifs" />
-        <KpiCard icon={Users} label="Utilisateurs" value={data.users_total} sub="Tous tenants" />
-        <KpiCard icon={AlertTriangle} label="Alertes" value={data.tenants_suspended + (data.expiring_soon?.length || 0)} sub={hasAlerts ? 'Actions requises' : 'Aucune alerte'} alert={hasAlerts} />
-      </div>
+    <div className="pa-page">
+      <dl className="pa-metrics">
+        <div><dt>Entreprises actives</dt><dd>{data.tenants_active}<small> sur {data.tenants_total}</small></dd></div>
+        <div><dt>Revenu mensuel prévu</dt><dd>{formatCompactFCFA(data.mrr)}</dd></div>
+        <div><dt>Utilisateurs</dt><dd>{data.users_total}</dd></div>
+        <div><dt>Échéances sous 7 jours</dt><dd><button className="pa-link" onClick={() => onSubscriptions('due')}>{data.expiring_soon.length}</button></dd></div>
+      </dl>
 
-      <nav aria-label="Gestion des abonnements" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-y border-[var(--w-separator)]">
-        <button type="button" onClick={() => onNavigate('tenants')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-[var(--w-text)] hover:underline">
-          <Building2 className="h-4 w-4" /> Inscriptions
-        </button>
-        <button type="button" onClick={() => onNavigate('subscriptions')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-[var(--w-text)] hover:underline">
-          <Clock className="h-4 w-4" /> Échéances
-        </button>
-        <button type="button" onClick={() => onNavigate('subscription_payments')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-[var(--w-text)] hover:underline">
-          <Receipt className="h-4 w-4" /> Encaissements
-        </button>
-      </nav>
+      <div className="pa-overview-grid">
+        <section>
+          <div className="pa-section-head">
+            <h2>À traiter</h2>
+            <button type="button" className="pa-link" onClick={() => onSubscriptions()}>Tous les abonnements <ArrowUpRight size={14} /></button>
+          </div>
+          <div className="pa-divided">
+            <button type="button" className="pa-dashboard-link" aria-label="Inscriptions à valider" onClick={() => onSubscriptions('pending')}>
+              <span>Inscriptions à valider</span>
+              <span className="tabular-nums">{data.tenants_pending ?? '—'}</span>
+            </button>
+            <button type="button" className="pa-dashboard-link" onClick={() => onSubscriptions('suspended')}>
+              <span>Entreprises suspendues</span><span className="tabular-nums">{data.tenants_suspended}</span>
+            </button>
+          </div>
+          <h3 className="pa-heading mt-5">Prochaines échéances</h3>
+          <div className="pa-divided">
+            {data.expiring_soon.slice(0, 6).map(tenant => (
+              <button type="button" key={tenant.id} className="pa-dashboard-link" onClick={() => onSubscriptions('due', tenant.id)}>
+                <span className="truncate">{tenant.name}</span><span className="pa-muted shrink-0">{formatDate(tenant.plan_expires_at)}</span>
+              </button>
+            ))}
+            {!data.expiring_soon.length && <p className="pa-empty">Aucune échéance dans les 7 jours.</p>}
+          </div>
+        </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Plan distribution */}
-        <div className="lg:col-span-2 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--w-text)]">Répartition par plan</h3>
-            <span className="text-[11px] text-[var(--w-text-sec)] font-medium">{data.tenants_total} tenants</span>
+        <section>
+          <div className="pa-section-head">
+            <h2>Activité récente</h2>
+            <button type="button" className="pa-link" onClick={() => onNavigate('activity')}>Tout voir <ArrowUpRight size={14} /></button>
           </div>
-          <div className="space-y-3">
-            {Object.entries(data.by_plan as Record<string, number>).map(([plan, count]) => {
-              const pct = data.tenants_total ? (count as number) / data.tenants_total * 100 : 0;
-              return (
-                <div key={plan}>
-                  <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="capitalize font-medium text-[var(--w-text)]">{plan}</span>
-                    <span className="text-[var(--w-text-sec)]">{count} <span className="text-[var(--w-text-muted)]">({pct.toFixed(0)}%)</span></span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-[var(--w-hover)] overflow-hidden">
-                    <div className={`h-full rounded-full ${planColors[plan] || 'bg-[#94A3B8]'} transition-all duration-500`} style={{ width: `${Math.max(pct, 2)}%` }} />
-                  </div>
-                </div>
-              );
-            })}
+          <div className="pa-divided">
+            {data.recent_events.slice(0, 6).map(event => <EventRow key={event.id} ev={event} />)}
+            {!data.recent_events.length && <p className="pa-empty">Aucune activité récente.</p>}
           </div>
-        </div>
+        </section>
 
-        {/* Expiring soon */}
-        <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--w-text)]">Expirations proches</h3>
-            <Clock className="w-4 h-4 text-[#F59E0B]" />
-          </div>
-          {data.expiring_soon.length === 0 ? (
-            <div className="py-8 text-center">
-              <Check className="w-8 h-8 text-[#10B981] mx-auto mb-2 opacity-50" />
-              <p className="text-xs text-[var(--w-text-sec)]">Aucune expiration dans les 7 jours.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {data.expiring_soon.slice(0, 6).map((t: any) => (
-                <div key={t.id} className="flex items-center justify-between text-xs py-2 border-b border-[var(--w-hover)] last:border-0">
-                  <span className="font-medium text-[var(--w-text)] truncate">{t.name}</span>
-                  <span className="text-[#F59E0B] bg-[#FFFBEB] px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 ml-2">{formatDate(t.plan_expires_at)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Actions and activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Actions a traiter */}
-        <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--w-text)]">Actions à traiter</h3>
-            <Bell className="w-4 h-4 text-[var(--w-text-sec)]" />
-          </div>
-          <div className="space-y-2">
-            {data.tenants_suspended > 0 && (
-              <ActionItem icon={Ban} label={`${data.tenants_suspended} tenant(s) suspendu(s)`} severity="critical" />
-            )}
-            {data.expiring_soon?.length > 0 && (
-              <ActionItem icon={Clock} label={`${data.expiring_soon.length} expiration(s) dans 7 jours`} severity="warning" />
-            )}
-            {pendingTenants > 0 && (
-              <ActionItem icon={Clock} label={`${pendingTenants} tenant(s) en attente d'approbation`} severity="info" />
-            )}
-            {data.tenants_suspended === 0 && (data.expiring_soon?.length || 0) === 0 && pendingTenants <= 0 && (
-              <div className="py-6 text-center">
-                <Check className="w-8 h-8 text-[#10B981] mx-auto mb-2 opacity-50" />
-                <p className="text-xs text-[var(--w-text-sec)]">Aucune action en attente.</p>
+        <section>
+          <div className="pa-section-head"><h2>Répartition par offre</h2></div>
+          <dl className="pa-divided">
+            {Object.entries(data.by_plan ?? {}).sort((a, b) => b[1] - a[1]).map(([plan, count]) => (
+              <div key={plan} className="pa-distribution">
+                <dt className="capitalize">{plan}</dt><dd>{count} <span className="pa-muted">entreprise{count !== 1 ? 's' : ''}</span></dd>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Recent activity */}
-        <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--w-text)]">Activité récente</h3>
-            <Activity className="w-4 h-4 text-[var(--w-text-sec)]" />
-          </div>
-          {data.recent_events.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-xs text-[var(--w-text-sec)]">Aucune activité récente.</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {data.recent_events.slice(0, 8).map((ev: any) => (
-                <EventRow key={ev.id} ev={ev} />
-              ))}
-            </div>
-          )}
-        </div>
+            ))}
+          </dl>
+        </section>
       </div>
     </div>
   );
 }
 
-function ActionItem({ icon: Icon, label, severity }: { icon: any; label: string; severity: 'critical' | 'warning' | 'info' }) {
-  const styles = {
-    critical: 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]',
-    warning: 'bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]',
-    info: 'bg-[var(--w-surface-el)] border-[var(--w-separator)] text-[var(--w-text-sec)]',
-  };
-  return (
-    <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-xs font-medium ${styles[severity]}`}>
-      <Icon className="w-3.5 h-3.5 shrink-0" />
-      <span>{label}</span>
-    </div>
-  );
-}
+const eventLabels: Record<string, string> = {
+  'tenant.approve': 'Inscription approuvée', 'tenant.reject': 'Inscription rejetée',
+  'tenant.suspend': 'Entreprise suspendue', 'tenant.auto_suspended': 'Suspension automatique',
+  'tenant.reactivate': 'Entreprise réactivée', 'tenant.update': 'Entreprise mise à jour',
+  'tenant.delete': 'Entreprise supprimée',
+  'subscription.create': 'Abonnement enregistré', 'subscription.cancel': 'Abonnement annulé',
+  'subscription.payment_applied': 'Paiement d’abonnement confirmé',
+  'subscription.auto_renewed': 'Abonnement renouvelé', 'subscription.expired': 'Abonnement expiré',
+  'plan.upsert': 'Offre enregistrée', 'plan.delete': 'Offre supprimée',
+  'message.create': 'Message publié', 'message.delete': 'Message supprimé',
+};
 
-function KpiCard({ icon: Icon, label, value, sub, alert }: { icon: any; label: string; value: any; sub: string; alert?: boolean }) {
+function EventRow({ ev }: { ev: PlatformEvent }) {
+  const tenant = ev.tenants?.name || ev.payload?.name || (ev.tenant_id ? 'Entreprise' : 'Plateforme');
   return (
-    <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${alert ? 'bg-[#FEF2F2] text-[#EF4444]' : 'bg-[var(--w-surface-el)] text-[var(--w-text-sec)]'}`}>
-          <Icon className="w-4 h-4" />
-        </div>
-      </div>
-      <div className="text-2xl font-bold text-[var(--w-text)] leading-tight">{value}</div>
-      <div className="text-[11px] font-medium text-[var(--w-text-sec)] mt-0.5">{label}</div>
-      <div className="text-[10px] text-[var(--w-text-muted)] mt-0.5">{sub}</div>
-    </div>
-  );
-}
-
-function EventRow({ ev }: { ev: any }) {
-  const icons: Record<string, any> = {
-    'tenant.suspend': Ban, 'tenant.reactivate': Power, 'tenant.update': Edit2,
-    'subscription.create': Plus, 'subscription.cancel': X,
-    'plan.upsert': Layers, 'plan.delete': Trash2,
-    'message.create': MessageSquare, 'message.delete': X,
-  };
-  const I = icons[ev.action] || Activity;
-  const tenantName = ev.tenants?.name || (ev.payload?.name) || (ev.tenant_id ? 'Tenant' : 'Plateforme');
-  return (
-    <div className="flex items-center gap-2.5 text-[12px] py-2 border-b border-[var(--w-hover)] last:border-0">
-      <div className="w-6 h-6 shrink-0 rounded-md bg-[var(--w-surface-el)] text-[var(--w-text-sec)] flex items-center justify-center">
-        <I className="w-3 h-3" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <span className="font-medium text-[var(--w-text)]">{ev.action}</span>
-        <span className="text-[var(--w-text-muted)] ml-1.5">{tenantName}</span>
-      </div>
-      <div className="text-[10px] text-[var(--w-text-muted)] shrink-0">{formatDateTime(ev.created_at)}</div>
+    <div className="pa-event-row">
+      <div className="min-w-0"><div className="truncate font-medium">{eventLabels[ev.action] ?? ev.action}</div><small className="pa-muted">{tenant}</small></div>
+      <time className="pa-muted shrink-0" dateTime={ev.created_at}>{formatDateTime(ev.created_at)}</time>
     </div>
   );
 }
 
 /* ============== TENANTS ============== */
-function TenantsSection() {
+const platformPageSize = 20;
+
+function PlatformPagination({ page, total, onPage }: { page: number; total: number; onPage: (page: number) => void }) {
+  const pages = Math.max(1, Math.ceil(total / platformPageSize));
+  if (pages < 2) return null;
+  return (
+    <nav className="pa-section-head pa-muted text-xs" aria-label="Pagination">
+      <span>{page * platformPageSize + 1}–{Math.min(total, (page + 1) * platformPageSize)} sur {total}</span>
+      <div className="pa-inline">
+        <button type="button" className="pa-icon-button" aria-label="Page précédente" disabled={page === 0} onClick={() => onPage(page - 1)}><ChevronLeft size={16} /></button>
+        <button type="button" className="pa-icon-button" aria-label="Page suivante" disabled={page + 1 >= pages} onClick={() => onPage(page + 1)}><ChevronRight size={16} /></button>
+      </div>
+    </nav>
+  );
+}
+
+const companyStatuses = {
+  pending: 'À valider',
+  active: 'Active',
+  suspended: 'Suspendue',
+  rejected: 'Rejetée',
+};
+
+function companyStatus(tenant: { approval_status?: string; is_active?: boolean; status?: string }) {
+  if (tenant.approval_status === 'pending') return 'pending';
+  if (tenant.approval_status === 'rejected') return 'rejected';
+  return tenant.is_active && tenant.status !== 'suspended' ? 'active' : 'suspended';
+}
+
+function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId: string) => void }) {
   const [tenants, setTenants] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'suspended' | 'expiring' | 'expired' | 'never_connected'>('all');
-  const [detail, setDetail] = useState<any>(null);
-  const [actionsOpen, setActionsOpen] = useState<string | null>(null);
-  const { success, error } = useToast();
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [t, p] = await Promise.all([call('list_tenants'), call('list_plans')]);
-      setTenants(t.tenants || []);
-      setPlans(p.plans || []);
-    } catch (e: any) { error(e.message); }
-    setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
-
-  const filtered = useMemo(() => {
-    const now = new Date();
-    const in7 = new Date(Date.now() + 7 * 86400000);
-    return tenants.filter(t => {
-      if (q && !`${t.name} ${t.email} ${t.phone} ${t.whatsapp_phone || ''} ${t.subdomain || ''} ${t.custom_domain || ''}`.toLowerCase().includes(q.toLowerCase())) return false;
-      const exp = t.plan_expires_at ? new Date(t.plan_expires_at) : null;
-      const approval = t.approval_status || 'approved';
-      if (filter === 'pending' && approval !== 'pending') return false;
-      if (filter === 'active' && (!t.is_active || approval !== 'approved')) return false;
-      if (filter === 'suspended' && t.is_active) return false;
-      if (filter === 'expiring' && (!exp || exp < now || exp > in7)) return false;
-      if (filter === 'expired' && (!exp || exp >= now)) return false;
-      if (filter === 'never_connected' && t.last_active_at) return false;
-      return true;
-    });
-  }, [tenants, q, filter]);
-
-  const planByCode = useMemo(() => Object.fromEntries(plans.map(p => [p.code, p])), [plans]);
-
-  const suspend = async (t: any, reason: string) => {
-    try { await call('suspend_tenant', { tenant_id: t.id, reason }); success('Tenant suspendu'); load(); }
-    catch (e: any) { error(e.message); }
-  };
-  const reactivate = async (t: any) => {
-    try { await call('reactivate_tenant', { tenant_id: t.id }); success('Tenant réactivé'); load(); }
-    catch (e: any) { error(e.message); }
-  };
-  const approve = async (t: any) => {
-    try { await call('approve_tenant', { tenant_id: t.id }); success('Tenant approuvé'); load(); }
-    catch (e: any) { error(e.message); }
-  };
-  const reject = async (t: any, reason: string) => {
-    try { await call('reject_tenant', { tenant_id: t.id, reason }); success('Tenant rejeté'); load(); }
-    catch (e: any) { error(e.message); }
-  };
+  const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(0);
+  const [detailId, setDetailId] = useState<string>();
+  const [actionsOpen, setActionsOpen] = useState<string>();
+  const [suspending, setSuspending] = useState<any>(null);
+  const [suspensionReason, setSuspensionReason] = useState('');
+  const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState<any>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const { success, error } = useToast();
 
-  const normalizeName = (s: string) => (s || '').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, ' ').replace(/\s+/g, ' ').trim();
+  const load = async () => {
+    try {
+      const [companyData, planData] = await Promise.all([call('list_tenants'), call('list_plans')]);
+      setTenants(companyData.tenants || []);
+      setPlans(planData.plans || []);
+    } catch (cause) { error((cause as Error).message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, []);
+
+  const planNames = useMemo(() => new Map(plans.map(plan => [plan.code, plan.name])), [plans]);
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return tenants.filter(tenant => {
+      const fields = [tenant.name, tenant.email, tenant.phone, tenant.whatsapp_phone, tenant.subdomain, tenant.custom_domain];
+      const matches = fields.some(value => String(value ?? '').toLowerCase().includes(query));
+      if (!matches) return false;
+      if (filter === 'all') return true;
+      if (filter === 'never_connected') return !tenant.last_active_at;
+      return companyStatus(tenant) === filter;
+    });
+  }, [tenants, q, filter]);
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / platformPageSize) - 1));
+  const detail = tenants.find(tenant => tenant.id === detailId);
+
+  const startDelete = (tenant: any) => {
+    setActionsOpen(undefined);
+    setDeleting(tenant);
+    setDeleteConfirmName('');
+    setDeleteReason('');
+  };
+
+  const updateAccess = async (tenant: any, action: 'suspend_tenant' | 'reactivate_tenant') => {
+    setUpdating(true);
+    try {
+      await call(action, { tenant_id: tenant.id, ...(action === 'suspend_tenant' ? { reason: suspensionReason } : {}) });
+      success(action === 'suspend_tenant' ? 'Entreprise suspendue' : 'Entreprise réactivée');
+      setSuspending(null);
+      await load();
+    } catch (cause) { error((cause as Error).message); }
+    finally { setUpdating(false); }
+  };
+
+  const normalizeName = (name: string) => (name || '').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, ' ').replace(/\s+/g, ' ').trim();
 
   const deleteTenant = async () => {
     if (!deleting) return;
     setDeleteLoading(true);
     try {
-      const res = await call('delete_tenant', { tenant_id: deleting.id, reason: deleteReason });
-      success(`Tenant "${res.tenant_name}" supprimé définitivement (${res.users_deleted} utilisateur(s) supprimé(s))`);
+      const response = await call('delete_tenant', { tenant_id: deleting.id, reason: deleteReason });
+      success('Entreprise « ' + response.tenant_name + ' » supprimée.');
       setDeleting(null);
       setDeleteConfirmName('');
       setDeleteReason('');
-      setDetail(null);
-      load();
-    } catch (e: any) { error(e.message); }
-    setDeleteLoading(false);
+      setDetailId(undefined);
+      await load();
+    } catch (cause) { error((cause as Error).message); }
+    finally { setDeleteLoading(false); }
   };
 
-  const pendingCount = tenants.filter(t => (t.approval_status || 'approved') === 'pending').length;
-
-  const filterDefs: { k: typeof filter; l: string }[] = [
-    { k: 'all', l: 'Tous' },
-    { k: 'active', l: 'Actifs' },
-    { k: 'pending', l: 'En attente' },
-    { k: 'suspended', l: 'Suspendus' },
-    { k: 'expiring', l: 'Expirent bientôt' },
-    { k: 'expired', l: 'Expirés' },
-    { k: 'never_connected', l: 'Jamais connectés' },
-  ];
-
   return (
-    <div className="space-y-4">
-      {/* Search + filters */}
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--w-text-muted)]" />
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Rechercher un tenant..."
-            className="w-full h-10 pl-10 pr-4 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] placeholder:text-[var(--w-text-muted)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)] transition-colors"
-          />
-        </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-          {filterDefs.map(f => (
-            <button key={f.k} onClick={() => setFilter(f.k)}
-              className={`relative px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
-                filter === f.k
-                  ? 'bg-[#0F172A] text-white'
-                  : 'bg-[var(--w-surface)] border border-[var(--w-separator)] text-[var(--w-text-sec)] hover:border-[var(--w-text-disabled)] hover:text-[var(--w-text)]'
-              }`}>
-              {f.l}
-              {f.k === 'pending' && pendingCount > 0 && filter !== f.k && (
-                <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-[#F59E0B] text-white text-[9px] font-bold">{pendingCount}</span>
-              )}
-            </button>
-          ))}
-        </div>
+    <div className="pa-page">
+      <div className="pa-toolbar">
+        <label className="pa-search">
+          <Search size={16} aria-hidden="true" />
+          <input value={q} aria-label="Rechercher une entreprise" placeholder="Entreprise, contact ou domaine"
+            onChange={event => { setQ(event.target.value); setPage(0); }} />
+        </label>
+        <select className="pa-field" aria-label="Statut de l’entreprise" value={filter}
+          onChange={event => { setFilter(event.target.value); setPage(0); }}>
+          <option value="all">Tous les statuts</option>
+          {Object.entries(companyStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          <option value="never_connected">Jamais connectée</option>
+        </select>
+        {!loading && <span className="pa-muted text-xs">{filtered.length} entreprise{filtered.length !== 1 ? 's' : ''}</span>}
       </div>
-
-      {/* Tenant count */}
-      {!loading && (
-        <div className="text-[11px] text-[var(--w-text-muted)] font-medium">
-          {filtered.length} tenant{filtered.length !== 1 ? 's' : ''} {filter !== 'all' ? 'filtrés' : 'au total'}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="py-20 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-sec)]" /></div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map(t => {
-            const plan = planByCode[t.plan];
-            const exp = t.plan_expires_at ? new Date(t.plan_expires_at) : null;
-            const now = new Date();
-            const expired = exp && exp < now;
-            const expiringSoon = exp && !expired && exp < new Date(Date.now() + 7 * 86400000);
-            const approval = t.approval_status || 'approved';
-            const isPending = approval === 'pending';
-            const isRejected = approval === 'rejected';
-            const neverConnected = !t.last_active_at;
-
-            const getStatusBadge = () => {
-              if (isPending) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[var(--w-surface-el)] text-[var(--w-text-sec)] border border-[var(--w-separator)] font-medium">En attente</span>;
-              if (isRejected) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Rejeté</span>;
-              if (!t.is_active) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Suspendu</span>;
-              if (expired) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] font-medium">Expiré</span>;
-              if (expiringSoon) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] font-medium">Expire bientôt</span>;
-              if (neverConnected) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[var(--w-surface-el)] text-[var(--w-text-muted)] border border-[var(--w-separator)] font-medium">Jamais connecté</span>;
-              return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] font-medium">Actif</span>;
-            };
-
-            return (
-              <div key={t.id} className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4 hover:border-[var(--w-text-disabled)] transition-colors">
-                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                  {/* Left: avatar + info */}
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className={`w-10 h-10 rounded-lg font-bold text-sm flex items-center justify-center shrink-0 ${
-                      isPending ? 'bg-[#FEF3C7] text-[#D97706]'
-                        : !t.is_active ? 'bg-[#FEE2E2] text-[#DC2626]'
-                        : 'bg-[var(--w-hover)] text-[var(--w-text)]'
-                    }`}>
-                      {(t.name || '?').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {/* Row 1: Name + plan badge */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-[var(--w-text)] text-sm">{t.name}</span>
-                        <PlanBadge plan={plan} code={t.plan} />
-                        {getStatusBadge()}
-                      </div>
-                      {/* Row 2: Details */}
-                      <div className="text-xs text-[var(--w-text-sec)] mt-0.5 leading-relaxed">
-                        {t.email || '—'}
-                        {t.whatsapp_phone && <><span className="text-[var(--w-text-disabled)] mx-1.5">|</span><span className="text-[#16A34A] font-medium">{t.whatsapp_phone}</span></>}
-                        <span className="text-[var(--w-text-disabled)] mx-1.5">|</span>
-                        {(t.profiles || []).length} utilisateur{(t.profiles || []).length !== 1 ? 's' : ''}
-                        <span className="text-[var(--w-text-disabled)] mx-1.5">|</span>
-                        Créé {formatDate(t.created_at)}
-                        {t.last_active_at && <><span className="text-[var(--w-text-disabled)] mx-1.5">|</span>Actif {formatDate(t.last_active_at)}</>}
-                      </div>
-                      {/* Row 3: Pending extra info */}
-                      {isPending && (t.city || t.selected_plan_code || t.first_payment) && (
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                          {t.city && <span className="text-[10px] text-[var(--w-text-sec)]">Ville: {t.city}</span>}
-                          {t.selected_plan_code && <span className="text-[10px] text-[#2563EB] font-medium">Plan souhaité: {t.selected_plan_code}</span>}
-                          {t.first_payment?.state === 'paid' && (
-                            <span className="text-[11px] font-semibold text-emerald-700">Payé · {formatFCFA(t.first_payment.amount)}</span>
-                          )}
-                          {['creating', 'pending'].includes(t.first_payment?.state) && (
-                            <span className="text-[11px] font-medium text-amber-700">Paiement en attente</span>
-                          )}
-                        </div>
-                      )}
-                      {/* Expiration date if exists */}
-                      {exp && (
-                        <div className="mt-1">
-                          <span className={`text-[11px] font-medium ${expired ? 'text-[#DC2626]' : expiringSoon ? 'text-[#D97706]' : 'text-[var(--w-text-sec)]'}`}>
-                            {expired ? 'Expiré le' : 'Expire le'} {formatDate(exp)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+      {loading ? <PlatformLoading /> : filtered.length === 0 ? <p className="pa-empty">Aucune entreprise trouvée.</p> : (
+        <>
+          <div className="pa-table pa-tenant-list" role="table" aria-label="Entreprises">
+            <div className="pa-list-head" role="row">
+              {['Entreprise', 'Offre', 'Dernière activité', 'Statut', 'Actions'].map(label => <span key={label} role="columnheader">{label}</span>)}
+            </div>
+            {filtered.slice(currentPage * platformPageSize, (currentPage + 1) * platformPageSize).map(tenant => {
+              const status = companyStatus(tenant);
+              const planCode = status === 'pending' ? tenant.selected_plan_code || tenant.plan : tenant.plan;
+              return (
+                <div className="pa-list-row" key={tenant.id} role="row">
+                  <div className="pa-row-title" role="cell">
+                    <button type="button" className="pa-name-button" onClick={() => setDetailId(tenant.id)}>{tenant.name}</button>
+                    <div className="pa-row-subtitle truncate">{tenant.email || tenant.whatsapp_phone || tenant.phone || '—'}</div>
                   </div>
-
-                  {/* Right: actions */}
-                  <div className="flex items-center gap-2 shrink-0 sm:pt-0.5">
-                    {isPending && (
-                      <>
-                        <button
-                          onClick={() => approve(t)}
-                          className="h-8 px-3 rounded-md bg-[#16A34A] text-white text-xs font-medium hover:bg-[#15803D] flex items-center gap-1.5 transition-colors"
-                        ><Check className="w-3.5 h-3.5" />Approuver</button>
-                        <button
-                          onClick={() => { const reason = prompt('Motif du rejet ? (optionnel)') || ''; reject(t, reason); }}
-                          className="h-8 w-8 rounded-md bg-[#FEF2F2] text-[#DC2626] hover:bg-[#FEE2E2] flex items-center justify-center transition-colors"
-                          title="Rejeter"
-                        ><Ban className="w-3.5 h-3.5" /></button>
-                      </>
+                  <div className="pa-row-plan" role="cell">
+                    <span>{planNames.get(planCode) || planCode || '—'}</span>
+                    <div className="pa-row-subtitle pa-desktop-cell">{(tenant.profiles || []).length} utilisateur{(tenant.profiles || []).length !== 1 ? 's' : ''}</div>
+                  </div>
+                  <div className="pa-desktop-cell pa-muted" role="cell">
+                    {tenant.last_active_at ? formatDate(tenant.last_active_at) : 'Jamais connectée'}
+                  </div>
+                  <div className="pa-row-status pa-status" data-alert={status !== 'active'} role="cell">{companyStatuses[status]}</div>
+                  <div className="pa-row-actions" role="cell">
+                    {status === 'pending' ? (
+                      <button type="button" className="pa-link" onClick={() => onOpenSubscription(tenant.id)}>Inscription <ArrowUpRight size={13} /></button>
+                    ) : (
+                      <button type="button" className="pa-link" onClick={() => setDetailId(tenant.id)}>Ouvrir <ArrowUpRight size={13} /></button>
                     )}
-                    <button
-                      onClick={() => setDetail(t)}
-                      className="h-8 px-3 rounded-md bg-[#0F172A] text-white text-xs font-medium hover:bg-[#1E293B] flex items-center gap-1.5 transition-colors"
-                    >Gérer<ArrowUpRight className="w-3 h-3" /></button>
-
-                    {/* Actions menu */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setActionsOpen(actionsOpen === t.id ? null : t.id)}
-                        className="h-8 w-8 rounded-md border border-[var(--w-separator)] text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)] flex items-center justify-center transition-colors"
-                      >
-                        <span className="text-sm leading-none font-bold tracking-wider">...</span>
+                    <div className="relative" onKeyDown={event => { if (event.key === 'Escape') setActionsOpen(undefined); }}>
+                      <button type="button" className="pa-icon-button" aria-label={'Actions de ' + tenant.name}
+                        aria-expanded={actionsOpen === tenant.id} onClick={() => setActionsOpen(actionsOpen === tenant.id ? undefined : tenant.id)}>
+                        <MoreHorizontal size={18} />
                       </button>
-                      {actionsOpen === t.id && (
+                      {actionsOpen === tenant.id && (
                         <>
-                          <div className="fixed inset-0 z-40" onClick={() => setActionsOpen(null)} />
-                          <div className="absolute right-0 top-full mt-1 z-50 w-44 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg shadow-lg py-1">
-                            {!isPending && t.is_active && (
-                              <button
-                                onClick={() => { setActionsOpen(null); const reason = prompt('Raison de la suspension ?') || ''; suspend(t, reason); }}
-                                className="w-full text-left px-3 py-2 text-xs text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)] flex items-center gap-2"
-                              ><Pause className="w-3.5 h-3.5" />Suspendre</button>
-                            )}
-                            {!isPending && !t.is_active && (
-                              <button
-                                onClick={() => { setActionsOpen(null); reactivate(t); }}
-                                className="w-full text-left px-3 py-2 text-xs text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)] flex items-center gap-2"
-                              ><Power className="w-3.5 h-3.5" />Réactiver</button>
-                            )}
-                            <button
-                              onClick={() => { setActionsOpen(null); setDeleting(t); setDeleteConfirmName(''); setDeleteReason(''); }}
-                              className="w-full text-left px-3 py-2 text-xs text-[#DC2626] hover:bg-[#FEF2F2] flex items-center gap-2"
-                            ><Trash2 className="w-3.5 h-3.5" />Supprimer</button>
+                          <div className="fixed inset-0 z-30" onClick={() => setActionsOpen(undefined)} />
+                          <div className="pa-popover">
+                            <button type="button" onClick={() => { setActionsOpen(undefined); onOpenSubscription(tenant.id); }}>Gérer l’abonnement</button>
+                            {status !== 'pending' && (tenant.is_active ? (
+                              <button type="button" onClick={() => { setActionsOpen(undefined); setSuspensionReason(''); setSuspending(tenant); }}>Suspendre</button>
+                            ) : (
+                              <button type="button" disabled={updating} onClick={() => { setActionsOpen(undefined); void updateAccess(tenant, 'reactivate_tenant'); }}>Réactiver</button>
+                            ))}
+                            <button type="button" className="pa-danger" onClick={() => startDelete(tenant)}>Supprimer</button>
                           </div>
                         </>
                       )}
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div className="text-center py-16">
-              <Building2 className="w-10 h-10 text-[var(--w-text-disabled)] mx-auto mb-3" />
-              <p className="text-sm font-medium text-[var(--w-text-sec)]">Aucun tenant trouvé</p>
-              <p className="text-xs text-[var(--w-text-muted)] mt-1">Essayez de modifier votre recherche ou vos filtres.</p>
-              {filter !== 'all' && (
-                <button onClick={() => { setFilter('all'); setQ(''); }} className="mt-3 text-xs font-medium text-[var(--w-text)] hover:underline">
-                  Réinitialiser les filtres
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+          <PlatformPagination page={currentPage} total={filtered.length} onPage={setPage} />
+        </>
       )}
 
-      {detail && <TenantDetailModal tenant={detail} plans={plans} onClose={() => setDetail(null)} onRefresh={load} onDelete={(t: any) => { setDeleting(t); setDeleteConfirmName(''); setDeleteReason(''); }} />}
+      {detail && (
+        <TenantDetailModal key={detail.id} tenant={detail} plans={plans} onClose={() => setDetailId(undefined)}
+          onRefresh={load} onDelete={startDelete} onOpenSubscription={onOpenSubscription} />
+      )}
+      {suspending && (
+        <Modal open title={'Suspendre ' + suspending.name} size="sm" variant="flat" layer="top" panelClassName="pa-modal"
+          onClose={() => { if (!updating) setSuspending(null); }}
+          footer={
+            <button type="button" className="pa-button pa-danger" disabled={updating}
+              onClick={() => void updateAccess(suspending, 'suspend_tenant')}>Suspendre l’accès</button>
+          }>
+          <label className="pa-field-label">
+            Motif de la suspension
+            <textarea rows={3} className="pa-field" value={suspensionReason} onChange={event => setSuspensionReason(event.target.value)} />
+          </label>
+        </Modal>
+      )}
 
       {/* Delete tenant confirmation modal */}
-      <Modal open={!!deleting} onClose={() => { if (!deleteLoading) { setDeleting(null); setDeleteConfirmName(''); setDeleteReason(''); } }} title="" size="md" footer={null}>
+      <Modal open={!!deleting} onClose={() => { if (!deleteLoading) { setDeleting(null); setDeleteConfirmName(''); setDeleteReason(''); } }} title="Supprimer une entreprise" size="md" footer={null} variant="flat" layer="top" panelClassName="pa-modal">
         {deleting && (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
@@ -732,20 +642,6 @@ function TenantsSection() {
         )}
       </Modal>
     </div>
-  );
-}
-
-function PlanBadge({ plan, code }: { plan: any; code: string }) {
-  const colors: Record<string, string> = {
-    trial: 'bg-[var(--w-surface-el)] text-[var(--w-text-sec)] border-[var(--w-separator)]',
-    starter: 'bg-[var(--w-surface-el)] text-[var(--w-text)] border-[var(--w-separator)]',
-    pro: 'bg-[#F0FDF4] text-[#16A34A] border-[#BBF7D0]',
-    enterprise: 'bg-[#FFFBEB] text-[#D97706] border-[#FDE68A]',
-  };
-  return (
-    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold border ${colors[code] || 'bg-[var(--w-surface-el)] text-[var(--w-text-sec)] border-[var(--w-separator)]'}`}>
-      {plan?.name || code}
-    </span>
   );
 }
 
@@ -912,9 +808,14 @@ function UsageBar({ label, current, limit }: { label: string; current: number; l
   );
 }
 
-function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { tenant: any; plans: any[]; onClose: () => void; onRefresh: () => void; onDelete?: (t: any) => void }) {
+function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete, onOpenSubscription, subscriptionMode = false, noticeActions }: {
+  tenant: any; plans: any[]; onClose: () => void; onRefresh: () => void;
+  onDelete?: (tenant: any) => void; onOpenSubscription?: (tenantId: string) => void;
+  subscriptionMode?: boolean;
+  noticeActions?: { busy: 'reminder' | 'email' | null; send: (kind: 'reminder' | 'email') => void };
+}) {
   const [detail, setDetail] = useState<any>(null);
-  const [tab, setTab] = useState<'info' | 'sub' | 'modules' | 'users' | 'history' | 'danger'>('info');
+  const [tab, setTab] = useState<'info' | 'sub' | 'modules' | 'users' | 'history' | 'danger'>(subscriptionMode ? 'sub' : 'info');
   const [form, setForm] = useState<any>({
     ...tenant,
     plan_expires_at: tenant.plan_expires_at?.slice(0, 10) || '',
@@ -923,10 +824,40 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
     enabled_modules: Array.isArray(tenant.enabled_modules) ? tenant.enabled_modules : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports'],
   });
   const [saving, setSaving] = useState(false);
-  const [subForm, setSubForm] = useState<any>({ plan_code: tenant.plan, billing_cycle: tenant.billing_cycle || 'monthly', amount: 0, auto_renew: tenant.auto_renew !== false, started_at: new Date().toISOString().slice(0, 10), ends_at: '' });
+  const cycle = tenant.billing_cycle || 'monthly';
+  const contract = findCurrentContract(tenant, detail?.subscriptions ?? tenant.tenant_subscriptions);
+  const planRate = (plan: any, cycle: string) => Number(cycle === 'yearly' ? plan?.price_yearly
+    : cycle === 'lifetime' ? plan?.price_lifetime : plan?.price_monthly) || 0;
+  const offeredRate = (planCode: string, billingCycle: string) => {
+    if (planCode === tenant.plan && billingCycle === cycle && contract?.amount != null) return Number(contract.amount);
+    return planRate(plans.find(plan => plan.code === planCode), billingCycle);
+  };
+  const [subForm, setSubForm] = useState<any>(() => ({
+    plan_code: tenant.plan, billing_cycle: cycle, auto_renew: tenant.auto_renew !== false,
+    started_at: new Date().toISOString().slice(0, 10), ends_at: '',
+  }));
   const [activationLock, setActivationLock] = useState<boolean | null>(null);
   const [activationLoading, setActivationLoading] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [decisionReason, setDecisionReason] = useState('');
+  const [cancelling, setCancelling] = useState<string>();
+  const [cancellationReason, setCancellationReason] = useState('');
   const { success, error } = useToast();
+  const registrationPending = tenant.approval_status === 'pending';
+  const detailPlanCode = registrationPending ? tenant.selected_plan_code || tenant.plan : tenant.plan;
+  const detailStatus = (tenant.subscription_status === 'trial_active' ? 'trial'
+    : companyStatus(tenant) === 'suspended' ? 'suspended' : tenant.subscription_status || 'none') as SubscriptionFilter;
+
+  const decideRegistration = async (action: 'approve_tenant' | 'reject_tenant') => {
+    setSaving(true);
+    try {
+      await call(action, { tenant_id: tenant.id, ...(action === 'reject_tenant' ? { reason: decisionReason } : {}) });
+      success(action === 'approve_tenant' ? 'Inscription approuvée' : 'Inscription rejetée');
+      onRefresh();
+      onClose();
+    } catch (cause) { error((cause as Error).message); }
+    finally { setSaving(false); }
+  };
 
   const loadActivation = async () => {
     const { data } = await supabase.from('_br_tenant_activation').select('enabled').eq('tenant_id', tenant.id).maybeSingle();
@@ -954,7 +885,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
       try { setDetail(await call('tenant_detail', { tenant_id: tenant.id })); }
       catch (e: any) { error(e.message); }
     })();
-    loadActivation();
+    if (!subscriptionMode) void loadActivation();
   }, [tenant.id]);
 
   const saveInfo = async () => {
@@ -979,10 +910,10 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
   };
 
   const applyPlan = async () => {
-    const plan = plans.find(p => p.code === subForm.plan_code);
-    const amount = Number(subForm.amount) || (plan ? (subForm.billing_cycle === 'yearly' ? plan.price_yearly : plan.price_monthly) : 0);
+    const amount = Number(subForm.amount ?? offeredRate(subForm.plan_code, subForm.billing_cycle));
+    setSaving(true);
     try {
-      const customLimits = subForm.custom_limits || {};
+      const customLimits = subForm.custom_limits ?? (subForm.plan_code === tenant.plan ? contract?.custom_limits : null) ?? {};
       const cleanCustom: Record<string, number> = {};
       for (const [k, v] of Object.entries(customLimits)) {
         if (v !== undefined && v !== null && v !== '') cleanCustom[k] = Number(v);
@@ -1003,72 +934,48 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
       const d = await call('tenant_detail', { tenant_id: tenant.id });
       setDetail(d);
     } catch (e: any) { error(e.message); }
+    finally { setSaving(false); }
   };
 
   const cancelSub = async (id: string) => {
-    const reason = prompt('Raison de l\'annulation ?') || '';
+    setSaving(true);
     try {
-      await call('cancel_subscription', { subscription_id: id, reason });
+      await call('cancel_subscription', { subscription_id: id, reason: cancellationReason });
       success('Abonnement annulé');
+      setCancelling(undefined);
       const d = await call('tenant_detail', { tenant_id: tenant.id });
       setDetail(d);
       onRefresh();
     } catch (e: any) { error(e.message); }
+    finally { setSaving(false); }
   };
 
   const tabs: { k: typeof tab; l: string }[] = [
     { k: 'info', l: 'Résumé' },
-    { k: 'sub', l: 'Abonnement' },
     { k: 'modules', l: 'Modules' },
     { k: 'users', l: 'Utilisateurs' },
     { k: 'history', l: 'Historique' },
-    { k: 'danger', l: 'Zone danger' },
+    { k: 'danger', l: 'Accès et sécurité' },
   ];
 
   return (
-    <Modal open onClose={onClose} title={tenant.name} size="lg" footer={null} fullMobile>
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="shrink-0 px-3 pt-3 pb-0 bg-[var(--w-surface)] border-b border-[var(--w-separator)] sm:px-5 sm:pt-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-[var(--w-hover)] text-[var(--w-text)] font-bold text-sm flex items-center justify-center shrink-0">
-              {tenant.name.charAt(0).toUpperCase()}
+    <Modal open onClose={onClose} title={tenant.name} size="lg" footer={null} fullMobile variant="flat" layer="top" panelClassName="pa-modal">
+      <div className="pa-page">
+        {!subscriptionMode && (
+          <>
+            <div className="pa-section-head text-sm">
+              <span className="pa-muted pa-break">{tenant.email || '—'}</span>
+              <button type="button" className="pa-link" onClick={() => onOpenSubscription?.(tenant.id)}>Gérer l’abonnement <ArrowUpRight size={14} /></button>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <PlanBadge plan={plans.find(p => p.code === tenant.plan)} code={tenant.plan} />
-                {tenant.is_active ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] font-medium">Actif</span>
-                ) : (
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Suspendu</span>
-                )}
-              </div>
-              <div className="text-xs text-[var(--w-text-sec)] truncate mt-0.5">{tenant.email || '—'}</div>
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex gap-0.5 overflow-x-auto -mb-px">
-            {tabs.map(t => (
-              <button key={t.k} onClick={() => setTab(t.k)}
-                className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
-                  tab === t.k
-                    ? 'border-[#0F172A] text-[var(--w-text)]'
-                    : 'border-transparent text-[var(--w-text-sec)] hover:text-[var(--w-text)]'
-                } ${t.k === 'danger' ? 'ml-auto text-[#DC2626]' : ''}`}>
-                {t.l}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-[var(--w-surface-el)]">
-          {!detail ? (
-            <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-sec)]" /></div>
-          ) : (
+            <nav className="pa-tabs" aria-label="Fiche de l’entreprise">
+              {tabs.map(item => <button type="button" key={item.k} aria-current={tab === item.k ? 'page' : undefined} onClick={() => setTab(item.k)}>{item.l}</button>)}
+            </nav>
+          </>
+        )}
+        <div>
+          {!detail ? <PlatformLoading /> : (
             <>
-              {tab === 'info' && (
+          {tab === 'info' && (
                 <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
@@ -1124,119 +1031,159 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
               )}
 
               {tab === 'sub' && (
-                <div className="space-y-4">
-                  {/* Current state */}
-                  <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
-                    <div className="text-[11px] font-medium text-[var(--w-text-sec)] mb-2">État actuel</div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-[var(--w-text)]">Plan {tenant.plan || '—'}</span>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${
-                        tenant.subscription_status === 'active' ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0]'
-                          : tenant.subscription_status === 'trial_active' ? 'bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]'
-                          : tenant.subscription_status === 'expired' ? 'bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA]'
-                          : 'bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]'
-                      }`}>{tenant.subscription_status || 'N/A'}</span>
-                      <span className="text-xs text-[var(--w-text-sec)]">{tenant.billing_cycle === 'yearly' ? 'Annuel' : tenant.billing_cycle === 'lifetime' ? 'A vie' : 'Mensuel'}</span>
-                      {tenant.plan_expires_at && <span className="text-xs text-[var(--w-text-sec)]">Expire : {formatDate(tenant.plan_expires_at)}</span>}
-                      {tenant.auto_renew && <span className="text-[10px] bg-[var(--w-hover)] text-[var(--w-text-sec)] px-1.5 py-0.5 rounded border border-[var(--w-separator)]">Auto-renew</span>}
-                    </div>
-                  </div>
+                <div className="pa-page">
+                  <dl className="pa-detail-list">
+                    <div><dt>Offre</dt><dd>{plans.find(plan => plan.code === detailPlanCode)?.name || detailPlanCode || '—'}</dd></div>
+                    <div><dt>Statut</dt><dd>{registrationPending ? 'Inscription à valider' : subscriptionStatuses[detailStatus] || '—'}</dd></div>
+                    {!registrationPending && contract?.amount != null && (
+                      <div><dt>Tarif {cycle === 'monthly' ? 'mensuel' : cycle === 'yearly' ? 'annuel' : 'contractuel'}</dt><dd>{formatFCFA(Number(contract.amount))}</dd></div>
+                    )}
+                    <div><dt>Échéance</dt><dd>{tenant.plan_expires_at ? formatDate(tenant.plan_expires_at) : tenant.billing_cycle === 'lifetime' ? 'À vie' : '—'}</dd></div>
+                    <div><dt>Contact</dt><dd>{tenant.email || tenant.whatsapp_phone || tenant.phone || '—'}</dd></div>
+                  </dl>
 
-                  {/* Plan picker */}
-                  <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
-                    <div className="text-[11px] font-medium text-[var(--w-text-sec)] mb-3">Sélectionner un plan</div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {plans.map(p => {
-                        const active = subForm.plan_code === p.code;
-                        return (
-                          <button key={p.code} onClick={() => setSubForm({ ...subForm, plan_code: p.code, amount: subForm.billing_cycle === 'lifetime' ? (p.price_lifetime || 0) : subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly })}
-                            className={`text-left p-3 rounded-lg border transition-all ${active ? 'border-[#0F172A] bg-[#0F172A] text-white' : 'border-[var(--w-separator)] bg-[var(--w-surface)] hover:border-[var(--w-text-disabled)]'}`}>
-                            <div className={`text-[10px] font-medium ${active ? 'text-white/60' : 'text-[var(--w-text-muted)]'}`}>{p.code}</div>
-                            <div className="font-semibold text-sm mt-0.5">{p.name}</div>
-                            <div className={`text-[11px] mt-1 ${active ? 'text-white/70' : 'text-[var(--w-text-sec)]'}`}>
-                              {subForm.billing_cycle === 'lifetime' ? `${formatCompactFCFA(p.price_lifetime || 0)} (a vie)` : `${formatCompactFCFA(subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly)}/${subForm.billing_cycle === 'yearly' ? 'an' : 'mois'}`}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                      <div>
-                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Cycle</label>
-                        <select value={subForm.billing_cycle} onChange={e => {
-                          const plan = plans.find(p => p.code === subForm.plan_code);
-                          const cycle = e.target.value;
-                          const amount = plan ? (cycle === 'lifetime' ? (plan.price_lifetime || 0) : cycle === 'yearly' ? plan.price_yearly : plan.price_monthly) : subForm.amount;
-                          setSubForm({ ...subForm, billing_cycle: cycle, amount, ends_at: cycle === 'lifetime' ? '' : subForm.ends_at });
-                        }} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]">
-                          <option value="monthly">Mensuel</option><option value="yearly">Annuel</option><option value="lifetime">A vie</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Montant (FCFA)</label>
-                        <input type="number" value={subForm.amount || 0} onChange={e => setSubForm({ ...subForm, amount: Number(e.target.value) })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Début</label>
-                        <input type="date" value={subForm.started_at} onChange={e => setSubForm({ ...subForm, started_at: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Fin</label>
-                        <input type="date" value={subForm.ends_at} onChange={e => setSubForm({ ...subForm, ends_at: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
-                      </div>
-                      <label className="sm:col-span-2 flex items-center gap-2 text-xs text-[var(--w-text)] cursor-pointer">
-                        <input type="checkbox" checked={!tenant.subscription_billing_online && subForm.auto_renew} disabled={tenant.subscription_billing_online} onChange={e => setSubForm({ ...subForm, auto_renew: e.target.checked })} className="rounded border-[var(--w-separator)]" />
-                        Renouvellement automatique
-                      </label>
-                      <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Notes</label>
-                        <input value={subForm.notes || ''} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" placeholder="Réf. facture, conditions..." />
-                      </div>
-                    </div>
-
-                    {/* Custom limits */}
-                    <div className="mt-4 pt-4 border-t border-[var(--w-hover)]">
-                      <div className="text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Limites personnalisées (override)</div>
-                      <p className="text-[10px] text-[var(--w-text-muted)] mb-2">Laisser vide pour utiliser les limites du plan.</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        {([['articles', 'Articles'], ['sites', 'Magasins'], ['users', 'Utilisateurs']] as [string, string][]).map(([key, label]) => (
-                          <div key={key}>
-                            <label className="text-[10px] font-medium text-[var(--w-text-muted)]">{label}</label>
-                            <input type="number" placeholder="plan" value={subForm.custom_limits?.[key] ?? ''} onChange={e => setSubForm({ ...subForm, custom_limits: { ...(subForm.custom_limits || {}), [key]: e.target.value === '' ? undefined : Number(e.target.value) } })} className="w-full h-8 px-2 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-md text-xs text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)]" />
+                  {registrationPending && (
+                    <section className="pa-panel space-y-3">
+                      <h4 className="pa-heading">Valider l’inscription</h4>
+                      <dl className="pa-detail-list">
+                        <div><dt>Inscrite le</dt><dd>{formatDate(tenant.created_at)}</dd></div>
+                        {tenant.city && <div><dt>Ville</dt><dd>{tenant.city}</dd></div>}
+                        {tenant.responsible_name && <div><dt>Responsable</dt><dd>{tenant.responsible_name}</dd></div>}
+                        {tenant.whatsapp_phone && <div><dt>WhatsApp</dt><dd>{tenant.whatsapp_phone}</dd></div>}
+                        {tenant.first_payment?.state === 'paid' && <div><dt>Premier règlement</dt><dd>Payé · {formatFCFA(tenant.first_payment.amount)}</dd></div>}
+                        {['creating', 'pending'].includes(tenant.first_payment?.state) && <div><dt>Premier règlement</dt><dd>En attente</dd></div>}
+                      </dl>
+                      {rejecting ? (
+                        <form className="space-y-2" onSubmit={event => { event.preventDefault(); void decideRegistration('reject_tenant'); }}>
+                          <label className="pa-field-label">
+                            Motif du rejet
+                            <textarea className="pa-field" rows={2} value={decisionReason} onChange={event => setDecisionReason(event.target.value)} />
+                          </label>
+                          <div className="pa-inline">
+                            <button type="submit" className="pa-button pa-danger" disabled={saving}>Confirmer le rejet</button>
+                            <button type="button" className="pa-link" disabled={saving} onClick={() => setRejecting(false)}>Annuler</button>
                           </div>
-                        ))}
+                        </form>
+                      ) : (
+                        <div className="pa-inline">
+                          <button type="button" className="pa-button" data-variant="primary" disabled={saving} onClick={() => void decideRegistration('approve_tenant')}>
+                            <Check size={15} /> Approuver l’inscription
+                          </button>
+                          <button type="button" className="pa-link pa-danger" disabled={saving} onClick={() => { setDecisionReason(''); setRejecting(true); }}>Rejeter</button>
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+                  {noticeActions && (
+                    <section className="pa-panel space-y-2">
+                      <h4 className="pa-heading">Rappels d’échéance</h4>
+                      <div className="pa-inline">
+                        <button type="button" className="pa-button" disabled={!!noticeActions.busy} onClick={() => noticeActions.send('reminder')}>
+                          {noticeActions.busy === 'reminder' ? <Loader2 size={15} className="animate-spin" /> : <Bell size={15} />} Rappeler dans Waarwi
+                        </button>
+                        <button type="button" className="pa-link" disabled={!!noticeActions.busy} onClick={() => noticeActions.send('email')}>
+                          {noticeActions.busy === 'email' ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />} Envoyer une alerte par e-mail
+                        </button>
                       </div>
-                    </div>
+                    </section>
+                  )}
 
-                    <button onClick={applyPlan} className="mt-4 w-full h-9 rounded-lg bg-[#0F172A] text-white text-sm font-medium hover:bg-[#1E293B] flex items-center justify-center gap-2 transition-colors">
-                      <Zap className="w-4 h-4" />Appliquer ce plan
-                    </button>
-                  </div>
+                  {!registrationPending && tenant.approval_status !== 'rejected' && (
+                    <details className="pa-panel">
+                      <summary className="pa-heading cursor-pointer">{detail.subscriptions?.length ? 'Enregistrer un renouvellement' : 'Enregistrer un abonnement'}</summary>
+                      <form className="mt-3 space-y-4" onSubmit={event => { event.preventDefault(); void applyPlan(); }}>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3">
+                          <label className="pa-field-label">Offre
+                            <select className="pa-field" value={subForm.plan_code} required
+                              onChange={event => setSubForm({ ...subForm, plan_code: event.target.value, amount: undefined, custom_limits: undefined })}>
+                              <option value="">Choisir l’offre</option>
+                              {plans.map(plan => <option key={plan.code} value={plan.code}>{plan.name}{plan.is_public === false ? ' · privée' : ''}</option>)}
+                            </select>
+                          </label>
+                          <label className="pa-field-label">Cycle
+                            <select className="pa-field" value={subForm.billing_cycle}
+                              onChange={event => {
+                                const cycle = event.target.value;
+                                setSubForm({ ...subForm, billing_cycle: cycle, amount: undefined, ends_at: cycle === 'lifetime' ? '' : subForm.ends_at });
+                              }}>
+                              <option value="monthly">Mensuel</option><option value="yearly">Annuel</option><option value="lifetime">À vie</option>
+                            </select>
+                          </label>
+                          <label className="pa-field-label">Tarif de l’abonnement (FCFA)
+                            <input className="pa-field" type="number" min={0} required value={subForm.amount ?? offeredRate(subForm.plan_code, subForm.billing_cycle)}
+                              onChange={event => setSubForm({ ...subForm, amount: event.target.value })} />
+                          </label>
+                          <label className="pa-field-label">Début
+                            <input className="pa-field" type="date" required value={subForm.started_at}
+                              onChange={event => setSubForm({ ...subForm, started_at: event.target.value })} />
+                          </label>
+                          {subForm.billing_cycle !== 'lifetime' && <label className="pa-field-label">Fin
+                            <input className="pa-field" type="date" value={subForm.ends_at} min={subForm.started_at || undefined}
+                              onChange={event => setSubForm({ ...subForm, ends_at: event.target.value })} />
+                          </label>}
+                          <label className="pa-field-label">Notes
+                            <input className="pa-field" value={subForm.notes || ''} placeholder="Référence de facture ou conditions"
+                              onChange={event => setSubForm({ ...subForm, notes: event.target.value })} />
+                          </label>
+                          <label className="pa-inline text-sm sm:col-span-2">
+                            <input type="checkbox" checked={!tenant.subscription_billing_online && subForm.auto_renew} disabled={tenant.subscription_billing_online || subForm.billing_cycle === 'lifetime'}
+                              onChange={event => setSubForm({ ...subForm, auto_renew: event.target.checked })} />
+                            Renouvellement automatique
+                          </label>
+                        </div>
+                        <details>
+                          <summary className="text-sm font-medium cursor-pointer">Limites personnalisées</summary>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+                            {([['articles', 'Articles'], ['sites', 'Magasins'], ['users', 'Utilisateurs']] as const).map(([key, label]) => (
+                              <label key={key} className="pa-field-label">{label}
+                                <input type="number" className="pa-field" placeholder="Limite de l’offre"
+                                  value={(subForm.custom_limits ?? (subForm.plan_code === tenant.plan ? contract?.custom_limits : null))?.[key] ?? ''}
+                                  onChange={event => {
+                                    const limits = subForm.custom_limits ?? (subForm.plan_code === tenant.plan ? contract?.custom_limits : null);
+                                    setSubForm({ ...subForm, custom_limits: { ...limits, [key]: event.target.value === '' ? undefined : Number(event.target.value) } });
+                                  }} />
+                              </label>
+                            ))}
+                          </div>
+                        </details>
+                        <button type="submit" className="pa-button" data-variant="primary" disabled={saving}>Enregistrer l’abonnement</button>
+                      </form>
+                    </details>
+                  )}
 
-                  {/* Subscription history */}
-                  <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
-                    <div className="text-[11px] font-medium text-[var(--w-text-sec)] mb-3">Historique d'abonnements</div>
-                    <div className="space-y-1.5">
-                      {(detail.subscriptions || []).map((s: any) => (
-                        <div key={s.id} className="flex items-center gap-2 bg-[var(--w-surface-el)] border border-[var(--w-separator)] rounded-lg px-3 py-2 text-xs">
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.status === 'active' ? 'bg-[#16A34A]' : s.status === 'cancelled' ? 'bg-[#DC2626]' : 'bg-[#94A3B8]'}`} />
-                          <span className="font-semibold text-[var(--w-text)] uppercase">{s.plan_code}</span>
-                          <span className="text-[var(--w-text-muted)]">·</span>
-                          <span className="text-[var(--w-text-sec)]">{formatFCFA(s.amount)} {s.billing_cycle === 'lifetime' ? '(a vie)' : `/ ${s.billing_cycle === 'yearly' ? 'an' : 'mois'}`}</span>
-                          <span className="text-[var(--w-text-muted)]">·</span>
-                          <span className="text-[var(--w-text-sec)]">{formatDate(s.started_at)}{s.ends_at ? ` → ${formatDate(s.ends_at)}` : ''}</span>
-                          <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-medium ${s.status === 'active' ? 'bg-[#F0FDF4] text-[#16A34A]' : 'bg-[var(--w-surface-el)] text-[var(--w-text-sec)]'}`}>{s.status}</span>
-                          {s.status === 'active' && (
-                            <button onClick={() => cancelSub(s.id)} className="text-[#DC2626] hover:bg-[#FEF2F2] p-1 rounded" title="Annuler">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+                  <section className="space-y-2">
+                    <h4 className="pa-heading">Historique des abonnements</h4>
+                    <div className="pa-divided">
+                      {(detail.subscriptions || []).map((entry: any) => (
+                        <div className="py-2 space-y-2" key={entry.id}>
+                          <div className="pa-section-head text-sm">
+                            <div className="min-w-0">
+                              <p className="font-medium">{plans.find(plan => plan.code === entry.plan_code)?.name || entry.plan_code} · {formatFCFA(entry.amount)}</p>
+                              <p className="pa-row-subtitle">{formatDate(entry.started_at)}{entry.ends_at ? ' – ' + formatDate(entry.ends_at) : ''}</p>
+                            </div>
+                            <div className="pa-inline">
+                              <span className="pa-status">{subscriptionStatuses[entry.status as SubscriptionFilter] || entry.status}</span>
+                              {entry.status === 'active' && <button type="button" className="pa-link pa-danger" disabled={saving}
+                                onClick={() => { setCancellationReason(''); setCancelling(entry.id); }}>Annuler</button>}
+                            </div>
+                          </div>
+                          {cancelling === entry.id && (
+                            <form className="space-y-2" onSubmit={event => { event.preventDefault(); void cancelSub(entry.id); }}>
+                              <label className="pa-field-label">Motif de l’annulation
+                                <input className="pa-field" value={cancellationReason} onChange={event => setCancellationReason(event.target.value)} />
+                              </label>
+                              <div className="pa-inline">
+                                <button type="submit" className="pa-button pa-danger" disabled={saving}>Confirmer l’annulation</button>
+                                <button type="button" className="pa-link" disabled={saving} onClick={() => setCancelling(undefined)}>Revenir</button>
+                              </div>
+                            </form>
                           )}
                         </div>
                       ))}
-                      {(detail.subscriptions || []).length === 0 && <div className="text-xs text-[var(--w-text-muted)] py-4 text-center">Aucun abonnement.</div>}
+                      {!detail.subscriptions?.length && <p className="pa-empty">Aucun abonnement enregistré.</p>}
                     </div>
-                  </div>
+                  </section>
                 </div>
               )}
 
@@ -1359,779 +1306,516 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
 }
 
 /* ============== PLANS ============== */
+const prepaidPeriods = [3, 6, 12] as const;
+const discountField = (months: typeof prepaidPeriods[number]) => 'discount_percent_' + months + '_months';
+
 function PlansSection() {
   const [plans, setPlans] = useState<any[]>([]);
   const [tenants, setTenants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>({});
+  const [form, setForm] = useState<any>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [toDelete, setToDelete] = useState<any>(null);
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const { success, error } = useToast();
 
   const load = async () => {
-    setLoading(true);
     try {
-      const [p, t] = await Promise.all([call('list_plans'), call('list_tenants')]);
-      setPlans(p.plans || []);
-      setTenants(t.tenants || []);
-    } catch (e: any) { error(e.message); }
-    setLoading(false);
+      const [offerData, companyData] = await Promise.all([call('list_plans'), call('list_tenants')]);
+      setPlans(offerData.plans || []);
+      setTenants(companyData.tenants || []);
+    } catch (cause) { error((cause as Error).message); }
+    finally { setLoading(false); }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
+
+  const openOffer = (plan?: any) => {
+    setEditing(!!plan);
+    setForm(plan ? { ...plan, features: Array.isArray(plan.features) ? plan.features.join('\n') : plan.features || '' } : {
+      code: '', name: '', features: '', is_public: true, sort_order: plans.length,
+      limits: { articles: -1, sites: 1, users: 2, max_clients: -1, max_suppliers: -1, max_invoices_month: -1, monthly_sales: -1,
+        online_shop: false, accounting: false, supplier_orders: false, has_whatsapp: false, has_multi_store: false, has_advanced_reports: false, has_accounting_export: false },
+    });
+  };
 
   const save = async () => {
-    if (!form.code || !form.name) { error('Code et nom requis'); return; }
+    if (!form || saving) return;
+    if (!String(form.code).trim() || !String(form.name).trim()) { error('Code et nom requis'); return; }
+    const discounts = Object.fromEntries(prepaidPeriods.map(months => [discountField(months), Number(form[discountField(months)] || 0)]));
+    if (Object.values(discounts).some(value => !Number.isFinite(value) || value < 0 || value > 99.99)) {
+      error('Saisis des remises comprises entre 0 et 99,99 %.');
+      return;
+    }
+    const limits = Object.fromEntries(Object.entries(form.limits || {}).map(([key, value]) => [
+      key, typeof value === 'boolean' ? value : value === '' || value == null ? -1 : Number(value),
+    ]));
+    setSaving(true);
     try {
-      const featuresArr = Array.isArray(form.features) ? form.features : String(form.features || '').split('\n').map((s: string) => s.trim()).filter(Boolean);
-      const rawLimits = form.limits || {};
-      const limits: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(rawLimits)) {
-        if (typeof v === 'boolean') { limits[k] = v; }
-        else { limits[k] = v === '' || v === null || v === undefined ? -1 : Number(v); }
-      }
       await call('upsert_plan', {
         plan: {
-          code: form.code,
-          name: form.name,
-          description: form.description || '',
-          price_monthly: Number(form.price_monthly) || 0,
-          price_yearly: Number(form.price_yearly) || 0,
+          code: String(form.code).trim(), name: String(form.name).trim(), description: form.description || '',
+          price_monthly: Number(form.price_monthly) || 0, price_yearly: Number(form.price_yearly) || 0,
+          price_lifetime: form.price_lifetime == null || form.price_lifetime === '' ? null : Number(form.price_lifetime),
           currency: form.currency || 'FCFA',
-          features: featuresArr,
-          limits,
-          is_public: form.is_public !== false,
-          sort_order: Number(form.sort_order) || 0,
+          features: String(form.features || '').split('\n').map(line => line.trim()).filter(Boolean),
+          limits, is_public: form.is_public !== false, sort_order: Number(form.sort_order) || 0,
+          ...discounts,
         },
       });
-      success('Plan enregistré');
-      setOpen(false); load();
-    } catch (e: any) { error(e.message); }
+      success('Offre enregistrée');
+      setForm(null);
+      await load();
+    } catch (cause) { error((cause as Error).message); }
+    finally { setSaving(false); }
   };
 
-  const planUsage = useMemo(() => {
-    const usage: Record<string, number> = {};
-    for (const t of tenants) { usage[t.plan] = (usage[t.plan] || 0) + 1; }
-    return usage;
+  const usage = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const company of tenants) counts.set(company.plan, (counts.get(company.plan) ?? 0) + 1);
+    return counts;
   }, [tenants]);
-
-  const mostUsedPlan = useMemo(() => {
-    let max = 0; let code = '-';
-    for (const [k, v] of Object.entries(planUsage)) { if (v > max) { max = v; code = k; } }
-    return code;
-  }, [planUsage]);
-
-  const publicPlans = plans.filter(p => p.is_public !== false).length;
-
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text)]" /></div>;
+  const limits = [['articles', 'Articles'], ['sites', 'Magasins'], ['users', 'Utilisateurs'], ['max_clients', 'Clients'],
+    ['max_suppliers', 'Fournisseurs'], ['max_invoices_month', 'Factures par mois'], ['monthly_sales', 'Ventes par mois']] as const;
+  const features = [['online_shop', 'Boutique en ligne'], ['accounting', 'Comptabilité'], ['supplier_orders', 'Achats'],
+    ['has_whatsapp', 'Notifications WhatsApp'], ['has_multi_store', 'Multi-magasins'], ['has_advanced_reports', 'Rapports avancés'],
+    ['has_accounting_export', 'Export comptable']] as const;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-[var(--w-text)]">Plans & tarifs</h2>
-          <p className="text-sm text-[var(--w-text-sec)] mt-0.5">Configurez les offres commerciales de Waarwi</p>
-        </div>
-        <button
-          onClick={() => { setForm({ features: '', is_public: true, sort_order: plans.length, limits: { articles: -1, sites: 1, users: 2, max_clients: -1, max_suppliers: -1, max_invoices_month: -1, monthly_sales: -1, online_shop: false, accounting: false, supplier_orders: false, has_whatsapp: false, has_multi_store: false, has_advanced_reports: false, has_accounting_export: false } }); setOpen(true); }}
-          className="btn-icon-primary"
-          title="Nouveau plan"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+    <div className="pa-page">
+      <div className="pa-section-head">
+        <span className="pa-muted text-sm">{plans.length} offre{plans.length !== 1 ? 's' : ''}</span>
+        <button type="button" className="pa-button" data-variant="primary" onClick={() => openOffer()}><Plus size={16} /> Nouvelle offre</button>
       </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
-              <Layers className="w-4 h-4 text-[var(--w-text)]" />
-            </div>
+      {loading ? <PlatformLoading /> : plans.length === 0 ? <p className="pa-empty">Aucune offre disponible.</p> : (
+        <div className="pa-table pa-offers-list" role="table" aria-label="Offres et tarifs">
+          <div className="pa-list-head" role="row">
+            {['Offre', 'Mensuel', 'Annuel', 'Remises prépayées', 'Visibilité', 'Actions'].map(label => <span role="columnheader" key={label}>{label}</span>)}
           </div>
-          <div className="text-2xl font-bold text-[var(--w-text)]">{publicPlans}</div>
-          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Plans actifs</div>
-        </div>
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-[var(--w-text)] truncate">{mostUsedPlan}</div>
-          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Plan le plus utilisé</div>
-        </div>
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-[var(--w-text-sec)]" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-[var(--w-text)]">{tenants.length}</div>
-          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Tenants abonnés</div>
-        </div>
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-[var(--w-active)] flex items-center justify-center">
-              <Clock className="w-4 h-4 text-blue-500" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-[var(--w-text)]">{tenants.filter(t => t.plan === 'trial' || t.plan === 'free').length}</div>
-          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Tenants en essai</div>
-        </div>
-      </div>
-
-      {/* Plan Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {plans.map(p => {
-          const usage = planUsage[p.code] || 0;
-          const isPopular = p.code === mostUsedPlan && usage > 0;
-          const isInactive = p.is_public === false;
-          return (
-            <div key={p.code} className={`relative bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-5 transition-all hover:shadow-sm ${isInactive ? 'opacity-60' : ''}`}>
-              {/* Header row */}
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-[var(--w-text)]">{p.name}</h3>
-                    {isPopular && <span className="text-[10px] font-medium bg-[#0F172A] text-white px-2 py-0.5 rounded">Populaire</span>}
-                    {isInactive && <span className="text-[10px] font-medium bg-slate-100 text-[var(--w-text-sec)] border border-[var(--w-separator)] px-2 py-0.5 rounded">Inactif</span>}
-                  </div>
-                  <div className="text-[11px] font-mono text-[var(--w-text-muted)] mt-0.5">{p.code}</div>
+          {plans.map(plan => {
+            const companies = usage.get(plan.code) ?? 0;
+            return (
+              <div className="pa-list-row" role="row" key={plan.code}>
+                <div role="cell" className="pa-row-title">
+                  <button type="button" className="pa-name-button" onClick={() => openOffer(plan)}>{plan.name}</button>
+                  <div className="pa-row-subtitle">{plan.code} · {companies} entreprise{companies !== 1 ? 's' : ''}</div>
                 </div>
-                <div className="relative">
-                  <button
-                    onClick={() => setMenuOpen(menuOpen === p.code ? null : p.code)}
-                    className="p-1.5 rounded-md hover:bg-[#F7F8FA] text-[var(--w-text-sec)] transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="4" r="2"/><circle cx="10" cy="10" r="2"/><circle cx="10" cy="16" r="2"/></svg>
-                  </button>
-                  {menuOpen === p.code && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(null)} />
-                      <div className="absolute right-0 top-8 z-20 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg shadow-lg py-1 w-40">
-                        <button
-                          onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); setMenuOpen(null); }}
-                          className="w-full text-left px-3 py-2 text-sm text-[var(--w-text)] hover:bg-[#F7F8FA] flex items-center gap-2"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />Modifier
-                        </button>
-                        <button
-                          onClick={() => { setToDelete(p); setMenuOpen(null); }}
-                          className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />Supprimer
-                        </button>
-                      </div>
-                    </>
-                  )}
+                <div role="cell" className="pa-row-amount">{formatFCFA(plan.price_monthly)} <span className="pa-mobile-meta pa-muted">/ mois</span></div>
+                <div role="cell" className="pa-row-date">{formatFCFA(plan.price_yearly)} <span className="pa-mobile-meta pa-muted">/ an</span></div>
+                <div role="cell" className="pa-row-plan pa-muted">
+                  {prepaidPeriods.filter(months => Number(plan[discountField(months)]) > 0)
+                    .map(months => months + ' m −' + formatSubscriptionDiscount(Number(plan[discountField(months)]))).join(' · ') || '—'}
+                </div>
+                <div role="cell" className="pa-row-status pa-status">{plan.is_public === false ? 'Privée' : 'Publique'}</div>
+                <div role="cell" className="pa-row-actions">
+                  <button type="button" className="pa-link" aria-label={'Modifier ' + plan.name} onClick={() => openOffer(plan)}>Modifier <ArrowUpRight size={13} /></button>
                 </div>
               </div>
-
-              {/* Description */}
-              {p.description && <p className="text-xs text-[var(--w-text-sec)] mb-4 line-clamp-2">{p.description}</p>}
-
-              {/* Pricing */}
-              <div className="mb-4 pb-4 border-b border-[var(--w-separator)]">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold text-[var(--w-text)]">{formatCompactFCFA(p.price_monthly)}</span>
-                  <span className="text-sm text-[var(--w-text-sec)]">/ mois</span>
-                </div>
-                {p.price_yearly > 0 && (
-                  <div className="text-xs text-[var(--w-text-muted)] mt-0.5">{formatCompactFCFA(p.price_yearly)} / an</div>
-                )}
-              </div>
-
-              {/* Limits */}
-              {p.limits && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[var(--w-text)] border border-[var(--w-separator)] px-2 py-1 rounded">
-                    {p.limits.users === -1 ? 'Illimité' : p.limits.users} utilisateur{(p.limits.users !== 1) ? 's' : ''}
-                  </span>
-                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[var(--w-text)] border border-[var(--w-separator)] px-2 py-1 rounded">
-                    {p.limits.sites === -1 ? 'Illimité' : p.limits.sites} site{(p.limits.sites !== 1) ? 's' : ''}
-                  </span>
-                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[var(--w-text)] border border-[var(--w-separator)] px-2 py-1 rounded">
-                    {p.limits.articles === -1 ? 'Illimité' : p.limits.articles} article{(p.limits.articles !== 1) ? 's' : ''}
-                  </span>
-                </div>
-              )}
-
-              {/* Features */}
-              {Array.isArray(p.features) && p.features.length > 0 && (
-                <div className="space-y-1.5 mb-4">
-                  {p.features.slice(0, 5).map((f: string, i: number) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-[var(--w-text-sec)]">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
-                      <span>{f}</span>
-                    </div>
-                  ))}
-                  {p.features.length > 5 && (
-                    <div className="text-[11px] text-[var(--w-text-muted)] pl-5">+{p.features.length - 5} fonctionnalité{p.features.length - 5 > 1 ? 's' : ''}</div>
-                  )}
-                </div>
-              )}
-
-              {/* Footer */}
-              <div className="flex items-center justify-between pt-3 border-t border-[var(--w-separator)]">
-                <span className="text-[11px] text-[var(--w-text-muted)]">{usage} tenant{usage !== 1 ? 's' : ''}</span>
-                <button
-                  onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); }}
-                  className="btn-icon-primary"
-                  title="Modifier"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {plans.length === 0 && (
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] py-12 text-center">
-          <Layers className="w-8 h-8 text-[var(--w-text-muted)] mx-auto mb-2" />
-          <div className="text-sm text-[var(--w-text-sec)]">Aucun plan configuré</div>
-          <p className="text-xs text-[var(--w-text-muted)] mt-1">Créez votre premier plan pour démarrer.</p>
+            );
+          })}
         </div>
       )}
 
-      {/* Modal */}
-      <Modal open={open} onClose={() => setOpen(false)} title={form.code && plans.some(p => p.code === form.code) ? 'Modifier le plan' : 'Nouveau plan'} size="lg"
-        footer={<>
-          <button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Check className="w-4 h-4" /></button>
-        </>}>
-        <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
-          {/* General info */}
-          <div>
-            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-3">Informations générales</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" placeholder="starter" /></div>
-              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
-              <div className="sm:col-span-2"><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Description</label><input value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
+      {form && (
+        <Modal open onClose={() => { if (!saving) setForm(null); }} title={editing ? 'Modifier l’offre' : 'Nouvelle offre'}
+          variant="flat" layer="top" panelClassName="pa-modal" size="lg" fullMobile
+          footer={<>
+            {editing && <button type="button" className="pa-link pa-danger mr-auto" disabled={saving} onClick={() => {
+              setToDelete({ code: form.code, name: form.name });
+              setForm(null);
+            }}>Supprimer l’offre</button>}
+            <button type="button" className="pa-link" disabled={saving} onClick={() => setForm(null)}>Annuler</button>
+            <button type="submit" form="platform-offer-form" className="pa-button" data-variant="primary" disabled={saving}>Enregistrer l’offre</button>
+          </>}>
+          <form id="platform-offer-form" className="pa-page" onSubmit={event => { event.preventDefault(); void save(); }}>
+            <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+              <label className="pa-field-label">Code de l’offre
+                <input className="pa-field" required readOnly={editing} value={form.code}
+                  onChange={event => setForm({ ...form, code: event.target.value })} />
+              </label>
+              <label className="pa-field-label">Nom
+                <input className="pa-field" required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />
+              </label>
+              <label className="pa-field-label sm:col-span-2">Description
+                <input className="pa-field" value={form.description || ''} onChange={event => setForm({ ...form, description: event.target.value })} />
+              </label>
             </div>
-          </div>
 
-          {/* Pricing */}
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-3">Tarifs</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Prix mensuel (FCFA)</label><input type="number" value={form.price_monthly || 0} onChange={e => setForm({ ...form, price_monthly: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
-              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Prix annuel (FCFA)</label><input type="number" value={form.price_yearly || 0} onChange={e => setForm({ ...form, price_yearly: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
-            </div>
-          </div>
-
-          {/* Limits */}
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-1">Limites</p>
-            <p className="text-[11px] text-[var(--w-text-muted)] mb-3">-1 = illimité</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {([['articles', 'Articles max'], ['sites', 'Magasins max'], ['users', 'Utilisateurs max'], ['max_clients', 'Clients max'], ['max_suppliers', 'Fournisseurs max'], ['max_invoices_month', 'Factures/mois max'], ['monthly_sales', 'Ventes/mois max']] as [string, string][]).map(([key, label]) => (
-                <div key={key}>
-                  <label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">{label}</label>
-                  <input type="number" value={form.limits?.[key] ?? ''} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.value === '' ? -1 : Number(e.target.value) } })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" placeholder="-1" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Modules */}
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-1">Modules inclus</p>
-            <p className="text-[11px] text-[var(--w-text-muted)] mb-3">Les modules liés au type d'activité sont gérés au niveau du tenant.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {([['online_shop', 'Boutique en ligne'], ['accounting', 'Comptabilité'], ['supplier_orders', 'Achats'], ['has_whatsapp', 'Notifications WhatsApp'], ['has_multi_store', 'Multi-magasins'], ['has_advanced_reports', 'Rapports avancés'], ['has_accounting_export', 'Export comptable']] as [string, string][]).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[var(--w-separator)] hover:bg-[#F7F8FA] transition-colors">
-                  <input type="checkbox" checked={!!form.limits?.[key]} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.checked } })} className="rounded border-[var(--w-separator)] text-[var(--w-text)] focus:ring-[var(--w-text)]" />
-                  <span className="text-[var(--w-text)] text-xs">{label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Marketing features */}
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-1">Fonctionnalités marketing</p>
-            <p className="text-[11px] text-[var(--w-text-muted)] mb-3">Texte affiché aux clients (une par ligne)</p>
-            <textarea value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" rows={4} placeholder="Une fonctionnalité par ligne" />
-          </div>
-
-          {/* Status */}
-          <div className="border-t border-[var(--w-separator)] pt-4">
-            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-3">Statut</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Ordre d'affichage</label><input type="number" value={form.sort_order || 0} onChange={e => setForm({ ...form, sort_order: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
-              <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[var(--w-separator)] hover:bg-[#F7F8FA] transition-colors">
-                  <input type="checkbox" checked={form.is_public !== false} onChange={e => setForm({ ...form, is_public: e.target.checked })} className="rounded border-[var(--w-separator)] text-[var(--w-text)] focus:ring-[var(--w-text)]" />
-                  <span className="text-xs text-[var(--w-text)]">Visible publiquement</span>
-                </label>
+            <section className="pa-panel space-y-3">
+              <h4 className="pa-heading">Tarifs</h4>
+              <div className="grid gap-x-5 gap-y-3 sm:grid-cols-3">
+                {([['price_monthly', 'Mensuel (FCFA)'], ['price_yearly', 'Annuel (FCFA)'], ['price_lifetime', 'À vie (FCFA)']] as const).map(([key, label]) => (
+                  <label key={key} className="pa-field-label">{label}
+                    <input className="pa-field" type="number" min={0} step="1" value={form[key] ?? ''}
+                      onChange={event => setForm({ ...form, [key]: event.target.value })} />
+                  </label>
+                ))}
               </div>
-            </div>
-          </div>
-        </div>
-      </Modal>
+            </section>
+
+            <section className="pa-panel space-y-3">
+              <h4 className="pa-heading">Remises sur le paiement d’avance</h4>
+              <div className="grid gap-x-5 gap-y-3 sm:grid-cols-3">
+                {prepaidPeriods.map(months => {
+                  const key = discountField(months);
+                  const rate = Math.round(Number(form[key] || 0) * 100);
+                  const quote = Math.round(Number(form.price_monthly || 0) * months * (10000 - rate) / 10000);
+                  return (
+                    <div key={months}>
+                      <label className="pa-field-label">Remise {months} mois (%)
+                        <input className="pa-field" type="number" min={0} max={99.99} step={0.01}
+                          value={form[key] ?? 0} onChange={event => setForm({ ...form, [key]: event.target.value })} />
+                      </label>
+                      <p className="pa-row-subtitle mt-1">{formatFCFA(quote)} au tarif de l’offre</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="pa-panel grid gap-3 sm:grid-cols-2">
+              <label className="pa-inline text-sm">
+                <input type="checkbox" checked={form.is_public !== false}
+                  onChange={event => setForm({ ...form, is_public: event.target.checked })} />
+                Visible à l’inscription
+              </label>
+              <label className="pa-field-label">Ordre d’affichage
+                <input className="pa-field" type="number" value={form.sort_order ?? 0}
+                  onChange={event => setForm({ ...form, sort_order: event.target.value })} />
+              </label>
+            </section>
+
+            <details className="pa-panel">
+              <summary className="pa-heading cursor-pointer">Limites et modules</summary>
+              <p className="pa-row-subtitle mt-2">Saisir −1 pour une limite illimitée.</p>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 mt-3">
+                {limits.map(([key, label]) => (
+                  <label className="pa-field-label" key={key}>{label}
+                    <input className="pa-field" type="number" min={-1} placeholder="-1" value={form.limits?.[key] ?? ''}
+                      onChange={event => setForm({ ...form, limits: { ...form.limits, [key]: event.target.value } })} />
+                  </label>
+                ))}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 mt-4">
+                {features.map(([key, label]) => (
+                  <label key={key} className="pa-inline text-sm">
+                    <input type="checkbox" checked={!!form.limits?.[key]}
+                      onChange={event => setForm({ ...form, limits: { ...form.limits, [key]: event.target.checked } })} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </details>
+
+            <label className="pa-field-label">Fonctionnalités affichées, une par ligne
+              <textarea className="pa-field" rows={3} value={form.features} onChange={event => setForm({ ...form, features: event.target.value })} />
+            </label>
+          </form>
+        </Modal>
+      )}
 
       <ConfirmDialog open={!!toDelete} onClose={() => setToDelete(null)}
         onConfirm={async () => {
-          try { await call('delete_plan', { code: toDelete.code }); success('Plan supprimé'); setToDelete(null); load(); }
-          catch (e: any) { error(e.message); }
+          if (!toDelete) return;
+          try { await call('delete_plan', { code: toDelete.code }); success('Offre supprimée'); setToDelete(null); await load(); }
+          catch (cause) { error((cause as Error).message); }
         }}
-        title="Supprimer ce plan ?" message={`Le plan "${toDelete?.name}" sera retiré. Les abonnements existants ne seront pas supprimés.`} danger />
+        title="Supprimer cette offre ?" message={'L’offre « ' + toDelete?.name + ' » sera supprimée.'} danger />
     </div>
   );
 }
 
-/* ============== SUBSCRIPTIONS ============== */
-function SubscriptionsSection() {
+const subscriptionStatuses: Record<SubscriptionFilter, string> = {
+  all: 'Tous les statuts',
+  pending: 'Inscription à valider',
+  due: 'Échéance proche',
+  expired: 'Expiré',
+  active: 'Actif',
+  trial: 'En essai',
+  suspended: 'Suspendu',
+  rejected: 'Inscription rejetée',
+  cancelled: 'Annulé',
+  completed: 'Terminé',
+  none: 'Sans abonnement',
+};
+
+const billingCycles: Record<string, string> = { monthly: 'Mensuel', yearly: 'Annuel', lifetime: 'À vie', trial: 'Essai' };
+
+type Contract = {
+  plan_code: string; billing_cycle: string; status: string; amount: number | string | null;
+  started_at: string; ends_at: string | null; created_at?: string;
+  custom_limits?: Record<string, number>;
+};
+
+function findCurrentContract(tenant: { plan: string; billing_cycle?: string; plan_expires_at?: string }, subscriptions: Contract[] = []) {
+  return subscriptions.filter(item => item.plan_code === tenant.plan
+    && item.billing_cycle === (tenant.billing_cycle || 'monthly')
+    && (item.ends_at ?? null) === (tenant.plan_expires_at ?? null)
+    && ['active', 'pending', 'expired', 'cancelled'].includes(item.status))
+    .sort((a, b) => (b.created_at || b.started_at || '').localeCompare(a.created_at || a.started_at || ''))[0];
+}
+
+function SubscriptionsSection({ initialFilter, focusTenantId, onFocusConsumed }: {
+  initialFilter: SubscriptionFilter;
+  focusTenantId?: string;
+  onFocusConsumed: () => void;
+}) {
   const [tenants, setTenants] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expiring, setExpiring] = useState<any[]>([]);
   const [reminderDays, setReminderDays] = useState(7);
-  const [sendingReminder, setSendingReminder] = useState<string | null>(null);
-  const [sendingEmailAlert, setSendingEmailAlert] = useState<string | null>(null);
+  const [dueLoading, setDueLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [sending, setSending] = useState<'reminder' | 'email' | null>(null);
   const [q, setQ] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
-  const [autoSuspendEnabled, setAutoSuspendEnabled] = useState(false);
-  const [autoSuspendDays, setAutoSuspendDays] = useState(7);
-  const [runningLifecycle, setRunningLifecycle] = useState(false);
-  const [lastLifecycleResult, setLastLifecycleResult] = useState<any>(null);
+  const [statusFilter, setStatusFilter] = useState<SubscriptionFilter>(initialFilter);
+  const [page, setPage] = useState(0);
+  const [selectedId, setSelectedId] = useState<string>();
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rules, setRules] = useState<{ enabled: boolean; days: number } | null>(null);
+  const [rulesBusy, setRulesBusy] = useState<'save' | 'run' | null>(null);
+  const [lastResult, setLastResult] = useState<{ renewed?: number; expired?: number; suspended?: number; reminders_sent?: number } | null>(null);
   const { success, error } = useToast();
 
-  const loadExpiring = async (days: number) => {
-    try { const res = await call('list_expiring_tenants', { days }); setExpiring(res.tenants || []); }
-    catch (e: any) { error(e.message); }
+  const load = async () => {
+    try {
+      const [companyData, planData] = await Promise.all([call('list_tenants'), call('list_plans')]);
+      setTenants(companyData.tenants || []);
+      setPlans(planData.plans || []);
+    } catch (cause) { error((cause as Error).message); }
+    finally { setLoading(false); }
   };
 
-  const loadAutoSuspendSettings = async () => {
-    try { const res = await call('get_auto_suspend_settings'); setAutoSuspendEnabled(res.auto_suspend_enabled); setAutoSuspendDays(res.auto_suspend_grace_days); }
-    catch {}
-  };
-
+  useEffect(() => { void load(); }, []);
+  useEffect(() => { setStatusFilter(initialFilter); setPage(0); }, [initialFilter]);
   useEffect(() => {
-    (async () => {
-      try { setTenants((await call('list_tenants')).tenants || []); }
-      catch (e: any) { error(e.message); }
-      setLoading(false);
-    })();
-    loadExpiring(reminderDays);
-    loadAutoSuspendSettings();
-  }, []);
+    let current = true;
+    setDueLoading(true);
+    call('list_expiring_tenants', { days: reminderDays }).then(result => {
+      if (current) setExpiring(result.tenants || []);
+    }).catch(cause => {
+      if (current) { setExpiring([]); error(cause.message); }
+    }).finally(() => { if (current) setDueLoading(false); });
+    return () => { current = false; };
+  }, [reminderDays, refreshKey]);
+  useEffect(() => {
+    if (!focusTenantId || loading) return;
+    if (tenants.some(tenant => tenant.id === focusTenantId)) setSelectedId(focusTenantId);
+    onFocusConsumed();
+  }, [focusTenantId, loading, tenants]);
 
-  const sendReminder = async (tenantId: string) => {
-    setSendingReminder(tenantId);
-    try {
-      const res = await call('send_payment_reminder', { tenant_id: tenantId });
-      success(`Rappel envoyé sur l'écran de ${res.tenant_name}`);
-    } catch (e: any) { error(e.message); }
-    setSendingReminder(null);
+  const refresh = () => {
+    void load();
+    setRefreshKey(value => value + 1);
   };
 
-  const sendEmailAlert = async (tenantId: string) => {
-    setSendingEmailAlert(tenantId);
+  const openRules = async () => {
+    setRules(null);
+    setRulesOpen(true);
     try {
-      await call('send_expiration_alert', { tenant_id: tenantId });
-      success('Email d\'alerte d\'expiration envoyé à l\'administrateur');
-    } catch (e: any) { error(e.message); }
-    setSendingEmailAlert(null);
+      const current = await call('get_auto_suspend_settings');
+      setRules({ enabled: !!current.auto_suspend_enabled, days: Number(current.auto_suspend_grace_days) || 7 });
+    } catch (cause) {
+      error((cause as Error).message);
+      setRulesOpen(false);
+    }
+  };
+
+  const saveRules = async () => {
+    if (!rules || rulesBusy) return;
+    setRulesBusy('save');
+    try {
+      await call('update_auto_suspend_settings', { auto_suspend_enabled: rules.enabled, auto_suspend_grace_days: rules.days });
+      success('Règles de suspension enregistrées');
+      setRulesOpen(false);
+      refresh();
+    } catch (cause) { error((cause as Error).message); }
+    finally { setRulesBusy(null); }
   };
 
   const runLifecycle = async () => {
-    setRunningLifecycle(true);
+    if (rulesBusy) return;
+    setRulesBusy('run');
     try {
-      const res = await call('run_subscription_lifecycle');
-      setLastLifecycleResult(res);
-      success(`Traitement terminé : ${res.renewed || 0} renouvelé(s), ${res.expired || 0} expiré(s), ${res.suspended || 0} suspendu(s), ${res.reminders_sent || 0} rappel(s)`);
-      // Reload
-      const t = await call('list_tenants');
-      setTenants(t.tenants || []);
-      loadExpiring(reminderDays);
-    } catch (e: any) { error(e.message); }
-    setRunningLifecycle(false);
+      setLastResult(await call('run_subscription_lifecycle'));
+      success('Traitement quotidien terminé');
+      refresh();
+    } catch (cause) { error((cause as Error).message); }
+    finally { setRulesBusy(null); }
   };
 
-  const saveAutoSuspend = async () => {
+  const sendNotice = async (tenantId: string, kind: 'reminder' | 'email') => {
+    if (sending) return;
+    setSending(kind);
     try {
-      await call('update_auto_suspend_settings', { auto_suspend_enabled: autoSuspendEnabled, auto_suspend_grace_days: autoSuspendDays });
-      success('Paramètres de suspension auto sauvegardés');
-    } catch (e: any) { error(e.message); }
+      await call(kind === 'reminder' ? 'send_payment_reminder' : 'send_expiration_alert', { tenant_id: tenantId });
+      success(kind === 'reminder' ? 'Rappel affiché dans l’application de l’entreprise' : 'Alerte d’échéance envoyée par e-mail');
+    } catch (cause) { error((cause as Error).message); }
+    finally { setSending(null); }
   };
 
-  // Build one row per tenant with only the CURRENT subscription (active or most recent)
+  const planNames = useMemo(() => new Map(plans.map(plan => [plan.code, plan.name])), [plans]);
+  const reminderIds = useMemo(() => new Set(expiring.map(tenant => tenant.id)), [expiring]);
+  const dueIds = useMemo(() => {
+    const now = Date.now();
+    return new Set(expiring.filter(tenant => new Date(tenant.plan_expires_at).getTime() >= now).map(tenant => tenant.id));
+  }, [expiring]);
   const rows = useMemo(() => {
-    const out: any[] = [];
-    for (const t of tenants) {
-      const subs = (t.tenant_subscriptions || []) as any[];
-      // Get current active/expired sub, or most recent if none active
-      const current = subs.find(s => s.status === 'active')
-        || subs.find(s => s.status === 'expired')
-        || subs.sort((a: any, b: any) => (b.started_at || '').localeCompare(a.started_at || ''))[0];
-      if (current) {
-        out.push({ ...current, tenant_name: t.name, tenant_id: t.id, tenant_email: t.email, tenant_subdomain: t.subdomain, auto_renew: t.auto_renew, subscription_status: t.subscription_status });
-      }
-      // Store history for expandable view (only completed, not current)
-      const history = subs.filter(s => s.id !== current?.id && s.status === 'completed');
-      if (current) current._history = history;
-    }
-    return out.sort((a, b) => {
-      // Expired first, then expiring soon, then active
-      const priority = (s: string) => s === 'expired' ? 0 : s === 'active' ? 1 : 2;
-      return priority(a.status) - priority(b.status) || (b.started_at || '').localeCompare(a.started_at || '');
-    });
+    const today = Date.now();
+    const priority: Record<string, number> = { pending: 0, expired: 1, suspended: 2, trial: 3, active: 4 };
+    return tenants.map(tenant => {
+      const subscriptions = [...(tenant.tenant_subscriptions || [])].sort((a, b) => (b.started_at || '').localeCompare(a.started_at || ''));
+      const planCode = tenant.approval_status === 'pending' ? tenant.selected_plan_code || tenant.plan : tenant.plan;
+      const contract = findCurrentContract(tenant, subscriptions);
+      const current = contract
+        || subscriptions.find(item => item.status === 'active')
+        || subscriptions.find(item => item.status === 'expired') || subscriptions[0];
+      const expiry = tenant.plan_expires_at || current?.ends_at;
+      const tenancy = companyStatus(tenant);
+      let status: SubscriptionFilter;
+      if (tenancy !== 'active') status = tenancy;
+      else if (current?.status === 'cancelled') status = 'cancelled';
+      else if (tenant.subscription_status === 'expired' || (expiry && new Date(expiry).getTime() < today)) status = 'expired';
+      else if (tenant.subscription_status === 'trial_active' || current?.status === 'trial') status = 'trial';
+      else if (tenant.subscription_status === 'active' || current?.status === 'active') status = 'active';
+      else if (current?.status === 'completed') status = 'completed';
+      else status = 'none';
+      return { tenant, planCode, expiry, status, cycle: tenant.billing_cycle || current?.billing_cycle, amount: contract?.amount };
+    }).sort((a, b) =>
+      (priority[a.status] ?? 5) - (priority[b.status] ?? 5) ||
+      (a.expiry || '9999').localeCompare(b.expiry || '9999') ||
+      a.tenant.name.localeCompare(b.tenant.name));
   }, [tenants]);
 
-  const EXCLUDED_MRR_TENANTS = new Set(['INTELLIGENCEPRO TECHNOLOGIES', 'SAD PIECES AUTO']);
-  const totalMRR = rows.filter(r => r.status === 'active' && r.billing_cycle !== 'lifetime' && !EXCLUDED_MRR_TENANTS.has((r.tenant_name || '').toUpperCase())).reduce((s, r) => s + Number(r.amount || 0) / (r.billing_cycle === 'yearly' ? 12 : 1), 0);
-  const activeCount = rows.filter(r => r.status === 'active').length;
-  const expiredCount = rows.filter(r => r.status === 'expired').length;
-
-  const statusLabel = (s: string) => {
-    const map: Record<string, string> = { active: 'Actif', expired: 'Expiré', completed: 'Terminé', suspended: 'Suspendu', trial: 'Essai' };
-    return map[s] || s;
-  };
-  const statusStyle = (s: string) => {
-    const map: Record<string, string> = {
-      active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      expired: 'bg-orange-50 text-orange-700 border-orange-200',
-      completed: 'bg-[var(--w-surface-el)] text-slate-500 border-slate-200',
-      suspended: 'bg-red-50 text-red-700 border-red-200',
-      trial: 'bg-[var(--w-active)] text-blue-600 border-blue-200',
-    };
-    return map[s] || 'bg-[var(--w-surface-el)] text-slate-600 border-slate-200';
-  };
-  const cycleLabel = (c: string) => {
-    const map: Record<string, string> = { monthly: 'Mensuel', yearly: 'Annuel', lifetime: 'Illimité', trial: 'Essai' };
-    return map[c] || c;
-  };
-
-  const filters: { key: string; label: string }[] = [
-    { key: 'all', label: 'Tous' },
-    { key: 'active', label: 'Actifs' },
-    { key: 'expired', label: 'Expirés' },
-    { key: 'expiring_soon', label: 'Expirent bientôt' },
-  ];
-
   const filtered = useMemo(() => {
-    const now = Date.now();
-    const in7 = now + 7 * 86400000;
-    return rows.filter(r => {
-      if (q) {
-        const search = q.toLowerCase();
-        if (!`${r.tenant_name} ${r.plan_code} ${statusLabel(r.status)}`.toLowerCase().includes(search)) return false;
-      }
-      if (statusFilter === 'all') return true;
-      if (statusFilter === 'expiring_soon') {
-        if (r.status !== 'active') return false;
-        const end = r.ends_at ? new Date(r.ends_at).getTime() : 0;
-        return end > now && end < in7;
-      }
-      return r.status === statusFilter;
+    const query = q.trim().toLowerCase();
+    return rows.filter(row => {
+      if (statusFilter === 'due' && !dueIds.has(row.tenant.id)) return false;
+      if (statusFilter !== 'all' && statusFilter !== 'due' && row.status !== statusFilter) return false;
+      return [row.tenant.name, row.planCode, planNames.get(row.planCode), subscriptionStatuses[row.status]]
+        .some(value => String(value ?? '').toLowerCase().includes(query));
     });
-  }, [rows, q, statusFilter]);
+  }, [rows, q, statusFilter, dueIds, planNames]);
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / platformPageSize) - 1));
+  const selected = tenants.find(tenant => tenant.id === selectedId);
 
-  const resetFilters = () => { setQ(''); setStatusFilter('all'); };
-
-  const toggleHistory = (tenantId: string) => {
-    setExpandedHistory(prev => {
-      const next = new Set(prev);
-      if (next.has(tenantId)) next.delete(tenantId); else next.add(tenantId);
-      return next;
-    });
-  };
-
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text)]" /></div>;
+  const selectFilter = (filter: SubscriptionFilter) => { setStatusFilter(filter); setPage(0); };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-[var(--w-text)]">Abonnements</h2>
-          <p className="text-sm text-[var(--w-text-sec)] mt-0.5">Vue en temps réel de chaque client</p>
-        </div>
-        <button
-          onClick={runLifecycle}
-          disabled={runningLifecycle}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#111111] hover:bg-[#333333] text-white text-sm font-medium transition-colors disabled:opacity-50"
-        >
-          {runningLifecycle ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Traitement quotidien
-        </button>
-      </div>
+    <div className="pa-page">
+      <dl className="pa-metrics">
+        {([
+          ['pending', 'Inscriptions à valider', rows.filter(row => row.status === 'pending').length],
+          ['due', 'Échéances sous ' + reminderDays + ' jours', dueLoading ? '—' : dueIds.size],
+          ['expired', 'Abonnements expirés', rows.filter(row => row.status === 'expired').length],
+          ['active', 'Abonnements actifs', rows.filter(row => row.status === 'active').length],
+        ] as const).map(([key, label, count]) => (
+          <div key={key}><dt>{label}</dt><dd>
+            <button type="button" className="pa-link" aria-label={label + ' ' + count}
+              aria-pressed={statusFilter === key} onClick={() => selectFilter(statusFilter === key ? 'all' : key)}>{count}</button>
+          </dd></div>
+        ))}
+      </dl>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-[var(--w-text)]" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-[var(--w-text)]">{formatCompactFCFA(totalMRR)}</div>
-          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">MRR (revenu mensuel)</div>
-        </div>
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-              <Check className="w-4 h-4 text-emerald-600" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-[var(--w-text)]">{activeCount}</div>
-          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Actifs</div>
-        </div>
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
-              <AlertTriangle className="w-4 h-4 text-orange-500" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-[var(--w-text)]">{expiredCount}</div>
-          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Expirés</div>
-        </div>
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
-              <Bell className="w-4 h-4 text-orange-500" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-[var(--w-text)]">{expiring.length}</div>
-          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Expirations proches</div>
-        </div>
-      </div>
-
-      {/* Auto-Suspension Settings */}
-      <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
-              <Ban className="w-4.5 h-4.5 text-red-500" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-[var(--w-text)]">Suspension automatique</div>
-              <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Suspendre automatiquement les clients après expiration + délai de grâce</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[var(--w-text-sec)]">Délai :</span>
-              <input
-                type="number" min={1} max={90} value={autoSuspendDays}
-                onChange={e => setAutoSuspendDays(Number(e.target.value) || 7)}
-                className="w-14 text-center text-xs border border-[var(--w-separator)] rounded-md px-2 py-1.5 bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]"
-              />
-              <span className="text-xs text-[var(--w-text-sec)]">jours</span>
-            </div>
-            <button
-              onClick={() => { setAutoSuspendEnabled(!autoSuspendEnabled); setTimeout(saveAutoSuspend, 100); }}
-              className={`relative w-11 h-6 rounded-full transition-colors ${autoSuspendEnabled ? 'bg-red-500' : 'bg-slate-200'}`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-[var(--w-surface)] rounded-full shadow transition-transform ${autoSuspendEnabled ? 'translate-x-5' : ''}`} />
-            </button>
-            <button onClick={saveAutoSuspend} className="text-xs font-medium px-3 py-1.5 rounded-md border border-[var(--w-separator)] hover:bg-[#F7F8FA] text-[var(--w-text)]">
-              Sauvegarder
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Last lifecycle result */}
-      {lastLifecycleResult && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-sm text-emerald-800 flex items-center gap-2">
-          <Check className="w-4 h-4 shrink-0" />
-          <span>Dernier traitement : {lastLifecycleResult.renewed || 0} renouvelé(s), {lastLifecycleResult.expired || 0} expiré(s), {lastLifecycleResult.suspended || 0} suspendu(s), {lastLifecycleResult.reminders_sent || 0} rappel(s)</span>
-        </div>
-      )}
-
-      {/* Payment Reminders */}
-      <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--w-separator)]">
-          <div className="flex items-center gap-2.5">
-            <Bell className="w-4 h-4 text-[var(--w-text)]" />
-            <span className="text-sm font-semibold text-[var(--w-text)]">Rappels de paiement</span>
-            {expiring.length > 0 && <span className="text-[11px] font-medium bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">{expiring.length}</span>}
-          </div>
-          <select
-            value={reminderDays}
-            onChange={e => { const d = Number(e.target.value); setReminderDays(d); loadExpiring(d); }}
-            className="text-xs border border-[var(--w-separator)] rounded-md px-2.5 py-1.5 bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]"
-          >
-            <option value={3}>3 jours</option>
-            <option value={5}>5 jours</option>
-            <option value={7}>7 jours</option>
-            <option value={14}>14 jours</option>
-            <option value={30}>30 jours</option>
+      <div className="pa-toolbar">
+        <label className="pa-search">
+          <Search size={16} aria-hidden="true" />
+          <input value={q} aria-label="Rechercher un abonnement" placeholder="Entreprise ou offre"
+            onChange={event => { setQ(event.target.value); setPage(0); }} />
+        </label>
+        <select className="pa-field" value={statusFilter} aria-label="Filtrer les abonnements"
+          onChange={event => selectFilter(event.target.value as SubscriptionFilter)}>
+          {Object.entries(subscriptionStatuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+        {statusFilter === 'due' && (
+          <select className="pa-field" aria-label="Fenêtre d’échéance" value={reminderDays}
+            onChange={event => { setReminderDays(Number(event.target.value)); setPage(0); }}>
+            {[3, 5, 7, 14, 30].map(days => <option key={days} value={days}>{days} jours</option>)}
           </select>
-        </div>
-        {expiring.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-[var(--w-text-sec)]">Aucun rappel de paiement pour le moment.</div>
-        ) : (
-          <div className="divide-y divide-[#E5E7EB]">
-            {expiring.map(t => {
-              const days = Math.ceil((new Date(t.plan_expires_at).getTime() - Date.now()) / 86400000);
-              const isUrgent = days <= 3;
-              return (
-                <div key={t.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-[#F7F8FA] transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-[var(--w-text)] truncate">{t.name}</div>
-                    <div className="text-xs text-[var(--w-text-sec)] mt-0.5 flex items-center gap-2 flex-wrap">
-                      <span>Plan {t.plan}</span>
-                      <span className="text-[var(--w-separator)]">|</span>
-                      <span>{t.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'}</span>
-                      <span className="text-[var(--w-separator)]">|</span>
-                      <span className={`font-medium ${isUrgent ? 'text-red-600' : 'text-orange-600'}`}>
-                        {days <= 0 ? 'Expiré' : `Expire dans ${days}j`}
-                      </span>
-                      {t.auto_renew && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">auto-renew</span>}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => sendReminder(t.id)}
-                    disabled={sendingReminder === t.id}
-                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#111111] hover:bg-[#333333] text-white text-xs font-medium transition-colors disabled:opacity-50"
-                  >
-                    {sendingReminder === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bell className="w-3 h-3" />}
-                    Rappeler
-                  </button>
-                  <button
-                    onClick={() => sendEmailAlert(t.id)}
-                    disabled={sendingEmailAlert === t.id}
-                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-medium transition-colors disabled:opacity-50"
-                  >
-                    {sendingEmailAlert === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
-                    Alerte email
-                  </button>
-                </div>
-              );
-            })}
-          </div>
         )}
+        <button type="button" className="pa-icon-button" aria-label="Actualiser les abonnements" title="Actualiser" onClick={refresh}><RefreshCw size={16} /></button>
+        <button type="button" className="pa-button" onClick={() => void openRules()}><Settings_ size={15} /> Règles de suivi</button>
       </div>
 
-      {/* Search + Filters */}
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--w-text-muted)]" />
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Rechercher par tenant, plan ou statut..."
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-[var(--w-separator)] rounded-lg bg-[var(--w-surface)] text-[var(--w-text)] placeholder:text-[var(--w-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)] focus:border-[var(--w-text)]"
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {filters.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setStatusFilter(f.key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                statusFilter === f.key
-                  ? 'bg-[#111111] text-white border-[#111111]'
-                  : 'bg-[var(--w-surface)] text-[var(--w-text-sec)] border-[var(--w-separator)] hover:border-[#0F172A] hover:text-[var(--w-text)]'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] py-12 text-center">
-          <div className="text-sm text-[var(--w-text-sec)]">Aucun abonnement trouvé</div>
-          <p className="text-xs text-[var(--w-text-muted)] mt-1">Essayez de modifier votre recherche ou vos filtres.</p>
-          {(q || statusFilter !== 'all') && (
-            <button onClick={resetFilters} className="mt-3 text-xs font-medium text-[var(--w-text)] border border-[var(--w-separator)] px-3 py-1.5 rounded-md hover:bg-[#F7F8FA] transition-colors">
-              Réinitialiser les filtres
-            </button>
-          )}
-        </div>
+      {loading || (statusFilter === 'due' && dueLoading) ? <PlatformLoading /> : filtered.length === 0 ? (
+        <p className="pa-empty">Aucun abonnement pour cette recherche.</p>
       ) : (
-        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] overflow-hidden">
-          <div className="hidden md:grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3 bg-[#F7F8FA] border-b border-[var(--w-separator)]">
-            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Client</div>
-            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Plan</div>
-            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Cycle</div>
-            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider text-right">Montant</div>
-            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Échéance</div>
-            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Statut</div>
-          </div>
-          <div className="divide-y divide-[#E5E7EB]">
-            {filtered.map(r => {
-              const hasHistory = r._history && r._history.length > 0;
-              const showHistory = expandedHistory.has(r.tenant_id);
+        <>
+          <div role="table" className="pa-table pa-subscription-list" aria-label="Suivi des abonnements">
+            <div role="row" className="pa-list-head">
+              {['Entreprise', 'Offre', 'Échéance', 'Tarif', 'Statut', 'Actions'].map(label => <span key={label} role="columnheader">{label}</span>)}
+            </div>
+            {filtered.slice(currentPage * platformPageSize, (currentPage + 1) * platformPageSize).map(row => {
+              const tenant = row.tenant;
+              const pending = row.status === 'pending';
               return (
-                <div key={r.id}>
-                  {/* Main row (desktop) */}
-                  <div className="hidden md:grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3.5 items-center hover:bg-[#F7F8FA] transition-colors">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[var(--w-text)] truncate">{r.tenant_name}</div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {r.auto_renew && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">auto</span>}
-                        {hasHistory && (
-                          <button onClick={() => toggleHistory(r.tenant_id)} className="text-[10px] text-[var(--w-text-sec)] hover:text-[var(--w-text)] underline">
-                            {showHistory ? 'Masquer' : `${r._history.length} ancien(s)`}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div><span className="text-xs font-medium text-[var(--w-text)] bg-[#F7F8FA] border border-[var(--w-separator)] px-2 py-0.5 rounded">{r.plan_code}</span></div>
-                    <div className="text-xs text-[var(--w-text-sec)]">{cycleLabel(r.billing_cycle)}</div>
-                    <div className="text-sm font-semibold text-[var(--w-text)] text-right">{formatFCFA(r.amount)}</div>
-                    <div className="text-xs text-[var(--w-text-sec)]">{r.ends_at ? formatDate(r.ends_at) : '-'}</div>
-                    <div><span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border ${statusStyle(r.status)}`}>{statusLabel(r.status)}</span></div>
+                <div role="row" className="pa-list-row" key={tenant.id}>
+                  <div role="cell" className="pa-row-title">
+                    <button type="button" className="pa-name-button" onClick={() => setSelectedId(tenant.id)}>{tenant.name}</button>
+                    <p className="pa-row-subtitle truncate">{tenant.email || tenant.city || '—'}</p>
                   </div>
-                  {/* Mobile card */}
-                  <div className="md:hidden p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-[var(--w-text)] truncate">{r.tenant_name}</div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {r.auto_renew && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">auto</span>}
-                        </div>
-                      </div>
-                      <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${statusStyle(r.status)}`}>{statusLabel(r.status)}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-y-2 gap-x-4 mt-3">
-                      <div><div className="text-[10px] uppercase text-[var(--w-text-muted)] font-medium">Plan</div><div className="text-xs text-[var(--w-text)] font-medium mt-0.5">{r.plan_code}</div></div>
-                      <div><div className="text-[10px] uppercase text-[var(--w-text-muted)] font-medium">Cycle</div><div className="text-xs text-[var(--w-text-sec)] mt-0.5">{cycleLabel(r.billing_cycle)}</div></div>
-                      <div><div className="text-[10px] uppercase text-[var(--w-text-muted)] font-medium">Montant</div><div className="text-sm font-semibold text-[var(--w-text)] mt-0.5">{formatFCFA(r.amount)}</div></div>
-                      <div><div className="text-[10px] uppercase text-[var(--w-text-muted)] font-medium">Échéance</div><div className="text-xs text-[var(--w-text-sec)] mt-0.5">{r.ends_at ? formatDate(r.ends_at) : '-'}</div></div>
-                    </div>
-                    {hasHistory && (
-                      <button onClick={() => toggleHistory(r.tenant_id)} className="mt-2 text-[11px] text-[var(--w-text-sec)] hover:text-[var(--w-text)] underline">
-                        {showHistory ? 'Masquer historique' : `Voir historique (${r._history.length})`}
-                      </button>
-                    )}
+                  <div role="cell" className="pa-row-plan">
+                    {planNames.get(row.planCode) || row.planCode || '—'}
+                    {row.cycle && <span className="pa-row-subtitle pa-row-cycle">{billingCycles[row.cycle] || row.cycle}</span>}
                   </div>
-                  {/* Expanded history */}
-                  {showHistory && r._history && (
-                    <div className="bg-[#FAFBFC] border-t border-[var(--w-separator)] px-5 py-2">
-                      <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wider mb-2">Historique</div>
-                      {r._history.map((h: any) => (
-                        <div key={h.id} className="flex items-center gap-4 py-1.5 text-xs text-[var(--w-text-sec)]">
-                          <span className="font-medium text-[var(--w-text)]">{h.plan_code}</span>
-                          <span>{cycleLabel(h.billing_cycle)}</span>
-                          <span>{formatDate(h.started_at)} - {h.ends_at ? formatDate(h.ends_at) : '...'}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusStyle(h.status)}`}>{statusLabel(h.status)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div role="cell" className="pa-row-date">{row.expiry ? formatDate(row.expiry) : row.cycle === 'lifetime' ? 'À vie' : '—'}</div>
+                  <div role="cell" className="pa-row-amount">
+                    {pending && tenant.first_payment?.state === 'paid'
+                      ? <><span>{formatFCFA(tenant.first_payment.amount)}</span><div className="pa-row-subtitle">Payé</div></>
+                      : row.amount != null ? formatFCFA(Number(row.amount)) : '—'}
+                  </div>
+                  <div role="cell" className="pa-row-status pa-status" data-alert={['pending', 'expired', 'suspended', 'rejected'].includes(row.status)}>
+                    {subscriptionStatuses[row.status]}
+                  </div>
+                  <div role="cell" className="pa-row-actions">
+                    <button type="button" className="pa-link" aria-label={(pending ? 'Examiner ' : 'Gérer l’abonnement de ') + tenant.name}
+                      onClick={() => setSelectedId(tenant.id)}>{pending ? 'Examiner' : 'Gérer'} <ArrowUpRight size={13} /></button>
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
+          <PlatformPagination page={currentPage} total={filtered.length} onPage={setPage} />
+        </>
+      )}
+      {selected && (
+        <TenantDetailModal key={selected.id} tenant={selected} plans={plans} subscriptionMode
+          onClose={() => setSelectedId(undefined)} onRefresh={refresh}
+          noticeActions={reminderIds.has(selected.id) ? {
+            busy: sending, send: kind => void sendNotice(selected.id, kind),
+          } : undefined} />
+      )}
+      {rulesOpen && (
+        <Modal open size="md" title="Règles de suivi" variant="flat" panelClassName="pa-modal" layer="top"
+          onClose={() => { if (!rulesBusy) setRulesOpen(false); }}>
+          {!rules ? <PlatformLoading /> : <div className="pa-page">
+            <form className="space-y-3" onSubmit={event => { event.preventDefault(); void saveRules(); }}>
+              <label className="pa-inline text-sm">
+                <input type="checkbox" checked={rules.enabled} onChange={event => setRules({ ...rules, enabled: event.target.checked })} />
+                Suspendre les abonnements après expiration
+              </label>
+              <label className="pa-field-label w-fit">Délai de grâce en jours
+                <input type="number" className="pa-field w-24" min={1} max={90} required value={rules.days || ''}
+                  onChange={event => setRules({ ...rules, days: Number(event.target.value) })} />
+              </label>
+              <button type="submit" className="pa-button" data-variant="primary" disabled={!!rulesBusy}>Enregistrer les règles</button>
+            </form>
+            <div className="pa-panel">
+              <button type="button" className="pa-button" disabled={!!rulesBusy} onClick={() => void runLifecycle()}>
+                {rulesBusy === 'run' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                Exécuter le traitement quotidien
+              </button>
+              {lastResult && <p className="pa-feedback" role="status">
+                {lastResult.renewed || 0} renouvelés · {lastResult.expired || 0} expirés · {lastResult.suspended || 0} suspendus · {lastResult.reminders_sent || 0} rappels
+              </p>}
+            </div>
+          </div>}
+        </Modal>
       )}
     </div>
   );
 }
 
-/* ============== MESSAGES ============== */
 function MessagesSection() {
   const [messages, setMessages] = useState<any[]>([]);
   const [tenants, setTenants] = useState<any[]>([]);
@@ -2163,50 +1847,37 @@ function MessagesSection() {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{messages.length} message{messages.length > 1 ? 's' : ''} publié(s)</p>
-        <button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouveau message"><Send className="w-4 h-4" /></button>
+    <div className="pa-page">
+      <div className="pa-section-head">
+        <span className="pa-muted text-sm">{messages.length} message{messages.length > 1 ? 's' : ''}</span>
+        <button type="button" onClick={() => setOpen(true)} className="pa-button" data-variant="primary"><Plus size={16} /> Nouveau message</button>
       </div>
-
-      {loading ? (
-        <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-      ) : (
-        <div className="space-y-2">
-          {messages.map(m => {
-            const sev = SEV[m.severity as keyof typeof SEV] || SEV.info;
-            const expired = m.expires_at && new Date(m.expires_at) < new Date();
+      {loading ? <PlatformLoading /> : messages.length === 0 ? <p className="pa-empty">Aucun message publié.</p> : (
+        <div className="pa-divided">
+          {messages.map(message => {
+            const severity = SEV[message.severity as keyof typeof SEV] || SEV.info;
+            const expired = message.expires_at && Date.parse(message.expires_at) < Date.now();
+            const target = message.target === 'all' ? 'Toutes les entreprises' : message.target === 'tenant'
+              ? message.tenants?.name || 'Entreprise' : message.plan_code;
             return (
-              <div key={m.id} className={`bg-[var(--w-surface)] border-l-4 ${sev.border} border-y border-r border-slate-200/70 rounded-2xl p-4 shadow-card`}>
-                <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 rounded-xl ${sev.bg} ${sev.icon} flex items-center justify-center shrink-0 border ${sev.border}`}>
-                    {m.severity === 'critical' ? <AlertTriangle className="w-5 h-5" /> : m.severity === 'warning' ? <AlertTriangle className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-slate-900">{m.title}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${sev.bg} ${sev.text}`}>{sev.label}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-slate-100 text-slate-600">
-                        {m.target === 'all' ? 'Tous' : m.target === 'tenant' ? `Tenant: ${m.tenants?.name || ''}` : `Plan: ${m.plan_code}`}
-                      </span>
-                      {expired && <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase">Expiré</span>}
-                    </div>
-                    <p className="text-sm text-slate-600 mt-1 line-clamp-2">{m.body}</p>
-                    <div className="text-[11px] text-slate-400 mt-1">Publié {formatDateTime(m.created_at)}{m.expires_at ? ` · expire ${formatDate(m.expires_at)}` : ''}</div>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <button onClick={() => setPreview(m)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" title="Prévisualiser"><Search className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setToDelete(m)} className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100"><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
+              <article className="pa-message-row" key={message.id}>
+                <div className="min-w-0">
+                  <button type="button" onClick={() => setPreview(message)} className="pa-name-button">{message.title}</button>
+                  <p className="pa-row-subtitle">{target} · {severity.label} · {formatDateTime(message.created_at)}{expired ? ' · Expiré' : ''}</p>
+                  {message.body && <p className="pa-muted text-sm line-clamp-2 mt-1">{message.body}</p>}
                 </div>
-              </div>
+                <div className="pa-row-actions">
+                  <button type="button" onClick={() => setPreview(message)} className="pa-link">Aperçu</button>
+                  <button type="button" onClick={() => setToDelete(message)} className="pa-icon-button pa-danger"
+                    aria-label={'Supprimer ' + message.title} title="Supprimer"><Trash2 size={16} /></button>
+                </div>
+              </article>
             );
           })}
-          {messages.length === 0 && <div className="text-center text-slate-400 py-10 text-sm">Aucun message publié.</div>}
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Nouveau message" size="md"
+      <Modal open={open} onClose={() => setOpen(false)} title="Nouveau message" size="md" variant="flat" layer="top" panelClassName="pa-modal flat-form"
         footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} className="btn-icon-primary" title="Publier"><Send className="w-4 h-4" /></button></>}>
         <div className="space-y-3">
           <div><label className="label">Titre *</label><input value={form.title || ''} onChange={e => setForm({ ...form, title: e.target.value })} className="input" placeholder="Ex: Maintenance planifiée" /></div>
@@ -2252,7 +1923,7 @@ function MessagesSection() {
       </Modal>
 
       {preview && (
-        <Modal open onClose={() => setPreview(null)} title="Prévisualisation" size="sm" footer={<button onClick={() => setPreview(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
+        <Modal open onClose={() => setPreview(null)} title="Aperçu du message" size="sm" variant="flat" layer="top" panelClassName="pa-modal" footer={<button onClick={() => setPreview(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
           <MessagePreview m={preview} />
         </Modal>
       )}
@@ -2283,132 +1954,71 @@ function MessagePreview({ m }: { m: any }) {
 
 /* ============== ACTIVITY ============== */
 function ActivitySection() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<PlatformEvent[]>([]);
   const [activity, setActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'overview' | 'log'>('overview');
+  const [page, setPage] = useState(0);
   const { error } = useToast();
 
   useEffect(() => {
     (async () => {
       try {
-        const [evRes, actRes] = await Promise.all([
-          call('list_events', { limit: 200 }),
-          call('tenant_activity_overview'),
-        ]);
-        setEvents(evRes.events || []);
-        setActivity(actRes.activity || []);
-      } catch (e: any) { error(e.message); }
-      setLoading(false);
+        const [eventData, activityData] = await Promise.all([call('list_events', { limit: 200 }), call('tenant_activity_overview')]);
+        setEvents(eventData.events || []);
+        setActivity(activityData.activity || []);
+      } catch (cause) { error((cause as Error).message); }
+      finally { setLoading(false); }
     })();
   }, []);
 
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
-
   const now = Date.now();
-  const activeCount = activity.filter(a => a.last_active_at && (now - new Date(a.last_active_at).getTime()) < 7 * 86400000).length;
-  const inactiveCount = activity.filter(a => !a.last_active_at || (now - new Date(a.last_active_at).getTime()) >= 30 * 86400000).length;
-
+  const lastSeen = (company: any) => company.last_active_at ? (now - new Date(company.last_active_at).getTime()) / 86400000 : null;
+  const active = activity.filter(company => (lastSeen(company) ?? Infinity) < 7).length;
+  const inactive = activity.filter(company => (lastSeen(company) ?? Infinity) >= 30).length;
+  const current = tab === 'overview' ? activity : events;
+  const visible = current.slice(page * platformPageSize, (page + 1) * platformPageSize);
   return (
-    <div className="space-y-4">
-      {/* Tab toggles */}
-      <div className="inline-flex rounded-2xl border border-slate-200 bg-[var(--w-surface)] overflow-hidden shadow-sm">
-        <button onClick={() => setTab('overview')} className={`px-4 py-2 text-xs font-bold transition-all ${tab === 'overview' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-[var(--w-surface-el)]'}`}>
-          <Eye className="w-3.5 h-3.5 inline mr-1.5" />Vue globale
-        </button>
-        <button onClick={() => setTab('log')} className={`px-4 py-2 text-xs font-bold border-l border-slate-200 transition-all ${tab === 'log' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-[var(--w-surface-el)]'}`}>
-          <Activity className="w-3.5 h-3.5 inline mr-1.5" />Journal
-        </button>
-      </div>
-
-      {tab === 'overview' && (
-        <div className="space-y-4">
-          {/* KPI */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-2xl p-4 shadow-card">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Tenants actifs (7j)</div>
-              <div className="text-2xl font-extrabold text-emerald-700 mt-1">{activeCount}</div>
+    <div className="pa-page">
+      <nav className="pa-tabs mb-0" aria-label="Activité de la plateforme">
+        <button type="button" aria-current={tab === 'overview' ? 'page' : undefined} onClick={() => { setTab('overview'); setPage(0); }}>Entreprises</button>
+        <button type="button" aria-current={tab === 'log' ? 'page' : undefined} onClick={() => { setTab('log'); setPage(0); }}>Journal</button>
+      </nav>
+      {loading ? <PlatformLoading /> : (
+        <>
+          {tab === 'overview' && <dl className="pa-metrics">
+            <div><dt>Actives sur 7 jours</dt><dd>{active}</dd></div>
+            <div><dt>Inactives depuis 30 jours</dt><dd>{inactive}</dd></div>
+            <div><dt>Ventes enregistrées</dt><dd>{activity.reduce((sum, company) => sum + Number(company.total_sales || 0), 0)}</dd></div>
+            <div><dt>Articles référencés</dt><dd>{activity.reduce((sum, company) => sum + Number(company.total_articles || 0), 0)}</dd></div>
+          </dl>}
+          {current.length === 0 ? <p className="pa-empty">Aucune activité enregistrée.</p> : tab === 'log' ? (
+            <div className="pa-divided">{(visible as PlatformEvent[]).map(event => <EventRow key={event.id} ev={event} />)}</div>
+          ) : (
+            <div role="table" aria-label="Activité des entreprises" className="pa-table pa-activity-list">
+              <div role="row" className="pa-list-head">
+                {['Entreprise', 'Utilisateurs', 'Articles', 'Ventes', 'Dernière activité', 'Statut'].map(label => <span key={label} role="columnheader">{label}</span>)}
+              </div>
+              {visible.map(company => {
+                const last = lastSeen(company);
+                const status = last === null ? 'Jamais connectée' : last < 7 ? 'Active' : last < 30 ? 'Récente' : 'Inactive';
+                return (
+                  <div key={company.tenant_id} className="pa-list-row" role="row">
+                    <div className="pa-row-title" role="cell"><strong>{company.tenant_name}</strong>
+                      <p className="pa-row-subtitle pa-mobile-meta">{company.total_users} utilisateurs · {company.total_articles} articles · {company.total_sales} ventes</p>
+                    </div>
+                    <div className="pa-desktop-cell tabular-nums" role="cell">{company.total_users}</div>
+                    <div className="pa-desktop-cell tabular-nums" role="cell">{company.total_articles}</div>
+                    <div className="pa-desktop-cell tabular-nums" role="cell">{company.total_sales}</div>
+                    <div className="pa-row-date pa-muted" role="cell">{company.last_active_at ? formatDateTime(company.last_active_at) : '—'}</div>
+                    <div className="pa-row-status pa-status" role="cell">{status}</div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-2xl p-4 shadow-card">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Inactifs (30j+)</div>
-              <div className="text-2xl font-extrabold text-red-600 mt-1">{inactiveCount}</div>
-            </div>
-            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-2xl p-4 shadow-card">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Total ventes</div>
-              <div className="text-2xl font-extrabold text-slate-800 mt-1">{activity.reduce((s, a) => s + (a.total_sales || 0), 0)}</div>
-            </div>
-            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-2xl p-4 shadow-card">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Total articles</div>
-              <div className="text-2xl font-extrabold text-slate-800 mt-1">{activity.reduce((s, a) => s + (a.total_articles || 0), 0)}</div>
-            </div>
-          </div>
-
-          {/* Activity table */}
-          <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
-            <div className="p-4 border-b border-[var(--w-separator)] flex items-center gap-2">
-              <LineChart className="w-4 h-4 text-brand-700" />
-              <h3 className="text-sm font-bold text-slate-900">Activite des tenants approuves</h3>
-              <span className="ml-auto text-xs text-slate-500">{activity.length} tenants</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-[var(--w-separator)] bg-[var(--w-surface-el)]/80">
-                    <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Tenant</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Utilisateurs</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Articles</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Ventes</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Derniere activite</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Statut</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activity.map(a => {
-                    const lastMs = a.last_active_at ? now - new Date(a.last_active_at).getTime() : null;
-                    const isActive = lastMs !== null && lastMs < 7 * 86400000;
-                    const isRecent = lastMs !== null && lastMs < 30 * 86400000;
-                    const statusLabel = lastMs === null ? 'Jamais connecte' : isActive ? 'Actif' : isRecent ? 'Recemment' : 'Inactif';
-                    const statusColor = lastMs === null ? 'bg-slate-100 text-slate-600' : isActive ? 'bg-emerald-100 text-emerald-700' : isRecent ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
-                    return (
-                      <tr key={a.tenant_id} className="border-b border-[var(--w-separator-l)] hover:bg-[var(--w-surface-el)]/50 transition-colors">
-                        <td className="px-4 py-2.5">
-                          <div className="text-xs font-semibold text-slate-900">{a.tenant_name}</div>
-                          <div className="text-[10px] text-slate-400">Cree {formatDate(a.created_at)}</div>
-                        </td>
-                        <td className="px-3 py-2.5 text-center text-xs font-bold text-slate-700">{a.total_users}</td>
-                        <td className="px-3 py-2.5 text-center text-xs font-bold text-slate-700">{a.total_articles}</td>
-                        <td className="px-3 py-2.5 text-center text-xs font-bold text-slate-700">{a.total_sales}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-600">
-                          {a.last_active_at ? formatDateTime(a.last_active_at) : <span className="text-slate-400 italic">Jamais</span>}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor}`}>{statusLabel}</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {activity.length === 0 && (
-                    <tr><td colSpan={6} className="py-10 text-center text-sm text-slate-400">Aucun tenant approuve.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === 'log' && (
-        <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-4 h-4 text-brand-700" />
-            <h3 className="text-sm font-bold text-slate-900">Journal d'activite plateforme</h3>
-            <span className="ml-auto text-xs text-slate-500">{events.length} evenement{events.length > 1 ? 's' : ''}</span>
-          </div>
-          <div className="space-y-1">
-            {events.map(ev => <EventRow key={ev.id} ev={ev} />)}
-            {events.length === 0 && <div className="text-center text-slate-400 py-10 text-sm">Aucune activite enregistree.</div>}
-          </div>
-        </div>
+          )}
+          <PlatformPagination page={page} total={current.length} onPage={setPage} />
+        </>
       )}
     </div>
   );
@@ -2516,49 +2126,40 @@ function LoginConfigSection() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card">
-        <div className="flex items-center gap-2 mb-1">
-          <Eye className="w-4 h-4 text-brand-700" />
-          <h3 className="text-sm font-bold text-slate-900">Interface de connexion</h3>
-        </div>
-        <p className="text-xs text-slate-500">Personnalisez les textes et modules affichés sur l'écran de connexion WAARWI. Les changements sont visibles immédiatement.</p>
-      </div>
-
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* Left: Editor */}
         <div className="space-y-4">
           {/* Tabs */}
-          <div className="flex bg-slate-100 rounded-xl p-1 border border-slate-200">
+          <div className="pa-tabs" aria-label="Configuration de la connexion">
             <button
               onClick={() => setActiveTab('textes')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'textes' ? 'bg-[var(--w-surface)] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              aria-current={activeTab === 'textes' ? 'page' : undefined}
             >
               Textes
             </button>
             <button
               onClick={() => setActiveTab('effets')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'effets' ? 'bg-[var(--w-surface)] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              aria-current={activeTab === 'effets' ? 'page' : undefined}
             >
               Effets
             </button>
             <button
               onClick={() => setActiveTab('modules')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'modules' ? 'bg-[var(--w-surface)] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              aria-current={activeTab === 'modules' ? 'page' : undefined}
             >
               Modules ({modules.length})
             </button>
           </div>
 
           {activeTab === 'textes' && (
-            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+            <div className="pa-panel space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Titre principal</label>
                 <input
                   value={headline}
                   onChange={e => setHeadline(e.target.value)}
                   placeholder="La plateforme qui simplifie,"
-                  className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                  className="w-full pa-field"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">Première ligne du titre</p>
               </div>
@@ -2588,7 +2189,7 @@ function LoginConfigSection() {
                   value={eyebrow}
                   onChange={e => setEyebrow(e.target.value)}
                   placeholder="LA PLATEFORME QUI AVANCE AVEC VOUS"
-                  className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                  className="w-full pa-field"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">Texte en petites capitales au-dessus du titre principal</p>
               </div>
@@ -2601,7 +2202,7 @@ function LoginConfigSection() {
                       value={loginTitle}
                       onChange={e => setLoginTitle(e.target.value)}
                       placeholder="Accédez à votre espace"
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                      className="w-full pa-field"
                     />
                   </div>
                   <div>
@@ -2610,7 +2211,7 @@ function LoginConfigSection() {
                       value={loginSubtitle}
                       onChange={e => setLoginSubtitle(e.target.value)}
                       placeholder="Connectez-vous pour gérer votre activité."
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                      className="w-full pa-field"
                     />
                   </div>
                 </div>
@@ -2649,7 +2250,7 @@ function LoginConfigSection() {
           )}
 
           {activeTab === 'effets' && (
-            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+            <div className="pa-panel space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-bold text-slate-700">Effets graphiques sur le texte</p>
@@ -2671,7 +2272,7 @@ function LoginConfigSection() {
                 </div>
               )}
 
-              <div className="space-y-3 max-h-[400px] overflow-y-auto -mr-1 pr-1">
+              <div className="space-y-3">
                 {textAccents.map((accent, idx) => (
                   <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-2.5 group">
                     <div className="flex items-center gap-2">
@@ -2797,7 +2398,7 @@ function LoginConfigSection() {
           )}
 
           {activeTab === 'modules' && (
-            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+            <div className="pa-panel space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold text-slate-700">Modules affichés ({modules.length})</p>
@@ -2828,7 +2429,7 @@ function LoginConfigSection() {
                 </div>
               )}
 
-              <div className="space-y-2 max-h-[420px] overflow-y-auto -mr-1 pr-1">
+              <div className="space-y-2">
                 {modules.map((mod, idx) => {
                   const IconComp = ICON_MAP_ADMIN[mod.icon] || Shield;
                   return (
@@ -2888,7 +2489,7 @@ function LoginConfigSection() {
 
         {/* Right: Live Preview */}
         <div className="sticky top-4">
-          <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
+          <div className="pa-panel overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--w-separator)] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -3081,15 +2682,10 @@ function ReleasesSection() {
   };
 
   return (
-    <div className="p-6 max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">Mises à jour</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Gérez les notifications de mise à jour affichées aux utilisateurs</p>
-        </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all shadow-sm">
-          <Plus className="w-4 h-4" />Nouvelle version
-        </button>
+    <div className="pa-page">
+      <div className="pa-section-head">
+        <span className="pa-muted text-sm">{releases.length} version{releases.length !== 1 ? 's' : ''}</span>
+        <button type="button" className="pa-button" data-variant="primary" onClick={openNew}><Plus size={16} /> Nouvelle version</button>
       </div>
 
       {loading ? (
@@ -3097,37 +2693,18 @@ function ReleasesSection() {
       ) : releases.length === 0 ? (
         <div className="py-16 text-center text-sm text-slate-400">Aucune mise à jour créée</div>
       ) : (
-        <div className="space-y-3">
-          {releases.map(r => (
-            <div key={r.id} className={`rounded-xl border p-4 transition-all ${r.is_published ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-[var(--w-surface)]'}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-black text-slate-900">{r.title}</span>
-                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold">v{r.version}</span>
-                    {r.is_published && (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />Publiée
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-400 mt-1">{formatDate(r.release_date)}</div>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-                    {r.features.length > 0 && (
-                      <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-emerald-500" />{r.features.length} nouveauté{r.features.length > 1 ? 's' : ''}</span>
-                    )}
-                    {r.fixes.length > 0 && (
-                      <span className="flex items-center gap-1"><Bug className="w-3 h-3 text-sky-500" />{r.fixes.length} correction{r.fixes.length > 1 ? 's' : ''}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => togglePublish(r)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${r.is_published ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
-                    {r.is_published ? 'Dépublier' : 'Publier'}
-                  </button>
-                  <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><Edit2 className="w-4 h-4" /></button>
-                  <button onClick={() => setDeleteConfirm(r.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
-                </div>
+        <div className="pa-divided">
+          {releases.map(release => (
+            <div key={release.id} className="pa-message-row">
+              <div className="min-w-0">
+                <button type="button" className="pa-name-button" onClick={() => openEdit(release)}>{release.title}</button>
+                <p className="pa-row-subtitle">v{release.version} · {formatDate(release.release_date)} · {release.is_published ? 'Publiée' : 'Brouillon'}</p>
+                <p className="pa-row-subtitle">{release.features.length} nouveautés · {release.fixes.length} corrections</p>
+              </div>
+              <div className="pa-row-actions">
+                <button type="button" className="pa-link" onClick={() => togglePublish(release)}>{release.is_published ? 'Dépublier' : 'Publier'}</button>
+                <button type="button" className="pa-icon-button" aria-label={'Modifier ' + release.title} onClick={() => openEdit(release)}><Edit2 size={16} /></button>
+                <button type="button" className="pa-icon-button pa-danger" aria-label={'Supprimer ' + release.title} onClick={() => setDeleteConfirm(release.id)}><Trash2 size={16} /></button>
               </div>
             </div>
           ))}
@@ -3135,7 +2712,7 @@ function ReleasesSection() {
       )}
 
       {/* Edit/Create Modal */}
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title={editId ? 'Modifier la mise à jour' : 'Nouvelle mise à jour'} size="lg">
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title={editId ? 'Modifier la mise à jour' : 'Nouvelle mise à jour'} size="lg" variant="flat" layer="top" panelClassName="pa-modal flat-form">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -3153,7 +2730,7 @@ function ReleasesSection() {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-emerald-500" />Nouveautés</span>
+              <span className="flex items-center gap-1.5">Nouveautés</span>
             </label>
             <textarea value={form.features} onChange={e => setForm({ ...form, features: e.target.value })} rows={4} placeholder="Une nouveauté par ligne..." className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none resize-none" />
             <p className="text-[10px] text-slate-400 mt-0.5">Une nouveauté par ligne</p>
