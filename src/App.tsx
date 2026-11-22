@@ -312,7 +312,7 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
 };
 
 function Inner() {
-  const { loading, user, tenant, profile } = useApp();
+  const { loading, user, tenant, profile, currentSite } = useApp();
   const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const canPaySubscription = useCanPaySubscription();
@@ -338,9 +338,9 @@ function Inner() {
     : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports','ipm'];
 
   useEffect(() => {
+    if (loading || !user || !profile || permsLoading) return;
     if (!tenant && isSuperAdmin) { setRoute('platform_admin'); return; }
     if (isSuperAdmin) return;
-    if (permsLoading) return;
     const mod = ROUTE_MODULE[route];
     if (mod && mod !== 'ipm' && !enabled.includes(mod)) { setRoute('pos'); return; }
     const perm = ROUTE_PERMISSION[route];
@@ -352,7 +352,7 @@ function Inner() {
       }) || 'pos';
       if (route !== fallback) setRoute(fallback);
     }
-  }, [tenant, isSuperAdmin, route, enabled.join(','), can, permsLoading]);
+  }, [loading, user, profile, tenant, isSuperAdmin, route, enabled.join(','), can, permsLoading]);
 
   if (loading) {
     return (
@@ -389,7 +389,7 @@ function Inner() {
     <Shell route={route} onRoute={setRoute}>
       <Suspense fallback={<div className="p-6 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>}>
         {route === 'dashboard' && <Dashboard onNavigate={(r: string) => setRoute(r as any)} />}
-        {route === 'pos' && <POS onLeave={() => setRoute('dashboard')} onNavigate={(r: string) => setRoute(r as any)} />}
+        {route === 'pos' && <POS key={[profile?.id, tenant?.id, currentSite?.id].join(":")} onLeave={() => setRoute('dashboard')} onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'articles' && <Articles onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'master_catalog' && <MasterCatalog />}
         {route === 'stock' && <Stock />}

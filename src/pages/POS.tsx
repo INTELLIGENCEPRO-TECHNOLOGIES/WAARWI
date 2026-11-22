@@ -85,19 +85,9 @@ import { PosRegisterPicker } from '../components/PosRegisterPicker';
 import { newIdempotencyKey, registerLabel, registerText, type PosCashContext } from '../lib/cashSession';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 
-type ArticleLite = {
-  id: string; internal_ref: string; name: string; oem_ref: string;
-  sale_price: number; purchase_price: number; stock_available: number;
-  category_id: string | null; image_url: string | null; ipm_eligible: boolean;
-  track_stock: boolean;
-  _stockLoaded?: boolean;
-};
+import { fetchPosArticlesById, fetchPosCatalog, type PosArticle as ArticleLite, type PosArticleTier } from '../lib/posCatalog';
 
-type ArticleTier = { article_id: string; tier_name: string; price: number };
-
-type CategoryLite = { id: string; name: string; parent_id: string | null; track_stock?: boolean };
-
-
+const noScores: Record<string, number> = {};
 
 type HeldCart = {
   id: string;
@@ -911,20 +901,6 @@ function POSLandingResume({
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-// Module-level cache to avoid full reload when returning to POS
-const posCache: {
-  key: string;
-  articles: ArticleLite[];
-  customers: Customer[];
-  methods: PaymentMethod[];
-  session: CashSession | null;
-  categories: CategoryLite[];
-  topScores: Record<string, number>;
-  articleTiers: ArticleTier[];
-  screen: 'open-form' | 'resume' | 'pos';
-  stockSiteId: string;
-} = { key: '', articles: [], customers: [], methods: [], session: null, categories: [], topScores: {}, articleTiers: [], screen: 'open-form', stockSiteId: '' };
-
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange, setCurrentSite } = useApp();
   const { can, loading: permsLoading, error: permsError } = usePermissions();
@@ -962,24 +938,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     return [...(currentSite ? [currentSite] : []), ...available];
   }, [tenant, currentSite, depots]);
 
-  const posCacheKey = `${tenant?.id}:${currentSite?.id}`;
-  const hasPosCache = posCache.key === posCacheKey && posCache.articles.length > 0;
-
-  // Screen state: 'open-form' | 'resume' | 'pos'
-  const [screen, setScreen] = useState<'open-form' | 'resume' | 'pos'>(hasPosCache ? posCache.screen : 'open-form');
-
-  // Data
-  const [articles, setArticles] = useState<ArticleLite[]>(hasPosCache ? posCache.articles : []);
-  const [customers, setCustomers] = useState<Customer[]>(hasPosCache ? posCache.customers : []);
-  const [methods, setMethods] = useState<PaymentMethod[]>(hasPosCache ? posCache.methods : []);
-  const [session, setSession] = useState<CashSession | null>(hasPosCache ? posCache.session : null);
+  const [screen, setScreen] = useState<'open-form' | 'resume' | 'pos'>('open-form');
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersStatus, setCustomersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const methods = useMemo(() => (refData?.paymentMethods || []).filter(m => m.tenant_id === tenant?.id && m.payment_type !== 'credit') as PaymentMethod[], [refData, tenant?.id]);
+  const [session, setSession] = useState<CashSession | null>(null);
   const cashCtx: CashOpContext | null = session ? {
     mode: 'personal', sessionId: session.id, siteId: session.site_id,
     registerLabel: '', operatorName: cashierName, siteName: currentSite?.name || '',
     userName: cashierName, printTenant: tenantForPrint, methods, customers,
   } : null;
-  const [loadingData, setLoadingData] = useState(!hasPosCache);
-  const initialLoadDone = useRef(hasPosCache);
+  const [loadingData, setLoadingData] = useState(true);
+  const cashContextRequest = useRef<AbortController | null>(null);
 
   // Session open form
   const [openingAmount, setOpeningAmount] = useState(0);
@@ -994,8 +964,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Catalog filters
-  const [categories, setCategories] = useState<CategoryLite[]>(hasPosCache ? posCache.categories : []);
-  const [topScores, setTopScores] = useState<Record<string, number>>(hasPosCache ? posCache.topScores : {});
+  const categories = useMemo(() => (refData?.categories || []).filter(category => category.tenant_id === tenant?.id), [refData, tenant?.id]);
+  const [topScores, setTopScores] = useState(noScores);
+  const [catalogRevision, refreshCatalog] = useState(0);
+  const [customersRevision, refreshCustomers] = useState(0);
+  const [catalog, setCatalog] = useState<{ key: string; articles: ArticleLite[]; failed?: boolean }>({ key: '', articles: [] });
   const [sortMode, setSortMode] = useState<'top' | 'alpha'>('top');
   const [categoryId, setCategoryId] = useState<string>('');
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
@@ -1013,10 +986,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const mobileDepotTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [mobileDepotPos, setMobileDepotPos] = useState<{ top: number; left: number; flip: boolean }>({ top: 0, left: 0, flip: false });
   const [stockSourceLoading, setStockSourceLoading] = useState(false);
-  const stockSourceLoadId = useRef(0);
+  const stockSourceRequest = useRef<AbortController | null>(null);
+  const productActionRequest = useRef<AbortController | null>(null);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [exceptionPrices, setExceptionPrices] = useState<Map<string, number>>(new Map());
-  const [articleTiers, setArticleTiers] = useState<ArticleTier[]>([]);
+  const [articleTiers, setArticleTiers] = useState<PosArticleTier[]>([]);
   const [tierPickerOpen, setTierPickerOpen] = useState(false);
   const [tierPickerArticle, setTierPickerArticle] = useState<ArticleLite | null>(null);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -1099,13 +1073,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   useEffect(() => {
     return () => { setPosCart(0, false); };
   }, [setPosCart]);
-
-  // Always reset saleSourceSiteId when currentSite changes & close depot menus
-  useEffect(() => {
-    if (currentSite) setSaleSourceSiteId(currentSite.id);
-    setDesktopDepotOpen(false);
-    setMobileDepotOpen(false);
-  }, [currentSite?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reposition mobile depot dropdown on scroll/resize/rotation
   useEffect(() => {
@@ -1283,340 +1250,189 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Lot picker for sale
   const [lotPickerOpen, setLotPickerOpen] = useState(false);
 
-  const loadIdRef = useRef(0);
+  const tenantId = tenant?.id;
+  const siteId = currentSite?.id;
+  const catalogSiteId = (tenant as any)?.settings?.shared_articles === false ? siteId || null : null;
+  const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
+  const stockSiteId = saleSourceSiteId || siteId;
 
-  const load = useCallback(async () => {
-    if (!tenant || !currentSite) { setLoadingData(false); return; }
-    const thisLoadId = ++loadIdRef.current;
-    const stockSiteId = saleSourceSiteId || currentSite.id;
-    const thisCacheKey = `${tenant.id}:${currentSite.id}`;
-    if (posCache.key !== thisCacheKey || posCache.articles.length === 0) {
-      setLoadingData(true);
-    }
-    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    const isShared = (tenant as any)?.settings?.shared_articles !== false;
-    const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
-
+  const loadCashContext = useCallback(async () => {
+    if (!tenantId || !siteId) return;
+    cashContextRequest.current?.abort();
+    const controller = new AbortController();
+    cashContextRequest.current = controller;
+    const signal = controller.signal;
     try {
-    // Fetch articles, stock and other data ALL in parallel
-    const fetchArticlesBatched = async () => {
-      let all: any[] = [];
-      let from = 0;
-      while (true) {
-        let q = supabase.from('articles')
-          .select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible, track_stock')
-          .eq('tenant_id', tenant.id).eq('is_active', true)
-          .range(from, from + 999);
-        if (!isShared && currentSite) q = q.eq('site_id', currentSite.id);
-        const { data, error: e } = await q;
-        if (e || !data) break;
-        all = all.concat(data);
-        if (data.length < 1000) break;
-        from += 1000;
+      const result = await supabase.rpc('cash_pos_context', { p_site_id: siteId }).abortSignal(signal);
+      if (result.error || !result.data || typeof result.data.multi_enabled !== 'boolean') {
+        throw result.error || new Error('Impossible de vérifier l’état des caisses');
       }
-      return all;
-    };
-    const fetchStockBatched = async () => {
-      let all: any[] = [];
-      let from = 0;
-      while (true) {
-        const { data, error: e } = await supabase.from('stock_levels')
-          .select('article_id, quantity')
-          .eq('tenant_id', tenant.id).eq('site_id', stockSiteId)
-          .range(from, from + 999);
-        if (e) { console.error('[POS] stock fetch error', e, { from, siteId: stockSiteId }); break; }
-        if (!data) break;
-        all = all.concat(data);
-        if (data.length < 1000) break;
-        from += 1000;
+      const ctx = result.data as PosCashContext;
+      let existingSession = ctx.my_session as CashSession | null;
+      if (!ctx.multi_enabled) {
+        // Legacy sessions can predate cash_register_id.
+        const legacy = await supabase.from('cash_sessions').select('*')
+          .eq('tenant_id', tenantId).eq('site_id', siteId).eq('status', 'open')
+          .order('opened_at', { ascending: false }).limit(1).abortSignal(signal).maybeSingle();
+        if (legacy.error) throw legacy.error;
+        existingSession = legacy.data;
       }
-      return all;
-    };
-
-    const fetchCustomersBatched = async () => {
-      let all: any[] = [];
-      let from = 0;
-      const seen = new Set<string>();
-      while (true) {
-        let q = supabase.from('customers')
-          .select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, credit_blocked, balance, is_active, tenant_id, site_id')
-          .eq('tenant_id', tenant.id).eq('is_active', true)
-          .order('name').order('id')
-          .range(from, from + 999);
-        if (!isSharedCust && currentSite) q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
-        const { data, error: e } = await q;
-        if (e) { console.error('[POS] customers fetch error', e, { from }); break; }
-        if (!data) break;
-        for (const c of data) { if (!seen.has(c.id)) { seen.add(c.id); all.push(c); } }
-        if (data.length < 1000) break;
-        from += 1000;
+      if (signal.aborted) return;
+      setPosCashCtx(ctx);
+      setPosCashCtxError('');
+      setSession(existingSession || null);
+      if (ctx.multi_enabled) {
+        const usable = (ctx.registers || []).filter(r => r.status !== 'busy' && !r.locked);
+        setSelectedRegisterId(previous => usable.some(r => r.id === previous) ? previous
+          : usable.find(r => r.status === 'mine')?.id
+            || (usable.length === 1 ? usable[0].id : usable.find(r => r.is_default)?.id)
+            || null);
       }
-      return all;
-    };
-
-    const [allArts, allStk, csResult, allCust, topResult, tiersResult, posCtxResult] = await Promise.all([
-      fetchArticlesBatched(),
-      fetchStockBatched(),
-      supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, status, user_id, site_id, tenant_id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
-      fetchCustomersBatched(),
-      supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
-      supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
-      supabase.rpc('cash_pos_context', { p_site_id: currentSite.id }),
-    ]);
-
-    // Abort if a newer load was started
-    if (thisLoadId !== loadIdRef.current) return;
-
-    const stk = allStk;
-    const cs = csResult.data;
-    const cust = allCust;
-    const topRows = topResult.data;
-    const tiers = tiersResult.data;
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[POS] load complete', { articles: allArts.length, stock: stk.length, siteId: stockSiteId, loadId: thisLoadId });
-    }
-
-    const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-    const newArticles = (allArts).map((a: any) => ({
-      id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
-      sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
-      stock_available: qmap.get(a.id) ?? 0,
-      _stockLoaded: true,
-      category_id: a.category_id || null,
-      image_url: a.image_url || null,
-      ipm_eligible: a.ipm_eligible !== false,
-      track_stock: a.track_stock !== false,
-    }));
-    const newMethods = ((refData?.paymentMethods || []).filter((m: any) => m.payment_type !== 'credit')) as PaymentMethod[];
-    const newCustomers = (cust || []) as Customer[];
-    const newCategories = (refData?.categories || []) as CategoryLite[];
-    const scores: Record<string, number> = {};
-    for (const r of (topRows || []) as any[]) {
-      if (!r.article_id) continue;
-      scores[r.article_id] = (scores[r.article_id] || 0) + Number(r.quantity || 0);
-    }
-    const newTiers = (tiers || []) as ArticleTier[];
-    const ctxData = posCtxResult.data as PosCashContext | null;
-    const ctxOk = !posCtxResult.error && !!ctxData && typeof ctxData === 'object';
-    const multiMode = ctxOk && !!ctxData!.multi_enabled;
-    // Mode multi-caisse : uniquement la session personnelle de l'utilisateur, jamais celle d'un collègue.
-    const existingSession = !ctxOk ? null : multiMode ? (ctxData!.my_session || null) : (cs || null);
-    setPosCashCtx(ctxOk ? ctxData : null);
-    setPosCashCtxError(ctxOk ? '' : (posCtxResult.error?.message || 'Impossible de vérifier l’état des caisses'));
-    if (multiMode) {
-      const usable = (ctxData!.registers || []).filter(r => r.status !== 'busy' && !r.locked);
-      setSelectedRegisterId(prev => {
-        if (prev && usable.some(r => r.id === prev)) return prev;
-        const mine = usable.find(r => r.status === 'mine');
-        if (mine) return mine.id;
-        if (usable.length === 1) return usable[0].id;
-        return usable.find(r => r.is_default)?.id || null;
-      });
-    }
-
-    setArticles(newArticles);
-    setMethods(newMethods);
-    setCustomers(newCustomers);
-    setCategories(newCategories);
-    setTopScores(scores);
-    setArticleTiers(newTiers);
-    setSession((existingSession) as any);
-    // Only update screen if we're not already inside the POS (avoids resetting after a sale)
-    setScreen(prev => {
-      if (prev === 'pos') return 'pos';
-      // Check if caller requested direct POS access (skip resume)
-      const ctx = peekNavContext();
-      if (ctx?.target === 'directPos' && existingSession) {
-        consumeNavContext();
-        return 'pos';
-      }
-      if (multiMode && existingSession) {
-        posCache.screen = 'pos';
-        return 'pos';
-      }
-      const newScreen = existingSession ? 'resume' : 'open-form';
-      posCache.screen = newScreen;
-      return newScreen;
-    });
-    // Persist to module-level cache
-    posCache.key = thisCacheKey;
-    posCache.articles = newArticles;
-    posCache.customers = newCustomers;
-    posCache.methods = newMethods;
-    posCache.session = existingSession as any;
-    posCache.categories = newCategories;
-    posCache.topScores = scores;
-    posCache.articleTiers = newTiers;
-    posCache.stockSiteId = stockSiteId;
-    } catch (err) {
-      console.error('[POS] load error', err);
+      const directPos = existingSession && peekNavContext()?.target === 'directPos';
+      if (directPos) consumeNavContext();
+      setScreen(previous => !existingSession ? 'open-form' : (previous === 'pos' || directPos || ctx.multi_enabled ? 'pos' : 'resume'));
+    } catch (cause) {
+      if (signal.aborted) return;
+      console.error('[POS] cash context', cause);
+      setPosCashCtx(null);
+      setSession(null);
+      setScreen('open-form');
+      setPosCashCtxError('Impossible de vérifier l’état des caisses.');
     } finally {
-      if (thisLoadId === loadIdRef.current) {
-        setLoadingData(false);
-        initialLoadDone.current = true;
+      if (!signal.aborted) setLoadingData(false);
+    }
+  }, [tenantId, siteId]);
+
+  useEffect(() => {
+    if (!tenantId || !siteId) { setLoadingData(false); return; }
+    loadCashContext();
+    return () => {
+      cashContextRequest.current?.abort();
+      stockSourceRequest.current?.abort();
+      productActionRequest.current?.abort();
+    };
+  }, [tenantId, siteId, loadCashContext]);
+
+  const load = useCallback(() => {
+    refreshCatalog(value => value + 1);
+    refreshCustomers(value => value + 1);
+    return loadCashContext();
+  }, [loadCashContext]);
+
+  useEffect(() => {
+    if (!tenantId || !siteId || loadingData || !session) return;
+    let catalogTimer: ReturnType<typeof setTimeout>;
+    let customersTimer: ReturnType<typeof setTimeout>;
+    const stopCatalog = onDataChange(['articles', 'stock_levels'], () => {
+      clearTimeout(catalogTimer);
+      catalogTimer = setTimeout(() => refreshCatalog(value => value + 1), 600);
+    });
+    const stopCustomers = onDataChange(['customers'], () => {
+      clearTimeout(customersTimer);
+      customersTimer = setTimeout(() => refreshCustomers(value => value + 1), 600);
+    });
+    return () => { stopCatalog(); stopCustomers(); clearTimeout(catalogTimer); clearTimeout(customersTimer); };
+  }, [tenantId, siteId, loadingData, session?.id, onDataChange]);
+
+  // Customer data also supports the resume screen and cash operations.
+  useEffect(() => {
+    if (!tenantId || !siteId || loadingData || (!session && !supervising)) return;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    (async () => {
+      const rows = new Map<string, Customer>();
+      for (let start = 0; !signal.aborted; start += 1000) {
+        let query = supabase.from('customers')
+          .select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, credit_blocked, balance, is_active, tenant_id, site_id')
+          .eq('tenant_id', tenantId).eq('is_active', true).order('name').order('id').range(start, start + 999);
+        if (!sharedCustomers) query = query.or('site_id.eq.' + siteId + ',site_id.is.null');
+        const { data, error } = await query.abortSignal(signal);
+        if (signal.aborted) return;
+        if (error) { setCustomersStatus('error'); return; }
+        for (const row of data) rows.set(row.id, row as Customer);
+        if (data.length < 1000) break;
       }
-    }
-  }, [tenant?.id, currentSite?.id, saleSourceSiteId]);
+      if (!signal.aborted) { setCustomers([...rows.values()]); setCustomersStatus('ready'); }
+    })();
+    return () => controller.abort();
+  }, [tenantId, siteId, loadingData, session?.id, supervising, sharedCustomers, customersRevision]);
 
-  useEffect(() => { load(); }, [load]);
+  const hasCatalog = catalog.key !== '' && !catalog.failed;
+  useEffect(() => {
+    if (!tenantId || !hasCatalog || screen !== 'pos') return;
+    const controller = new AbortController();
+    // Popular items enhance the catalogue after its first results are available.
+    const timer = setTimeout(async () => {
+      const since = new Date(Date.now() - 90 * 86400000).toISOString();
+      const query = supabase.from('sale_items')
+        .select('article_id, quantity, sales!inner(tenant_id, site_id, created_at, status)')
+        .eq('tenant_id', tenantId).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000);
+      if (catalogSiteId) query.eq('sales.site_id', catalogSiteId);
+      const { data } = await query.abortSignal(controller.signal);
+      if (!data || controller.signal.aborted) return;
+      const scores: Record<string, number> = {};
+      for (const row of data) {
+        if (row.article_id) scores[row.article_id] = (scores[row.article_id] || 0) + Number(row.quantity || 0);
+      }
+      if (Object.keys(scores).length) setTopScores(scores);
+    }, 800);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [tenantId, catalogSiteId, hasCatalog, screen]);
 
-  // Dedicated stock-only fetch for a given site — used by depot selector
-  const fetchStockForSite = useCallback(async (siteId: string) => {
-    if (!tenant) return null;
-    let all: any[] = [];
-    let from = 0;
-    while (true) {
-      const { data, error: e } = await supabase.from('stock_levels')
-        .select('article_id, quantity')
-        .eq('tenant_id', tenant.id).eq('site_id', siteId)
-        .range(from, from + 999);
-      if (e || !data) return null;
-      all = all.concat(data);
-      if (data.length < 1000) break;
-      from += 1000;
-    }
-    return all;
-  }, [tenant?.id]);
+  const searchTerm = search.trim();
+  const categoryIds = useMemo(() => categoryId
+    ? [categoryId, ...categories.filter(c => c.parent_id === categoryId).map(c => c.id)]
+    : [], [categoryId, categories]);
+  const catalogKey = JSON.stringify([tenantId, catalogSiteId, stockSiteId, searchTerm, categoryIds, sortMode]);
+  const catalogReady = catalog.key === catalogKey;
+  const catalogFailed = catalogReady && catalog.failed;
+  const filtered = catalogReady ? catalog.articles : [];
 
-  const handleStockSourceChange = useCallback(async (nextSiteId: string) => {
-    if (!tenant || !currentSite || nextSiteId === saleSourceSiteId) return;
+  useEffect(() => {
+    if (!tenantId || !stockSiteId || screen !== 'pos') return;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const timer = setTimeout(async () => {
+      try {
+        const articles = await fetchPosCatalog({ tenantId, catalogSiteId, stockSiteId, search: searchTerm,
+          categories: categoryIds, scores: sortMode === 'top' ? topScores : noScores, signal });
+        if (!signal.aborted) setCatalog({ key: catalogKey, articles });
+      } catch (cause) {
+        if (signal.aborted) return;
+        console.error('[POS] catalog', cause);
+        setCatalog(previous => ({ key: catalogKey, articles: previous.key === catalogKey ? previous.articles : [], failed: true }));
+      }
+    }, searchTerm ? 250 : 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [tenantId, catalogSiteId, stockSiteId, searchTerm, categoryIds, sortMode, topScores, catalogKey, screen, catalogRevision]);
+
+  const handleStockSourceChange = async (nextSiteId: string) => {
+    if (!tenantId || nextSiteId === stockSiteId) return;
     setDesktopDepotOpen(false);
     setMobileDepotOpen(false);
     setStockSourceLoading(true);
-    const thisId = ++stockSourceLoadId.current;
+    stockSourceRequest.current?.abort();
+    productActionRequest.current?.abort();
+    setTierPickerOpen(false);
+    setTierPickerArticle(null);
+    const controller = new AbortController();
+    stockSourceRequest.current = controller;
+    const signal = controller.signal;
     try {
-      const stk = await fetchStockForSite(nextSiteId);
-      if (thisId !== stockSourceLoadId.current) return;
-      if (!stk) { error('Impossible de charger le stock de ce dépôt'); return; }
-      const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
+      const rows = await fetchPosArticlesById(tenantId, catalogSiteId, nextSiteId, cart.map(item => item.article_id), signal);
+      if (signal.aborted) return;
+      const byId = new Map(rows.map(row => [row.id, row]));
       setSaleSourceSiteId(nextSiteId);
-      setArticles(prev => prev.map(a => ({
-        ...a,
-        stock_available: qmap.get(a.id) ?? 0,
-        _stockLoaded: true,
-      })));
-      posCache.articles = posCache.articles.map(a => ({
-        ...a,
-        stock_available: qmap.get(a.id) ?? 0,
-        _stockLoaded: true,
-      }));
-      posCache.stockSiteId = nextSiteId;
-      setCart(prev => prev.map(item => ({
-        ...item,
-        stock_available: qmap.get(item.article_id) ?? 0,
+      setCart(previous => previous.map(item => ({
+        ...item, stock_available: byId.get(item.article_id)?.stock_available ?? 0,
+        track_stock: byId.get(item.article_id)?.track_stock ?? item.track_stock,
       })));
     } catch {
-      if (thisId === stockSourceLoadId.current) error('Erreur lors du chargement du stock');
+      if (!signal.aborted) error('Impossible de charger le stock de ce dépôt');
     } finally {
-      if (thisId === stockSourceLoadId.current) setStockSourceLoading(false);
+      if (!signal.aborted) setStockSourceLoading(false);
     }
-  }, [tenant?.id, currentSite?.id, saleSourceSiteId, fetchStockForSite, error]);
-
-  // Realtime: silently refresh stock + articles when another user makes changes (NOT customers)
-  useEffect(() => {
-    if (!tenant || !currentSite) return;
-    const stockSiteId = saleSourceSiteId || currentSite.id;
-    const isShared = (tenant as any)?.settings?.shared_articles !== false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const unsub = onDataChange(
-      ['articles', 'stock_levels'],
-      () => {
-        if (!initialLoadDone.current) return;
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(async () => {
-          const fetchStk = async () => {
-            let all: any[] = [];
-            let f = 0;
-            while (true) {
-              const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId).range(f, f + 999);
-              if (e || !data) break;
-              all = all.concat(data);
-              if (data.length < 1000) break;
-              f += 1000;
-            }
-            return all;
-          };
-          const fetchArts = async () => {
-            let all: any[] = [];
-            let from = 0;
-            while (true) {
-              let q = supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible, track_stock').eq('tenant_id', tenant.id).eq('is_active', true).range(from, from + 999);
-              if (!isShared) q = q.eq('site_id', currentSite.id);
-              const { data, error: e } = await q;
-              if (e || !data) break;
-              all = all.concat(data);
-              if (data.length < 1000) break;
-              from += 1000;
-            }
-            return all;
-          };
-          const [stk, newArts] = await Promise.all([fetchStk(), fetchArts()]);
-          if (stk && newArts && newArts.length > 0) {
-            const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
-            const updatedArticles = newArts.map((a: any) => ({
-              id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
-              sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
-              stock_available: qmap.get(a.id) ?? 0,
-              _stockLoaded: true,
-              category_id: a.category_id || null,
-              image_url: a.image_url || null,
-              ipm_eligible: a.ipm_eligible !== false,
-              track_stock: a.track_stock !== false,
-            }));
-            setArticles(updatedArticles);
-            posCache.articles = updatedArticles;
-          } else if (stk && stk.length > 0) {
-            const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
-            setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.get(a.id) ?? 0, _stockLoaded: true })));
-          }
-        }, 600);
-      }
-    );
-    return () => { unsub(); if (timer) clearTimeout(timer); };
-  }, [tenant?.id, currentSite?.id, saleSourceSiteId, onDataChange]);
-
-  // Realtime: refresh customers only when customer data changes
-  useEffect(() => {
-    if (!tenant || !currentSite) return;
-    const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const unsub = onDataChange(
-      ['customers'],
-      () => {
-        if (!initialLoadDone.current) return;
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(async () => {
-          let all: any[] = [];
-          let from = 0;
-          const seen = new Set<string>();
-          let failed = false;
-          while (true) {
-            let q = supabase.from('customers')
-              .select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, credit_blocked, balance, is_active, tenant_id, site_id')
-              .eq('tenant_id', tenant.id).eq('is_active', true)
-              .order('name').order('id')
-              .range(from, from + 999);
-            if (!isSharedCust && currentSite) q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
-            const { data, error: e } = await q;
-            if (e) { console.error('[POS] realtime customers fetch error', e, { from }); failed = true; break; }
-            if (!data) break;
-            for (const c of data) { if (!seen.has(c.id)) { seen.add(c.id); all.push(c); } }
-            if (data.length < 1000) break;
-            from += 1000;
-          }
-          if (!failed && all.length > 0) {
-            const cust = all as Customer[];
-            setCustomers(cust);
-            posCache.customers = cust;
-          }
-        }, 600);
-      }
-    );
-    return () => { unsub(); if (timer) clearTimeout(timer); };
-  }, [tenant?.id, currentSite?.id, onDataChange]);
+  };
 
   // Force-skip resume screen when coming from Dashboard "Ventes" button
   useEffect(() => {
@@ -1637,97 +1453,76 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }
   }, [session, screen]);
 
-  const categoryMatchIds = useMemo(() => {
-    if (!categoryId) return null;
-    const ids = new Set<string>([categoryId]);
-    for (const c of categories) if (c.parent_id === categoryId) ids.add(c.id);
-    return ids;
-  }, [categoryId, categories]);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    let base = articles;
-    if (categoryMatchIds) base = base.filter(a => a.category_id && categoryMatchIds.has(a.category_id));
-    if (q) {
-      base = base.filter(a => a.name.toLowerCase().includes(q) || a.internal_ref.toLowerCase().includes(q));
-    }
-    const sorted = [...base].sort((a, b) => {
-      if (sortMode === 'alpha') return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-      const sa = topScores[a.id] || 0;
-      const sb = topScores[b.id] || 0;
-      if (sb !== sa) return sb - sa;
-      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-    });
-    const cap = q || categoryId ? 300 : 120;
-    return sorted.slice(0, cap);
-  }, [articles, search, sortMode, topScores, categoryMatchIds, categoryId]);
-
   // ─── Cart operations ──────────────────────────────────────────────────────
 
-  const tracksStock = (a: ArticleLite) => a.track_stock !== false;
+  const tracksStock = (a: ArticleLite) => a.track_stock;
 
-  const addToCart = (a: ArticleLite) => {
-    if (stockSourceLoading) return;
+  const addToCart = async (a: ArticleLite) => {
+    if (stockSourceLoading || !tenantId || productActionRequest.current) return;
     const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     // If already in cart, just increment qty
     const existing = cart.find(i => i.article_id === a.id);
     if (existing) {
-      if (!allowNeg && tracksStock(a) && a._stockLoaded && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return; }
+      if (!allowNeg && tracksStock(a) && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return; }
       setCart(c => c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i));
       return;
     }
-    if (!allowNeg && tracksStock(a) && a._stockLoaded && a.stock_available <= 0) { error('Article en rupture'); return; }
+    if (!allowNeg && tracksStock(a) && a.stock_available <= 0) { error('Article en rupture'); return; }
 
-    // Check pricing tiers for this article (exception price always takes priority)
-    const hasException = exceptionPrices.has(a.id);
-    const tiers = articleTiers.filter(t => t.article_id === a.id);
-    if (tiers.length > 1 && !hasException) {
-      setTierPickerArticle(a);
-      setTierPickerOpen(true);
-      return;
+    if (exceptionPrices.has(a.id)) { appendCartLine(a, exceptionPrices.get(a.id)!); return; }
+    const controller = new AbortController();
+    productActionRequest.current = controller;
+    try {
+      const { data, error: tierError } = await supabase.from('article_pricing_tiers').select('article_id, tier_name, price')
+        .eq('tenant_id', tenantId).eq('article_id', a.id).order('sort_order').abortSignal(controller.signal);
+      if (controller.signal.aborted) return;
+      if (tierError) { error('Impossible de vérifier les tarifs de cet article'); return; }
+      const tiers = data as PosArticleTier[];
+      if (tiers.length > 1) {
+        setArticleTiers(tiers);
+        setTierPickerArticle(a);
+        setTierPickerOpen(true);
+        return;
+      }
+      appendCartLine(a, Number(tiers[0]?.price ?? a.sale_price), tiers[0]?.tier_name);
+    } catch {
+      if (!controller.signal.aborted) error('Impossible de vérifier les tarifs de cet article');
+    } finally {
+      if (productActionRequest.current === controller) productActionRequest.current = null;
     }
-
-    const price = hasException ? exceptionPrices.get(a.id)! : (tiers.length === 1 ? tiers[0].price : a.sale_price);
-    const tierName = !hasException && tiers.length === 1 ? tiers[0].tier_name : undefined;
-    setCart(c => [...c, {
-      article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
-      quantity: 1, unit_price: price, discount: 0,
-      stock_available: a.stock_available, purchase_cost: a.purchase_price,
-      tier_name: tierName, ipm_eligible: a.ipm_eligible,
-    }]);
   };
 
-  const addToCartWithTier = (a: ArticleLite, tierName: string, tierPrice: number) => {
-    const price = exceptionPrices.get(a.id) ?? tierPrice;
-    setCart(c => [...c, {
+  const appendCartLine = (a: ArticleLite, price: number, tierName?: string) => {
+    setCart(previous => [...previous, {
       article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
-      quantity: 1, unit_price: price, discount: 0,
-      stock_available: a.stock_available, purchase_cost: a.purchase_price,
-      tier_name: tierName, ipm_eligible: a.ipm_eligible,
+      quantity: 1, unit_price: price, discount: 0, stock_available: a.stock_available,
+      purchase_cost: a.purchase_price, tier_name: tierName, ipm_eligible: a.ipm_eligible,
+      track_stock: a.track_stock,
     }]);
     setTierPickerOpen(false);
     setTierPickerArticle(null);
   };
 
+  const addToCartWithTier = (a: ArticleLite, tierName: string, tierPrice: number) => {
+    appendCartLine(a, exceptionPrices.get(a.id) ?? tierPrice, tierName || undefined);
+  };
+
   const updateQty = (id: string, delta: number) => {
     const allowNeg = !!(currentSite as any)?.allow_negative_stock;
-    const art = articles.find(a => a.id === id);
-    const tracked = art ? tracksStock(art) : true;
     setCart(c => c.flatMap(i => {
       if (i.article_id !== id) return [i];
       const q = i.quantity + delta;
       if (q <= 0) return [];
-      if (!allowNeg && tracked && q > i.stock_available) { error(`Stock insuffisant (${i.stock_available})`); return [i]; }
+      if (!allowNeg && i.track_stock !== false && q > i.stock_available) { error(`Stock insuffisant (${i.stock_available})`); return [i]; }
       return [{ ...i, quantity: q }];
     }));
   };
 
   const setQty = (id: string, n: number) => {
     const allowNeg = !!(currentSite as any)?.allow_negative_stock;
-    const art = articles.find(a => a.id === id);
-    const tracked = art ? tracksStock(art) : true;
-    const val = (allowNeg || !tracked) ? n : Math.min(n, (cart.find(i => i.article_id === id)?.stock_available ?? n));
-    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: val } : i));
+    setCart(c => c.map(i => i.article_id === id
+      ? { ...i, quantity: allowNeg || i.track_stock === false ? n : Math.min(n, i.stock_available) }
+      : i));
   };
 
   const finalizeQty = (id: string) => {
@@ -1751,7 +1546,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     if (field === 'qty') {
       const item = cart.find(i => i.article_id === selectedLineId);
-      if (!allowNeg && item && tracksStock(articles.find(a => a.id === selectedLineId)!) && value > (item.stock_available ?? value)) {
+      if (!allowNeg && item && item.track_stock !== false && value > (item.stock_available ?? value)) {
         error(`Stock insuffisant (${item.stock_available})`);
         return;
       }
@@ -1804,11 +1599,28 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const resumeHeld = async (h: HeldCart) => {
+    if (!tenantId || !stockSiteId || stockSourceLoading || productActionRequest.current) return;
     if (cart.length > 0 && !confirm('Remplacer le panier actuel par ce ticket en attente ?')) return;
-    setCart(h.cart); setCustomer(h.customer); setDiscount(h.discount);
-    setHeldCarts(held => held.filter(x => x.id !== h.id));
-    setHoldOpen(false);
-    await supabase.from('held_carts').delete().eq('id', h.id);
+    const controller = new AbortController();
+    productActionRequest.current = controller;
+    try {
+      const articles = await fetchPosArticlesById(tenantId, catalogSiteId, stockSiteId, h.cart.map(item => item.article_id), controller.signal);
+      if (controller.signal.aborted) return;
+      const byId = new Map(articles.map(article => [article.id, article]));
+      setCart(h.cart.map(item => ({
+        ...item, track_stock: byId.get(item.article_id)?.track_stock ?? item.track_stock,
+        stock_available: byId.get(item.article_id)?.stock_available ?? 0,
+      })));
+      setCustomer(h.customer);
+      setDiscount(h.discount);
+      setHeldCarts(held => held.filter(x => x.id !== h.id));
+      setHoldOpen(false);
+      await supabase.from('held_carts').delete().eq('id', h.id);
+    } catch {
+      if (!controller.signal.aborted) error('Impossible de vérifier le stock du ticket en attente');
+    } finally {
+      if (productActionRequest.current === controller) productActionRequest.current = null;
+    }
   };
 
   const deleteHeld = async (id: string) => {
@@ -1830,7 +1642,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (!tenant || !currentSite || !profile) return;
     if (permsPending) { error(permsPending); return; }
     if (!can('pos_open_session')) { error('Vous n\'avez pas la permission d\'ouvrir une session'); return; }
-    if (posCashCtxError) { error(posCashCtxError); return; }
+    if (!posCashCtx || posCashCtxError) { error(posCashCtxError || 'Vérification de la caisse en cours'); return; }
     if (posCashCtx?.multi_enabled) {
       if (!selectedRegisterId) { error('Choisissez une caisse avant de l’ouvrir'); return; }
       if (!openIdemRef.current.key || openIdemRef.current.registerId !== selectedRegisterId) {
@@ -1857,7 +1669,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       return;
     }
     setOpeningSubmitting(true);
-    const { data: existing } = await supabase.from('cash_sessions').select('id, opening_amount, opened_at').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1);
+    const { data: existing, error: checkError } = await supabase.from('cash_sessions').select('*').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1);
+    if (checkError) { setOpeningSubmitting(false); error('Impossible de vérifier la session ouverte'); return; }
     if (existing && existing.length > 0) {
       setSession(existing[0]); setScreen('pos'); success('Session existante récupérée');
       setOpeningSubmitting(false);
@@ -1880,6 +1693,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // ─── Payment ──────────────────────────────────────────────────────────────
 
   const openPayment = () => {
+    if (stockSourceLoading) return;
+    if (!refData) { error('Modes de règlement en cours de chargement'); return; }
     if (cart.length === 0) { error('Panier vide'); return; }
     if (!session) { error('Ouvrez d\'abord la caisse'); return; }
     // Pre-select Espèces (cash) as the default payment method
@@ -2184,34 +1999,47 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setWebOrderItems((data || []) as WebOrderItem[]);
   };
 
-  const loadToCartFromWebOrder = () => {
-    if (!webOrderDetail || webOrderItems.length === 0) return;
+  const loadToCartFromWebOrder = async () => {
+    if (!tenantId || !stockSiteId || !webOrderDetail || webOrderItems.length === 0 || stockSourceLoading || productActionRequest.current) return;
     if (cart.length > 0 && !confirm('Remplacer le panier actuel par cette commande web ?')) return;
-    const newCart: CartItem[] = [];
-    const missing: string[] = [];
-    for (const it of webOrderItems) {
-      const a = articles.find(x => x.id === it.article_id);
-      if (!a) { missing.push(it.article_name); continue; }
-      const allowNeg = !!(currentSite as any)?.allow_negative_stock;
-      if (!allowNeg && tracksStock(a) && a.stock_available < it.quantity) {
-        error(`Stock insuffisant pour "${a.name}" (${a.stock_available} dispo / ${it.quantity} requis)`);
-        return;
+    const controller = new AbortController();
+    productActionRequest.current = controller;
+    setTransforming(true);
+    try {
+      const ids = webOrderItems.flatMap(item => item.article_id ? [item.article_id] : []);
+      const articles = await fetchPosArticlesById(tenantId, catalogSiteId, stockSiteId, ids, controller.signal);
+      if (controller.signal.aborted) return;
+      const newCart: CartItem[] = [];
+      const missing: string[] = [];
+      for (const it of webOrderItems) {
+        const a = articles.find(x => x.id === it.article_id);
+        if (!a) { missing.push(it.article_name); continue; }
+        const allowNeg = !!(currentSite as any)?.allow_negative_stock;
+        if (!allowNeg && tracksStock(a) && a.stock_available < it.quantity) {
+          error(`Stock insuffisant pour "${a.name}" (${a.stock_available} dispo / ${it.quantity} requis)`);
+          return;
+        }
+        newCart.push({
+          article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
+          quantity: it.quantity, unit_price: Number(it.unit_price), discount: 0,
+          stock_available: a.stock_available, purchase_cost: a.purchase_price, track_stock: a.track_stock, ipm_eligible: a.ipm_eligible,
+        });
       }
-      newCart.push({
-        article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
-        quantity: it.quantity, unit_price: Number(it.unit_price), discount: 0,
-        stock_available: a.stock_available, purchase_cost: a.purchase_price,
-      });
+      if (missing.length > 0) { error(`Articles introuvables: ${missing.join(', ')}`); return; }
+      setCart(newCart);
+      setDiscount(0);
+      setCustomer(null);
+      setWebOrdersOpen(false);
+      setMobileCartOpen(true);
+      success(`Commande ${webOrderDetail.order_number} chargée. Validez le paiement pour finaliser.`);
+      // Remember pending web order id for post-sale linking
+      (window as any).__pendingWebOrderId = webOrderDetail.id;
+    } catch {
+      if (!controller.signal.aborted) error('Impossible de vérifier les articles de cette commande');
+    } finally {
+      if (productActionRequest.current === controller) productActionRequest.current = null;
+      setTransforming(false);
     }
-    if (missing.length > 0) { error(`Articles introuvables: ${missing.join(', ')}`); return; }
-    setCart(newCart);
-    setDiscount(0);
-    setCustomer(null);
-    setWebOrdersOpen(false);
-    setMobileCartOpen(true);
-    success(`Commande ${webOrderDetail.order_number} chargée. Validez le paiement pour finaliser.`);
-    // Remember pending web order id for post-sale linking
-    (window as any).__pendingWebOrderId = webOrderDetail.id;
   };
 
   const markWebOrderDelivered = async (o: WebOrder) => {
@@ -2316,6 +2144,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         otherSession={posCashCtx?.other_session || null}
         notice={multiNotice}
       />
+      {posCashCtxError && (
+        <button type="button" onClick={() => { setLoadingData(true); loadCashContext(); }} className="w-full mt-2 py-2 text-xs font-medium underline">Réessayer</button>
+      )}
       {canSupervise && (
         <button type="button" onClick={() => setSupervising(true)} className="w-full mt-2 inline-flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-neutral-700 hover:text-black hover:underline underline-offset-4 transition-colors">
           <Eye className="w-3.5 h-3.5" />Superviser une caisse
@@ -2327,7 +2158,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     return <CashSupervision tenantId={tenant.id} methods={methods} customers={customers}
       onExit={() => { setSupervising(false); load(); }} />;
   }
-  const openDisabled = !!posCashCtxError || (multiCash && (
+  const openDisabled = !posCashCtx || !!posCashCtxError || (multiCash && (
     !!multiNotice || !!posCashCtx?.other_session || !selectedRegisterId
     || multiRegisters.find(r => r.id === selectedRegisterId)?.status === 'busy'
     || !!multiRegisters.find(r => r.id === selectedRegisterId)?.locked
@@ -2393,6 +2224,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               value={customer?.id || ''}
               onChange={v => setCustomer(customers.find(c => c.id === v) || null)}
               placeholder="Client comptoir"
+              disabled={customersStatus === 'loading'}
               maxResults={50}
             />
           </div>
@@ -2411,6 +2243,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             </button>
           )}
         </div>
+        {customersStatus === 'error' && (
+          <button type="button" className="mt-1 text-xs underline" onClick={() => { setCustomersStatus('loading'); refreshCustomers(value => value + 1); }}>
+            Clients indisponibles · Réessayer
+          </button>
+        )}
         {customer && (() => {
           const limit = Number((customer as any).credit_limit || 0);
           const balance = Number((customer as any).balance || 0);
@@ -2832,9 +2669,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <div className="p-2 sm:p-3 w-full max-w-full mx-auto">
-            {filtered.length === 0 ? (
+            {!catalogReady ? (
+              <p role="status" className="py-10 text-center text-xs text-[var(--w-text-muted)]">Chargement des articles…</p>
+            ) : catalogFailed ? (
+              <p role="alert" className="py-10 text-center text-xs text-[var(--w-text)]">
+                Catalogue indisponible.{' '}
+                <button type="button" className="underline" onClick={() => { setCatalog({ key: '', articles: [] }); refreshCatalog(value => value + 1); }}>Réessayer</button>
+              </p>
+            ) : filtered.length === 0 ? (
               <div>
-                <EmptyState icon={Package} title="Aucun article" description="Créez des articles dans le catalogue." />
+                <EmptyState icon={Package} title="Aucun article" description={searchTerm || categoryId ? 'Essayez un autre nom, une autre référence ou une autre catégorie.' : 'Créez des articles dans le catalogue.'} />
                 <div className="mt-3 flex justify-center">
                   <QuickCreateButton label="Créer un article" onClick={() => { setQuickArticleName(search); setQuickArticleOpen(true); }} />
                 </div>
@@ -2844,8 +2688,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 {filtered.map(a => {
                   const allowNeg = !!(currentSite as any)?.allow_negative_stock;
                   const tracked = tracksStock(a);
-                  const out = !allowNeg && tracked && a._stockLoaded && a.stock_available <= 0;
-                  const low = tracked && a._stockLoaded && a.stock_available > 0 && a.stock_available <= 3;
+                  const out = !allowNeg && tracked && a.stock_available <= 0;
+                  const low = tracked && a.stock_available > 0 && a.stock_available <= 3;
                   return (
                     <button key={a.id} onClick={() => addToCart(a)} disabled={out}
                       className="product-card disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2853,8 +2697,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <div className="relative aspect-[4/3] overflow-hidden" style={{ background: '#FFFFFF', margin: 0, padding: 0 }}>
                         <PosCardImage key={a.image_url || ''} url={a.image_url} alt={a.name} />
                         {tracked && can('view_stock_levels') && (
-                          <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${!a._stockLoaded ? 'bg-neutral-300 text-white' : a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
-                            {!a._stockLoaded ? '...' : a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
+                          <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
+                            {a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
                           </span>
                         )}
                       </div>
@@ -2874,8 +2718,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 {filtered.map(a => {
                   const allowNeg = !!(currentSite as any)?.allow_negative_stock;
                   const tracked = tracksStock(a);
-                  const out = !allowNeg && tracked && a._stockLoaded && a.stock_available <= 0;
-                  const stockLabel = tracked && can('view_stock_levels') ? (!a._stockLoaded ? '...' : a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup') : `${a.stock_available}`) : '';
+                  const out = !allowNeg && tracked && a.stock_available <= 0;
+                  const stockLabel = tracked && can('view_stock_levels') ? (a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup') : `${a.stock_available}`) : '';
                   return (
                     <button
                       key={a.id}
@@ -2885,7 +2729,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     >
                       {/* Desktop: single row with vertical separators */}
                       <div className="hidden sm:flex items-center gap-2">
-                        <span className={`text-[11px] font-bold num tabular-nums w-12 shrink-0 text-center ${!a._stockLoaded ? 'text-neutral-300' : a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-700'}`}>
+                        <span className={`text-[11px] font-bold num tabular-nums w-12 shrink-0 text-center ${a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-700'}`}>
                           {stockLabel}
                         </span>
                         <span className="w-px h-4 bg-neutral-200 shrink-0" />
@@ -2897,7 +2741,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <div className="sm:hidden">
                         <MarqueeText className="text-[12px] font-semibold text-neutral-900">{a.name}</MarqueeText>
                         <div className="flex items-center justify-between mt-0.5">
-                          <span className={`text-[10px] font-bold num ${!a._stockLoaded ? 'text-neutral-300' : a.stock_available <= 0 ? 'text-red-500' : 'text-neutral-500'}`}>
+                          <span className={`text-[10px] font-bold num ${a.stock_available <= 0 ? 'text-red-500' : 'text-neutral-500'}`}>
                             {stockLabel && `Stock: ${stockLabel}`}
                           </span>
                           <span className="text-[12px] font-bold text-neutral-900 num">{formatFCFA(a.sale_price)}</span>
@@ -2949,17 +2793,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {autoMode && <VehicleArticlePicker
         open={vehiclePickerOpen}
         onClose={() => setVehiclePickerOpen(false)}
-        onSelect={a => {
-          const article: ArticleLite = {
-            id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: (a as any).oem_ref || '',
-            sale_price: a.sale_price, purchase_price: a.purchase_price,
-            stock_available: a.stock_available,
-            category_id: null,
-            image_url: null,
-            ipm_eligible: true,
-            track_stock: (a as any).track_stock !== false,
-          };
-          addToCart(article);
+        onSelect={async a => {
+          if (!tenantId || !stockSiteId || stockSourceLoading || productActionRequest.current) return;
+          const controller = new AbortController();
+          productActionRequest.current = controller;
+          try {
+            const [article] = await fetchPosArticlesById(tenantId, catalogSiteId, stockSiteId, [a.id], controller.signal);
+            if (controller.signal.aborted) return;
+            productActionRequest.current = null;
+            if (article) await addToCart(article);
+            else error('Cet article est indisponible dans ce magasin');
+          } catch {
+            if (!controller.signal.aborted) error('Impossible de vérifier le stock de cet article');
+          } finally {
+            if (productActionRequest.current === controller) productActionRequest.current = null;
+          }
         }}
         priceMode="sale"
         tenantId={tenant!.id}
@@ -3319,9 +3167,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       <QuickCreateArticleModal
         open={quickArticleOpen}
         onClose={() => setQuickArticleOpen(false)}
-        onCreated={(a) => {
-          setArticles(prev => [{ ...a, stock_available: 0, track_stock: a.track_stock !== false } as ArticleLite, ...prev]);
-        }}
+        onCreated={() => refreshCatalog(value => value + 1)}
         initialName={quickArticleName}
       />
       <QuickCreateCustomerModal
