@@ -1,0 +1,4 @@
+# Use the isolated Supabase project for the subscription payments preview.
+[context."codex/waarwi-subscription-payments".environment]
+  VITE_SUPABASE_URL = "https://awrhkromycuzbqfycolc.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF3cmhrcm9teWN1emJxZnljb2xjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzMTcyNjMsImV4cCI6MjExMDg5MzI2M30.tFdMaL1Ot_6qrmhark4ZJBkHpsQ3J5syrrr6ahb4x7s"

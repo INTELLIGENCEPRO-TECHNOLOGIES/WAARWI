@@ -87,15 +87,24 @@ FOR EACH ROW EXECUTE FUNCTION public._trg_cs_prepay_session_immutable();
 
 CREATE OR REPLACE FUNCTION pg_temp.mc1d2_patch(p_sig regprocedure, p_old text, p_new text, p_expected int)
 RETURNS void LANGUAGE plpgsql AS $p$
-DECLARE d text; n int;
+DECLARE d text; n int; v_pattern text;
 BEGIN
 d := pg_get_functiondef(p_sig);
 IF position(p_new in d) > 0 AND p_old <> p_new AND position(p_old in d) = 0 THEN RETURN; END IF;
 n := (length(d) - length(replace(d, p_old, ''))) / length(p_old);
-IF n <> p_expected THEN
-RAISE EXCEPTION 'mc1d2: % occurrence(s) au lieu de % dans %', n, p_expected, p_sig;
+IF n = p_expected THEN
+  EXECUTE replace(d, p_old, p_new);
+  RETURN;
 END IF;
-EXECUTE replace(d, p_old, p_new);
+
+-- Match the same SQL anchor when its continuation lines are indented.
+v_pattern := regexp_replace(p_old, $re$([\\.^$|()\[\]{}*+?])$re$, $sub$\\\1$sub$, 'g');
+v_pattern := replace(v_pattern, chr(10), chr(10) || '[[:blank:]]*');
+n := regexp_count(d, v_pattern);
+IF n <> p_expected THEN
+  RAISE EXCEPTION 'mc1d2: % occurrence(s) au lieu de % dans %', n, p_expected, p_sig;
+END IF;
+EXECUTE regexp_replace(d, v_pattern, replace(p_new, chr(92), repeat(chr(92), 2)), 'g');
 END;
 $p$;
 

@@ -407,6 +407,11 @@ DECLARE
   v_err_msg text;
   i int;
 BEGIN
+  -- Apply this data repair only where the original tenant exists.
+  IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = v_tenant) THEN
+    RETURN;
+  END IF;
+
   -- Get backup payload
   SELECT payload INTO v_payload FROM public.tenant_backups
   WHERE id = v_backup_id AND tenant_id = v_tenant;

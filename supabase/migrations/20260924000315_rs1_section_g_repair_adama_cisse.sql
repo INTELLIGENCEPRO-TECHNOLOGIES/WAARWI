@@ -67,6 +67,11 @@ DECLARE
   v_new_status text;
   v_sale_total numeric;
 BEGIN
+  -- Apply this data repair only where the original tenant exists.
+  IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = v_tenant) THEN
+    RETURN;
+  END IF;
+
   -- Step 1: Delete ghost sale_payments
   DELETE FROM sale_payments WHERE id = ANY(v_ghost_sp_ids) AND tenant_id = v_tenant;
   GET DIAGNOSTICS v_deleted = ROW_COUNT;

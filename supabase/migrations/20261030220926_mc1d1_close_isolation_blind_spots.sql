@@ -263,6 +263,7 @@ DECLARE
   v_def text;
   v_n int;
   v_pos int;
+  v_pattern text;
 BEGIN
   FOR v_patch IN
     SELECT * FROM (VALUES
@@ -336,11 +337,17 @@ $r$,
       IF v_n < 1 THEN RAISE EXCEPTION 'MC1-D.1 patch % : motif absent dans %', v_patch.ord, v_patch.fn; END IF;
       v_pos := position(v_patch.src IN v_def);
       v_def := overlay(v_def placing v_patch.dst from v_pos for length(v_patch.src));
+    ELSIF v_n = v_patch.expected THEN
+      v_def := replace(v_def, v_patch.src, v_patch.dst);
     ELSE
+      -- Match the same SQL anchor when its continuation lines are indented.
+      v_pattern := regexp_replace(v_patch.src, $re$([\\.^$|()\[\]{}*+?])$re$, $sub$\\\1$sub$, 'g');
+      v_pattern := replace(v_pattern, chr(10), chr(10) || '[[:blank:]]*');
+      v_n := regexp_count(v_def, v_pattern);
       IF v_n <> v_patch.expected THEN
         RAISE EXCEPTION 'MC1-D.1 patch % : % occurrence(s) au lieu de % dans %', v_patch.ord, v_n, v_patch.expected, v_patch.fn;
       END IF;
-      v_def := replace(v_def, v_patch.src, v_patch.dst);
+      v_def := regexp_replace(v_def, v_pattern, replace(v_patch.dst, chr(92), repeat(chr(92), 2)), 'g');
     END IF;
     EXECUTE v_def;
   END LOOP;

@@ -47,6 +47,11 @@ DECLARE
   v_target_balance numeric := 70000;
   v_credit_used numeric;
 BEGIN
+  -- Apply this data repair only where the original tenant exists.
+  IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = v_tenant_id) THEN
+    RETURN;
+  END IF;
+
   -- Verify pre-conditions
   SELECT balance INTO v_current_balance FROM public.customers
   WHERE id = v_cust_id AND tenant_id = v_tenant_id;

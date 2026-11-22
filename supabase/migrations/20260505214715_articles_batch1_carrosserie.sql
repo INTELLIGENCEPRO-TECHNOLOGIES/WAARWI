@@ -41,6 +41,11 @@ DECLARE
   m_colorado uuid; m_captiva uuid;
   seq int := 1;
 BEGIN
+  -- This import targets an existing tenant.
+  IF tid IS NULL THEN
+    RETURN;
+  END IF;
+
   -- Récupère catégories
   SELECT id INTO c_pcav FROM part_categories WHERE tenant_id=tid AND code='PCH-AV' LIMIT 1;
   SELECT id INTO c_pcar FROM part_categories WHERE tenant_id=tid AND code='PCH-AR' LIMIT 1;

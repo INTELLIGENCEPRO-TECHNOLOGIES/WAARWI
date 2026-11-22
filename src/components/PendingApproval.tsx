@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { LogOut, Building2, Phone, Headphones, RefreshCw, Clock, CheckCircle2, XCircle, AlertTriangle, CreditCard, MessageCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
+import { SubscriptionPaymentPanel } from './SubscriptionPaymentPanel';
 
 const STEPS = [
   { key: 'created', label: 'Compte créé', desc: 'Votre compte a été créé.' },
@@ -54,7 +55,7 @@ export function PendingApproval() {
   const whatsapp = (tenant as any)?.whatsapp_phone;
 
   return (
-    <div className="h-screen bg-white flex flex-col overflow-hidden">
+    <div className="min-h-[100dvh] bg-[var(--w-surface)] flex flex-col">
 
       {/* TOP HEADER */}
       <header className="shrink-0 flex flex-col items-center pt-10 pb-4 px-4">
@@ -75,7 +76,7 @@ export function PendingApproval() {
       </header>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 min-h-0">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-5">
         <div className="w-full max-w-md md:max-w-lg">
 
           {rejected ? (
@@ -160,6 +161,8 @@ export function PendingApproval() {
               </div>
             </div>
           )}
+
+          {!rejected && <div className="mt-6"><SubscriptionPaymentPanel /></div>}
 
           {/* PROGRESS STEPS — clean minimal */}
           <div className="mt-10">

@@ -14,11 +14,12 @@ import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
+import { AdminSubscriptionPayments } from '../components/AdminSubscriptionPayments';
 import { CentralizedBackups } from '../components/CentralizedBackups';
 import { LandingConfigSection as LandingConfigSectionNew } from '../components/LandingConfigSection';
 import { LOGIN_ICON_MAP, DEFAULT_LOGIN_MODULES, type LoginModule, type TextAccent } from '../lib/loginConfig';
 
-type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'landing' | 'releases' | 'backups';
+type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'subscription_payments' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'landing' | 'releases' | 'backups';
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const doFetch = async (accessToken: string) => {
@@ -59,11 +60,17 @@ const SEV = {
 
 const sidebarGroups = [
   {
-    label: 'PLATEFORME',
+    label: 'PILOTAGE',
     items: [
       { k: 'overview' as Section, l: 'Vue d\'ensemble', icon: Gauge },
-      { k: 'tenants' as Section, l: 'Tenants', icon: Building2 },
-      { k: 'subscriptions' as Section, l: 'Abonnements', icon: CircleDollarSign },
+      { k: 'tenants' as Section, l: 'Entreprises', icon: Building2 },
+    ],
+  },
+  {
+    label: 'ABONNEMENTS',
+    items: [
+      { k: 'subscriptions' as Section, l: 'Échéances', icon: CircleDollarSign },
+      { k: 'subscription_payments' as Section, l: 'Encaissements', icon: Receipt },
       { k: 'plans' as Section, l: 'Plans & tarifs', icon: Layers },
     ],
   },
@@ -113,6 +120,7 @@ export function PlatformAdmin() {
                 return (
                   <button
                     key={item.k}
+                    aria-current={active ? 'page' : undefined}
                     onClick={() => { setSection(item.k); setSidebarOpen(false); }}
                     className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-[7px] text-[13px] transition-colors border-l-2 ${
                       active
@@ -139,7 +147,7 @@ export function PlatformAdmin() {
 
       <main className="flex-1 min-w-0 bg-[var(--w-surface)]">
         <header className="sticky top-0 z-30 h-14 bg-[var(--w-surface)] border-b border-[var(--w-separator)] px-5 sm:px-8 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 text-[var(--w-text-sec)] hover:text-[var(--w-text)]">
+          <button type="button" aria-label="Ouvrir la navigation" onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 text-[var(--w-text-sec)] hover:text-[var(--w-text)]">
             <Layers className="w-5 h-5" />
           </button>
           <h1 className="text-[15px] font-semibold text-[var(--w-text)] flex-1 min-w-0">
@@ -156,10 +164,11 @@ export function PlatformAdmin() {
         </header>
 
         <div className="p-5 sm:p-8">
-          {section === 'overview' && <OverviewSection />}
+          {section === 'overview' && <OverviewSection onNavigate={setSection} />}
           {section === 'tenants' && <TenantsSection />}
           {section === 'plans' && <PlansSection />}
           {section === 'subscriptions' && <SubscriptionsSection />}
+          {section === 'subscription_payments' && <AdminSubscriptionPayments />}
           {section === 'messages' && <MessagesSection />}
           {section === 'login_config' && <LoginConfigSection />}
           {section === 'landing' && <LandingConfigSectionNew />}
@@ -174,7 +183,7 @@ export function PlatformAdmin() {
 }
 
 /* ============== OVERVIEW ============== */
-function OverviewSection() {
+function OverviewSection({ onNavigate }: { onNavigate: (section: Section) => void }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { error } = useToast();
@@ -205,10 +214,22 @@ function OverviewSection() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard icon={Building2} label="Tenants actifs" value={data.tenants_active} sub={`${data.tenants_total} total`} />
-        <KpiCard icon={Wallet} label="MRR" value={formatCompactFCFA(data.mrr)} sub="Revenu mensuel" />
+        <KpiCard icon={Wallet} label="Revenu mensuel prévu" value={formatCompactFCFA(data.mrr)} sub="Abonnements actifs" />
         <KpiCard icon={Users} label="Utilisateurs" value={data.users_total} sub="Tous tenants" />
         <KpiCard icon={AlertTriangle} label="Alertes" value={data.tenants_suspended + (data.expiring_soon?.length || 0)} sub={hasAlerts ? 'Actions requises' : 'Aucune alerte'} alert={hasAlerts} />
       </div>
+
+      <nav aria-label="Gestion des abonnements" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-y border-[var(--w-separator)]">
+        <button type="button" onClick={() => onNavigate('tenants')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-[var(--w-text)] hover:underline">
+          <Building2 className="h-4 w-4" /> Inscriptions
+        </button>
+        <button type="button" onClick={() => onNavigate('subscriptions')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-[var(--w-text)] hover:underline">
+          <Clock className="h-4 w-4" /> Échéances
+        </button>
+        <button type="button" onClick={() => onNavigate('subscription_payments')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-[var(--w-text)] hover:underline">
+          <Receipt className="h-4 w-4" /> Encaissements
+        </button>
+      </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Plan distribution */}
@@ -544,10 +565,16 @@ function TenantsSection() {
                         {t.last_active_at && <><span className="text-[var(--w-text-disabled)] mx-1.5">|</span>Actif {formatDate(t.last_active_at)}</>}
                       </div>
                       {/* Row 3: Pending extra info */}
-                      {isPending && (t.city || t.selected_plan_code) && (
+                      {isPending && (t.city || t.selected_plan_code || t.first_payment) && (
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                           {t.city && <span className="text-[10px] text-[var(--w-text-sec)]">Ville: {t.city}</span>}
                           {t.selected_plan_code && <span className="text-[10px] text-[#2563EB] font-medium">Plan souhaité: {t.selected_plan_code}</span>}
+                          {t.first_payment?.state === 'paid' && (
+                            <span className="text-[11px] font-semibold text-emerald-700">Payé · {formatFCFA(t.first_payment.amount)}</span>
+                          )}
+                          {['creating', 'pending'].includes(t.first_payment?.state) && (
+                            <span className="text-[11px] font-medium text-amber-700">Paiement en attente</span>
+                          )}
                         </div>
                       )}
                       {/* Expiration date if exists */}
@@ -1159,7 +1186,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                         <input type="date" value={subForm.ends_at} onChange={e => setSubForm({ ...subForm, ends_at: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                       </div>
                       <label className="sm:col-span-2 flex items-center gap-2 text-xs text-[var(--w-text)] cursor-pointer">
-                        <input type="checkbox" checked={subForm.auto_renew} onChange={e => setSubForm({ ...subForm, auto_renew: e.target.checked })} className="rounded border-[var(--w-separator)]" />
+                        <input type="checkbox" checked={!tenant.subscription_billing_online && subForm.auto_renew} disabled={tenant.subscription_billing_online} onChange={e => setSubForm({ ...subForm, auto_renew: e.target.checked })} className="rounded border-[var(--w-separator)]" />
                         Renouvellement automatique
                       </label>
                       <div className="sm:col-span-2">

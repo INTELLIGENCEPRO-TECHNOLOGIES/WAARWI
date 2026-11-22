@@ -734,6 +734,11 @@ GRANT EXECUTE ON FUNCTION public.comptabiliser_depense(uuid) TO service_role;
 DO $$
 DECLARE v_count int; v_total numeric;
 BEGIN
+  -- The original data correction requires a populated database.
+  IF NOT EXISTS (SELECT 1 FROM public.tenants) THEN
+    RETURN;
+  END IF;
+
   SELECT count(*), COALESCE(sum(amount),0) INTO v_count, v_total
     FROM cash_movements WHERE supplier_id IS NOT NULL AND accounting_status = 'not_accounted';
   IF v_count <> 4 OR v_total <> 1510000 THEN

@@ -20,6 +20,8 @@ export type Tenant = {
   a4_header_config?: A4HeaderConfig | null;
   enabled_modules?: string[];
   approval_status?: string;
+  owner_user_id?: string | null;
+  subscription_billing_online?: boolean;
   slogan?: string;
   website?: string;
 };

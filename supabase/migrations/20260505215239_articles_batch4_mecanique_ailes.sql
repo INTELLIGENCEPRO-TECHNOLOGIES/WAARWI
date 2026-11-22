@@ -48,6 +48,11 @@ DECLARE
   -- Chevrolet
   m_colorado uuid; m_captiva uuid; m_cruze uuid;
 BEGIN
+  -- This import targets an existing tenant.
+  IF tid IS NULL THEN
+    RETURN;
+  END IF;
+
   SELECT id INTO c_flair FROM part_categories WHERE tenant_id=tid AND code='Filtre à air' LIMIT 1;
   IF c_flair IS NULL THEN SELECT id INTO c_flair FROM part_categories WHERE tenant_id=tid AND name='Filtre à air' LIMIT 1; END IF;
   SELECT id INTO c_flhui FROM part_categories WHERE tenant_id=tid AND name='Filtre à huile' LIMIT 1;
