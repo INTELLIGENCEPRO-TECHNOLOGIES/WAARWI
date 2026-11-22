@@ -11,6 +11,7 @@ import { Dashboard } from './pages/Dashboard';
 import { TenantMessagePopup } from './components/TenantMessagePopup';
 import { MultiCashAnnouncement } from './components/MultiCashAnnouncement';
 import { PendingApproval } from './components/PendingApproval';
+import { SubscriptionPaymentPanel, SubscriptionPaymentReturn, useCanPaySubscription } from './components/SubscriptionPaymentPanel';
 import UpdateNotification from './components/UpdateNotification';
 import { useToast } from './context/ToastContext';
 import { installDraftFlushListeners, setDraftErrorHandler, hasAnyDraft, hasPendingWrite, flushAllPendingDrafts } from './lib/draftRecovery';
@@ -18,7 +19,7 @@ import { installDraftFlushListeners, setDraftErrorHandler, hasAnyDraft, hasPendi
 function SuspendedTenant() {
   const { tenant, signOut } = useApp();
   return (
-    <div className="h-screen bg-white flex flex-col items-center justify-center px-4">
+    <div className="min-h-[100dvh] bg-[var(--w-surface)] flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-md text-center space-y-5">
         <div className="flex justify-center">
           <div className="w-16 h-16 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center">
@@ -30,6 +31,7 @@ function SuspendedTenant() {
           <p className="text-sm text-slate-600 mt-2">Votre compte a été suspendu. Vous n'avez plus accès à l'application.</p>
           <p className="text-xs text-slate-400 mt-1">Veuillez contacter l'équipe Waarwi pour plus d'informations.</p>
         </div>
+        <SubscriptionPaymentPanel />
         <div className="flex flex-col items-center gap-3 pt-4">
           <button onClick={signOut} className="flex items-center gap-2.5 px-8 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-sm font-bold transition-all">
             <LogOut className="w-4 h-4" />Se déconnecter
@@ -313,6 +315,11 @@ function Inner() {
   const { loading, user, tenant, profile } = useApp();
   const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
+  const canPaySubscription = useCanPaySubscription();
+  const [paymentReturn, setPaymentReturn] = useState(() => {
+    const reference = new URLSearchParams(window.location.search).get('subscription_payment');
+    return reference && /^[0-9a-f-]{36}$/i.test(reference) ? reference : null;
+  });
   const [route, setRoute] = useState<Route>('dashboard');
   const [billingMounted, setBillingMounted] = useState(false);
   useEffect(() => { if (route === 'billing') setBillingMounted(true); }, [route]);
@@ -357,6 +364,15 @@ function Inner() {
 
   if (!user) return <Auth />;
   if (!tenant && !isSuperAdmin) return <Auth />;
+
+  if (paymentReturn && canPaySubscription) {
+    return <SubscriptionPaymentReturn paymentId={paymentReturn} onClose={() => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('subscription_payment');
+      window.history.replaceState(window.history.state, '', url);
+      setPaymentReturn(null);
+    }} />;
+  }
 
   const approvalStatus = (tenant as any)?.approval_status;
   if (tenant && !isSuperAdmin && approvalStatus && approvalStatus !== 'approved') {

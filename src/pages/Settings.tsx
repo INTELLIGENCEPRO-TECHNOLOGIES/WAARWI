@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight, Monitor } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
+import { SubscriptionPaymentPanel } from '../components/SubscriptionPaymentPanel';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { PermissionsTab } from '../components/PermissionsTab';
@@ -2396,7 +2397,7 @@ function SubscriptionTab() {
           <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold text-red-800">Votre abonnement a expire.</p>
-            <p className="text-xs text-red-600 mt-0.5">Veuillez contacter l'equipe Waarwi pour renouveler votre abonnement.</p>
+            <p className="text-xs text-red-600 mt-0.5">Vous pouvez régler votre échéance en ligne ou contacter l’équipe Waarwi.</p>
           </div>
         </div>
       )}
@@ -2419,7 +2420,7 @@ function SubscriptionTab() {
           </div>
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Renouvellement</div>
-            <div className="text-sm font-semibold text-neutral-900">{autoRenew ? 'Auto' : 'Manuel'}</div>
+            <div className="text-sm font-semibold text-neutral-900">{tenant.subscription_billing_online ? 'À chaque échéance' : autoRenew ? 'Auto' : 'Manuel'}</div>
           </div>
           {(subStart || (subStatus !== 'trial_active' && trialEnd)) && (
             <div>
@@ -2439,6 +2440,8 @@ function SubscriptionTab() {
           )}
         </div>
       </section>
+
+      <SubscriptionPaymentPanel />
 
       {/* Trial info */}
       {subStatus === 'trial_active' && trialEnd && (

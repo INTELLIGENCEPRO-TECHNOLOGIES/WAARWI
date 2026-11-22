@@ -1,4 +1,3 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
@@ -148,7 +147,7 @@ Deno.serve(async (req: Request) => {
     const isSuperAdmin = callerProfile.role === "super_admin";
     const isAdmin = callerProfile.role === "admin" || isSuperAdmin;
 
-    const logEvent = async (a: string, tenantId: string | null, payload: Record<string, unknown> = {}) => {
+    const logEvent = async (a: string, tenantId: string | null, payload: Record<string, unknown> | null = {}) => {
       await admin.from("platform_events").insert({
         actor_id: caller.id,
         actor_email: caller.email || "",
@@ -377,7 +376,19 @@ Deno.serve(async (req: Request) => {
       const { data } = await admin.from("tenants")
         .select("*, profiles(id,email,full_name,role,is_active), tenant_subscriptions(id,plan_code,status,amount,billing_cycle,started_at,ends_at,auto_renew)")
         .order("created_at", { ascending: false });
-      return json({ tenants: data || [] });
+      const tenants = data || [];
+      const pendingIds = tenants.filter(tenant => tenant.approval_status === "pending").map(tenant => tenant.id);
+      if (!pendingIds.length) return json({ tenants });
+
+      const { data: payments } = await admin.from("tenant_subscription_payments")
+        .select("tenant_id,state,amount").in("tenant_id", pendingIds)
+        .eq("environment", "prod").eq("purpose", "initial")
+        .order("created_at", { ascending: false });
+      const latestByTenant = new Map<string, { state: string; amount: number }>();
+      for (const payment of payments || []) {
+        if (!latestByTenant.has(payment.tenant_id)) latestByTenant.set(payment.tenant_id, payment);
+      }
+      return json({ tenants: tenants.map(tenant => ({ ...tenant, first_payment: latestByTenant.get(tenant.id) })) });
     }
 
     if (action === "tenant_detail") {
@@ -407,7 +418,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === "suspend_tenant") {
       const { tenant_id, reason } = body;
-      const { error } = await admin.from("tenants").update({ is_active: false, status: "suspended" }).eq("id", tenant_id);
+      const { error } = await admin.from("tenants").update({ is_active: false, status: "suspended", subscription_expiry_suspended: false }).eq("id", tenant_id);
       if (error) return json({ error: error.message }, 400);
       await logEvent("tenant.suspend", tenant_id, { reason: reason || "" });
       return json({ success: true });
@@ -424,42 +435,14 @@ Deno.serve(async (req: Request) => {
     if (action === "approve_tenant") {
       const { tenant_id } = body;
       if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
-      const { data: tenantData } = await admin.from("tenants").select("selected_plan_code, plan, billing_cycle").eq("id", tenant_id).maybeSingle();
-      const planCode = tenantData?.selected_plan_code || tenantData?.plan || "trial";
-      const billingCycle = tenantData?.billing_cycle || "monthly";
-      const { data: planData } = await admin.from("plans").select("trial_days, price_monthly, price_yearly, price_lifetime").eq("code", planCode).maybeSingle();
-      const trialDays = planData?.trial_days || 14;
-      const isLifetime = billingCycle === "lifetime";
-      const now = new Date();
-      const trialEnd = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
-      let subscriptionEndDate: Date | null = null;
-      if (!isLifetime) {
-        subscriptionEndDate = billingCycle === "yearly"
-          ? new Date(trialEnd.getTime() + 365 * 24 * 60 * 60 * 1000)
-          : new Date(trialEnd.getTime() + 30 * 24 * 60 * 60 * 1000);
-      }
-      const updatePayload: Record<string, unknown> = {
-        approval_status: "approved", approved_at: now.toISOString(), approved_by: caller.id,
-        is_active: true, status: "active", plan: planCode,
-        subscription_status: isLifetime ? "active" : "trial_active",
-        trial_start_date: isLifetime ? null : now.toISOString(),
-        trial_end_date: isLifetime ? null : trialEnd.toISOString(),
-        subscription_start_date: isLifetime ? now.toISOString() : trialEnd.toISOString(),
-        plan_expires_at: subscriptionEndDate ? subscriptionEndDate.toISOString() : null,
-        auto_renew: !isLifetime,
-      };
-      const { error } = await admin.from("tenants").update(updatePayload).eq("id", tenant_id);
-      if (error) return json({ error: error.message }, 400);
-      const amount = isLifetime ? (planData?.price_lifetime || 0) : billingCycle === "yearly" ? (planData?.price_yearly || 0) : (planData?.price_monthly || 0);
-      await admin.from("tenant_subscriptions").insert({
-        tenant_id, plan_code: planCode, billing_cycle: billingCycle, amount, currency: "FCFA",
-        started_at: isLifetime ? now.toISOString() : trialEnd.toISOString(),
-        ends_at: subscriptionEndDate ? subscriptionEndDate.toISOString() : null,
-        auto_renew: !isLifetime, status: "pending",
-        notes: `Abonnement ${billingCycle === "yearly" ? "annuel" : "mensuel"} - commence après essai de ${trialDays}j`,
-        created_by: caller.id,
+      const { data: approval, error } = await admin.rpc("approve_waarwi_tenant", {
+        p_tenant_id: tenant_id, p_actor_id: caller.id,
       });
-      await logEvent("tenant.approve", tenant_id, { trial_days: trialDays, plan: planCode, billing_cycle: billingCycle });
+      if (error) return json({ error: error.message }, 400);
+      if (!approval?.success) return json({ error: approval?.error || "Inscription non validée" }, 409);
+      await logEvent("tenant.approve", tenant_id, {
+        trial_days: approval.trial_days, plan: approval.plan, billing_cycle: approval.billing_cycle,
+      });
       fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
         method: "POST", headers: { "Authorization": authHeader, "Content-Type": "application/json" },
         body: JSON.stringify({ type: "approval", tenant_id }),
@@ -470,8 +453,11 @@ Deno.serve(async (req: Request) => {
     if (action === "reject_tenant") {
       const { tenant_id, reason } = body;
       if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
-      const { error } = await admin.from("tenants").update({ approval_status: "rejected", rejection_reason: reason || "", is_active: false, status: "suspended" }).eq("id", tenant_id);
+      const { data: rejected, error } = await admin.from("tenants")
+        .update({ approval_status: "rejected", rejection_reason: reason || "", is_active: false, status: "suspended", subscription_expiry_suspended: false })
+        .eq("id", tenant_id).eq("approval_status", "pending").select("id").maybeSingle();
       if (error) return json({ error: error.message }, 400);
+      if (!rejected) return json({ error: "Inscription déjà traitée ou introuvable" }, 409);
       await logEvent("tenant.reject", tenant_id, { reason: reason || "" });
       fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
         method: "POST", headers: { "Authorization": authHeader, "Content-Type": "application/json" },
@@ -522,31 +508,31 @@ Deno.serve(async (req: Request) => {
     if (action === "create_subscription") {
       const { tenant_id, plan_code, billing_cycle, amount, currency, started_at, ends_at, auto_renew, notes, custom_limits } = body;
       if (!tenant_id || !plan_code) return json({ error: "Paramètres manquants" }, 400);
-      await admin.from("tenant_subscriptions").update({ status: "superseded" }).eq("tenant_id", tenant_id).eq("status", "active");
-      const { data, error } = await admin.from("tenant_subscriptions").insert({
-        tenant_id, plan_code, billing_cycle: billing_cycle || "monthly",
-        amount: amount || 0, currency: currency || "FCFA",
-        started_at: started_at || new Date().toISOString(), ends_at: ends_at || null,
-        auto_renew: auto_renew !== false, notes: notes || "", status: "active", created_by: caller.id, custom_limits: custom_limits || null,
-      }).select().maybeSingle();
+      const { data, error } = await admin.rpc("record_manual_waarwi_subscription", {
+        p_actor_id: caller.id,
+        p_tenant_id: tenant_id,
+        p_plan_code: plan_code,
+        p_billing_cycle: billing_cycle || "monthly",
+        p_amount: amount || 0,
+        p_currency: currency || "FCFA",
+        p_started_at: started_at || new Date().toISOString(),
+        p_ends_at: ends_at || null,
+        p_auto_renew: auto_renew !== false,
+        p_notes: notes || "",
+        p_custom_limits: custom_limits || null,
+      });
       if (error) return json({ error: error.message }, 400);
-      await admin.from("tenants").update({
-        plan: plan_code, plan_expires_at: ends_at || null, status: "active", is_active: true,
-        subscription_status: "active", billing_cycle: billing_cycle || "monthly",
-        auto_renew: auto_renew !== false, subscription_start_date: started_at || new Date().toISOString(),
-      }).eq("id", tenant_id);
       await logEvent("subscription.create", tenant_id, { plan_code, amount, custom_limits });
       return json({ success: true, subscription: data });
     }
 
     if (action === "cancel_subscription") {
       const { subscription_id, reason } = body;
-      const { data: sub } = await admin.from("tenant_subscriptions").select("tenant_id").eq("id", subscription_id).maybeSingle();
-      const { error } = await admin.from("tenant_subscriptions")
-        .update({ status: "cancelled", cancelled_at: new Date().toISOString(), cancel_reason: reason || "", auto_renew: false })
-        .eq("id", subscription_id);
+      const { data: cancelledTenantId, error } = await admin.rpc("cancel_waarwi_subscription", {
+        p_subscription_id: subscription_id, p_reason: reason || "",
+      });
       if (error) return json({ error: error.message }, 400);
-      if (sub) await logEvent("subscription.cancel", sub.tenant_id, { subscription_id, reason });
+      if (cancelledTenantId) await logEvent("subscription.cancel", cancelledTenantId, { subscription_id, reason });
       return json({ success: true });
     }
 

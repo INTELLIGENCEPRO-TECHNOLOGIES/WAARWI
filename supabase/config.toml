@@ -21,3 +21,9 @@ verify_jwt = false
 
 [functions.backup-export-v3]
 verify_jwt = false
+
+[functions.subscription-payments]
+verify_jwt = true
+
+[functions.paytech-subscription-ipn]
+verify_jwt = false
