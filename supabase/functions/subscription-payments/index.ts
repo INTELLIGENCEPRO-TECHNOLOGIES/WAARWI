@@ -10,7 +10,7 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const CUSTOMER_FIELDS = "id,plan_code,billing_cycle,billing_months,purpose,amount,environment,state,subscription_id,review_reason,payment_method,paid_at,created_at";
-const ADMIN_FIELDS = "id,tenant_id,tenant_name,plan_code,billing_cycle,billing_months,purpose,amount,environment,state,subscription_id,review_reason,payment_method,paid_at,created_at";
+const ADMIN_FIELDS = "id,tenant_id,tenant_name,plan_code,billing_cycle,billing_months,monthly_rate,purpose,amount,environment,state,subscription_id,review_reason,payment_method,paid_at,created_at";
 const PAGE_SIZE = 50;
 
 type CheckoutContext = {
@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body?.action;
     const { config, missing, invalid } = getPayTechConfiguration();
+    const checkoutPaused = !config || Deno.env.get("WAARWI_PAYTECH_CHECKOUT_ENABLED")?.trim() !== "true";
 
     async function reconcile(order: PaymentOrder, provider: PayTechConfig) {
       const status = await getPayTechStatus(provider, order);
@@ -100,14 +101,13 @@ Deno.serve(async (req) => {
       if (listError) throw listError;
       return json({
         payments: data, total: count ?? 0, page_size: PAGE_SIZE,
-        environment: config?.environment ?? null, configuration: { missing, invalid },
+        environment: config?.environment ?? null, checkout_paused: checkoutPaused, configuration: { missing, invalid },
       });
     }
 
     if (action !== "context" && action !== "start" && action !== "reconcile") {
       return json({ error: "Action inconnue" }, 400);
     }
-    const checkoutPaused = !config || Deno.env.get("WAARWI_PAYTECH_CHECKOUT_ENABLED")?.trim() !== "true";
     if (action === "start" && checkoutPaused) {
       return json({ error: "Fonctionnalité en cours de développement", checkout_paused: true }, 503);
     }

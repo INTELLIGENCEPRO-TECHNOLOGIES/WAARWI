@@ -3,7 +3,7 @@ import { ArrowUpRight, CreditCard, Loader2, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDateTime, formatFCFA } from '../lib/format';
 import {
-  callSubscriptionPayments, subscriptionCycleLabels, subscriptionPaymentDuration, subscriptionPaymentLabel,
+  callSubscriptionPayments, formatSubscriptionDiscount, subscriptionCycleLabels, subscriptionPaymentDuration, subscriptionPaymentLabel,
   type SubscriptionPaymentContext,
 } from '../lib/subscriptionPayments';
 
@@ -133,7 +133,11 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
           <select value={billingOption.months} onChange={event => setSelectedMonths(Number(event.target.value))}
             disabled={!!busy}
             className="min-h-10 border-b border-[var(--w-separator)] bg-transparent pr-8 text-sm text-[var(--w-text)]">
-            {billingOptions.map(option => <option key={option.months} value={option.months}>{option.months} mois</option>)}
+            {billingOptions.map(option => (
+              <option key={option.months} value={option.months}>
+                {option.months} mois{option.discount_percent ? ' · −' + formatSubscriptionDiscount(option.discount_percent) : ''}
+              </option>
+            ))}
           </select>
         </label>
       )}

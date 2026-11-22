@@ -110,7 +110,7 @@ const DEFAULT_FAQ: FaqItem[] = [
   { q: 'Peut-on être accompagné lors du démarrage ?', a: 'Oui. Notre équipe vous accompagne dans la configuration de votre compte, votre catalogue et votre caisse pour démarrer sereinement.' },
 ];
 
-const inputCls = "w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400";
+const inputCls = "w-full pa-field";
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const doFetch = async (accessToken: string) => {
@@ -558,31 +558,21 @@ export function LandingConfigSection() {
 
   return (
     <div className="space-y-5">
-      <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Globe className="w-4 h-4 text-brand-700" />
-              <h3 className="text-sm font-bold text-slate-900">Landing page waarwi.com</h3>
-            </div>
-            <p className="text-xs text-slate-500">Contenu de la page d'accueil publique. Tout est dynamique : textes, captures, preuves, FAQ et contact.</p>
-          </div>
-          <a href="https://waarwi.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-[var(--w-surface-el)] hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
-            <Eye className="w-3.5 h-3.5" /> Voir la landing
-          </a>
-        </div>
+      <div className="pa-section-head">
+        <span className="pa-muted text-sm">waarwi.com</span>
+        <a href="https://waarwi.com" target="_blank" rel="noreferrer" className="pa-link"><ArrowUpRight size={15} /> Ouvrir le site public</a>
       </div>
 
-      <div className="flex bg-slate-100 rounded-xl p-1 border border-slate-200 overflow-x-auto">
-        {tabs.map(t => (
-          <button key={t.k} onClick={() => setActiveTab(t.k)} className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${activeTab === t.k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-            {t.label}{t.count !== undefined ? ` (${t.count})` : ''}
+      <nav className="pa-tabs" aria-label="Configuration du site vitrine">
+        {tabs.map(item => (
+          <button type="button" key={item.k} aria-current={activeTab === item.k ? 'page' : undefined} onClick={() => setActiveTab(item.k)}>
+            {item.label}
           </button>
         ))}
-      </div>
+      </nav>
 
       {activeTab === 'contenu' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+        <div className="pa-panel space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Titre hero (première ligne)</label>
             <input value={heroHeadline} onChange={e => setHeroHeadline(e.target.value)} placeholder="La plateforme qui simplifie, connecte et propulse" className={inputCls} />
@@ -727,7 +717,7 @@ export function LandingConfigSection() {
       )}
 
       {activeTab === 'modules' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+        <div className="pa-panel space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-slate-700">Fonctionnalités affichées ({features.length})</p>
@@ -748,7 +738,7 @@ export function LandingConfigSection() {
               <button onClick={useDefaultFeatures} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Utiliser les modules par défaut →</button>
             </div>
           )}
-          <div className="space-y-3 max-h-[520px] overflow-y-auto -mr-1 pr-1">
+          <div className="space-y-3">
             {features.map((f, idx) => {
               const IconComp = ICON_MAP_ADMIN[f.icon] || Shield;
               return (
@@ -788,7 +778,7 @@ export function LandingConfigSection() {
       )}
 
       {activeTab === 'secteurs' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+        <div className="pa-panel space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-slate-700">Secteurs d’activité ({sectors.length})</p>
@@ -805,7 +795,7 @@ export function LandingConfigSection() {
           ) : sectors.length === 0 ? (
             <p className="text-xs text-slate-400 py-6 text-center">Aucun secteur configuré.</p>
           ) : (
-            <div className="space-y-3 max-h-[520px] overflow-y-auto -mr-1 pr-1">
+            <div className="space-y-3">
               {sectors.map((s) => {
                 const SecIcon = SECTOR_ICONS_ADMIN[s.slug] || Store;
                 return (
@@ -839,7 +829,7 @@ export function LandingConfigSection() {
       )}
 
       {activeTab === 'demo' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
+        <div className="pa-panel">
           <div className="flex items-center gap-2 mb-1">
             <ImageIcon className="w-4 h-4 text-brand-700" />
             <h3 className="text-sm font-bold text-slate-900">Captures d'écran</h3>
@@ -854,7 +844,7 @@ export function LandingConfigSection() {
 
       {activeTab === 'preuves' && (
         <div className="space-y-4">
-          <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+          <div className="pa-panel space-y-4">
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-4 h-4 text-brand-700" />
               <h3 className="text-sm font-bold text-slate-900">Logos clients</h3>
@@ -888,7 +878,7 @@ export function LandingConfigSection() {
             )}
           </div>
 
-          <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+          <div className="pa-panel space-y-4">
             <div className="flex items-center gap-2 mb-1">
               <MessageSquare className="w-4 h-4 text-brand-700" />
               <h3 className="text-sm font-bold text-slate-900">Témoignages</h3>
@@ -924,10 +914,9 @@ export function LandingConfigSection() {
 
       {activeTab === 'whyfaq' && (
         <div className="space-y-4">
-          <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+          <div className="pa-panel space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-brand-700" />
                 <h3 className="text-sm font-bold text-slate-900">Pourquoi Waarwi ({whyWaarwi.length})</h3>
               </div>
               <div className="flex gap-2">
@@ -939,7 +928,7 @@ export function LandingConfigSection() {
                 </button>
               </div>
             </div>
-            <div className="space-y-3 max-h-[520px] overflow-y-auto -mr-1 pr-1">
+            <div className="space-y-3">
               {whyWaarwi.map((w, idx) => {
                 const IconComp = ICON_MAP_ADMIN[w.icon] || Shield;
                 return (
@@ -977,7 +966,7 @@ export function LandingConfigSection() {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+          <div className="pa-panel space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <HelpCircle className="w-4 h-4 text-brand-700" />
@@ -992,7 +981,7 @@ export function LandingConfigSection() {
                 </button>
               </div>
             </div>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto -mr-1 pr-1">
+            <div className="space-y-2">
               {faqItems.map((f, idx) => (
                 <div key={idx} className="p-2.5 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-1.5 group">
                   <div className="flex items-center gap-2">
@@ -1012,7 +1001,7 @@ export function LandingConfigSection() {
       )}
 
       {activeTab === 'legal' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+        <div className="pa-panel space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <Scale className="w-4 h-4 text-brand-700" />
             <h3 className="text-sm font-bold text-slate-900">Documents juridiques</h3>
@@ -1043,7 +1032,7 @@ export function LandingConfigSection() {
       )}
 
       {activeTab === 'effets' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-5">
+        <div className="pa-panel space-y-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Palette className="w-4 h-4 text-brand-700" />

@@ -707,7 +707,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   );
   return (
     <QuickActionProvider onNavigate={(r) => { onRoute(r as Route); setMobileOpen(false); }}>
-    <div className="min-h-screen h-screen flex flex-col overflow-hidden bg-white">
+    <div className={`flex flex-col overflow-hidden ${isPlatformAdmin ? 'h-[100dvh] bg-[var(--w-bg)]' : 'min-h-screen h-screen bg-white'}`}>
       {/* Desktop header */}
       <header
         className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b ${isPOS ? 'pos-header-sep' : 'border-neutral-200'} bg-white sticky top-0 z-30 flex-shrink-0`}
@@ -1206,7 +1206,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         )}
 
-        <main className={`flex-1 w-full min-h-0 ${isPOS || isTiers ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`} style={{ paddingBottom: 'var(--w-taskbar-h, 0px)' }}>
+        <main className={`flex-1 w-full min-h-0 ${isPOS || isTiers || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`} style={{ paddingBottom: isPlatformAdmin ? 0 : 'var(--w-taskbar-h, 0px)' }}>
           {isPOS || isTiers ? (
             <div className={`flex-1 flex flex-col min-h-0 ${isPOS && posCartOpen ? 'pb-0' : 'pb-[60px]'} lg:pb-0`}>{children}</div>
           ) : isPlatformAdmin ? (

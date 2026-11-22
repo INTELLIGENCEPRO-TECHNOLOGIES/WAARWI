@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useCallback, useState } from 'react';
+import { ReactNode, useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, GripVertical, Check, Trash2 } from 'lucide-react';
 import { useTopLayer } from './modalStack';
@@ -36,7 +36,7 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
     };
   }, [open, isTopLayer]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -64,7 +64,7 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
         {!fullMobile && !fullscreenMobile && <div className="sm:hidden sheet-handle" />}
         <div className={`flex items-center justify-between border-b border-[var(--w-separator)] bg-[var(--w-surface-el)] ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : 'px-4 py-3 sm:px-5 sm:py-4 rounded-t-xl'}`}>
           <h3 className={`font-bold text-[var(--w-text)] tracking-tight ${fullscreenMobile ? 'text-base sm:text-lg' : fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors">
+          <button type="button" aria-label="Fermer" onClick={onClose} className="p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -57,18 +57,13 @@ export function MasterCatalogAdmin() {
 
   return (
     <div className="space-y-3">
-      <div className="flex overflow-x-auto gap-1 bg-white/60 border border-slate-200/70 rounded-2xl p-1 shadow-sm">
-        {tabs.map(t => {
-          const I = t.icon;
-          const active = tab === t.key;
-          return (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${active ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:bg-white hover:text-slate-900'}`}>
-              <I className="w-3.5 h-3.5" />{t.label}
-            </button>
-          );
-        })}
-      </div>
+      <nav className="pa-tabs" aria-label="Référentiels métiers">
+        {tabs.map(item => (
+          <button type="button" key={item.key} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}>
+            {item.label}
+          </button>
+        ))}
+      </nav>
 
       {loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
