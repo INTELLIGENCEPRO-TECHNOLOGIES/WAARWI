@@ -567,6 +567,11 @@ DECLARE
   ];
   v_updated int;
 BEGIN
+  -- The original data correction requires a populated database.
+  IF NOT EXISTS (SELECT 1 FROM public.tenants) THEN
+    RETURN;
+  END IF;
+
   SELECT count(*) INTO v_total FROM supplier_payments;
   SELECT count(*) INTO v_before_cash FROM supplier_payments WHERE funding_source = 'cash';
   SELECT count(*) INTO v_before_vault FROM supplier_payments WHERE funding_source = 'vault';

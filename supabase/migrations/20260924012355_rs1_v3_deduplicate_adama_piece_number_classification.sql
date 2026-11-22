@@ -73,6 +73,11 @@ DECLARE
   v_check_sp     int;
   v_check_cm     int;
 BEGIN
+  -- Apply this data repair only where the original tenant exists.
+  IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = v_tenant) THEN
+    RETURN;
+  END IF;
+
   -- Capture session theoretical before
   SELECT theoretical_amount INTO STRICT v_theo_before FROM cash_sessions WHERE id = v_session;
 

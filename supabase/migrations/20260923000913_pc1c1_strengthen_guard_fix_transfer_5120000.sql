@@ -263,6 +263,11 @@ DO $$
 DECLARE
   v_updated integer;
 BEGIN
+  -- The original data correction requires a populated database.
+  IF NOT EXISTS (SELECT 1 FROM public.tenants) THEN
+    RETURN;
+  END IF;
+
   UPDATE payment_methods
   SET account_code = '5210000'
   WHERE code = 'TRANSFER'

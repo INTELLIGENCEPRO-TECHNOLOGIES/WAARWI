@@ -20,6 +20,11 @@ DECLARE
   cat_interieur uuid;
   cat_kits_sport uuid;
 BEGIN
+  -- This import targets an existing tenant.
+  IF tid IS NULL THEN
+    RETURN;
+  END IF;
+
   -- CARROSSERIE (parent)
   IF NOT EXISTS (SELECT 1 FROM part_categories WHERE tenant_id = tid AND name = 'Carrosserie') THEN
     INSERT INTO part_categories (tenant_id, name, code, is_active) VALUES (tid, 'Carrosserie', 'CARRO', true);

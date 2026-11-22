@@ -1073,6 +1073,11 @@ DECLARE
   v_cur_theo      numeric;
   v_cur_cm_id     uuid;
 BEGIN
+  -- Apply this data repair only where the original tenant exists.
+  IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = v_tenant_id) THEN
+    RETURN;
+  END IF;
+
   -- Guard: customer_payment must exist and lack cash_movement_id
   SELECT cash_movement_id INTO v_cur_cm_id FROM customer_payments
   WHERE id = v_cp_id AND tenant_id = v_tenant_id AND status = 'confirmed';

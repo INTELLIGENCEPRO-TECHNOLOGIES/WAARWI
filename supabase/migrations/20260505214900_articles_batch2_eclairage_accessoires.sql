@@ -23,6 +23,11 @@ DECLARE
   m_tiguan uuid; m_amarok uuid;
   m_hiluxold uuid;
 BEGIN
+  -- This import targets an existing tenant.
+  IF tid IS NULL THEN
+    RETURN;
+  END IF;
+
   SELECT id INTO c_phaled FROM part_categories WHERE tenant_id=tid AND code='PHA-LED' LIMIT 1;
   SELECT id INTO c_feuar  FROM part_categories WHERE tenant_id=tid AND code='FEU-AR-LED' LIMIT 1;
   SELECT id INTO c_clig   FROM part_categories WHERE tenant_id=tid AND code='CLIG' LIMIT 1;

@@ -27,6 +27,11 @@ DECLARE
   m_accord uuid; m_hrv uuid; m_crv uuid;
   m_clio uuid; m_megane uuid; m_duster uuid;
 BEGIN
+  -- This import targets an existing tenant.
+  IF tid IS NULL THEN
+    RETURN;
+  END IF;
+
   SELECT id INTO c_ecran FROM part_categories WHERE tenant_id=tid AND code='ECRAN-AND' LIMIT 1;
   SELECT id INTO c_gps   FROM part_categories WHERE tenant_id=tid AND code='GPS' LIMIT 1;
   SELECT id INTO c_ampli FROM part_categories WHERE tenant_id=tid AND code='AMPLI' LIMIT 1;
