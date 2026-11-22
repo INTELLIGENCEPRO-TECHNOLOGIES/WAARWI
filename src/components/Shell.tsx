@@ -15,6 +15,7 @@ import { QuickActionsPanel } from './QuickActionsPanel';
 import { QuickActionProvider, useQuickAction } from '../context/QuickActionContext';
 import { CompactThemeToggle } from './ThemeToggle';
 import SubscriptionStatus from './SubscriptionStatus';
+import { SubscriptionPaymentButton } from './SubscriptionPaymentPanel';
 import { WindowTaskbar } from './DesktopWindow';
 import { useWindowManager } from '../context/WindowManagerContext';
 
@@ -183,7 +184,9 @@ function trackUsage(key: Route) {
   } catch {}
 }
 
-export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r: Route) => void; children: ReactNode }) {
+export function Shell({ route, onRoute, children, onOpenSubscription }: {
+  route: Route; onRoute: (r: Route) => void; children: ReactNode; onOpenSubscription?: () => void;
+}) {
   const { t } = useTranslation();
   const { tenant, profile, signOut, sites, currentSite, setCurrentSite, setDefaultSite, localDefaultSiteId, posCartCount, posCartOpen, setPosCart } = useApp();
   const brandLogo = currentSite?.logo_url || tenant?.logo_url;
@@ -730,6 +733,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           {shellSubInfo && (
             <SubscriptionStatus info={shellSubInfo} onClick={() => onRoute('settings')} />
           )}
+          {!isDashboard && onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
           {shellSubInfo && sites.length > 1 && !isDashboard && <div className="w-px h-5 bg-neutral-200 shrink-0" />}
           {/* Desktop site selector dropdown — hidden on dashboard (has its own) */}
           {sites.length > 1 && !isDashboard && (
@@ -1157,6 +1161,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+          {!isDashboard && onOpenSubscription && <SubscriptionPaymentButton iconOnly onClick={onOpenSubscription} />}
           {newOrdersCount > 0 && (
             <button
               onClick={() => onRoute('online_orders')}

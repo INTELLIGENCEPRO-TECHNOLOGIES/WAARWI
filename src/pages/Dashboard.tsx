@@ -7,6 +7,7 @@ import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { isSaleSettlementIncome } from '../lib/cashMovements';
 import { getOperationalCashContext } from '../lib/cashSession';
 import SubscriptionStatus from '../components/SubscriptionStatus';
+import { SubscriptionPaymentButton } from '../components/SubscriptionPaymentPanel';
 import {
   TrendingUp, AlertTriangle, Package, Loader2,
   Users, FileText, ExternalLink, Globe,
@@ -102,7 +103,9 @@ const emptySessionStats = {
 
 let dashCache: { stats: Stats; shopInfo: ShopInfo | null; key: string } | null = null;
 
-export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void }) {
+export function Dashboard({ onNavigate, onOpenSubscription }: {
+  onNavigate?: (route: string) => void; onOpenSubscription?: () => void;
+}) {
   const { tenant, profile, currentSite, onDataChange } = useApp();
   const [period, setPeriod] = useState('today');
   const cacheKey = JSON.stringify([profile?.id, tenant?.id, currentSite?.id, period, new Date().toDateString()]);
@@ -591,7 +594,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
   if (!stats) {
     return (
       <section className="px-4 py-5">
-        <h1 className="text-lg font-semibold text-[var(--w-text)]">Tableau de bord</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-lg font-semibold text-[var(--w-text)]">Tableau de bord</h1>
+          {onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
+        </div>
         {issues.length > 0 ? (
           <p role="alert" className="mt-2 text-sm text-[var(--w-text-muted)]">
             Indicateurs indisponibles.{' '}
@@ -623,6 +629,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           marginPct={marginPct}
           dayMarginPct={dayMarginPct}
           nav={nav}
+          onOpenSubscription={onOpenSubscription}
           balanceHidden={balanceHidden || !can('view_dashboard_stats')}
           toggleBalanceHidden={toggleBalanceHidden}
           canViewMargin={can('view_margins')}
@@ -639,6 +646,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         <DesktopDashboard
           stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, todayCollected: 0, todayDirectCash: 0, monthSales: 0, cashBalance: 0, receivables: 0, payables: 0, periodTauxMarge: 0, periodMargeBrute: 0, periodCharges: 0, periodResultat: 0, periodExpenses: 0, periodRefunds: 0, periodWithdrawals: 0, periodCustomerLoans: 0, periodCashBalance: 0, sessionCaNet: 0, sessionMargeBrute: 0, sessionTauxMarge: 0, sessionNbVentes: 0, sessionDepenses: 0, sessionRemboursements: 0, sessionRetraits: 0, sessionPretsClients: 0, sessionEntreesDirectes: 0, sessionEncaissements: 0, sessionCreditTotal: 0, sessionCreditCount: 0, sessionResultat: 0 }}
           nav={nav}
+          onOpenSubscription={onOpenSubscription}
           period={period}
           setPeriod={setPeriod}
           showPeriodMenu={showPeriodMenu}
@@ -658,7 +666,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
  *  MOBILE DASHBOARD — Ultra-compact Premium Fintech 2026
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
-  stats, shopInfo, marginPct, dayMarginPct, nav,
+  stats, shopInfo, marginPct, dayMarginPct, nav, onOpenSubscription,
   balanceHidden, toggleBalanceHidden, canViewMargin,
   viewMode, toggleViewMode, period, setPeriod, periodLabel, periodOptions, showPeriodMenu, setShowPeriodMenu,
 }: any) {
@@ -834,8 +842,9 @@ function MobileDashboard({
     <div className="space-y-0 animate-fade-in pb-16">
 
       {/* ── SUBSCRIPTION INFO (discrete) ── */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 px-1">
       {subInfo && (
-        <button onClick={() => nav('settings', { target: 'subscription' })} className="w-full text-left px-1 -mb-1">
+        <button onClick={() => nav('settings', { target: 'subscription' })} className="min-w-0 text-left">
           <span className="text-[10px] text-neutral-400">
             Plan {subInfo.planName}
             {subInfo.expiresAt && (
@@ -857,6 +866,9 @@ function MobileDashboard({
           </span>
         </button>
       )}
+
+      {onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
+      </div>
 
       {/* ── VIEW MODE TABS ── */}
       <div className="flex items-center gap-6 px-1">
@@ -1600,7 +1612,7 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
   );
 }
 
-function DesktopDashboard({ stats, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, canViewMargin, viewMode, toggleViewMode }: any) {
+function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, canViewMargin, viewMode, toggleViewMode }: any) {
   const { tenant, currentSite, sites, setCurrentSite, profile, signOut } = useApp();
   const { can } = usePermissions();
 
@@ -1888,8 +1900,11 @@ function DesktopDashboard({ stats, nav, period, setPeriod, showPeriodMenu, setSh
         <div className="ml-auto flex items-center gap-4">
           {/* Subscription badge — compact with expiry */}
           {subInfo && (
-            <SubscriptionStatus info={subInfo} onClick={() => nav('settings', { target: 'subscription' })} />
+            <div className={onOpenSubscription ? 'hidden xl:block' : ''}>
+              <SubscriptionStatus info={subInfo} onClick={() => nav('settings', { target: 'subscription' })} />
+            </div>
           )}
+          {onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
 
           {/* Subtle vertical separator */}
           <div className="w-px h-5 bg-neutral-200" />

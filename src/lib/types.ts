@@ -22,6 +22,9 @@ export type Tenant = {
   approval_status?: string;
   owner_user_id?: string | null;
   subscription_billing_online?: boolean;
+  subscription_status?: string;
+  billing_cycle?: string;
+  plan_expires_at?: string | null;
   slogan?: string;
   website?: string;
 };
