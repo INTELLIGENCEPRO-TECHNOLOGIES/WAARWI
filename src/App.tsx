@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, CheckCircle, XCircle, WifiOff, Wifi, LogOut, ShieldX, Phone, Headphones, AlertCircle, Ban, Power } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { WindowManagerProvider } from './context/WindowManagerContext';
@@ -11,7 +11,7 @@ import { Dashboard } from './pages/Dashboard';
 import { TenantMessagePopup } from './components/TenantMessagePopup';
 import { MultiCashAnnouncement } from './components/MultiCashAnnouncement';
 import { PendingApproval } from './components/PendingApproval';
-import { SubscriptionPaymentPanel, SubscriptionPaymentReturn, useCanPaySubscription } from './components/SubscriptionPaymentPanel';
+import { SubscriptionPaymentDialog, SubscriptionPaymentPanel, SubscriptionPaymentReturn, useCanPaySubscription } from './components/SubscriptionPaymentPanel';
 import UpdateNotification from './components/UpdateNotification';
 import { useToast } from './context/ToastContext';
 import { installDraftFlushListeners, setDraftErrorHandler, hasAnyDraft, hasPendingWrite, flushAllPendingDrafts } from './lib/draftRecovery';
@@ -316,6 +316,12 @@ function Inner() {
   const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const canPaySubscription = useCanPaySubscription();
+  const [paymentDialogTenantId, setPaymentDialogTenantId] = useState<string>();
+  const closePaymentDialog = useCallback(() => setPaymentDialogTenantId(undefined), []);
+  const onOpenSubscription = canPaySubscription && tenant &&
+    !(tenant.billing_cycle === 'lifetime' && tenant.subscription_status === 'active')
+    ? () => setPaymentDialogTenantId(tenant.id)
+    : undefined;
   const [paymentReturn, setPaymentReturn] = useState(() => {
     const reference = new URLSearchParams(window.location.search).get('subscription_payment');
     return reference && /^[0-9a-f-]{36}$/i.test(reference) ? reference : null;
@@ -386,9 +392,9 @@ function Inner() {
 
   return (
     <>
-    <Shell route={route} onRoute={setRoute}>
+    <Shell route={route} onRoute={setRoute} onOpenSubscription={onOpenSubscription}>
       <Suspense fallback={<div className="p-6 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>}>
-        {route === 'dashboard' && <Dashboard onNavigate={(r: string) => setRoute(r as any)} />}
+        {route === 'dashboard' && <Dashboard onNavigate={(r: string) => setRoute(r as Route)} onOpenSubscription={onOpenSubscription} />}
         {route === 'pos' && <POS key={[profile?.id, tenant?.id, currentSite?.id].join(":")} onLeave={() => setRoute('dashboard')} onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'articles' && <Articles onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'master_catalog' && <MasterCatalog />}
@@ -424,6 +430,9 @@ function Inner() {
         </>
       )}
     </Shell>
+    {onOpenSubscription && paymentDialogTenantId && paymentDialogTenantId === tenant?.id && (
+      <SubscriptionPaymentDialog onClose={closePaymentDialog} />
+    )}
     </>
   );
 }

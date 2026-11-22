@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUpRight, CreditCard, Loader2, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDateTime, formatFCFA } from '../lib/format';
+import { Modal } from './Modal';
 import {
   callSubscriptionPayments, formatSubscriptionDiscount, subscriptionCycleLabels, subscriptionPaymentDuration, subscriptionPaymentLabel,
   type SubscriptionPaymentContext,
@@ -12,13 +13,39 @@ export function useCanPaySubscription() {
   return !!tenant && profile?.role === 'admin' && profile.is_active !== false && (isOwner || !tenant.owner_user_id);
 }
 
-export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) {
+export function SubscriptionPaymentButton({ onClick, iconOnly = false }: { onClick: () => void; iconOnly?: boolean }) {
+  const { tenant } = useApp();
+  const label = tenant?.plan_expires_at ? 'Renouveler mon abonnement' : 'Payer mon abonnement';
+
+  return (
+    <button type="button" onClick={onClick} title={label} aria-label={label} aria-haspopup="dialog"
+      className={iconOnly
+        ? 'inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-neutral-800 hover:bg-neutral-100'
+        : 'inline-flex min-h-9 shrink-0 items-center gap-1.5 text-xs font-semibold text-[var(--w-text)] hover:underline underline-offset-4'}>
+      <CreditCard className="size-4 shrink-0" aria-hidden="true" />
+      {!iconOnly && <span>{label}</span>}
+    </button>
+  );
+}
+
+export function SubscriptionPaymentDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal open onClose={onClose} title="Mon abonnement" size="sm" layer="top" focusOnOpen
+      panelClassName="!h-auto !max-h-[88dvh] pb-[env(safe-area-inset-bottom)]">
+      <SubscriptionPaymentPanel inDialog />
+    </Modal>
+  );
+}
+
+export function SubscriptionPaymentPanel({ paymentId, inDialog = false }: { paymentId?: string; inDialog?: boolean }) {
   const { tenant, refresh } = useApp();
   const canPay = useCanPaySubscription();
   const [context, setContext] = useState<SubscriptionPaymentContext>();
   const [busy, setBusy] = useState<'start' | 'reconcile' | null>(null);
   const [error, setError] = useState('');
   const [selectedMonths, setSelectedMonths] = useState(1);
+  const [retry, setRetry] = useState(0);
+  const mounted = useRef(false);
   const pauseMessageId = useId();
   const refreshedPayment = useRef<string>();
   const payment = context?.payment;
@@ -27,6 +54,12 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
   const billingOption = billingOptions.find(option => option.months === selectedMonths) ?? billingOptions[0];
   const checkoutPaused = context?.checkout_paused === true;
   const tenantId = tenant?.id;
+  const currentExpiry = tenant?.plan_expires_at ?? null;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!canPay) return;
@@ -45,7 +78,7 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
           }
         }
       } catch (cause) {
-        if (current && paymentId) setError((cause as Error).message);
+        if (current && (paymentId || inDialog)) setError((cause as Error).message);
       }
     };
 
@@ -55,7 +88,7 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
     }, 4000) : undefined;
     void read();
     return () => { current = false; window.clearInterval(timer); };
-  }, [canPay, paymentId, tenantId]);
+  }, [canPay, paymentId, tenantId, inDialog, retry]);
 
   useEffect(() => {
     if (payment?.subscription_id && payment.id !== refreshedPayment.current) {
@@ -88,7 +121,7 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
       const result = await callSubscriptionPayments<{ checkout_url: string }>({
         action: 'start', ...(months == null ? {} : { billing_months: months }),
       });
-      window.location.assign(result.checkout_url);
+      if (mounted.current) window.location.assign(result.checkout_url);
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -97,17 +130,36 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
   };
 
   if (!canPay) return null;
-  if (!paymentId && (!context?.enabled || (!quote && !payment))) return null;
+  if (!paymentId && (!context?.enabled || (!quote && !payment))) {
+    if (!inDialog) return null;
+    if (error) {
+      return (
+        <div className="space-y-2 py-2 text-sm">
+          <p role="alert" className="text-red-700">{error}</p>
+          <button type="button" onClick={() => { setError(''); setRetry(value => value + 1); }}
+            className="min-h-10 font-semibold text-[var(--w-text)] underline underline-offset-4">
+            Réessayer
+          </button>
+        </div>
+      );
+    }
+    return (
+      <p role="status" className="py-2 text-sm text-[var(--w-text-sec)]">
+        {context ? 'Le paiement en ligne est indisponible pour cet abonnement.' : 'Chargement de votre abonnement…'}
+      </p>
+    );
+  }
 
   const isPending = payment?.state === 'pending';
   const checkoutAvailable = !!quote || isPending;
   const creating = payment?.state === 'creating';
+  const renewal = quote?.purpose === 'renewal' || ((isPending || creating) && payment?.purpose === 'renewal');
   const label = isPending ? 'Reprendre le paiement'
     : quote?.purpose === 'initial' ? 'Payer l’abonnement'
     : 'Payer la prochaine échéance';
 
   return (
-    <section className="space-y-3 border-y border-[var(--w-separator)] py-4 text-left" aria-label="Paiement de l’abonnement">
+    <section className={'space-y-3 text-left' + (inDialog ? '' : ' border-y border-[var(--w-separator)] py-4')} aria-label="Paiement de l’abonnement">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--w-text)]">
@@ -142,6 +194,13 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
         </label>
       )}
 
+      {renewal && (
+        <p className="border-t border-[var(--w-separator)] pt-3 text-sm text-[var(--w-text-sec)]">
+          {currentExpiry && new Date(currentExpiry).getTime() > Date.now()
+            ? <>Votre abonnement reste valable jusqu’au <time dateTime={currentExpiry} className="font-semibold text-[var(--w-text)]">{formatDateTime(currentExpiry)}</time>. Le renouvellement commencera à cette échéance.</>
+            : 'Le renouvellement commencera à la confirmation du paiement.'}
+        </p>
+      )}
       {context?.environment === 'test' && <p className="text-xs font-medium text-amber-700">Mode test PayTech</p>}
       {payment && (
         <div className="space-y-1 text-xs text-[var(--w-text-sec)]" aria-live="polite">
