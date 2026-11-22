@@ -5,6 +5,8 @@ import { WindowManagerProvider } from './context/WindowManagerContext';
 import { usePermissions, type PermissionKey } from './lib/permissions';
 import { ToastProvider } from './context/ToastContext';
 import { Auth } from './pages/Auth';
+import { Registration } from './pages/Registration';
+import { loadRegistrationDraft } from './lib/registration';
 
 import { Shell, type Route } from './components/Shell';
 import { Dashboard } from './pages/Dashboard';
@@ -325,6 +327,22 @@ function Inner() {
     !(tenant.billing_cycle === 'lifetime' && tenant.subscription_status === 'active')
     ? () => setPaymentDialogTenantId(tenant.id)
     : undefined;
+  const [registrationMode, setRegistrationMode] = useState<'default' | 'open' | 'closed'>(() =>
+    new URLSearchParams(window.location.search).get('mode') === 'register' ? 'open' : 'default',
+  );
+  const [registeredTenantId, setRegisteredTenantId] = useState(() => {
+    try { return sessionStorage.getItem('waarwi:registration-tenant'); } catch { return null; }
+  });
+  const openRegistration = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', 'register');
+    window.history.replaceState(window.history.state, '', url);
+    setRegistrationMode('open');
+  }, []);
+  const onRegistered = useCallback((tenantId: string) => {
+    try { sessionStorage.setItem('waarwi:registration-tenant', tenantId); } catch { /* storage unavailable */ }
+    setRegisteredTenantId(tenantId);
+  }, []);
   const [paymentReturn, setPaymentReturn] = useState(() => {
     const reference = new URLSearchParams(window.location.search).get('subscription_payment');
     return reference && /^[0-9a-f-]{36}$/i.test(reference) ? reference : null;
@@ -371,12 +389,32 @@ function Inner() {
     );
   }
 
-  if (!user) return <Auth />;
-  if (!tenant && !isSuperAdmin) return <Auth />;
-
   const approvalStatus = tenant?.approval_status;
   const tenantPending = tenant && !isSuperAdmin && approvalStatus && approvalStatus !== 'approved';
   const tenantSuspended = tenant && !isSuperAdmin && ((tenant as any)?.is_active === false || tenant.status === 'suspended');
+  const registeredHere = !!tenant && tenant.id === registeredTenantId;
+  const registrationPayment = canPaySubscription && (registeredHere || approvalStatus === 'pending');
+
+  const registering = registrationMode === 'open';
+  const hasDraft = !tenant && registrationMode === 'default' && !!loadRegistrationDraft(user?.email);
+
+  if ((!isSuperAdmin && !tenant && (registering || hasDraft)) || ((registering || paymentReturn || registeredHere) && registrationPayment)) {
+    const closeRegistration = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('mode');
+      url.searchParams.delete('plan');
+      url.searchParams.delete('subscription_payment');
+      window.history.replaceState(window.history.state, '', url);
+      try { sessionStorage.removeItem('waarwi:registration-tenant'); } catch { /* storage unavailable */ }
+      setRegisteredTenantId(null);
+      setRegistrationMode('closed');
+      setPaymentReturn(null);
+    };
+    return <Registration onExit={closeRegistration} onRegistered={onRegistered}
+      paymentId={paymentReturn || undefined} resumePayment={registrationPayment} />;
+  }
+
+  if (!user || (!tenant && !isSuperAdmin)) return <Auth onRegister={openRegistration} />;
 
   if (paymentReturn && canPaySubscription) {
     const closeReturn = () => {
