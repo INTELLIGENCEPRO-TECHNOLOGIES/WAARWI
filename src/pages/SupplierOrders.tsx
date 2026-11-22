@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   ShoppingBag, Loader2, Search, RefreshCw, ClipboardList,
@@ -76,7 +77,8 @@ const SUPPLIER_ORDERS_PAGE_ID = 'supplier-orders-page';
 const SUPPLIER_ORDERS_GROUP = 'supplier-orders';
 
 export function SupplierOrders({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void } = {}) {
-  const { tenant, currentSite, sites, depots, dataTick, profile, user } = useApp();
+  const { tenant, currentSite, sites, depots, profile, user } = useApp();
+  const dataTick = useRealtimeTick(['supplier_orders', 'supplier_order_items', 'supplier_order_receptions', 'supplier_payments', 'suppliers', 'articles']);
   const { can } = usePermissions();
   const { canEditStatus, canDelete } = useSupplierOrderRights();
   const canPayOrders = can('access_tiers');

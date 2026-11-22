@@ -1,3 +1,5 @@
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Loader2, Package, Check, Download, X, Filter,
@@ -62,13 +64,15 @@ export function MasterCatalog() {
 
   const MAX_IMPORT = 500;
 
+  const catalogTick = useRealtimeTick(['master_catalogs', 'master_catalog_categories', 'master_catalog_items', 'business_activity_types']);
+
   const activityTypeId = (tenant as any)?.business_activity_type_id || null;
 
   useEffect(() => {
     if (!tenant) return;
     let cancelled = false;
     (async () => {
-      setLoading(true);
+
 
       // Si pas d'activity configurée sur tenant, fallback via business_type texte
       let actId = activityTypeId;
@@ -157,7 +161,7 @@ export function MasterCatalog() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [tenant?.id, activityTypeId, currentSite?.id, sharedArticles]);
+  }, [tenant?.id, activityTypeId, currentSite?.id, sharedArticles, catalogTick]);
 
   // Helper to re-fetch just the importedIds (lightweight, paginated)
   const refreshImportedIds = async (silent = false) => {
@@ -186,32 +190,7 @@ export function MasterCatalog() {
     if (!silent) setRefreshing(false);
   };
 
-  // Realtime: auto-update importedIds when articles are inserted/deleted for this tenant
-  useEffect(() => {
-    if (!tenant?.id) return;
-    const channel = supabase
-      .channel(`master-catalog-imported-${tenant.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'articles',
-        filter: `tenant_id=eq.${tenant.id}`,
-      }, (payload) => {
-        const id = (payload.new as any)?.master_catalog_item_id;
-        if (id) setImportedIds(prev => new Set([...prev, id]));
-      })
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'articles',
-        filter: `tenant_id=eq.${tenant.id}`,
-      }, () => {
-        // On delete, do a full refresh to stay consistent
-        refreshImportedIds(true);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [tenant?.id]);
+  useRealtimeRefresh(['articles'], () => refreshImportedIds(true), !!tenant?.id);
 
   const rootCategories = useMemo(() => categories.filter(c => !c.parent_id), [categories]);
   const subcategories = useMemo(

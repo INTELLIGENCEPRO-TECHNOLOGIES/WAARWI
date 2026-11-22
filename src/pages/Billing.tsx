@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useStickyOffset } from '../lib/useStickyOffset';
 import { createPortal } from 'react-dom';
@@ -115,7 +116,8 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export function Billing({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void }) {
-  const { tenant, currentSite, sites, depots, dataTick, profile, user } = useApp();
+  const { tenant, currentSite, sites, depots, profile, user } = useApp();
+  const dataTick = useRealtimeTick(['sales', 'sale_items', 'sale_payments', 'sale_returns', 'quotes', 'quote_items', 'customers', 'articles', 'stock_levels', 'document_settings']);
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
@@ -647,7 +649,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     const t = setTimeout(() => setFlashTab(null), 6800);
     return () => clearTimeout(t);
   }, []);
-  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => loadTab(billPage, true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   useEffect(() => {
     if (!tenant || !currentSite) return;

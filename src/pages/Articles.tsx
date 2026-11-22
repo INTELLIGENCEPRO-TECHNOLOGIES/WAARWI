@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Plus, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
@@ -34,7 +35,8 @@ type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 type SaveIntent = 'stay' | 'new' | 'close';
 
 export function Articles({ onNavigate }: { onNavigate?: (route: string) => void } = {}) {
-  const { tenant, currentSite, sites, depots, dataTick, refData } = useApp();
+  const { tenant, currentSite, sites, depots, refData } = useApp();
+  const dataTick = useRealtimeTick(['articles', 'part_categories', 'stock_levels', 'stock_lots', 'article_pricing_tiers', 'vehicle_brands', 'vehicle_models', 'article_compatibilities']);
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const businessLabel = BUSINESS_TYPE_LABELS[tenant?.business_type || 'auto_parts'] || 'Catalogue';

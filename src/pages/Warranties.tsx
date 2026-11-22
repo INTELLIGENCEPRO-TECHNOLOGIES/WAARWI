@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   Filter, RefreshCw, Printer, Download, Search,
@@ -127,9 +128,9 @@ export function Warranties() {
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1); }, [debouncedSearch, filterStatus, filterSite, filterDateFrom, filterDateTo, tenant?.id]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!tenant) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setLoadError(null);
     const myReqId = ++reqIdRef.current;
 
@@ -187,6 +188,7 @@ export function Warranties() {
   }, [tenant?.id, page, debouncedSearch, filterStatus, filterSite, filterDateFrom, filterDateTo]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['sales', 'sale_items', 'sale_returns', 'articles', 'customers'], () => load(true));
 
   const filtered = entries;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -323,7 +325,7 @@ export function Warranties() {
             <Filter className="w-4 h-4" />
             <span className="hidden md:inline">Filtres</span>
           </button>
-          <button onClick={load} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors" title="Actualiser">
+          <button onClick={() => void load()} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors" title="Actualiser">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button onClick={exportCsv} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors" title="Exporter">

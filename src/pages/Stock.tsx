@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin, Filter, ChevronLeft, ChevronRight, RefreshCw, ArrowRight, Lightbulb } from 'lucide-react';
 import { CategoryPickerModal } from './ArticlesComponents';
@@ -47,7 +48,8 @@ type LotRow = {
 };
 
 export function Stock() {
-  const { tenant, currentSite, sites, depots, dataTick, profile, refData } = useApp();
+  const { tenant, currentSite, sites, depots, profile, refData } = useApp();
+  const dataTick = useRealtimeTick(['articles', 'stock_levels', 'stock_movements', 'stock_lots', 'stock_documents', 'sites', 'part_categories']);
   const { can } = usePermissions();
   const { success, error } = useToast();
   const [rows, setRows] = useState<Row[]>([]);

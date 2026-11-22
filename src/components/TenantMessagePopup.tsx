@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useState, useCallback } from 'react';
 import { AlertTriangle, Info, CheckCircle2, AlertOctagon, X, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -47,28 +48,7 @@ export function TenantMessagePopup() {
     loadMessages();
   }, [loadMessages]);
 
-  // Listen for new messages in real-time
-  useEffect(() => {
-    if (!user || !tenant?.id || profile?.role === 'super_admin') return;
-    const chan = supabase
-      .channel(`tenant_messages_${tenant.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'tenant_messages',
-      }, (payload) => {
-        const msg = payload.new as any;
-        const isForMe =
-          msg.target === 'all' ||
-          (msg.target === 'tenant' && msg.tenant_id === tenant.id) ||
-          (msg.target === 'plan' && msg.plan_code === tenant.plan);
-        if (isForMe) {
-          loadMessages();
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(chan); };
-  }, [user?.id, tenant?.id, tenant?.plan, profile?.role, loadMessages]);
+  useRealtimeRefresh(['tenant_messages'], loadMessages, !!user && !!tenant?.id && profile?.role !== 'super_admin');
 
   if (queue.length === 0 || idx >= queue.length) return null;
   const m = queue[idx];

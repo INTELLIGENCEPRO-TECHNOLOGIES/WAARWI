@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Loader2, ChevronUp, ChevronDown, Eye, EyeOff, Lock,
   Save, Check, GripVertical, Pencil, Trash2,
@@ -90,6 +91,8 @@ export function DocumentSettingsTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
+  const savedSettings = useRef<DocSettings>();
+  const requestId = useRef(0);
   const [paperFormat, setPaperFormat] = useState<DocPaperFormat>(getDocPaperFormat);
 
   const choosePaperFormat = (f: DocPaperFormat) => {
@@ -101,17 +104,18 @@ export function DocumentSettingsTab() {
   const activityName = (tenant?.business_activity_type_name || '').toLowerCase().trim();
   const showImeiFields = IMEI_ACTIVITY_TYPES.some(t => activityName.includes(t));
 
-  const loadSettings = useCallback(async (type: DocType) => {
+  const loadSettings = useCallback(async (type: DocType, silent = false) => {
     if (!tenant) return;
-    setLoading(true);
+    const request = ++requestId.current;
+    if (!silent) setLoading(true);
     const { data } = await supabase
       .from('document_settings')
       .select('*')
       .eq('tenant_id', tenant.id)
       .eq('doc_type', type)
       .maybeSingle();
-    if (data) {
-      setSettings({
+    if (request !== requestId.current) return;
+    const next: DocSettings = data ? {
         show_delivery_date:  data.show_delivery_date  ?? false,
         show_reference:      data.show_reference      ?? false,
         show_warranty:       data.show_warranty       ?? false,
@@ -123,14 +127,19 @@ export function DocumentSettingsTab() {
         allow_edit:          data.allow_edit          ?? false,
         allow_delete:        data.allow_delete        ?? false,
         columns_config:      mergeColumns(data.columns_config ?? []),
-      });
-    } else {
-      setSettings(DEFAULT_DOC_SETTINGS);
-    }
+    } : DEFAULT_DOC_SETTINGS;
+    const before = savedSettings.current;
+    savedSettings.current = next;
+    setSettings(draft => {
+      if (!silent || !before) return next;
+      const edits = Object.entries(draft).filter(([key, value]) => value !== before[key as keyof DocSettings]);
+      return { ...next, ...Object.fromEntries(edits) };
+    });
     setLoading(false);
   }, [tenant?.id]);
 
   useEffect(() => { loadSettings(docType); }, [docType, loadSettings]);
+  useRealtimeRefresh(['document_settings'], () => loadSettings(docType, true), !saving);
 
   const save = useCallback(async (s: DocSettings) => {
     if (!tenant) return;

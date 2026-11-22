@@ -131,11 +131,18 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
     const unsub = onDataChange(
       ['sales', 'sale_payments', 'cash_movements', 'cash_sessions', 'customers', 'suppliers', 'articles', 'stock_levels', 'quotes', 'sale_returns', 'online_orders', 'supplier_orders'],
       () => {
-        if (refreshTimer.current) clearTimeout(refreshTimer.current);
-        refreshTimer.current = setTimeout(() => setRefreshTick(t => t + 1), 900);
+        if (refreshTimer.current) return;
+        refreshTimer.current = setTimeout(() => {
+          refreshTimer.current = null;
+          setRefreshTick(t => t + 1);
+        }, 600);
       }
     );
-    return () => { unsub(); if (refreshTimer.current) clearTimeout(refreshTimer.current); };
+    return () => {
+      unsub();
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      refreshTimer.current = null;
+    };
   }, [tenant?.id, onDataChange]);
   const [balanceHidden, setBalanceHidden] = useState(() => {
     try { return localStorage.getItem('dashboardBalanceHidden') === '1'; } catch { return false; }

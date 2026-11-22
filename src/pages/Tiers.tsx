@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -52,7 +53,8 @@ type LedgerWindowDescriptor = { windowId: string; customerId: string; customer: 
 let ledgerWinCounter = 0;
 
 export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void } = {}) {
-  const { tenant, currentSite, sites, profile, dataTick } = useApp();
+  const { tenant, currentSite, sites, profile } = useApp();
+  const dataTick = useRealtimeTick(['customers', 'suppliers', 'customer_payments', 'supplier_payments', 'customer_prepayments', 'balance_adjustments', 'credit_allocations', 'sales', 'sale_payments', 'supplier_orders', 'customer_exception_prices']);
   const { can } = usePermissions();
   const { t } = useTranslation();
   const { success, error } = useToast();

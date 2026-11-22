@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Lock, Loader2, Printer, Calendar, ChevronDown, RefreshCw,
@@ -81,7 +82,8 @@ function periodBounds(range: DateRange) {
 }
 
 export function Coffre() {
-  const { tenant, currentSite, dataTick } = useApp();
+  const { tenant, currentSite } = useApp();
+  const dataTick = useRealtimeTick(['vaults', 'vault_movements', 'cash_sessions', 'cash_movements']);
   const { can } = usePermissions();
   const { success, error } = useToast();
 

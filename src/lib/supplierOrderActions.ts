@@ -1,3 +1,4 @@
+import { useRealtimeTick } from './useRealtimeData';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { useApp } from '../context/AppContext';
@@ -7,7 +8,8 @@ export const RECEIVED_STATUSES = ['received', 'partial'];
 const EDITABLE_STATUSES = ['draft', 'sent', 'confirmed'];
 
 export function useSupplierOrderRights() {
-  const { tenant, dataTick } = useApp();
+  const { tenant } = useApp();
+  const dataTick = useRealtimeTick(['supplier_orders', 'supplier_order_items', 'supplier_order_receptions']);
   const { can } = usePermissions();
   const [settings, setSettings] = useState({ allow_edit: false, allow_delete: false });
 

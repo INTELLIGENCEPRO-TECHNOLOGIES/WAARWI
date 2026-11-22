@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2, Plus, Check, X, Info, CreditCard as Edit2, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -30,10 +31,10 @@ export function ExpenseCategoriesTab() {
   const [seeding, setSeeding] = useState(false);
   const loadRef = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!tenant || !currentSite?.id) return;
     const token = ++loadRef.current;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const { data, error: e } = await supabase.rpc('get_effective_expense_categories', {
       p_site_id: currentSite.id,
       p_include_inactive: true,
@@ -49,6 +50,7 @@ export function ExpenseCategoriesTab() {
     setNewName('');
     load();
   }, [load]);
+  useRealtimeRefresh(['expense_categories', 'expense_category_site_settings'], () => load(true));
 
   const add = async () => {
     const name = newName.trim();

@@ -48,6 +48,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
@@ -1313,6 +1314,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     };
   }, [tenantId, siteId, loadCashContext]);
 
+  useRealtimeRefresh(['cash_sessions', 'cash_registers', 'cash_register_assignments', 'cash_register_settings'],
+    () => loadCashContext(), !!tenantId && !!siteId && !loadingData && screen !== 'pos');
+
   const load = useCallback(() => {
     refreshCatalog(value => value + 1);
     refreshCustomers(value => value + 1);
@@ -1321,15 +1325,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   useEffect(() => {
     if (!tenantId || !siteId || loadingData || !session) return;
-    let catalogTimer: ReturnType<typeof setTimeout>;
-    let customersTimer: ReturnType<typeof setTimeout>;
-    const stopCatalog = onDataChange(['articles', 'stock_levels'], () => {
-      clearTimeout(catalogTimer);
-      catalogTimer = setTimeout(() => refreshCatalog(value => value + 1), 600);
+    let catalogTimer: ReturnType<typeof setTimeout> | undefined;
+    let customersTimer: ReturnType<typeof setTimeout> | undefined;
+    const stopCatalog = onDataChange(['articles', 'stock_levels', 'stock_lots', 'article_pricing_tiers', 'customer_exception_prices'], () => {
+      if (catalogTimer) return;
+      catalogTimer = setTimeout(() => {
+        catalogTimer = undefined;
+        refreshCatalog(value => value + 1);
+      }, 450);
     });
     const stopCustomers = onDataChange(['customers'], () => {
-      clearTimeout(customersTimer);
-      customersTimer = setTimeout(() => refreshCustomers(value => value + 1), 600);
+      if (customersTimer) return;
+      customersTimer = setTimeout(() => {
+        customersTimer = undefined;
+        refreshCustomers(value => value + 1);
+      }, 450);
     });
     return () => { stopCatalog(); stopCustomers(); clearTimeout(catalogTimer); clearTimeout(customersTimer); };
   }, [tenantId, siteId, loadingData, session?.id, onDataChange]);

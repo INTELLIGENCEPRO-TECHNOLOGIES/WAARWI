@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUpRight, CreditCard, Loader2, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -47,6 +48,7 @@ export function SubscriptionPaymentPanel({ paymentId, inDialog = false }: { paym
   const [error, setError] = useState('');
   const [selectedMonths, setSelectedMonths] = useState(1);
   const [retry, setRetry] = useState(0);
+  const paymentTick = useRealtimeTick(['tenant_subscription_payments', 'tenant_subscriptions', 'tenants'], canPay);
   const mounted = useRef(false);
   const pauseMessageId = useId();
   const refreshedPayment = useRef<string>();
@@ -90,7 +92,7 @@ export function SubscriptionPaymentPanel({ paymentId, inDialog = false }: { paym
     }, 4000) : undefined;
     void read();
     return () => { current = false; window.clearInterval(timer); };
-  }, [canPay, paymentId, tenantId, inDialog, retry]);
+  }, [canPay, paymentId, tenantId, inDialog, retry, paymentTick]);
 
   useEffect(() => {
     if (payment?.subscription_id && payment.id !== refreshedPayment.current) {

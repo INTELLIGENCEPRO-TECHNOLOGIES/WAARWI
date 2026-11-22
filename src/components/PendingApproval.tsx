@@ -1,5 +1,6 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useState } from 'react';
-import { LogOut } from 'lucide-react';
+import { ArrowRight, LogOut } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { RegistrationLayout } from '../pages/RegistrationLayout';
@@ -9,10 +10,11 @@ import { SubscriptionHistoryAccess } from './SubscriptionHistory';
 const approvalSteps = ['Demande reçue', 'Vérification', 'Activation'];
 const rejectedSteps = ['Demande reçue', 'Demande non validée'];
 
-export function PendingApproval() {
-  const { tenant, signOut } = useApp();
+export function PendingApproval({ onEnter }: { onEnter?: () => void }) {
+  const { tenant, user, signOut } = useApp();
   const canPay = useCanPaySubscription();
   const rejected = tenant?.approval_status === 'rejected';
+  const planTick = useRealtimeTick(['plans']);
   const planCode = tenant?.selected_plan_code || tenant?.plan;
   const activityName = tenant?.registration_other_activity || tenant?.business_activity_type_name;
   const legacyType = !activityName && !tenant?.business_activity_type_id && tenant?.business_type !== 'generic'
@@ -30,7 +32,7 @@ export function PendingApproval() {
       if (current && data?.name) setPlan({ code: planCode, name: data.name });
     });
     return () => { current = false; };
-  }, [planCode]);
+  }, [planCode, planTick]);
 
   useEffect(() => {
     if (!legacyType) return;
@@ -46,9 +48,9 @@ export function PendingApproval() {
   return (
     <RegistrationLayout
       steps={rejected ? rejectedSteps : approvalSteps}
-      activeStep={1}
-      title={rejected ? 'Demande non validée' : 'Validation en cours'}
-      description={rejected
+      activeStep={onEnter ? 2 : 1}
+      title={onEnter ? 'Inscription validée' : rejected ? 'Demande non validée' : 'Validation en cours'}
+      description={onEnter ? 'Votre espace est prêt. Vous pouvez vous connecter directement.' : rejected
         ? 'Votre demande a été examinée par l’équipe Waarwi.'
         : 'L’équipe Waarwi examine votre demande et vous contactera par WhatsApp.'}
       headerAction={
@@ -65,13 +67,18 @@ export function PendingApproval() {
             {planName && <div><dt>Offre</dt><dd>{planName}</dd></div>}
             {tenant?.whatsapp_phone && <div><dt>WhatsApp</dt><dd>{tenant.whatsapp_phone}</dd></div>}
           </dl>
+          {onEnter && user?.email && (
+            <p className="registration-approval-reason" role="status">
+              Identifiant de connexion <strong>{user.email}</strong>
+            </p>
+          )}
           {rejected && tenant?.rejection_reason && (
             <section className="registration-approval-reason">
               <h2>Motif de la décision</h2>
               <p>{tenant.rejection_reason}</p>
             </section>
           )}
-          {!rejected && canPay && (
+          {!onEnter && !rejected && canPay && (
             <div className="registration-payment registration-approval-payment">
               <SubscriptionPaymentPanel />
             </div>
@@ -79,8 +86,13 @@ export function PendingApproval() {
         </div>
         <div className="registration-stage-footer">
           <div className="registration-actions registration-approval-actions">
-            {canPay && <SubscriptionHistoryAccess />}
+            {!onEnter && canPay && <SubscriptionHistoryAccess />}
             <a href="tel:+221775254101" className="registration-link">Assistance Waarwi</a>
+            {onEnter && (
+              <button type="button" className="registration-primary" onClick={onEnter}>
+                Se connecter<ArrowRight size={17} aria-hidden="true" />
+              </button>
+            )}
           </div>
         </div>
       </div>

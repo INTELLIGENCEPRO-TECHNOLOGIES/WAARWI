@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Printer, Eye, Calendar, ChevronDown, Store, Check, ArrowLeft, RefreshCw,
@@ -36,6 +37,15 @@ function isMobile() {
   return window.innerWidth < 768;
 }
 
+const REPORT_CHANGES: Record<string, readonly string[]> = {
+  cash: ['cash_sessions', 'cash_movements', 'cash_regularizations', 'cash_control_lines', 'sales', 'sale_payments', 'sale_returns', 'customer_payments', 'supplier_payments', 'expense_categories'],
+  articles: ['articles', 'sales', 'sale_items', 'sale_returns', 'stock_levels'],
+  customers: ['customers', 'sales', 'sale_payments', 'customer_payments', 'customer_prepayments', 'sale_returns'],
+  suppliers: ['suppliers', 'supplier_orders', 'supplier_order_items', 'supplier_payments'],
+  expenses: ['cash_movements', 'expense_categories', 'expense_category_site_settings'],
+  tiers_balance: ['customers', 'suppliers', 'sales', 'sale_payments', 'supplier_orders', 'supplier_payments', 'customer_payments', 'balance_adjustments'],
+};
+
 export function Reports() {
   const { tenant, sites, currentSite, refresh } = useApp();
   const { error: toastError } = useToast();
@@ -54,9 +64,8 @@ export function Reports() {
   const [scopeOptions, setScopeOptions] = useState<CashScopeOptions | null>(null);
   const [scope, setScope] = useState<CashScopeSelection>(EMPTY_SCOPE);
 
-  const [showMargin, setShowMargin] = useState<boolean>(() =>
-    !!(tenant as any)?.settings?.show_margin_in_reports
-  );
+  const marginInReports = !!(tenant as any)?.settings?.show_margin_in_reports;
+  const [showMargin, setShowMargin] = useState(marginInReports);
 
   const [range, setRange] = useState<DateRange>(() => {
     const now = new Date();
@@ -67,6 +76,8 @@ export function Reports() {
   const [previewScale, setPreviewScale] = useState(1);
   const [mobile, setMobile] = useState(isMobile);
   const reqToken = useRef(0);
+  const cashScopeTick = useRealtimeTick(['cash_sessions', 'cash_registers', 'cash_register_assignments', 'profiles', 'sites']);
+  const reportTick = useRealtimeTick(REPORT_CHANGES[reportType] || []);
 
   useEffect(() => {
     if (currentSite && selectedSiteId === 'all' && sites.length <= 1) {
@@ -75,8 +86,8 @@ export function Reports() {
   }, [currentSite?.id, sites.length]);
 
   useEffect(() => {
-    if (tenant) setShowMargin(!!(tenant as any)?.settings?.show_margin_in_reports);
-  }, [tenant?.id]);
+    setShowMargin(marginInReports);
+  }, [marginInReports]);
 
   useEffect(() => {
     const check = () => setMobile(window.innerWidth < 768);
@@ -132,7 +143,7 @@ export function Reports() {
       });
     })();
     return () => { cancelled = true; };
-  }, [tenant?.id, selectedSiteId, scope.registerId, scope.userId, range.from, range.to]);
+  }, [tenant?.id, selectedSiteId, scope.registerId, scope.userId, range.from, range.to, cashScopeTick]);
 
   const multi = !!scopeOptions;
 
@@ -180,7 +191,7 @@ export function Reports() {
         if (token === reqToken.current) setLoading(false);
       }
     })();
-  }, [tenant?.id, reportType, range.from, range.to, selectedSiteId, scope.registerId, scope.userId, scope.sessionId]);
+  }, [tenant?.id, reportType, range.from, range.to, selectedSiteId, scope.registerId, scope.userId, scope.sessionId, reportTick]);
 
   const reload = () => setRange(r => ({ ...r }));
 

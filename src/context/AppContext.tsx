@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { includesChanges, subscribeToDataChanges } from '../lib/realtime';
 import type { Profile, Tenant, Site, Category, VehicleBrand } from '../lib/types';
 
 export type RefData = {
@@ -26,14 +27,16 @@ type AppState = {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
-  dataTick: number;
-  onDataChange: (tables: string[], cb: () => void) => () => void;
+  onDataChange: (tables: readonly string[], cb: () => void) => () => void;
   posCartCount: number;
   posCartOpen: boolean;
   setPosCart: (count: number, open: boolean) => void;
   refData: RefData | null;
   isOwner: boolean;
 };
+
+const REF_TABLES = ['part_categories', 'vehicle_brands', 'vehicle_models', 'payment_methods'];
+const CORE_TABLES = ['tenants', 'profiles', 'sites', 'business_activity_types'];
 
 const Ctx = createContext<AppState | null>(null);
 
@@ -47,12 +50,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentSite, setCurrentSite] = useState<Site | null>(null);
   const [localDefaultSiteId, setLocalDefaultSiteId] = useState<string | null>(null);
   const lastLostSiteAlertRef = useRef<string | null>(null);
-  const [dataTick, setDataTick] = useState(0);
+  const [coreTick, setCoreTick] = useState(0);
+  const [refTick, setRefTick] = useState(0);
   const [posCartCount, setPosCartCount] = useState(0);
   const [posCartOpen, setPosCartOpenState] = useState(false);
-  const listenersRef = useRef<{ tables: Set<string>; cb: () => void }[]>([]);
+  const listenersRef = useRef<{ tables: readonly string[]; cb: () => void }[]>([]);
   const [refData, setRefData] = useState<RefData | null>(null);
   const refDataTidRef = useRef<string | null>(null);
+  const refRequest = useRef(0);
   const activeSiteKey = (uid: string, tid: string) => `activeSiteId:${uid}:${tid}`;
   const defaultSiteKey = (uid: string, tid: string) => `defaultSiteId:${uid}:${tid}`;
   const readTabActive = (uid: string, tid: string): string | null => {
@@ -147,66 +152,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [loadSession]);
 
-  // ── Realtime: one channel per tenant ──────────────────────────────────────
+  const tenantId = profile?.tenant_id;
+  const profileId = profile?.id;
+  const platform = profile?.role === 'super_admin';
+
   useEffect(() => {
-    const tid = profile?.tenant_id;
-    if (!tid) return;
-    const tables = [
-      'articles','part_categories','stock_levels','stock_movements','stock_lots',
-      'vehicle_brands','vehicle_models','article_compatibilities',
-      'payment_methods','cash_sessions','cash_movements','sales','sale_items','sale_payments',
-      'quotes','quote_items','sale_returns','sale_return_items',
-      'customers','suppliers','supplier_orders','supplier_order_items','supplier_payments',
-      'online_orders','online_order_items','shop_settings','tenants','sites','profiles','tenant_messages',
-      'journal_entries',
-      'vaults','vault_movements',
-    ];
-    const dispatch = (table: string) => {
-      setDataTick(t => t + 1);
-      if (REF_TABLES.includes(table)) refDirtyRef.current = true;
-      listenersRef.current.forEach(l => {
-        if (l.tables.has(table) || l.tables.has('*')) {
-          try { l.cb(); } catch (_e) { /* ignore */ }
+    if (!profileId || (!tenantId && !platform)) return;
+    const topics = ['waarwi:shared'];
+    if (tenantId) topics.push(`waarwi:tenant:${tenantId}`);
+    if (platform) topics.push('waarwi:platform');
+
+    return subscribeToDataChanges(topics, changes => {
+      if (includesChanges(changes, CORE_TABLES)) setCoreTick(tick => tick + 1);
+      if (includesChanges(changes, REF_TABLES)) setRefTick(tick => tick + 1);
+      listenersRef.current.forEach(listener => {
+        if (listener.tables.includes('*') || includesChanges(changes, listener.tables)) {
+          try { listener.cb(); } catch { /* other screens still need the update */ }
         }
       });
-    };
-    const channel = supabase.channel(`tenant:${tid}`);
-    tables.forEach(table => {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => dispatch(table));
     });
-    channel.subscribe((status) => {
-      if (status === 'CHANNEL_ERROR') {
-        setTimeout(() => { setDataTick(t => t + 1); }, 2000);
-      }
-    });
-    return () => { supabase.removeChannel(channel); };
-  }, [profile?.tenant_id]);
+  }, [profileId, tenantId, platform]);
 
-  // ── Visibility change: refresh data when app returns to foreground ────────
+  const approvalStatus = tenant?.approval_status;
   useEffect(() => {
-    const tid = profile?.tenant_id;
-    if (!tid) return;
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        setDataTick(t => t + 1);
-        listenersRef.current.forEach(l => { try { l.cb(); } catch (_e) { /* ignore */ } });
+    if (!tenantId || (approvalStatus !== 'pending' && approvalStatus !== 'rejected')) return;
+    let active = true;
+    let checking = false;
+    const check = async () => {
+      if (!active || checking || document.hidden || !navigator.onLine) return;
+      checking = true;
+      try {
+        const { data } = await supabase.from('tenants').select('approval_status').eq('id', tenantId).maybeSingle();
+        if (active && data?.approval_status && data.approval_status !== approvalStatus) setCoreTick(tick => tick + 1);
+      } finally {
+        checking = false;
       }
     };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [profile?.tenant_id]);
+    // A limited fallback for the waiting screen, including the join window.
+    const interval = window.setInterval(() => void check(), 12000);
+    void check();
+    return () => { active = false; window.clearInterval(interval); };
+  }, [tenantId, approvalStatus]);
 
-  // Refresh tenant/profile/sites on dataTick (debounced)
+  // Refresh scoped identity and site data only when these records change.
   useEffect(() => {
-    if (!profile?.tenant_id || dataTick === 0) return;
-    const tid = profile.tenant_id;
-    const pid = profile.id;
+    if (!tenantId || !profileId || coreTick === 0) return;
+    let current = true;
+    const tid = tenantId;
+    const pid = profileId;
     const timer = setTimeout(async () => {
       const [{ data: ten }, { data: s }, { data: prof }] = await Promise.all([
         supabase.from('tenants').select('*').eq('id', tid).maybeSingle(),
         supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id, logo_url, legal_name, ninea, rccm, email, website, ticket_header_config, a4_header_config, allow_negative_stock').eq('tenant_id', tid).eq('is_active', true).order('name'),
         supabase.from('profiles').select('*').eq('id', pid).maybeSingle(),
       ]);
+      if (!current) return;
+      if (prof?.tenant_id && prof.tenant_id !== tid) { void loadSession(); return; }
       if (ten) {
         let tenantWithActivity: Tenant = ten as Tenant;
         if (ten.business_activity_type_id) {
@@ -217,7 +218,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             .maybeSingle();
           tenantWithActivity = { ...ten, business_activity_type_name: act?.name || null } as Tenant;
         }
-        setTenant(tenantWithActivity);
+        if (!current) return;
+        setTenant(previous => JSON.stringify(previous) === JSON.stringify(tenantWithActivity) ? previous : tenantWithActivity);
       }
       if (s && prof) {
         const mode: string = (prof as any).site_access_mode || 'selected';
@@ -243,8 +245,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               try { window.alert(`Le magasin "${name}" n'est plus accessible. Veuillez sélectionner un autre magasin.`); } catch {}
             }, 0);
           }
-          if (user?.id && profile?.tenant_id) {
-            try { sessionStorage.removeItem(activeSiteKey(user.id, profile.tenant_id)); } catch {}
+          if (user?.id) {
+            try { sessionStorage.removeItem(activeSiteKey(user.id, tid)); } catch {}
           }
           return null;
         });
@@ -265,34 +267,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
               try { window.alert(`Le magasin "${name}" n'est plus accessible. Veuillez sélectionner un autre magasin.`); } catch {}
             }, 0);
           }
-          if (user?.id && profile?.tenant_id) {
-            try { sessionStorage.removeItem(activeSiteKey(user.id, profile.tenant_id)); } catch {}
+          if (user?.id) {
+            try { sessionStorage.removeItem(activeSiteKey(user.id, tid)); } catch {}
           }
           return null;
         });
       }
-      if (prof) setProfile(prof);
-    }, 500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataTick]);
+      if (prof) setProfile(previous => JSON.stringify(previous) === JSON.stringify(prof) ? previous : prof);
+    }, 80);
+    return () => { current = false; clearTimeout(timer); };
+  }, [coreTick, profileId, tenantId, user?.id, loadSession]);
 
-  const onDataChange = useCallback((tables: string[], cb: () => void) => {
-    const entry = { tables: new Set(tables), cb };
+  const onDataChange = useCallback((tables: readonly string[], cb: () => void) => {
+    const entry = { tables, cb };
     listenersRef.current.push(entry);
     return () => { listenersRef.current = listenersRef.current.filter(l => l !== entry); };
   }, []);
 
   // Reference data cache: categories, brands, models, payment methods
-  const REF_TABLES = ['part_categories', 'vehicle_brands', 'vehicle_models', 'payment_methods'];
-  const refDirtyRef = useRef(false);
   const loadRefData = useCallback(async (tid: string) => {
+    const request = ++refRequest.current;
     const [{ data: cats }, { data: brands }, { data: models }, { data: pm }] = await Promise.all([
       supabase.from('part_categories').select('id, name, code, parent_id, tenant_id, is_active, track_stock').eq('tenant_id', tid).eq('is_active', true).order('name'),
       supabase.from('vehicle_brands').select('id, name, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('name'),
       supabase.from('vehicle_models').select('id, name, brand_id, tenant_id').eq('tenant_id', tid).order('name'),
       supabase.from('payment_methods').select('id, name, is_active, sort_order, tenant_id, payment_type').eq('tenant_id', tid).eq('is_active', true).order('sort_order'),
     ]);
+    if (refDataTidRef.current !== tid || request !== refRequest.current) return;
     setRefData({
       categories: (cats || []) as Category[],
       brands: (brands || []) as VehicleBrand[],
@@ -300,25 +301,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       paymentMethods: pm || [],
       loadedAt: Date.now(),
     });
-    refDirtyRef.current = false;
   }, []);
 
   useEffect(() => {
-    const tid = profile?.tenant_id;
-    if (!tid) { setRefData(null); return; }
-    if (refDataTidRef.current !== tid) {
-      refDataTidRef.current = tid;
-      loadRefData(tid);
-    }
-  }, [profile?.tenant_id, loadRefData]);
-
-  // Invalidate refData when ref tables change via realtime
-  useEffect(() => {
-    if (!profile?.tenant_id || dataTick === 0 || !refDirtyRef.current) return;
-    const timer = setTimeout(() => { loadRefData(profile.tenant_id!); }, 600);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataTick]);
+    refDataTidRef.current = tenantId || null;
+    if (!tenantId) { setRefData(null); return; }
+    void loadRefData(tenantId);
+  }, [tenantId, refTick, loadRefData]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -407,7 +396,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDefaultSite: handleSetDefaultSite,
       localDefaultSiteId,
       signIn, signOut, refresh: loadSession,
-      dataTick, onDataChange,
+      onDataChange,
       posCartCount, posCartOpen, setPosCart,
       refData,
       isOwner: !!(user && tenant && (tenant as any).owner_user_id === user.id),

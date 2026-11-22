@@ -1,3 +1,5 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, ArrowUpRight, Building2, Check, CircleDollarSign, Clock,
@@ -266,6 +268,8 @@ function OverviewSection({ onNavigate, onSubscriptions }: {
   const [loading, setLoading] = useState(true);
   const { error } = useToast();
 
+  const realtimeTick = useRealtimeTick(['tenants', 'profiles', 'tenant_subscriptions', 'tenant_subscription_payments', 'platform_events', 'plans']);
+
   useEffect(() => {
     let current = true;
     call('platform_overview').then(result => {
@@ -276,7 +280,7 @@ function OverviewSection({ onNavigate, onSubscriptions }: {
       if (current) setLoading(false);
     });
     return () => { current = false; };
-  }, []);
+  }, [, realtimeTick]);
 
   if (loading) return <PlatformLoading />;
   if (!data) return <p className="pa-empty">La vue d’ensemble est indisponible.</p>;
@@ -420,6 +424,7 @@ function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId:
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
+  useRealtimeRefresh(['tenants', 'profiles', 'tenant_subscriptions', 'tenant_subscription_payments', 'plans'], load);
 
   const planNames = useMemo(() => new Map(plans.map(plan => [plan.code, plan.name])), [plans]);
   const filtered = useMemo(() => {
@@ -1138,6 +1143,7 @@ function PlansSection() {
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
+  useRealtimeRefresh(['plans'], load);
 
   const openOffer = (plan?: any) => {
     setEditing(!!plan);
@@ -1410,6 +1416,7 @@ function SubscriptionsSection({ initialFilter, focusTenantId, onFocusConsumed }:
   };
 
   useEffect(() => { void load(); }, []);
+  useRealtimeRefresh(['tenants', 'tenant_subscriptions', 'tenant_subscription_payments', 'plans'], load);
   useEffect(() => { setStatusFilter(initialFilter); setPage(0); }, [initialFilter]);
   useEffect(() => {
     let current = true;
@@ -1654,8 +1661,8 @@ function MessagesSection() {
   const [toDelete, setToDelete] = useState<any>(null);
   const { success, error } = useToast();
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [m, t, p] = await Promise.all([call('list_messages'), call('list_tenants'), call('list_plans')]);
       setMessages(m.messages || []); setTenants(t.tenants || []); setPlans(p.plans || []);
@@ -1663,6 +1670,7 @@ function MessagesSection() {
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+  useRealtimeRefresh(['tenant_messages'], () => load(true));
 
   const save = async () => {
     if (!form.title?.trim() || publishing) return;
@@ -1817,6 +1825,8 @@ function ActivitySection() {
   const [page, setPage] = useState(0);
   const { error } = useToast();
 
+  const realtimeTick = useRealtimeTick(['tenants', 'platform_events']);
+
   useEffect(() => {
     (async () => {
       try {
@@ -1826,7 +1836,7 @@ function ActivitySection() {
       } catch (cause) { error((cause as Error).message); }
       finally { setLoading(false); }
     })();
-  }, []);
+  }, [, realtimeTick]);
 
   const now = Date.now();
   const lastSeen = (company: any) => company.last_active_at ? (now - new Date(company.last_active_at).getTime()) / 86400000 : null;
@@ -2208,8 +2218,8 @@ function ReleasesSection() {
   const [form, setForm] = useState({ version: '', title: 'Mise à jour', release_date: new Date().toISOString().split('T')[0], features: '', fixes: '' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase
       .from('app_releases')
       .select('*')
@@ -2219,6 +2229,7 @@ function ReleasesSection() {
   };
 
   useEffect(() => { load(); }, []);
+  useRealtimeRefresh(['app_releases'], () => load(true));
 
   const openNew = () => {
     setEditId(null);

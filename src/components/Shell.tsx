@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
@@ -339,6 +340,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
     });
   };
 
+  const ordersTick = useRealtimeTick(['online_orders']);
   useEffect(() => {
     if (!tenant) return;
     let active = true;
@@ -351,11 +353,8 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
       if (active) setNewOrdersCount(count || 0);
     };
     load();
-    const chan = supabase.channel(`shell_online_orders_${tenant.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'online_orders', filter: `tenant_id=eq.${tenant.id}` }, () => load())
-      .subscribe();
-    return () => { active = false; supabase.removeChannel(chan); };
-  }, [tenant]);
+    return () => { active = false; };
+  }, [tenant?.id, ordersTick]);
 
   const badgeFor = (key: Route) => {
     if (key === 'online_orders' && newOrdersCount > 0) return newOrdersCount;

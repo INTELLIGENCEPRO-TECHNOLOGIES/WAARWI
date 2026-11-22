@@ -1,3 +1,4 @@
+import { useRealtimeTick } from './useRealtimeData';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from './supabase';
 import { useApp } from '../context/AppContext';
@@ -291,7 +292,8 @@ const OWNER_ONLY_KEYS: Set<PermissionKey> = new Set([
 type PermState = { key: string; permissions: PermissionMap; error: string | null };
 
 export function usePermissions(): { permissions: PermissionMap; loading: boolean; error: string | null; reload: () => void; can: (key: PermissionKey) => boolean } {
-  const { profile, dataTick, isOwner } = useApp();
+  const { profile, isOwner } = useApp();
+  const dataTick = useRealtimeTick(['role_permissions', 'profiles']);
   const ctxKey = profile?.tenant_id && profile?.role ? `${profile.id}|${profile.tenant_id}|${profile.role}|${isOwner ? 1 : 0}` : '';
   const [state, setState] = useState<PermState>({ key: '', permissions: ALL_FALSE, error: null });
   const [reloadTick, setReloadTick] = useState(0);
