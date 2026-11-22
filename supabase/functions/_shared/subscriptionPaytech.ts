@@ -68,6 +68,21 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+export class PayTechCheckoutRefused extends Error {}
+
+function checkoutRefusalMessage(data: Record<string, unknown>, config: PayTechConfig): string {
+  const notices = [data.error, data.errors, data.message].flatMap(value =>
+    value && typeof value === "object" ? Object.values(value) : [value],
+  );
+  const detail = notices.flat().map(text).filter(Boolean).join(" ")
+    .replaceAll(config.key, "[clé]").replaceAll(config.secret, "[secret]")
+    .replace(/https?:\/\/\S+/gi, "[adresse]")
+    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "[courriel]")
+    .replace(/[A-Za-z0-9_-]{24,}/g, "[référence]")
+    .slice(0, 420);
+  return detail ? "Refus PayTech · " + detail : "Refus PayTech sans motif";
+}
+
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
@@ -110,11 +125,19 @@ export async function createPayTechCheckout(
     success_url: returnUrl.toString(), cancel_url: returnUrl.toString(),
   });
 
+  if (Number(result.success) !== 1) {
+    throw new PayTechCheckoutRefused(checkoutRefusalMessage(result, config));
+  }
+
   const token = text(result.token);
-  const redirect = new URL(text(result.redirect_url) || text(result.redirectUrl));
-  if (Number(result.success) !== 1 || !token || redirect.origin !== "https://paytech.sn"
+  const redirectUrl = text(result.redirect_url) || text(result.redirectUrl);
+  if (!token || !URL.canParse(redirectUrl)) {
+    throw new Error("Réponse PayTech sans référence ou adresse de paiement valide");
+  }
+  const redirect = new URL(redirectUrl);
+  if (redirect.origin !== "https://paytech.sn"
       || !redirect.pathname.startsWith("/payment/checkout/") || redirect.username || redirect.password) {
-    throw new Error("Demande de paiement PayTech refusée");
+    throw new Error("Adresse de paiement PayTech inattendue");
   }
   return { token, url: redirect.toString() };
 }
