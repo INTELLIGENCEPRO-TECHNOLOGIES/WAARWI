@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { approvalEmail, newSignupAdminEmail } from "./registrationEmails.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,60 +75,6 @@ function emailLayout(content: string, year: number) {
 </html>`;
 }
 
-function approvalEmail(
-  tenantName: string,
-  tenantEmail: string,
-  loginUrl: string,
-  year: number
-) {
-  const content = `
-    <h1 style="margin:0 0 20px;color:#0f172a;font-size:22px;font-weight:800;">
-      Bienvenue sur WAARWI !
-    </h1>
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.7;">
-      Bonjour,
-    </p>
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.7;">
-      J'ai le plaisir de vous informer que votre compte <strong style="color:#0f172a;">${tenantName}</strong> a \u00e9t\u00e9 valid\u00e9 avec succ\u00e8s. Vous pouvez d\u00e8s maintenant acc\u00e9der \u00e0 l'ensemble des fonctionnalit\u00e9s de la plateforme.
-    </p>
-
-    <!-- Credentials box -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdfa;border-radius:12px;border:1px solid #99f6e4;margin:24px 0;">
-      <tr><td style="padding:20px 24px;">
-        <p style="margin:0 0 10px;color:#0f766e;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
-          Vos identifiants de connexion
-        </p>
-        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
-          <strong>Email :</strong> ${tenantEmail}
-        </p>
-        <p style="margin:0;color:#334155;font-size:14px;">
-          <strong>Mot de passe :</strong> celui choisi lors de votre inscription
-        </p>
-      </td></tr>
-    </table>
-
-    <!-- CTA button -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 24px;">
-      <tr><td align="center">
-        <a href="${loginUrl}" style="display:inline-block;padding:14px 40px;background-color:#0f766e;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:700;letter-spacing:0.3px;">
-          Se connecter \u00e0 WAARWI
-        </a>
-      </td></tr>
-    </table>
-
-    <p style="margin:0 0 8px;color:#94a3b8;font-size:12px;text-align:center;">
-      Ou copiez ce lien : <a href="${loginUrl}" style="color:#0f766e;word-break:break-all;">${loginUrl}</a>
-    </p>
-
-    <p style="margin:24px 0 0;color:#475569;font-size:15px;line-height:1.7;">
-      N'h\u00e9sitez pas \u00e0 nous contacter si vous avez la moindre question. Nous sommes l\u00e0 pour vous accompagner.
-    </p>
-    <p style="margin:16px 0 0;color:#475569;font-size:15px;line-height:1.7;">
-      Cordialement,
-    </p>`;
-  return emailLayout(content, year);
-}
-
 function rejectionEmail(
   tenantName: string,
   reason: string,
@@ -162,68 +109,6 @@ function rejectionEmail(
     </p>
     <p style="margin:16px 0 0;color:#475569;font-size:15px;line-height:1.7;">
       Cordialement,
-    </p>`;
-  return emailLayout(content, year);
-}
-
-function newSignupAdminEmail(
-  tenantName: string,
-  tenantEmail: string,
-  businessType: string,
-  approveUrl: string,
-  platformUrl: string,
-  year: number
-) {
-  const content = `
-    <h1 style="margin:0 0 20px;color:#0f172a;font-size:22px;font-weight:800;">
-      Nouvelle inscription !
-    </h1>
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.7;">
-      Un nouveau tenant vient de s'inscrire sur la plateforme WAARWI et attend votre validation.
-    </p>
-
-    <!-- Tenant info box -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f9ff;border-radius:12px;border:1px solid #bae6fd;margin:24px 0;">
-      <tr><td style="padding:20px 24px;">
-        <p style="margin:0 0 10px;color:#0369a1;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
-          D\u00e9tails du tenant
-        </p>
-        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
-          <strong>Entreprise :</strong> ${tenantName}
-        </p>
-        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
-          <strong>Email :</strong> ${tenantEmail}
-        </p>
-        <p style="margin:0;color:#334155;font-size:14px;">
-          <strong>Type d'activit\u00e9 :</strong> ${businessType}
-        </p>
-      </td></tr>
-    </table>
-
-    <!-- CTA: Approve directly -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 16px;">
-      <tr><td align="center">
-        <a href="${approveUrl}" style="display:inline-block;padding:14px 40px;background-color:#059669;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:700;letter-spacing:0.3px;">
-          Approuver ce tenant
-        </a>
-      </td></tr>
-    </table>
-
-    <p style="margin:0 0 20px;color:#94a3b8;font-size:12px;text-align:center;">
-      Cliquez sur le bouton ci-dessus pour activer directement le compte.
-    </p>
-
-    <!-- Secondary: Go to platform -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-      <tr><td align="center">
-        <a href="${platformUrl}" style="display:inline-block;padding:10px 28px;background-color:#f1f5f9;color:#475569;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;border:1px solid #e2e8f0;">
-          Ouvrir la console WAARWI
-        </a>
-      </td></tr>
-    </table>
-
-    <p style="margin:0;color:#475569;font-size:13px;line-height:1.7;color:#94a3b8;">
-      Si vous ne souhaitez pas approuver ce tenant, connectez-vous sur la console pour le rejeter avec un motif.
     </p>`;
   return emailLayout(content, year);
 }
@@ -326,10 +211,11 @@ Deno.serve(async (req: Request) => {
       return json({ error: "type et tenant_id requis" }, 400);
     }
 
-    // For new_signup and subscription_expired_admin types, use service key auth
-    if (type !== "new_signup" && type !== "subscription_expired_admin") {
-      const authHeader = req.headers.get("Authorization") || "";
-      const token = authHeader.replace("Bearer ", "");
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    const internalApproval = type === "approval" && !!SERVICE_KEY && token === SERVICE_KEY;
+
+    if (!internalApproval && type !== "new_signup" && type !== "subscription_expired_admin") {
       if (!token) return json({ error: "Unauthorized" }, 401);
 
       const { data: userData, error: userErr } = await admin.auth.getUser(token);
@@ -343,11 +229,9 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (!profile || profile.role !== "super_admin")
         return json({ error: "Forbidden" }, 403);
-    } else {
-      const apikey = req.headers.get("Apikey") || req.headers.get("apikey") || "";
-      const authHeader = req.headers.get("Authorization") || "";
+    } else if (!internalApproval) {
+      const apikey = req.headers.get("Apikey") || "";
       if (!apikey && !authHeader.includes(SERVICE_KEY)) {
-        const token = authHeader.replace("Bearer ", "");
         if (token) {
           const { data: userData, error: userErr } = await admin.auth.getUser(token);
           if (userErr || !userData.user)
@@ -360,7 +244,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: tenant } = await admin
       .from("tenants")
-      .select("name, email, business_type, approval_token, plan, plan_expires_at, billing_cycle")
+      .select("name, email, business_type, business_activity_type_id, registration_other_activity, responsible_name, whatsapp_phone, approval_status, approval_token, plan, plan_expires_at, billing_cycle")
       .eq("id", tenant_id)
       .maybeSingle();
 
@@ -380,24 +264,39 @@ Deno.serve(async (req: Request) => {
     let toEmail = tenant.email;
 
     if (type === "approval") {
-      subject = `${tenant.name}, votre compte WAARWI est actif !`;
-      htmlBody = approvalEmail(tenant.name, tenant.email || "", APP_URL, year);
+      if (tenant.approval_status !== "approved") {
+        return json({ error: "L’inscription doit être validée avant l’envoi." }, 409);
+      }
+      subject = `Inscription validée · ${tenant.name}`;
+      htmlBody = approvalEmail(tenant.name, tenant.email || "", APP_URL);
     } else if (type === "rejection") {
       const reason = body.reason || "";
       subject = "Information concernant votre inscription WAARWI";
       htmlBody = rejectionEmail(tenant.name, reason, year);
     } else if (type === "new_signup") {
+      if (tenant.approval_status !== "pending" || !tenant.approval_token) {
+        return json({ success: true, skipped: true });
+      }
       toEmail = ADMIN_EMAIL;
-      subject = `Nouvelle inscription : ${tenant.name} (${tenant.email})`;
-      const approveUrl = `${APP_URL}?approve_token=${tenant.approval_token}`;
-      htmlBody = newSignupAdminEmail(
-        tenant.name,
-        tenant.email || "",
-        tenant.business_type || "non specifie",
-        approveUrl,
-        APP_URL,
-        year
+      subject = `Nouvelle inscription · ${tenant.name}`;
+      const approveUrl = new URL(APP_URL);
+      approveUrl.searchParams.set("approve_token", tenant.approval_token);
+      const { data: activityType } = tenant.business_activity_type_id
+        ? await admin.from("business_activity_types").select("name").eq("id", tenant.business_activity_type_id).maybeSingle()
+        : { data: null };
+      const activity = tenant.registration_other_activity || activityType?.name || (
+        tenant.business_type === "auto_parts" ? "Pièces détachées automobiles"
+          : tenant.business_type && tenant.business_type !== "generic"
+            ? tenant.business_type.replaceAll("_", " ")
+            : undefined
       );
+      htmlBody = newSignupAdminEmail({
+        company: tenant.name,
+        email: tenant.email,
+        activity,
+        contact: tenant.responsible_name,
+        phone: tenant.whatsapp_phone,
+      }, approveUrl.toString(), APP_URL);
     } else if (type === "subscription_expired_admin") {
       toEmail = ADMIN_EMAIL;
       const expiredAt = tenant.plan_expires_at
