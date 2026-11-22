@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Loader2, RefreshCw, Search } from 'lucide-re
 import { useToast } from '../context/ToastContext';
 import { formatDateTime, formatFCFA } from '../lib/format';
 import {
-  callSubscriptionPayments, subscriptionCycleLabels, subscriptionPaymentLabel,
+  callSubscriptionPayments, subscriptionCycleLabels, subscriptionPaymentDuration, subscriptionPaymentLabel,
   type SubscriptionPayment,
 } from '../lib/subscriptionPayments';
 import { Modal } from './Modal';
@@ -202,6 +202,7 @@ export function AdminSubscriptionPayments() {
               ['Entreprise', selected.tenant_name],
               ['Référence', selected.id],
               ['Plan', selected.plan_code + ' · ' + subscriptionCycleLabels[selected.billing_cycle]],
+              ['Durée', subscriptionPaymentDuration(selected)],
               ['Montant', formatFCFA(selected.amount)],
               ['Statut', subscriptionPaymentLabel(selected)],
               ['Moyen de paiement', selected.payment_method],

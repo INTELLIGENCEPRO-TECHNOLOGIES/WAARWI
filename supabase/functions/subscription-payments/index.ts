@@ -9,8 +9,8 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const CUSTOMER_FIELDS = "id,plan_code,billing_cycle,purpose,amount,environment,state,checkout_url,subscription_id,review_reason,payment_method,paid_at,created_at";
-const ADMIN_FIELDS = "id,tenant_id,tenant_name,plan_code,billing_cycle,purpose,amount,environment,state,subscription_id,review_reason,payment_method,paid_at,created_at";
+const CUSTOMER_FIELDS = "id,plan_code,billing_cycle,billing_months,purpose,amount,environment,state,subscription_id,review_reason,payment_method,paid_at,created_at";
+const ADMIN_FIELDS = "id,tenant_id,tenant_name,plan_code,billing_cycle,billing_months,purpose,amount,environment,state,subscription_id,review_reason,payment_method,paid_at,created_at";
 const PAGE_SIZE = 50;
 
 type CheckoutContext = {
@@ -18,6 +18,8 @@ type CheckoutContext = {
   tenant_id?: string;
   payment_id?: string;
   reserved?: boolean;
+  period_conflict?: boolean;
+  period_unavailable?: boolean;
   quote?: { plan_name: string; amount: number; billing_cycle: string; purpose: string };
 };
 
@@ -105,14 +107,23 @@ Deno.serve(async (req) => {
     if (action !== "context" && action !== "start" && action !== "reconcile") {
       return json({ error: "Action inconnue" }, 400);
     }
-    if (!config) {
-      return action === "context" ? json({ enabled: false })
-        : json({ error: "Le paiement en ligne est actuellement indisponible" }, 503);
+    const checkoutPaused = !config || Deno.env.get("WAARWI_PAYTECH_CHECKOUT_ENABLED")?.trim() !== "true";
+    if (action === "start" && checkoutPaused) {
+      return json({ error: "Fonctionnalité en cours de développement", checkout_paused: true }, 503);
+    }
+    if (action === "reconcile" && !config) {
+      return json({ error: "Le compte PayTech de ce paiement est indisponible" }, 503);
+    }
+    const environment = config?.environment ?? "prod";
+    const billingMonths = action === "start" ? body.billing_months ?? null : null;
+    if (billingMonths !== null && ![1, 3, 6, 12].includes(billingMonths)) {
+      return json({ error: "Choisis une durée de paiement proposée par Waarwi." }, 400);
     }
 
     async function prepare(reserve = false) {
       const { data, error } = await db.rpc("prepare_subscription_payment", {
-        p_actor_id: auth.user!.id, p_environment: config!.environment, p_reserve: reserve,
+        p_actor_id: auth.user!.id, p_environment: environment, p_reserve: reserve,
+        p_billing_months: billingMonths,
       });
       if (error) throw error;
       return data as CheckoutContext;
@@ -122,7 +133,14 @@ Deno.serve(async (req) => {
     if (!context.authorized || !context.tenant_id) return json({ enabled: false }, 403);
     const requestedId = isUuid(body.payment_id) ? body.payment_id : null;
 
-    if (action === "start" && context.reserved && context.payment_id && context.quote) {
+    if (context.period_unavailable) {
+      return json({ error: "Cette durée est indisponible pour ton abonnement." }, 400);
+    }
+    if (context.period_conflict) {
+      return json({ error: "Un paiement est déjà ouvert pour une autre durée. Actualise la page pour reprendre ce paiement." }, 409);
+    }
+
+    if (action === "start" && config && context.reserved && context.payment_id && context.quote) {
       const { data, error } = await db.from(PAYTECH_ORDER_TABLE).select("*").eq("id", context.payment_id).single();
       if (error) throw error;
       const order = data as PaymentOrder;
@@ -145,10 +163,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (action === "reconcile" && (requestedId || context.payment_id)) {
+    if (action === "start") {
+      if (!context.payment_id) {
+        return json({ error: "Aucun abonnement à payer pour le moment." }, 409);
+      }
+      const { data: payment, error } = await db.from(PAYTECH_ORDER_TABLE).select("state,checkout_url")
+        .eq("id", context.payment_id).eq("tenant_id", context.tenant_id).eq("environment", environment).maybeSingle();
+      if (error) throw error;
+      if (payment?.state === "pending" && payment.checkout_url) return json({ checkout_url: payment.checkout_url });
+      return json({ error: payment?.state === "creating"
+        ? "Le paiement est en cours de préparation. Actualise son statut."
+        : "Aucun abonnement à payer pour le moment." }, 409);
+    }
+
+    if (action === "reconcile" && config && (requestedId || context.payment_id)) {
       const { data, error } = await db.from(PAYTECH_ORDER_TABLE).select("*")
         .eq("id", requestedId ?? context.payment_id!)
-        .eq("tenant_id", context.tenant_id).eq("environment", config.environment).maybeSingle();
+        .eq("tenant_id", context.tenant_id).eq("environment", environment).maybeSingle();
       if (error) throw error;
       if (!data) return json({ error: "Paiement introuvable" }, 404);
       if (data.state === "pending" || data.state === "cancelled") {
@@ -157,20 +188,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const targetId = action === "start" ? context.payment_id : requestedId ?? context.payment_id;
+    const targetId = requestedId ?? context.payment_id;
     let lookup = db.from(PAYTECH_ORDER_TABLE).select(CUSTOMER_FIELDS)
-      .eq("tenant_id", context.tenant_id!).eq("environment", config.environment);
+      .eq("tenant_id", context.tenant_id!).eq("environment", environment);
     if (targetId) lookup = lookup.eq("id", targetId);
     const { data: payment, error } = await lookup.order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (error) throw error;
 
-    if (action === "start") {
-      if (payment?.state === "pending" && payment.checkout_url) return json({ checkout_url: payment.checkout_url });
-      return json({ error: payment?.state === "creating"
-        ? "Le paiement est en cours de préparation. Actualise son statut."
-        : "Aucun abonnement à payer pour le moment." }, 409);
-    }
-    return json({ enabled: true, environment: config.environment, quote: context.quote ?? null, payment });
+    return json({ enabled: true, environment, checkout_paused: checkoutPaused, quote: context.quote ?? null, payment });
   } catch (cause) {
     console.error("Paiements d’abonnement Waarwi", cause instanceof Error ? cause.message : "requête impossible");
     return json({ error: "Le statut du paiement est temporairement indisponible." }, 502);

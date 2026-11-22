@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUpRight, CreditCard, Loader2, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDateTime, formatFCFA } from '../lib/format';
 import {
-  callSubscriptionPayments, subscriptionCycleLabels, subscriptionPaymentLabel,
+  callSubscriptionPayments, subscriptionCycleLabels, subscriptionPaymentDuration, subscriptionPaymentLabel,
   type SubscriptionPaymentContext,
 } from '../lib/subscriptionPayments';
 
@@ -18,9 +18,14 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
   const [context, setContext] = useState<SubscriptionPaymentContext>();
   const [busy, setBusy] = useState<'start' | 'reconcile' | null>(null);
   const [error, setError] = useState('');
+  const [selectedMonths, setSelectedMonths] = useState(1);
+  const pauseMessageId = useId();
   const refreshedPayment = useRef<string>();
   const payment = context?.payment;
   const quote = paymentId ? null : context?.quote;
+  const billingOptions = quote?.billing_options ?? [];
+  const billingOption = billingOptions.find(option => option.months === selectedMonths) ?? billingOptions[0];
+  const checkoutPaused = context?.checkout_paused === true;
   const tenantId = tenant?.id;
 
   useEffect(() => {
@@ -75,14 +80,14 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
   }, [payment]);
 
   const start = async () => {
+    if (checkoutPaused || busy) return;
     setBusy('start');
     setError('');
     try {
-      if (payment?.state === 'pending' && payment.checkout_url) {
-        window.location.assign(payment.checkout_url);
-        return;
-      }
-      const result = await callSubscriptionPayments<{ checkout_url: string }>({ action: 'start' });
+      const months = billingOption?.months ?? (payment?.state === 'pending' ? payment.billing_months : null);
+      const result = await callSubscriptionPayments<{ checkout_url: string }>({
+        action: 'start', ...(months == null ? {} : { billing_months: months }),
+      });
       window.location.assign(result.checkout_url);
     } catch (cause) {
       setError((cause as Error).message);
@@ -117,15 +122,27 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
         </div>
         {(quote || payment) && (
           <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--w-text)]">
-            {formatFCFA(quote?.amount ?? payment?.amount)}
+            {formatFCFA(billingOption?.amount ?? quote?.amount ?? payment?.amount)}
           </span>
         )}
       </div>
+
+      {billingOption && (
+        <label className="flex w-fit flex-col gap-1 text-xs font-medium text-[var(--w-text-sec)]">
+          Durée à régler
+          <select value={billingOption.months} onChange={event => setSelectedMonths(Number(event.target.value))}
+            disabled={!!busy}
+            className="min-h-10 border-b border-[var(--w-separator)] bg-transparent pr-8 text-sm text-[var(--w-text)]">
+            {billingOptions.map(option => <option key={option.months} value={option.months}>{option.months} mois</option>)}
+          </select>
+        </label>
+      )}
 
       {context?.environment === 'test' && <p className="text-xs font-medium text-amber-700">Mode test PayTech</p>}
       {payment && (
         <div className="space-y-1 text-xs text-[var(--w-text-sec)]" aria-live="polite">
           <p className="font-medium text-[var(--w-text)]">{quote && 'Dernier paiement · '}{subscriptionPaymentLabel(payment)}</p>
+          {!quote && <p>{subscriptionPaymentDuration(payment)}</p>}
           {payment.paid_at && <p>{formatDateTime(payment.paid_at)}{payment.payment_method && ' · ' + payment.payment_method}</p>}
           {paymentId && <p className="break-all">Référence {payment.id}</p>}
           {payment.review_reason && <p>Contactez l’équipe Waarwi avec la référence {payment.id}.</p>}
@@ -134,12 +151,16 @@ export function SubscriptionPaymentPanel({ paymentId }: { paymentId?: string }) 
       )}
       {paymentId && !context && !error && <p className="text-sm text-[var(--w-text-sec)]">Vérification du paiement…</p>}
       {paymentId && context && !payment && <p className="text-sm text-[var(--w-text-sec)]">Paiement indisponible sur ce compte.</p>}
+      {checkoutPaused && checkoutAvailable && (
+        <p id={pauseMessageId} className="text-sm font-medium text-[var(--w-text-sec)]">Fonctionnalité en cours de développement</p>
+      )}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
 
       {(checkoutAvailable || creating) && (
         <div className="flex flex-wrap items-center gap-3">
           {checkoutAvailable && (
-            <button type="button" onClick={() => void start()} disabled={!!busy}
+            <button type="button" onClick={() => void start()} disabled={!!busy || checkoutPaused}
+              aria-describedby={checkoutPaused ? pauseMessageId : undefined}
               className="inline-flex min-h-10 items-center gap-2 bg-neutral-900 px-3.5 text-sm font-semibold text-white disabled:opacity-60">
               {busy === 'start' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
               {label}
