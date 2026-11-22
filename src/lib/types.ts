@@ -258,6 +258,7 @@ export type CartItem = {
   purchase_cost: number;
   tier_name?: string;
   ipm_eligible?: boolean;
+  track_stock?: boolean;
 };
 
 export type SalePayment = {

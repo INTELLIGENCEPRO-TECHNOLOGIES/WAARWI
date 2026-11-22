@@ -1358,6 +1358,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   <span className="text-xs font-semibold text-white">{siteConfirmPending.name}</span>
                 </div>
               </div>
+              {route === 'pos' && posCartCount > 0 && (
+                <p className="mt-3 text-xs text-neutral-600">Le changement de magasin vide le panier en cours.</p>
+              )}
             </div>
             <div className="flex border-t border-neutral-100">
               <button

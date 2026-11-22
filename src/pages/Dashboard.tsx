@@ -1,26 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
-import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 import { formatFCFA, formatCompactFCFA, formatDateTime } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { isSaleSettlementIncome } from '../lib/cashMovements';
 import { getOperationalCashContext } from '../lib/cashSession';
-import { Modal } from '../components/Modal';
 import SubscriptionStatus from '../components/SubscriptionStatus';
-import { desktopAutoFocus } from '../lib/device';
 import {
-  TrendingUp, TrendingDown, AlertTriangle, Package, Loader2,
+  TrendingUp, AlertTriangle, Package, Loader2,
   Users, FileText, ExternalLink, Globe,
-  ShoppingCart, ChevronRight, Bell, Calendar,
+  ShoppingCart, ChevronRight, Calendar,
   CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowDownRight,
   ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, X,
   Share2, Copy, Check as CheckIcon, MessageCircle, RefreshCw,
   ClipboardList, Coins, RotateCcw,
   ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3, Store,
-  Network, Award, Menu, ChevronDown, Monitor, LogOut,
-  LayoutDashboard,
+  Network, Award, ChevronDown, Monitor, LogOut,
 } from 'lucide-react';
 
 type ShopInfo = { slug: string | null; isActive: boolean };
@@ -40,43 +36,14 @@ type ActivityItem = {
   highlightId?: string;
 };
 
-type AlertItem = {
-  id: string;
-  severity: 'critical' | 'warning' | 'info';
-  title: string;
-  detail: string;
-  time: string | null;
-  route: string;
-  routeCtx?: NavContext;
-};
-
-type OrderDetail = {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  customerPhone: string;
-  status: string;
-  deliveryMode: string;
-  deliveryAddress: string;
-  total: number;
-  createdAt: string;
-  items: Array<{ name: string; qty: number; price: number }>;
-};
-
 type Stats = {
   todaySales: number;
   todayCollected: number;
   todayDirectCash: number;
   todayCount: number;
-  todayPaid: number;
-  todayReceivable: number;
-  yesterdaySales: number;
-  monthSales: number;
-  monthMargin: number;
-  monthTauxMarge: number;
+  monthSales?: number;
+  monthMarginRate?: number;
   cashBalance: number;
-  sessionExpenses: number;
-  sessionCashIn: number;
   sessionInfo: { id: string; openedAt: string; openingAmount: number } | null;
   receivables: number;
   payables: number;
@@ -89,16 +56,9 @@ type Stats = {
   suppliersToChase: number;
   pendingQuotes: number;
   pendingReturns: number;
-  stockInToday: number;
-  stockOutToday: number;
-  stockValue: number;
   todayMargin: number;
   periodTauxMarge: number;
-  periodCaNet: number;
   periodMargeBrute: number;
-  periodNbVentes: number;
-  periodNbRetours: number;
-  periodRetours: number;
   periodCharges: number;
   periodResultat: number;
   periodExpenses: number;
@@ -111,8 +71,6 @@ type Stats = {
   sessionMargeBrute: number;
   sessionTauxMarge: number;
   sessionNbVentes: number;
-  sessionNbRetours: number;
-  sessionRetours: number;
   sessionDepenses: number;
   sessionRemboursements: number;
   sessionRetraits: number;
@@ -120,41 +78,48 @@ type Stats = {
   sessionEntreesDirectes: number;
   sessionEncaissements: number;
   sessionCreditTotal: number;
-  sessionCreditOutstanding: number;
   sessionCreditCount: number;
   sessionResultat: number;
-  sessionOpenedBy: string;
-  articlesInStockCount: number;
   recentSales: Array<{
     id: string; sale_number: string; total: number; created_at: string;
     customers: { name: string } | null;
     sale_payments?: Array<{ method_name?: string | null }>;
   }>;
-  recentActivities: ActivityItem[];
-  alerts: AlertItem[];
-  activeOrders: OrderDetail[];
+  recentActivities?: ActivityItem[];
+  sessionReady: boolean;
+  stockReady: boolean;
+  balancesReady: boolean;
+  countsReady: boolean;
   webNew: number;
-  webPrep: number;
-  webReady: number;
-  webTodayCount: number;
-  webTodayTotal: number;
-  webAvgWait: number;
-  lastWebOrder: { order_number: string; customer_name: string | null; total: number; created_at: string } | null;
-  hourlySales: number[];
-  weeklySales: { day: string; total: number }[];
-  weekTotal: number;
 };
 
-const dashCache: { stats: Stats | null; shopInfo: ShopInfo | null; key: string; ts: number } = { stats: null, shopInfo: null, key: '', ts: 0 };
+const emptySessionStats = {
+  cashBalance: 0, sessionInfo: null, sessionCaNet: 0, sessionMargeBrute: 0, sessionTauxMarge: 0,
+  sessionNbVentes: 0, sessionDepenses: 0, sessionRemboursements: 0, sessionRetraits: 0,
+  sessionPretsClients: 0, sessionEntreesDirectes: 0, sessionEncaissements: 0,
+  sessionCreditTotal: 0, sessionCreditCount: 0, sessionResultat: 0,
+};
+
+let dashCache: { stats: Stats; shopInfo: ShopInfo | null; key: string } | null = null;
 
 export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void }) {
   const { tenant, profile, currentSite, onDataChange } = useApp();
-  const { error: toastError } = useToast();
-  const cacheKey = `${tenant?.id}:${currentSite?.id}`;
-  const hasCached = dashCache.key === cacheKey && dashCache.stats !== null;
-  const [stats, setStats] = useState<Stats | null>(hasCached ? dashCache.stats : null);
-  const [loading, setLoading] = useState(!hasCached);
-  const [shopInfo, setShopInfo] = useState<ShopInfo | null>(hasCached ? dashCache.shopInfo : null);
+  const [period, setPeriod] = useState('today');
+  const cacheKey = JSON.stringify([profile?.id, tenant?.id, currentSite?.id, period, new Date().toDateString()]);
+  const [snapshot, setSnapshot] = useState(() => dashCache?.key === cacheKey ? dashCache : null);
+  const [loadIssue, setLoadIssue] = useState<{ key: string; blocks: string[] } | null>(null);
+  const stats = snapshot?.key === cacheKey ? snapshot.stats : null;
+  const shopInfo = snapshot?.key === cacheKey ? snapshot.shopInfo : null;
+  const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const sync = () => setDesktop(media.matches);
+    media.addEventListener('change', sync);
+    sync();
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
   const [refreshTick, setRefreshTick] = useState(0);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -164,7 +129,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       ['sales', 'sale_payments', 'cash_movements', 'cash_sessions', 'customers', 'suppliers', 'articles', 'stock_levels', 'quotes', 'sale_returns', 'online_orders', 'supplier_orders'],
       () => {
         if (refreshTimer.current) clearTimeout(refreshTimer.current);
-        refreshTimer.current = setTimeout(() => setRefreshTick(t => t + 1), 150);
+        refreshTimer.current = setTimeout(() => setRefreshTick(t => t + 1), 900);
       }
     );
     return () => { unsub(); if (refreshTimer.current) clearTimeout(refreshTimer.current); };
@@ -181,7 +146,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
   };
   const { can } = usePermissions();
 
-  const [period, setPeriod] = useState<string>('today');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const periodOptions = [
     { value: 'today', label: `Aujourd'hui, ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}` },
@@ -205,9 +169,17 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
     if (!tenant || !currentSite) return;
     const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
     const sharedArticles = (tenant as any)?.settings?.shared_articles !== false;
-    let cancelled = false;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    setLoadIssue(null);
+
+    const reportIssue = (block: string, cause: unknown) => {
+      if (signal.aborted) return;
+      console.error('[Dashboard]', block, cause);
+      setLoadIssue(previous => ({ key: cacheKey, blocks: [...(previous?.key === cacheKey ? previous.blocks : []), block] }));
+    };
+
     (async () => {
-      const now = new Date();
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const yest = new Date(today); yest.setDate(yest.getDate() - 1);
 
@@ -240,87 +212,33 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const siteId = currentSite.id;
-
-      const periodQuery = supabase.from('sales').select('total, paid, status, created_at').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString()).neq('status', 'cancelled');
-      if (periodEnd) periodQuery.lt('created_at', periodEnd.toISOString());
-
+      const salesQuery = supabase.from('sales').select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString()).neq('status', 'cancelled');
+      const paymentsQuery = supabase.from('sale_payments').select('amount, sales!inner(site_id)')
+        .eq('tenant_id', tenant.id).eq('sales.site_id', siteId).gte('created_at', periodStart.toISOString());
+      const movementsQuery = supabase.from('cash_movements').select('kind, amount, reason')
+        .eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString());
+      if (periodEnd) {
+        const end = periodEnd.toISOString();
+        salesQuery.lt('created_at', end);
+        paymentsQuery.lt('created_at', end);
+        movementsQuery.lt('created_at', end);
+      }
       const periodFromDate = periodStart.toISOString().slice(0, 10);
-      const periodToDate = periodEnd ? new Date(periodEnd.getTime() - 1).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
-      const yestDate = yest.toISOString().slice(0, 10);
-
-      const [
-        todayData, _yestRpc, _monthRpc, _periodRpc, articlesCount, trackedArticlesCount, recent,
-        custData, suppData, quotesData, returnsData, shopData,
-        webNewData, webPrepData, webReadyData, webTodayData, webWaitData, lastWebOrderData,
-        openSessions, stockInTodayData,
-      ] = await Promise.all([
-        periodQuery,
-        supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: yestDate, p_to: yestDate }),
-        supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: firstOfMonth.toISOString().slice(0, 10), p_to: new Date().toISOString().slice(0, 10) }),
-        supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: periodFromDate, p_to: periodToDate }),
-        sharedArticles
-          ? supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true)
-          : supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true),
-        sharedArticles
-          ? supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true).eq('track_stock', true)
-          : supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true).eq('track_stock', true),
-        supabase.from('sales').select('id, sale_number, total, created_at, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
-        supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
-        sharedSuppliers
-          ? supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true)
-          : supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true),
-        supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).in('status', ['draft', 'sent']),
-        supabase.from('sale_returns').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'pending'),
-        supabase.from('tenants').select('public_slug').eq('id', tenant.id).maybeSingle(),
-        supabase.from('online_orders').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('status', 'nouvelle'),
-        supabase.from('online_orders').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('status', 'en_preparation'),
-        supabase.from('online_orders').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('status', 'prete'),
-        supabase.from('online_orders').select('total').eq('tenant_id', tenant.id).gte('created_at', periodStart.toISOString()).neq('status', 'annulee'),
-        supabase.from('online_orders').select('created_at').eq('tenant_id', tenant.id).eq('status', 'nouvelle').order('created_at', { ascending: true }).limit(1),
-        supabase.from('online_orders').select('order_number, customer_name, total, created_at').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, user_id').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'open'),
-        supabase.from('stock_movements').select('quantity').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['purchase', 'adjustment_in']).gte('created_at', periodStart.toISOString()),
+      const periodToDate = (periodEnd || new Date()).toISOString().slice(0, 10);
+      const [sales, financial, payments, movements] = await Promise.all([
+        salesQuery.abortSignal(signal),
+        supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: periodFromDate, p_to: periodToDate }).abortSignal(signal),
+        paymentsQuery.abortSignal(signal),
+        movementsQuery.abortSignal(signal),
       ]);
-
-      // Paginate stock_levels to bypass server-side 1000-row cap
-      let allStockRows: any[] = [];
-      let stkFrom = 0;
-      while (true) {
-        const { data, error: stkErr } = await supabase
-          .from('stock_levels')
-          .select('quantity, articles!inner(stock_min, purchase_price, track_stock, category_id)')
-          .eq('tenant_id', tenant.id)
-          .eq('site_id', siteId)
-          .eq('articles.track_stock', true)
-          .range(stkFrom, stkFrom + 999);
-        if (stkErr || !data || data.length === 0) break;
-        allStockRows = allStockRows.concat(data);
-        if (data.length < 1000) break;
-        stkFrom += 1000;
-      }
-
-      let newShopInfo: ShopInfo;
-      if (shopData.data?.public_slug) {
-        const { data: ss } = await supabase.from('shop_settings').select('is_active').eq('tenant_id', tenant.id).maybeSingle();
-        newShopInfo = { slug: shopData.data.public_slug, isActive: ss?.is_active ?? false };
-      } else {
-        newShopInfo = { slug: null, isActive: false };
-      }
-
-      const yestRpc = (_yestRpc.data || {}) as any;
-      const monthRpc = (_monthRpc.data || {}) as any;
-      const periodRpc = (_periodRpc.data || {}) as any;
-
-      const todaySales = Number(periodRpc.ca_net || 0);
-      const todayPaid = (todayData.data || []).reduce((s: number, r: any) => s + Math.min(Number(r.total || 0), Number(r.paid || 0)), 0);
-      const todayReceivable = Math.max(0, (todayData.data || []).reduce((s: number, r: any) => s + Number(r.total || 0), 0) - todayPaid);
-
-      const periodEndIso = periodEnd ? periodEnd.toISOString() : null;
-      const periodPaymentsQuery = supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).gte('created_at', periodStart.toISOString());
-      if (periodEndIso) periodPaymentsQuery.lt('created_at', periodEndIso);
-      const periodMovsQuery = supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString());
-      if (periodEndIso) periodMovsQuery.lt('created_at', periodEndIso);
-      const [{ data: periodPayments }, { data: periodMovs }] = await Promise.all([periodPaymentsQuery, periodMovsQuery]);
+      if (signal.aborted) return;
+      const essentialError = sales.error || financial.error || payments.error || movements.error;
+      if (essentialError) throw essentialError;
+      if (!financial.data) throw new Error('Missing financial summary');
+      const periodRpc = financial.data;
+      const periodPayments = payments.data;
+      const periodMovs = movements.data;
       const todayPaymentsTotal = (periodPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
       const todayMovIncome = (periodMovs || [])
         .filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !isSaleSettlementIncome(m.kind, m.reason))
@@ -333,560 +251,375 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const periodVaultIn = (periodMovs || []).filter((m: any) => m.kind === 'vault_withdrawal').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
       const periodVaultOut = (periodMovs || []).filter((m: any) => m.kind === 'vault_deposit').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
       const periodCashBalance = todayCollected + periodVaultIn - periodExpenses - periodRefunds - periodWithdrawals - periodCustomerLoans - periodVaultOut;
-      const todayMargin = Number(periodRpc.marge_brute || 0);
-      const yesterdaySales = Number(yestRpc.ca_net || 0);
-      const monthSales = Number(monthRpc.ca_net || 0);
-      const monthMargin = Number(monthRpc.marge_brute || 0);
-
-      const stockRows = allStockRows;
-      const siteArticlesTotal = trackedArticlesCount.count || 0;
-      const low = stockRows.filter((r: any) => Number(r.quantity) > 0 && Number(r.articles?.stock_min || 0) > 0 && Number(r.quantity) <= Number(r.articles.stock_min)).length;
-      const outInLevels = stockRows.filter((r: any) => Number(r.quantity) <= 0).length;
-      const articlesInStockCount = stockRows.filter((r: any) => Number(r.quantity) > 0).length;
-      const articlesWithLevels = stockRows.length;
-      const articlesWithoutLevels = Math.max(0, siteArticlesTotal - articlesWithLevels);
-      const out = outInLevels + articlesWithoutLevels;
-      const stockValue = stockRows.reduce((s: number, r: any) => s + (Number(r.quantity || 0) * Number(r.articles?.purchase_price || 0)), 0);
-
-      const webTodayRows = (webTodayData.data || []) as any[];
-      const webTodayTotal = webTodayRows.reduce((s, r) => s + Number(r.total || 0), 0);
-
-      const unpaidOrdersQuery = supabase
-        .from('supplier_orders')
-        .select('total, paid, supplier_id')
-        .eq('tenant_id', tenant.id)
-        .neq('status', 'cancelled')
-        .limit(5000);
-      if (!sharedSuppliers) unpaidOrdersQuery.eq('site_id', siteId);
-      const { data: unpaidOrders } = await unpaidOrdersQuery;
-      const payables = (unpaidOrders || []).reduce((s: number, o: any) => {
-        const remaining = Number(o.total || 0) - Number(o.paid || 0);
-        return s + Math.max(0, remaining);
-      }, 0);
-      const payablesSupplierIds = new Set(
-        (unpaidOrders || []).filter((o: any) => Number(o.total || 0) - Number(o.paid || 0) > 0).map((o: any) => o.supplier_id)
-      );
-      const payablesSupplierCount = payablesSupplierIds.size;
-
-      const { data: unpaidSales } = await supabase
-        .from('sales')
-        .select('total, paid, customer_id')
-        .eq('tenant_id', tenant.id)
-        .eq('site_id', siteId)
-        .not('customer_id', 'is', null)
-        .neq('status', 'cancelled')
-        .neq('status', 'paid')
-        .limit(5000);
-      const receivables = (unpaidSales || []).reduce((s: number, sale: any) => {
-        const remaining = Number(sale.total || 0) - Number(sale.paid || 0);
-        return s + Math.max(0, remaining);
-      }, 0);
-      const receivablesCustomerIds = new Set(
-        (unpaidSales || []).filter((s: any) => Number(s.total || 0) - Number(s.paid || 0) > 0).map((s: any) => s.customer_id)
-      );
-      const customersToChaseCount = receivablesCustomerIds.size;
-
-      const currentSession = (openSessions.data || []).length > 0
-        ? (openSessions.data as any[]).sort((a: any, b: any) =>
-            (Number(b.user_id === profile?.id) - Number(a.user_id === profile?.id))
-            || (new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime()))[0]
-        : null;
-
-      let cashBalance = 0;
-      let sessionMovIncome = 0;
-      let sessionMovExpense = 0;
-      let sessionInfo: Stats['sessionInfo'] = null;
-
-      if (currentSession) {
-        sessionInfo = {
-          id: currentSession.id,
-          openedAt: currentSession.opened_at,
-          openingAmount: Number(currentSession.opening_amount || 0),
-        };
-
-        const { data: sessionPayments } = await supabase
-          .from('sale_payments')
-          .select('amount')
-          .eq('tenant_id', tenant.id)
-          .eq('cash_session_id', currentSession.id);
-        const sessionPaymentsTotal = (sessionPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-
-        const { data: sessionMovs } = await supabase
-          .from('cash_movements')
-          .select('kind, amount, reason')
-          .eq('tenant_id', tenant.id)
-          .eq('cash_session_id', currentSession.id);
-        for (const m of (sessionMovs || []) as any[]) {
-          if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
-          else if (m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !isSaleSettlementIncome(m.kind, m.reason)) sessionMovIncome += Number(m.amount || 0);
-        }
-      }
-
-      // Session financial summary via dedicated RPC
-      let sessionFinancials: any = {};
-      if (currentSession) {
-        const { data: sfData } = await supabase.rpc('get_session_financial_summary', {
-          p_cash_session_id: currentSession.id
-        });
-        sessionFinancials = sfData || {};
-        
-        // Fetch the user who opened the session
-        const { data: sessionProfile } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', currentSession.user_id || '')
-          .maybeSingle();
-        sessionFinancials._openedBy = sessionProfile?.full_name || '';
-      }
-
-      if (currentSession) {
-        cashBalance = Number(currentSession.opening_amount || 0) + Number(sessionFinancials.encaissements || 0) + Number(sessionFinancials.entrees_directes || 0) - Number(sessionFinancials.depenses_session || 0) - Number(sessionFinancials.remboursements || 0) - Number(sessionFinancials.retraits || 0) - Number(sessionFinancials.prets_clients || 0);
-      }
-
-      const stockIn = (stockInTodayData.data || []).reduce((s: number, r: any) => s + Number(r.quantity || 0), 0);
-
-      // Stock out for period
-      const { data: stockOutTodayData2 } = await supabase
-        .from('stock_movements')
-        .select('quantity')
-        .eq('tenant_id', tenant.id)
-        .eq('site_id', siteId)
-        .in('movement_type', ['sale', 'adjustment_out'])
-        .gte('created_at', periodStart.toISOString());
-      const stockOut = (stockOutTodayData2 || []).reduce((s: number, r: any) => s + Math.abs(Number(r.quantity || 0)), 0);
-
-      // Hourly sales breakdown for intraday chart
-      const hourlySales = new Array(24).fill(0);
-      for (const sale of (todayData.data || []) as any[]) {
-        const h = new Date(sale.created_at || today).getHours();
-        hourlySales[h] += Number(sale.total || 0);
-      }
-
-      // Weekly sales (last 7 days)
-      const weekStart = new Date(today);
-      weekStart.setDate(weekStart.getDate() - 6);
-      const { data: weekSalesRaw } = await supabase
-        .from('sales')
-        .select('total, created_at')
-        .eq('tenant_id', tenant.id)
-        .eq('site_id', siteId)
-        .gte('created_at', weekStart.toISOString())
-        .in('status', ['paid', 'partial', 'validated']);
-      const dayNames = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
-      const weeklySales: { day: string; total: number }[] = [];
-      let weekTotal = 0;
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - 6 + i);
-        const dayStr = d.toISOString().slice(0, 10);
-        const dayTotal = (weekSalesRaw || [])
-          .filter((r: any) => (r.created_at || '').slice(0, 10) === dayStr)
-          .reduce((s: number, r: any) => s + Number(r.total || 0), 0);
-        weeklySales.push({ day: dayNames[d.getDay()], total: dayTotal });
-        weekTotal += dayTotal;
-      }
-
-      const firstWaitRow = (webWaitData.data || [])[0];
-      const avgWaitMin = firstWaitRow ? Math.max(0, Math.floor((Date.now() - new Date(firstWaitRow.created_at).getTime()) / 60000)) : 0;
-
-      // Fetch recent activities from multiple sources for intelligent feed
-      const [actSales, actQuotes, actSupOrders, actOnline, actReturns, actPayments, actMovements] = await Promise.all([
-        supabase.from('sales').select('id, sale_number, total, created_at, status, site_id, user_id, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(8),
-        supabase.from('quotes').select('id, quote_number, total, created_at, status, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
-        sharedSuppliers
-          ? supabase.from('supplier_orders').select('id, order_number, total, created_at, status, site_id, user_id, suppliers(name)').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5)
-          : supabase.from('supplier_orders').select('id, order_number, total, created_at, status, site_id, user_id, suppliers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
-        supabase.from('online_orders').select('id, order_number, total, created_at, status, customer_name').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
-        supabase.from('sale_returns').select('id, return_number, total, created_at, status, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(3),
-        supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, site_id, user_id, customers(name))').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).order('created_at', { ascending: false }).limit(5),
-        supabase.from('cash_movements').select('id, kind, amount, note, created_at, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('kind', ['expense', 'refund', 'customer_loan', 'withdrawal', 'deposit', 'customer_prepayment']).order('created_at', { ascending: false }).limit(8),
-      ]);
-
-      // Batch-fetch profile names for all user_ids referenced in activities
-      const activityUserIds = new Set<string>();
-      for (const s of (actSales.data || []) as any[]) if (s.user_id) activityUserIds.add(s.user_id);
-      for (const q of (actQuotes.data || []) as any[]) if (q.user_id) activityUserIds.add(q.user_id);
-      for (const o of (actSupOrders.data || []) as any[]) if (o.user_id) activityUserIds.add(o.user_id);
-      for (const r of (actReturns.data || []) as any[]) if (r.user_id) activityUserIds.add(r.user_id);
-      for (const p of (actPayments.data || []) as any[]) if (p.sales?.user_id) activityUserIds.add(p.sales.user_id);
-      for (const m of (actMovements.data || []) as any[]) if (m.user_id) activityUserIds.add(m.user_id);
-      let activityProfileMap: Record<string, string> = {};
-      if (activityUserIds.size > 0) {
-        const { data: actProfiles } = await supabase.from('profiles').select('id, full_name').in('id', Array.from(activityUserIds));
-        for (const p of (actProfiles || []) as any[]) activityProfileMap[p.id] = p.full_name || '';
-      }
-      const siteNameMap: Record<string, string> = {};
-      for (const s of (tenant as any)?.sites || []) siteNameMap[s.id] = s.name;
-      if (currentSite) siteNameMap[currentSite.id] = currentSite.name;
-      const hasMultiSitesAct = ((tenant as any)?.sites?.length || 0) > 1;
-
-      const activities: ActivityItem[] = [];
-
-      for (const s of (actSales.data || []) as any[]) {
-        const client = s.customers?.name || 'Client comptoir';
-        const method = s.sale_payments?.[0]?.method_name || '';
-        const statusLabel = s.status === 'paid' ? 'Payée' : s.status === 'partial' ? 'Partielle' : s.status === 'cancelled' ? 'Annulée' : 'Créée';
-        activities.push({
-          id: `sale-${s.id}`,
-          type: 'sale',
-          title: `Vente ${s.sale_number}`,
-          detail: `${client}${method ? ' · ' + method : ''} · ${statusLabel}`,
-          amount: Number(s.total),
-          amountType: s.status === 'cancelled' ? 'negative' : 'positive',
-          time: s.created_at,
-          route: 'sales',
-          siteName: hasMultiSitesAct ? (siteNameMap[s.site_id] || '') : '',
-          userName: s.user_id ? (activityProfileMap[s.user_id] || '') : '',
-          highlightId: s.id,
-        });
-      }
-
-      for (const q of (actQuotes.data || []) as any[]) {
-        const client = q.customers?.name || 'Client';
-        const statusLabel = q.status === 'sent' ? 'Envoyé' : q.status === 'accepted' ? 'Accepté' : q.status === 'converted' ? 'Converti' : 'Brouillon';
-        activities.push({
-          id: `quote-${q.id}`,
-          type: 'quote',
-          title: `Devis ${q.quote_number}`,
-          detail: `${client} · ${statusLabel}`,
-          amount: Number(q.total),
-          amountType: 'neutral',
-          time: q.created_at,
-          route: 'sales',
-          siteName: hasMultiSitesAct ? (siteNameMap[q.site_id] || '') : '',
-          userName: q.user_id ? (activityProfileMap[q.user_id] || '') : '',
-          highlightId: q.id,
-        });
-      }
-
-      for (const o of (actSupOrders.data || []) as any[]) {
-        const supplier = o.suppliers?.name || 'Fournisseur';
-        const statusLabel = o.status === 'delivered' ? 'Livrée' : o.status === 'sent' ? 'Envoyée' : o.status === 'partial' ? 'Partielle' : 'Brouillon';
-        activities.push({
-          id: `suporder-${o.id}`,
-          type: 'supplier_order',
-          title: `Commande ${o.order_number}`,
-          detail: `${supplier} · ${statusLabel}`,
-          amount: Number(o.total),
-          amountType: 'negative',
-          time: o.created_at,
-          route: 'supplier_orders',
-          siteName: hasMultiSitesAct ? (siteNameMap[o.site_id] || '') : '',
-          userName: o.user_id ? (activityProfileMap[o.user_id] || '') : '',
-          highlightId: o.id,
-        });
-      }
-
-      for (const o of (actOnline.data || []) as any[]) {
-        const client = o.customer_name || 'Client web';
-        const statusLabel = o.status === 'nouvelle' ? 'Nouvelle' : o.status === 'en_preparation' ? 'En préparation' : o.status === 'prete' ? 'Prête' : o.status === 'livree' ? 'Livrée' : o.status;
-        activities.push({
-          id: `online-${o.id}`,
-          type: 'online_order',
-          title: `Commande en ligne ${o.order_number}`,
-          detail: `${client} · ${statusLabel}`,
-          amount: Number(o.total),
-          amountType: 'positive',
-          time: o.created_at,
-          route: 'online_orders',
-          highlightId: o.id,
-        });
-      }
-
-      for (const r of (actReturns.data || []) as any[]) {
-        const client = r.customers?.name || 'Client';
-        activities.push({
-          id: `return-${r.id}`,
-          type: 'return',
-          title: `Retour ${r.return_number || ''}`,
-          detail: `${client} · ${r.status === 'pending' ? 'En attente' : 'Traité'}`,
-          amount: Number(r.total || 0),
-          amountType: 'negative',
-          time: r.created_at,
-          route: 'sales',
-          siteName: hasMultiSitesAct ? (siteNameMap[r.site_id] || '') : '',
-          userName: r.user_id ? (activityProfileMap[r.user_id] || '') : '',
-          highlightId: r.id,
-        });
-      }
-
-      for (const p of (actPayments.data || []) as any[]) {
-        const saleRef = p.sales?.sale_number || '';
-        const client = p.sales?.customers?.name || 'Client';
-        activities.push({
-          id: `payment-${p.id}`,
-          type: 'payment_received',
-          title: `Règlement ${saleRef}`,
-          detail: `${client} · ${p.method_name || 'Espèces'}`,
-          amount: Number(p.amount),
-          amountType: 'positive',
-          time: p.created_at,
-          route: 'sales',
-          siteName: hasMultiSitesAct ? (siteNameMap[p.sales?.site_id] || '') : '',
-          userName: p.sales?.user_id ? (activityProfileMap[p.sales.user_id] || '') : '',
-          highlightId: p.sales?.id || p.id,
-        });
-      }
-
-      for (const m of (actMovements.data || []) as any[]) {
-        const kindLabels: Record<string, string> = { expense: 'Sortie', refund: 'Remboursement', customer_loan: 'Prêt client', withdrawal: 'Retrait', deposit: 'Entrée', customer_prepayment: 'Acompte' };
-        const label = kindLabels[m.kind] || m.kind;
-        const client = m.customers?.name;
-        activities.push({
-          id: `movement-${m.id}`,
-          type: m.kind === 'expense' ? 'expense' : m.kind === 'refund' ? 'return' : 'payment_received',
-          title: label,
-          detail: `${client ? client + ' · ' : ''}${m.note || ''}`.replace(/ · $/, '') || label,
-          amount: Number(m.amount),
-          amountType: (m.kind === 'deposit' || m.kind === 'customer_prepayment') ? 'positive' : 'negative',
-          time: m.created_at,
-          route: 'cash_history',
-          siteName: hasMultiSitesAct ? (siteNameMap[m.site_id] || '') : '',
-          userName: m.user_id ? (activityProfileMap[m.user_id] || '') : '',
-          highlightId: m.id,
-        });
-      }
-
-      activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      const recentActivities = activities.slice(0, 15);
-
-      // ── Intelligent Alerts ──
-      const [alertStockOut, alertStockLow, alertAdjustments, alertModifiedSales] = await Promise.all([
-        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min, track_stock, category_id)').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('articles.track_stock', true).lte('quantity', 0).limit(10000),
-        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min, track_stock, category_id)').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('articles.track_stock', true).gt('quantity', 0).limit(10000),
-        supabase.from('stock_movements').select('id, movement_type, quantity, note, created_at, articles(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['adjustment_in', 'adjustment_out']).order('created_at', { ascending: false }).limit(5),
-        supabase.from('sales').select('id, sale_number, total, created_at, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(10),
-      ]);
-
-      const alerts: AlertItem[] = [];
-
-      const outItems = (alertStockOut.data || []).filter((r: any) => Number(r.articles?.stock_min || 0) > 0);
-      for (const item of outItems.slice(0, 5) as any[]) {
-        alerts.push({
-          id: `rupture-${item.articles.id}`,
-          severity: 'critical',
-          title: `Rupture : ${item.articles.name}`,
-          detail: `Réf. ${item.articles.internal_ref || '-'} · Stock: ${item.quantity}`,
-          time: null,
-          route: 'stock',
-          routeCtx: { filter: 'rupture' },
-        });
-      }
-
-      const lowItems = (alertStockLow.data || []).filter((r: any) => Number(r.articles?.stock_min || 0) > 0 && Number(r.quantity) <= Number(r.articles.stock_min));
-      for (const item of lowItems.slice(0, 5) as any[]) {
-        alerts.push({
-          id: `low-${item.articles.id}`,
-          severity: 'warning',
-          title: `Stock bas : ${item.articles.name}`,
-          detail: `Réf. ${item.articles.internal_ref || '-'} · Stock: ${item.quantity} / Min: ${item.articles.stock_min}`,
-          time: null,
-          route: 'stock',
-          routeCtx: { filter: 'bas' },
-        });
-      }
-
-      for (const adj of (alertAdjustments.data || []) as any[]) {
-        const dir = adj.movement_type === 'adjustment_in' ? 'Entrée' : 'Sortie';
-        alerts.push({
-          id: `adj-${adj.id}`,
-          severity: 'info',
-          title: `Ajustement stock (${dir})`,
-          detail: `${adj.articles?.name || 'Article'} · Qté: ${adj.quantity}${adj.note ? ' · ' + adj.note : ''}`,
-          time: adj.created_at,
-          route: 'stock',
-        });
-      }
-
-      const modifiedSales = (alertModifiedSales.data || []).filter((s: any) => {
-        return false;
-      });
-      for (const s of modifiedSales.slice(0, 3) as any[]) {
-        alerts.push({
-          id: `mod-sale-${s.id}`,
-          severity: 'info',
-          title: `Facture modifiée : ${s.sale_number}`,
-          detail: `${s.customers?.name || 'Client'} · ${formatCompactFCFA(s.total)}`,
-          time: s.created_at,
-          route: 'sales',
-        });
-      }
-
-      if (!currentSession) {
-        alerts.push({
-          id: 'no-session',
-          severity: 'warning',
-          title: 'Session caisse fermée',
-          detail: 'Aucune session de caisse n\'est ouverte',
-          time: null,
-          route: 'pos',
-        });
-      }
-
-      alerts.sort((a, b) => {
-        const sev = { critical: 0, warning: 1, info: 2 };
-        return sev[a.severity] - sev[b.severity];
-      });
-
-      // ── Active Orders with full details ──
-      const { data: activeOrdersRaw } = await supabase
-        .from('online_orders')
-        .select('id, order_number, customer_name, customer_phone, status, delivery_mode, delivery_address, total, created_at, online_order_items(article_name, quantity, unit_price)')
-        .eq('tenant_id', tenant.id)
-        .in('status', ['nouvelle', 'en_preparation', 'prete'])
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      const activeOrders: OrderDetail[] = ((activeOrdersRaw || []) as any[]).map((o) => ({
-        id: o.id,
-        orderNumber: o.order_number,
-        customerName: o.customer_name || 'Client',
-        customerPhone: o.customer_phone || '',
-        status: o.status,
-        deliveryMode: o.delivery_mode || 'retrait',
-        deliveryAddress: o.delivery_address || '',
-        total: Number(o.total),
-        createdAt: o.created_at,
-        items: (o.online_order_items || []).map((i: any) => ({
-          name: i.article_name,
-          qty: i.quantity,
-          price: Number(i.unit_price),
-        })),
-      }));
-
-      const next: Stats = {
-        todaySales, todayCollected, todayDirectCash: todayMovIncome, todayCount: todayData.data?.length || 0,
-        todayPaid, todayReceivable,
-        yesterdaySales,
-        monthSales, monthMargin,
-        monthTauxMarge: Number(monthRpc.taux_marge || 0),
-        todayMargin,
+      let next: Stats = {
+        ...emptySessionStats,
+        articlesCount: 0, customersCount: 0, suppliersCount: 0, lowStockCount: 0, outOfStockCount: 0,
+        receivables: 0, payables: 0, customersToChase: 0, suppliersToChase: 0,
+        pendingQuotes: 0, pendingReturns: 0, webNew: 0, recentSales: [],
+        balancesReady: false, stockReady: false, sessionReady: false, countsReady: false,
+        ...(dashCache?.key === cacheKey ? dashCache.stats : {}),
+        todaySales: Number(periodRpc.ca_net || 0), todayCollected, todayDirectCash: todayMovIncome, todayCount: sales.count || 0,
+        todayMargin: Number(periodRpc.marge_brute || 0),
         periodTauxMarge: Number(periodRpc.taux_marge || 0),
-        periodCaNet: Number(periodRpc.ca_net || 0),
         periodMargeBrute: Number(periodRpc.marge_brute || 0),
-        periodNbVentes: Number(periodRpc.nb_ventes || 0),
-        periodNbRetours: Number(periodRpc.nb_retours || 0),
-        periodRetours: Number(periodRpc.retours || 0),
-      periodCharges: Number(periodRpc.charges_exploitation || 0),
-      periodResultat: Number(periodRpc.resultat_exploitation || 0),
-        cashBalance, sessionExpenses: sessionMovExpense, sessionCashIn: sessionMovIncome, periodExpenses, periodRefunds, periodWithdrawals, periodCustomerLoans, periodCashBalance,
-        sessionCaNet: Number(sessionFinancials.ca_net || 0),
-        sessionMargeBrute: Number(sessionFinancials.marge_brute || 0),
-        sessionTauxMarge: Number(sessionFinancials.taux_marge || 0),
-        sessionNbVentes: Number(sessionFinancials.nb_ventes || 0),
-        sessionNbRetours: Number(sessionFinancials.nb_retours || 0),
-        sessionRetours: Number(sessionFinancials.retours || 0),
-        sessionDepenses: Number(sessionFinancials.depenses_session || 0),
-        sessionRemboursements: Number(sessionFinancials.remboursements || 0),
-        sessionRetraits: Number(sessionFinancials.retraits || 0),
-        sessionPretsClients: Number(sessionFinancials.prets_clients || 0),
-        sessionEntreesDirectes: Number(sessionFinancials.entrees_directes || 0),
-        sessionEncaissements: Number(sessionFinancials.encaissements || 0),
-        sessionCreditTotal: Number(sessionFinancials.credit_sales_total || 0),
-        sessionCreditOutstanding: Number(sessionFinancials.credit_sales_outstanding || 0),
-        sessionCreditCount: Number(sessionFinancials.credit_sales_count || 0),
-        sessionResultat: Number(sessionFinancials.resultat_exploitation || 0),
-        sessionOpenedBy: sessionFinancials._openedBy || '',
-        sessionInfo,
-        receivables, payables,
-        articlesCount: articlesCount.count || 0,
-        lowStockCount: low, outOfStockCount: out,
-        stockValue,
-        articlesInStockCount,
-        customersCount: custData.count || 0,
-        suppliersCount: suppData.count || 0,
-        customersToChase: customersToChaseCount,
-        suppliersToChase: payablesSupplierCount,
-        pendingQuotes: quotesData.count || 0,
-        pendingReturns: returnsData.count || 0,
-        stockInToday: stockIn,
-        stockOutToday: stockOut,
-        recentSales: (recent.data as any) || [],
-        recentActivities,
-        alerts,
-        activeOrders,
-        webNew: webNewData.count || 0,
-        webPrep: webPrepData.count || 0,
-        webReady: webReadyData.count || 0,
-        webTodayCount: webTodayRows.length,
-        webTodayTotal,
-        webAvgWait: avgWaitMin,
-        lastWebOrder: lastWebOrderData.data as any || null,
-        hourlySales,
-        weeklySales,
-        weekTotal,
+        periodCharges: Number(periodRpc.charges_exploitation || 0),
+        periodResultat: Number(periodRpc.resultat_exploitation || 0),
+        periodExpenses, periodRefunds, periodWithdrawals, periodCustomerLoans, periodCashBalance,
       };
-      if (!cancelled) {
-        dashCache.stats = next;
-        dashCache.shopInfo = newShopInfo;
-        dashCache.key = `${tenant.id}:${siteId}`;
-        dashCache.ts = Date.now();
-        setStats(next);
-        setShopInfo(newShopInfo);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [tenant, refreshTick, currentSite?.id, period]);
+      let nextShop = dashCache?.key === cacheKey ? dashCache.shopInfo : null;
+      const publish = (patch: Partial<Stats> = {}) => {
+        if (signal.aborted) return;
+        next = { ...next, ...patch };
+        dashCache = { key: cacheKey, stats: next, shopInfo: nextShop };
+        setSnapshot(dashCache);
+      };
+      publish();
+
+      const section = async (name: string, task: () => Promise<void>) => {
+        try { await task(); } catch (cause) { reportIssue(name, cause); }
+      };
+
+      await Promise.all([
+        section('session de caisse', async () => {
+          const { data, error } = await supabase.from('cash_sessions').select('id, opening_amount, opened_at, user_id')
+            .eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'open').abortSignal(signal);
+          if (error) throw error;
+          if (signal.aborted) return;
+          const currentSession = data.sort((a, b) =>
+            Number(b.user_id === profile?.id) - Number(a.user_id === profile?.id)
+            || new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())[0];
+          if (!currentSession) {
+            publish({ ...emptySessionStats, sessionReady: true });
+            return;
+          }
+          const sessionInfo = { id: currentSession.id, openedAt: currentSession.opened_at, openingAmount: Number(currentSession.opening_amount || 0) };
+          const summary = await supabase.rpc('get_session_financial_summary', { p_cash_session_id: currentSession.id }).abortSignal(signal);
+          if (summary.error) throw summary.error;
+          const sessionFinancials = summary.data || {};
+          const cashBalance = sessionInfo.openingAmount + Number(sessionFinancials.encaissements || 0) + Number(sessionFinancials.entrees_directes || 0)
+            - Number(sessionFinancials.depenses_session || 0) - Number(sessionFinancials.remboursements || 0)
+            - Number(sessionFinancials.retraits || 0) - Number(sessionFinancials.prets_clients || 0);
+          publish({
+            cashBalance, sessionReady: true,
+            sessionCaNet: Number(sessionFinancials.ca_net || 0),
+            sessionMargeBrute: Number(sessionFinancials.marge_brute || 0),
+            sessionTauxMarge: Number(sessionFinancials.taux_marge || 0),
+            sessionNbVentes: Number(sessionFinancials.nb_ventes || 0),
+            sessionDepenses: Number(sessionFinancials.depenses_session || 0),
+            sessionRemboursements: Number(sessionFinancials.remboursements || 0),
+            sessionRetraits: Number(sessionFinancials.retraits || 0),
+            sessionPretsClients: Number(sessionFinancials.prets_clients || 0),
+            sessionEntreesDirectes: Number(sessionFinancials.entrees_directes || 0),
+            sessionEncaissements: Number(sessionFinancials.encaissements || 0),
+            sessionCreditTotal: Number(sessionFinancials.credit_sales_total || 0),
+            sessionCreditCount: Number(sessionFinancials.credit_sales_count || 0),
+            sessionResultat: Number(sessionFinancials.resultat_exploitation || 0),
+            sessionInfo,
+          });
+        }),
+        section('créances et dettes', async () => {
+          const unpaidOrdersQuery = supabase
+            .from('supplier_orders')
+            .select('total, paid, supplier_id')
+            .eq('tenant_id', tenant.id)
+            .neq('status', 'cancelled')
+            .limit(5000);
+          if (!sharedSuppliers) unpaidOrdersQuery.eq('site_id', siteId);
+          const unpaidSalesQuery = supabase
+            .from('sales')
+            .select('total, paid, customer_id')
+            .eq('tenant_id', tenant.id)
+            .eq('site_id', siteId)
+            .not('customer_id', 'is', null)
+            .neq('status', 'cancelled')
+            .neq('status', 'paid')
+            .limit(5000);
+          const [ordersResult, salesResult] = await Promise.all([unpaidOrdersQuery.abortSignal(signal), unpaidSalesQuery.abortSignal(signal)]);
+          if (ordersResult.error || salesResult.error) throw ordersResult.error || salesResult.error;
+          const unpaidOrders = ordersResult.data;
+          const unpaidSales = salesResult.data;
+          const payables = (unpaidOrders || []).reduce((s: number, o: any) => {
+            const remaining = Number(o.total || 0) - Number(o.paid || 0);
+            return s + Math.max(0, remaining);
+          }, 0);
+          const payablesSupplierIds = new Set(
+            (unpaidOrders || []).filter((o: any) => Number(o.total || 0) - Number(o.paid || 0) > 0).map((o: any) => o.supplier_id)
+          );
+          const payablesSupplierCount = payablesSupplierIds.size;
+
+          const receivables = (unpaidSales || []).reduce((s: number, sale: any) => {
+            const remaining = Number(sale.total || 0) - Number(sale.paid || 0);
+            return s + Math.max(0, remaining);
+          }, 0);
+          const receivablesCustomerIds = new Set(
+            (unpaidSales || []).filter((s: any) => Number(s.total || 0) - Number(s.paid || 0) > 0).map((s: any) => s.customer_id)
+          );
+          const customersToChaseCount = receivablesCustomerIds.size;
+          publish({ receivables, payables, customersToChase: customersToChaseCount, suppliersToChase: payablesSupplierCount, balancesReady: true });
+        }),
+        section('stock', async () => {
+          const { data, error } = await supabase.rpc('dashboard_stock_counts', {
+            p_tenant_id: tenant.id, p_site_id: siteId, p_shared_articles: sharedArticles,
+          }).abortSignal(signal).single();
+          if (error) throw error;
+          if (!data) throw new Error('Missing stock counts');
+          const counts = data as { low_stock_count: number | string; out_of_stock_count: number | string };
+          publish({ stockReady: true, lowStockCount: Number(counts.low_stock_count), outOfStockCount: Number(counts.out_of_stock_count) });
+        }),
+        section('compteurs', async () => {
+          let articleCount = supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true);
+          if (!sharedArticles) articleCount = articleCount.eq('site_id', siteId);
+          let supplierCount = supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true);
+          if (!sharedSuppliers) supplierCount = supplierCount.eq('site_id', siteId);
+          const results = await Promise.all([
+            articleCount, supplierCount,
+            supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
+            supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).in('status', ['draft', 'sent']),
+            supabase.from('sale_returns').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'pending'),
+          ].map(query => query.abortSignal(signal)));
+          const failed = results.find(entry => entry.error);
+          if (failed) throw failed.error;
+          const [articlesCount, suppliersCount, customersCount, pendingQuotes, pendingReturns] = results.map(result => result.count || 0);
+          publish({ countsReady: true, articlesCount, suppliersCount, customersCount, pendingQuotes, pendingReturns });
+        }),
+        section('boutique en ligne', async () => {
+          const [shop, online] = await Promise.all([
+            supabase.from('tenants').select('public_slug').eq('id', tenant.id).abortSignal(signal).maybeSingle(),
+            supabase.from('online_orders').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('status', 'nouvelle').abortSignal(signal),
+          ]);
+          if (shop.error || online.error) throw shop.error || online.error;
+          if (signal.aborted) return;
+          publish({ webNew: online.count || 0 });
+          const slug = shop.data?.public_slug;
+          if (!slug) { nextShop = null; publish(); return; }
+          const settings = await supabase.from('shop_settings').select('is_active').eq('tenant_id', tenant.id).abortSignal(signal).maybeSingle();
+          if (settings.error) throw settings.error;
+          nextShop = { slug, isActive: settings.data?.is_active ?? false };
+          publish();
+        }),
+        section('dernière vente', async () => {
+          const { data, error } = await supabase.from('sales').select('id, sale_number, total, created_at, customers(name)')
+            .eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false })
+            .limit(1).abortSignal(signal);
+          if (error) throw error;
+          publish({ recentSales: data as unknown as Stats['recentSales'] });
+        }),
+        desktop ? section('activité récente', async () => {
+          const entries = await Promise.all([
+            supabase.from('sales').select('id, sale_number, total, created_at, status, site_id, user_id, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(8),
+            supabase.from('quotes').select('id, quote_number, total, created_at, status, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
+            sharedSuppliers
+              ? supabase.from('supplier_orders').select('id, order_number, total, created_at, status, site_id, user_id, suppliers(name)').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5)
+              : supabase.from('supplier_orders').select('id, order_number, total, created_at, status, site_id, user_id, suppliers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
+            supabase.from('online_orders').select('id, order_number, total, created_at, status, customer_name').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
+            supabase.from('sale_returns').select('id, return_number, total, created_at, status, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(3),
+            supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, site_id, user_id, customers(name))').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).order('created_at', { ascending: false }).limit(5),
+            supabase.from('cash_movements').select('id, kind, amount, note, created_at, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('kind', ['expense', 'refund', 'customer_loan', 'withdrawal', 'deposit', 'customer_prepayment']).order('created_at', { ascending: false }).limit(8),
+          ].map(query => query.abortSignal(signal)));
+          const failed = entries.find(entry => entry.error);
+          if (failed) throw failed.error;
+          const [actSales, actQuotes, actSupOrders, actOnline, actReturns, actPayments, actMovements] = entries;
+
+          // Batch-fetch profile names for all user_ids referenced in activities
+          const activityUserIds = new Set<string>();
+          for (const s of (actSales.data || []) as any[]) if (s.user_id) activityUserIds.add(s.user_id);
+          for (const q of (actQuotes.data || []) as any[]) if (q.user_id) activityUserIds.add(q.user_id);
+          for (const o of (actSupOrders.data || []) as any[]) if (o.user_id) activityUserIds.add(o.user_id);
+          for (const r of (actReturns.data || []) as any[]) if (r.user_id) activityUserIds.add(r.user_id);
+          for (const p of (actPayments.data || []) as any[]) if (p.sales?.user_id) activityUserIds.add(p.sales.user_id);
+          for (const m of (actMovements.data || []) as any[]) if (m.user_id) activityUserIds.add(m.user_id);
+          let activityProfileMap: Record<string, string> = {};
+          if (activityUserIds.size > 0) {
+            const { data: actProfiles } = await supabase.from('profiles').select('id, full_name').in('id', Array.from(activityUserIds)).abortSignal(signal);
+            for (const p of (actProfiles || []) as any[]) activityProfileMap[p.id] = p.full_name || '';
+          }
+          const siteNameMap: Record<string, string> = {};
+          for (const s of (tenant as any)?.sites || []) siteNameMap[s.id] = s.name;
+          if (currentSite) siteNameMap[currentSite.id] = currentSite.name;
+          const hasMultiSitesAct = ((tenant as any)?.sites?.length || 0) > 1;
+
+          const activities: ActivityItem[] = [];
+
+          for (const s of (actSales.data || []) as any[]) {
+            const client = s.customers?.name || 'Client comptoir';
+            const method = s.sale_payments?.[0]?.method_name || '';
+            const statusLabel = s.status === 'paid' ? 'Payée' : s.status === 'partial' ? 'Partielle' : s.status === 'cancelled' ? 'Annulée' : 'Créée';
+            activities.push({
+              id: `sale-${s.id}`,
+              type: 'sale',
+              title: `Vente ${s.sale_number}`,
+              detail: `${client}${method ? ' · ' + method : ''} · ${statusLabel}`,
+              amount: Number(s.total),
+              amountType: s.status === 'cancelled' ? 'negative' : 'positive',
+              time: s.created_at,
+              route: 'sales',
+              siteName: hasMultiSitesAct ? (siteNameMap[s.site_id] || '') : '',
+              userName: s.user_id ? (activityProfileMap[s.user_id] || '') : '',
+              highlightId: s.id,
+            });
+          }
+
+          for (const q of (actQuotes.data || []) as any[]) {
+            const client = q.customers?.name || 'Client';
+            const statusLabel = q.status === 'sent' ? 'Envoyé' : q.status === 'accepted' ? 'Accepté' : q.status === 'converted' ? 'Converti' : 'Brouillon';
+            activities.push({
+              id: `quote-${q.id}`,
+              type: 'quote',
+              title: `Devis ${q.quote_number}`,
+              detail: `${client} · ${statusLabel}`,
+              amount: Number(q.total),
+              amountType: 'neutral',
+              time: q.created_at,
+              route: 'sales',
+              siteName: hasMultiSitesAct ? (siteNameMap[q.site_id] || '') : '',
+              userName: q.user_id ? (activityProfileMap[q.user_id] || '') : '',
+              highlightId: q.id,
+            });
+          }
+
+          for (const o of (actSupOrders.data || []) as any[]) {
+            const supplier = o.suppliers?.name || 'Fournisseur';
+            const statusLabel = o.status === 'delivered' ? 'Livrée' : o.status === 'sent' ? 'Envoyée' : o.status === 'partial' ? 'Partielle' : 'Brouillon';
+            activities.push({
+              id: `suporder-${o.id}`,
+              type: 'supplier_order',
+              title: `Commande ${o.order_number}`,
+              detail: `${supplier} · ${statusLabel}`,
+              amount: Number(o.total),
+              amountType: 'negative',
+              time: o.created_at,
+              route: 'supplier_orders',
+              siteName: hasMultiSitesAct ? (siteNameMap[o.site_id] || '') : '',
+              userName: o.user_id ? (activityProfileMap[o.user_id] || '') : '',
+              highlightId: o.id,
+            });
+          }
+
+          for (const o of (actOnline.data || []) as any[]) {
+            const client = o.customer_name || 'Client web';
+            const statusLabel = o.status === 'nouvelle' ? 'Nouvelle' : o.status === 'en_preparation' ? 'En préparation' : o.status === 'prete' ? 'Prête' : o.status === 'livree' ? 'Livrée' : o.status;
+            activities.push({
+              id: `online-${o.id}`,
+              type: 'online_order',
+              title: `Commande en ligne ${o.order_number}`,
+              detail: `${client} · ${statusLabel}`,
+              amount: Number(o.total),
+              amountType: 'positive',
+              time: o.created_at,
+              route: 'online_orders',
+              highlightId: o.id,
+            });
+          }
+
+          for (const r of (actReturns.data || []) as any[]) {
+            const client = r.customers?.name || 'Client';
+            activities.push({
+              id: `return-${r.id}`,
+              type: 'return',
+              title: `Retour ${r.return_number || ''}`,
+              detail: `${client} · ${r.status === 'pending' ? 'En attente' : 'Traité'}`,
+              amount: Number(r.total || 0),
+              amountType: 'negative',
+              time: r.created_at,
+              route: 'sales',
+              siteName: hasMultiSitesAct ? (siteNameMap[r.site_id] || '') : '',
+              userName: r.user_id ? (activityProfileMap[r.user_id] || '') : '',
+              highlightId: r.id,
+            });
+          }
+
+          for (const p of (actPayments.data || []) as any[]) {
+            const saleRef = p.sales?.sale_number || '';
+            const client = p.sales?.customers?.name || 'Client';
+            activities.push({
+              id: `payment-${p.id}`,
+              type: 'payment_received',
+              title: `Règlement ${saleRef}`,
+              detail: `${client} · ${p.method_name || 'Espèces'}`,
+              amount: Number(p.amount),
+              amountType: 'positive',
+              time: p.created_at,
+              route: 'sales',
+              siteName: hasMultiSitesAct ? (siteNameMap[p.sales?.site_id] || '') : '',
+              userName: p.sales?.user_id ? (activityProfileMap[p.sales.user_id] || '') : '',
+              highlightId: p.sales?.id || p.id,
+            });
+          }
+
+          for (const m of (actMovements.data || []) as any[]) {
+            const kindLabels: Record<string, string> = { expense: 'Sortie', refund: 'Remboursement', customer_loan: 'Prêt client', withdrawal: 'Retrait', deposit: 'Entrée', customer_prepayment: 'Acompte' };
+            const label = kindLabels[m.kind] || m.kind;
+            const client = m.customers?.name;
+            activities.push({
+              id: `movement-${m.id}`,
+              type: m.kind === 'expense' ? 'expense' : m.kind === 'refund' ? 'return' : 'payment_received',
+              title: label,
+              detail: `${client ? client + ' · ' : ''}${m.note || ''}`.replace(/ · $/, '') || label,
+              amount: Number(m.amount),
+              amountType: (m.kind === 'deposit' || m.kind === 'customer_prepayment') ? 'positive' : 'negative',
+              time: m.created_at,
+              route: 'cash_history',
+              siteName: hasMultiSitesAct ? (siteNameMap[m.site_id] || '') : '',
+              userName: m.user_id ? (activityProfileMap[m.user_id] || '') : '',
+              highlightId: m.id,
+            });
+          }
+
+          activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+          const recentActivities = activities.slice(0, 15);
+          publish({ recentActivities });
+        }) : section('synthèse mensuelle', async () => {
+          const from = firstOfMonth.toISOString().slice(0, 10);
+          const to = new Date().toISOString().slice(0, 10);
+          const monthly = periodFromDate === from && periodToDate === to
+            ? financial
+            : await supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: from, p_to: to }).abortSignal(signal);
+          if (monthly.error) throw monthly.error;
+          publish({ monthSales: Number(monthly.data?.ca_net || 0), monthMarginRate: Number(monthly.data?.taux_marge || 0) });
+        }),
+      ]);
+    })().catch(cause => reportIssue('indicateurs principaux', cause));
+    return () => controller.abort();
+  }, [tenant, currentSite?.id, profile?.id, refreshTick, period, cacheKey, desktop]);
 
   const nav = (route: string, ctx?: NavContext) => {
     setNavContext(ctx || null);
     onNavigate?.(route);
   };
 
-  if (loading || !stats) {
+  const issues = loadIssue?.key === cacheKey ? loadIssue.blocks : [];
+  if (!stats) {
     return (
-      <div data-app-overlay className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--w-bg)] z-[9999] overflow-hidden">
-        {/* Ambient glow orbs */}
-        <div className="absolute top-1/4 left-1/4 w-[50vw] h-[50vw] rounded-full bg-brand-500/8 blur-[120px] animate-[dashPulse_3s_ease-in-out_infinite]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[40vw] h-[40vw] rounded-full bg-brand-400/6 blur-[100px] animate-[dashPulse_3s_ease-in-out_infinite_1.5s]" />
-
-        {/* Dashboard icon with orbiting rings */}
-        <div className="relative flex items-center justify-center mb-8">
-          <div className="absolute w-24 h-24 rounded-full border border-white/5" />
-          <div className="absolute w-16 h-16 rounded-full border border-white/10 animate-[dashSpin_2s_linear_infinite]" style={{ borderTopColor: 'rgba(20,184,166,0.6)' }} />
-          <div className="absolute w-20 h-20 rounded-full border border-white/5 animate-[dashSpin_3s_linear_infinite_reverse]" style={{ borderBottomColor: 'rgba(6,182,212,0.4)' }} />
-          <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-brand-md">
-            <LayoutDashboard className="w-6 h-6 text-white" />
-          </div>
-        </div>
-
-        {/* Progress dots */}
-        <div className="flex items-center gap-1.5 mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-[dashBounce_1.4s_ease-in-out_infinite]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-[dashBounce_1.4s_ease-in-out_infinite_0.2s]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-[dashBounce_1.4s_ease-in-out_infinite_0.4s]" />
-        </div>
-
-        {/* Status text */}
-        <p className="text-[13px] font-medium text-[var(--w-text-sec)] tracking-wide">
-          Préparation de votre tableau de bord
-        </p>
-        <p className="text-[10px] text-[var(--w-text-muted)] mt-1 tracking-[0.15em] uppercase">
-          Chargement des données
-        </p>
-      </div>
+      <section className="px-4 py-5">
+        <h1 className="text-lg font-semibold text-[var(--w-text)]">Tableau de bord</h1>
+        {issues.length > 0 ? (
+          <p role="alert" className="mt-2 text-sm text-[var(--w-text-muted)]">
+            Indicateurs indisponibles.{' '}
+            <button className="underline" onClick={() => setRefreshTick(tick => tick + 1)}>Réessayer</button>
+          </p>
+        ) : (
+          <p role="status" className="mt-2 text-xs text-[var(--w-text-muted)]">Chargement des indicateurs…</p>
+        )}
+      </section>
     );
   }
 
-  const now = new Date();
-  const hourGreet = now.getHours() < 12 ? 'Bonjour' : now.getHours() < 18 ? 'Bon après-midi' : 'Bonsoir';
-  const marginPct = can('view_margins') ? Math.round(stats.monthTauxMarge) : 0;
+  const marginPct = can('view_margins') ? Math.round(stats.monthMarginRate || 0) : 0;
   const dayMarginPct = can('view_margins') ? Math.round(stats.periodTauxMarge) : 0;
-  const dayDelta = stats.yesterdaySales > 0
-    ? Math.round(((stats.todaySales - stats.yesterdaySales) / stats.yesterdaySales) * 100)
-    : (stats.todaySales > 0 ? 100 : 0);
-
-  const firstName = (profile?.full_name || '').split(' ')[0];
 
   return (
     <>
       <h1 className="sr-only">Tableau de bord</h1>
-      <div className="lg:hidden space-y-2.5">
+      {issues.length > 0 && (
+        <p role="alert" className="px-3 py-2 text-xs text-[var(--w-text-muted)]">
+          Actualisation indisponible pour {issues.join(', ')}.{' '}
+          <button className="underline" onClick={() => setRefreshTick(tick => tick + 1)}>Réessayer</button>
+        </p>
+      )}
+      {!desktop ? <div className="space-y-2.5">
         <MobileDashboard
           stats={stats}
           shopInfo={shopInfo}
-          dayDelta={dayDelta}
           marginPct={marginPct}
           dayMarginPct={dayMarginPct}
           nav={nav}
@@ -902,17 +635,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           showPeriodMenu={showPeriodMenu}
           setShowPeriodMenu={setShowPeriodMenu}
         />
-      </div>
-
-      <div className="hidden lg:block">
+      </div> : <div>
         <DesktopDashboard
-          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, todayCollected: 0, todayDirectCash: 0, todayPaid: 0, todayReceivable: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, monthTauxMarge: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0, periodTauxMarge: 0, periodCaNet: 0, periodMargeBrute: 0, periodNbVentes: 0, periodNbRetours: 0, periodRetours: 0, periodCharges: 0, periodResultat: 0, periodExpenses: 0, periodRefunds: 0, periodWithdrawals: 0, periodCustomerLoans: 0, periodCashBalance: 0, sessionCaNet: 0, sessionMargeBrute: 0, sessionTauxMarge: 0, sessionNbVentes: 0, sessionNbRetours: 0, sessionRetours: 0, sessionDepenses: 0, sessionRemboursements: 0, sessionRetraits: 0, sessionPretsClients: 0, sessionEntreesDirectes: 0, sessionEncaissements: 0, sessionCreditTotal: 0, sessionCreditOutstanding: 0, sessionCreditCount: 0, sessionResultat: 0, sessionOpenedBy: '' }}
-          shopInfo={shopInfo}
-          greet={hourGreet}
-          firstName={firstName}
-          dayDelta={can('view_dashboard_stats') ? dayDelta : 0}
-          dayMarginPct={can('view_margins') ? dayMarginPct : 0}
-          marginPct={marginPct}
+          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, todayCollected: 0, todayDirectCash: 0, monthSales: 0, cashBalance: 0, receivables: 0, payables: 0, periodTauxMarge: 0, periodMargeBrute: 0, periodCharges: 0, periodResultat: 0, periodExpenses: 0, periodRefunds: 0, periodWithdrawals: 0, periodCustomerLoans: 0, periodCashBalance: 0, sessionCaNet: 0, sessionMargeBrute: 0, sessionTauxMarge: 0, sessionNbVentes: 0, sessionDepenses: 0, sessionRemboursements: 0, sessionRetraits: 0, sessionPretsClients: 0, sessionEntreesDirectes: 0, sessionEncaissements: 0, sessionCreditTotal: 0, sessionCreditCount: 0, sessionResultat: 0 }}
           nav={nav}
           period={period}
           setPeriod={setPeriod}
@@ -924,7 +649,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           viewMode={viewMode}
           toggleViewMode={toggleViewMode}
         />
-      </div>
+      </div>}
     </>
   );
 }
@@ -933,7 +658,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
  *  MOBILE DASHBOARD — Ultra-compact Premium Fintech 2026
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
-  stats, shopInfo, dayDelta, marginPct, dayMarginPct, nav,
+  stats, shopInfo, marginPct, dayMarginPct, nav,
   balanceHidden, toggleBalanceHidden, canViewMargin,
   viewMode, toggleViewMode, period, setPeriod, periodLabel, periodOptions, showPeriodMenu, setShowPeriodMenu,
 }: any) {
@@ -1190,7 +915,9 @@ function MobileDashboard({
         </div>
       )}
 
-      {viewMode === 'session' && !stats.sessionInfo ? (
+      {viewMode === 'session' && !stats.sessionReady ? (
+        <p role="status" className="py-4 text-xs text-[var(--w-text-muted)]">Données de caisse en attente…</p>
+      ) : viewMode === 'session' && !stats.sessionInfo ? (
         <div className="mt-4 rounded-[18px] bg-white p-6 text-center" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08)' }}>
           <div className="w-14 h-14 mx-auto rounded-full bg-neutral-100 flex items-center justify-center mb-3">
             <Wallet className="w-6 h-6 text-neutral-400" />
@@ -1370,9 +1097,9 @@ function MobileDashboard({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`num text-[13px] font-black text-amber-700`}>
-                    {balanceHidden ? '•••' : formatFCFA(stats.receivables)}
+                    {balanceHidden ? '•••' : stats.balancesReady ? formatFCFA(stats.receivables) : '—'}
                   </span>
-                  <span className={`text-[8px] font-bold num text-[var(--w-text-muted)]`}>{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''}</span>
+                  <span className={`text-[8px] font-bold num text-[var(--w-text-muted)]`}>{stats.balancesReady ? stats.customersToChase : '—'} client{stats.customersToChase > 1 ? 's' : ''}</span>
                 </div>
               </div>
             )}
@@ -1401,7 +1128,7 @@ function MobileDashboard({
                   <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-muted)]`}>CA du mois</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`num text-[13px] font-black text-[var(--w-text-sec)]`}>{formatCompactFCFA(stats.monthSales)}</span>
+                  <span className={`num text-[13px] font-black text-[var(--w-text-sec)]`}>{stats.monthSales == null ? '—' : formatCompactFCFA(stats.monthSales)}</span>
                   {marginPct > 0 && <span className={`text-[8px] font-bold num text-[var(--w-text-muted)]`}>marge {marginPct}%</span>}
                 </div>
               </div>
@@ -1461,13 +1188,13 @@ function MobileDashboard({
         <div className="grid grid-cols-2 mt-1">
           <button onClick={() => nav('tiers', { target: 'receivables' })} className="px-1 py-2.5 text-left active:bg-neutral-50/50 transition-colors border-r border-neutral-100">
             <div className="text-[9px] text-neutral-400 font-medium mb-0.5">Créances</div>
-            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.receivables)}</div>
-            <div className="text-[9px] text-neutral-400 mt-0.5">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''}</div>
+            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : stats.balancesReady ? formatFCFA(stats.receivables) : '—'}</div>
+            <div className="text-[9px] text-neutral-400 mt-0.5">{stats.balancesReady ? stats.customersToChase : '—'} client{stats.customersToChase > 1 ? 's' : ''}</div>
           </button>
           <button onClick={() => nav('supplier_orders', { target: 'payables' })} className="px-3 py-2.5 text-left active:bg-neutral-50/50 transition-colors">
             <div className="text-[9px] text-neutral-400 font-medium mb-0.5">Fournisseurs</div>
-            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.payables)}</div>
-            <div className="text-[9px] text-neutral-400 mt-0.5">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''}</div>
+            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : stats.balancesReady ? formatFCFA(stats.payables) : '—'}</div>
+            <div className="text-[9px] text-neutral-400 mt-0.5">{stats.balancesReady ? stats.suppliersToChase : '—'} fournisseur{stats.suppliersToChase > 1 ? 's' : ''}</div>
           </button>
         </div>
       </div>
@@ -1559,21 +1286,21 @@ function MobileDashboard({
           <button onClick={() => nav('articles')} className="flex items-center gap-1.5 px-1 py-2.5 active:bg-neutral-50/50 transition-colors border-r border-neutral-100">
             <Package className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.articlesCount}</div>
+              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.countsReady ? stats.articlesCount : '—'}</div>
               <div className="text-[9px] text-neutral-400 font-medium mt-0.5">Articles</div>
             </div>
           </button>
           <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2.5 active:bg-neutral-50/50 transition-colors border-r border-neutral-100">
             <Users className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.customersCount}</div>
+              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.countsReady ? stats.customersCount : '—'}</div>
               <div className="text-[9px] text-neutral-400 font-medium mt-0.5">Clients</div>
             </div>
           </button>
           <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2.5 active:bg-neutral-50/50 transition-colors">
             <Truck className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.suppliersCount}</div>
+              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.countsReady ? stats.suppliersCount : '—'}</div>
               <div className="text-[9px] text-neutral-400 font-medium mt-0.5">Fourn.</div>
             </div>
           </button>
@@ -1873,7 +1600,7 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
   );
 }
 
-function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, canViewMargin, viewMode, toggleViewMode }: any) {
+function DesktopDashboard({ stats, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, canViewMargin, viewMode, toggleViewMode }: any) {
   const { tenant, currentSite, sites, setCurrentSite, profile, signOut } = useApp();
   const { can } = usePermissions();
 
@@ -2302,7 +2029,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
             </div>
 
-            <div className="grid grid-cols-[minmax(185px,1.35fr)_minmax(0,4fr)] items-center gap-5 flex-1 min-h-0">
+            {viewMode === 'session' && !stats.sessionReady ? (
+              <p role="status" className="py-4 text-xs text-[var(--w-text-muted)]">Données de caisse en attente…</p>
+            ) : <div className="grid grid-cols-[minmax(185px,1.35fr)_minmax(0,4fr)] items-center gap-5 flex-1 min-h-0">
               {/* Main amount */}
               <div>
                 <p className={`text-[11px] font-medium mb-1 text-[var(--w-text-muted)]`}>{viewMode === 'session' ? 'CA net session' : `Encaissements ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}`}</p>
@@ -2338,10 +2067,10 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   <KpiDivider />
                   <KpiItem label="Dépenses" value={formatCompactFCFA(stats.periodExpenses)} negative />
                   <KpiDivider />
-                  <KpiItem label="Créances" value={formatCompactFCFA(stats.receivables)} sub={`${stats.customersToChase} client${stats.customersToChase > 1 ? 's' : ''}`} accent={stats.receivables > 0 ? 'amber' : undefined} />
+                  <KpiItem label="Créances" value={stats.balancesReady ? formatCompactFCFA(stats.receivables) : '—'} sub={`${stats.customersToChase} client${stats.customersToChase > 1 ? 's' : ''}`} accent={stats.receivables > 0 ? 'amber' : undefined} />
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Footer */}
             <div className={`flex items-center justify-between pt-3 mt-3 border-t border-[var(--w-separator-l)]`}>
@@ -2359,7 +2088,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           </div>
 
           {/* ── RENTABILITÉ — single analytical band (permission-gated) ── */}
-          {canViewMargin && (
+          {canViewMargin && (viewMode !== 'session' || stats.sessionReady) && (
             <div className="bg-white rounded-xl border border-neutral-200 px-5 py-3">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-neutral-700" />
@@ -2405,8 +2134,8 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   <Users className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <span className="text-xs font-semibold text-neutral-600">Créances clients</span>
                 </div>
-                <div className="ml-[22px] mt-1 text-lg font-bold text-neutral-900 num tracking-tight leading-tight whitespace-nowrap">{formatFCFA(stats.receivables)}</div>
-                <p className="ml-[22px] mt-0.5 text-[11px] text-neutral-400">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''} à relancer</p>
+                <div className="ml-[22px] mt-1 text-lg font-bold text-neutral-900 num tracking-tight leading-tight whitespace-nowrap">{stats.balancesReady ? formatFCFA(stats.receivables) : '—'}</div>
+                <p className="ml-[22px] mt-0.5 text-[11px] text-neutral-400">{stats.balancesReady ? stats.customersToChase : '—'} client{stats.customersToChase > 1 ? 's' : ''} à relancer</p>
               </div>
               <ChevronRight className="w-3.5 h-3.5 shrink-0 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
             </button>
@@ -2418,8 +2147,8 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   <Truck className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <span className="text-xs font-semibold text-neutral-600">Dettes fournisseurs</span>
                 </div>
-                <div className="ml-[22px] mt-1 text-lg font-bold text-neutral-900 num tracking-tight leading-tight whitespace-nowrap">{formatFCFA(stats.payables)}</div>
-                <p className="ml-[22px] mt-0.5 text-[11px] text-neutral-400">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} à payer</p>
+                <div className="ml-[22px] mt-1 text-lg font-bold text-neutral-900 num tracking-tight leading-tight whitespace-nowrap">{stats.balancesReady ? formatFCFA(stats.payables) : '—'}</div>
+                <p className="ml-[22px] mt-0.5 text-[11px] text-neutral-400">{stats.balancesReady ? stats.suppliersToChase : '—'} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} à payer</p>
               </div>
               <ChevronRight className="w-3.5 h-3.5 shrink-0 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
             </button>
@@ -2435,17 +2164,17 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               </div>
               <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 ml-5.5">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-sm font-bold text-red-600 num">{stats.outOfStockCount}</span>
+                  <span className="text-sm font-bold text-red-600 num">{stats.stockReady ? stats.outOfStockCount : '—'}</span>
                   <span className="text-[9px] text-neutral-400">Ruptures</span>
                 </div>
                 <div className="w-px h-3 bg-neutral-200" />
                 <div className="flex items-baseline gap-1">
-                  <span className="text-sm font-bold text-neutral-700 num">{stats.lowStockCount}</span>
+                  <span className="text-sm font-bold text-neutral-700 num">{stats.stockReady ? stats.lowStockCount : '—'}</span>
                   <span className="text-[9px] text-neutral-400">Stock bas</span>
                 </div>
                 <div className="w-px h-3 bg-neutral-200" />
                 <div className="flex items-baseline gap-1">
-                  <span className="text-sm font-bold text-neutral-900 num">{stats.outOfStockCount + stats.lowStockCount}</span>
+                  <span className="text-sm font-bold text-neutral-900 num">{stats.stockReady ? stats.outOfStockCount + stats.lowStockCount : '—'}</span>
                   <span className="text-[9px] text-neutral-400">A commander</span>
                 </div>
               </div>
@@ -2598,7 +2327,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 <Clock className="w-4 h-4 text-neutral-500" />
                 <h2 className="text-sm font-bold text-neutral-900">Activités récentes</h2>
               </div>
-              {stats.recentActivities.length > 0 && (
+              {(stats.recentActivities?.length ?? 0) > 0 && (
                 <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 transition-colors shrink-0">
                   Voir toute l'activité <ArrowUpRight className="w-3.5 h-3.5" />
                 </button>
@@ -2617,7 +2346,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.recentActivities.slice(0, 9).map((act: ActivityItem) => {
+                  {stats.recentActivities?.slice(0, 9).map((act: ActivityItem) => {
                     const codeMap: Record<ActivityItem['type'], string> = {
                       sale: 'VTE',
                       quote: 'DEV',
@@ -2664,7 +2393,10 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   })}
                 </tbody>
               </table>
-              {stats.recentActivities.length === 0 && (
+              {stats.recentActivities == null && (
+                <p className="py-4 text-xs text-[var(--w-text-muted)]">Activité en cours de chargement…</p>
+              )}
+              {stats.recentActivities?.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <Activity className="w-8 h-8 text-neutral-200 mb-2" />
                   <p className="text-xs text-neutral-400">Aucune activité récente</p>
@@ -2684,7 +2416,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               <span className="text-[10px] font-medium text-neutral-500 shrink-0 ml-2">{viewMode === 'session' ? 'Session' : periodLabel}</span>
             </div>
             <div className="space-y-1">
-              {viewMode === 'session' ? (
+              {viewMode === 'session' && !stats.sessionReady ? (
+                <p className="py-2 text-xs text-[var(--w-text-muted)]">Données de caisse en attente…</p>
+              ) : viewMode === 'session' ? (
                 <>
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-xs text-neutral-500 leading-tight">Solde d'ouverture</span>
@@ -2812,7 +2546,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
                 </button>
               )}
-              {!stats.receivables && !stats.payables && !stats.pendingReturns && !stats.sessionInfo && (
+              {stats.balancesReady && stats.countsReady && stats.sessionReady && !stats.receivables && !stats.payables && !stats.pendingReturns && !stats.sessionInfo && (
                 <div className="flex items-center gap-2 py-2">
                   <CheckCircle className="w-4 h-4 text-neutral-400 shrink-0" />
                   <p className="text-xs font-semibold text-neutral-500">Tout est en ordre</p>
