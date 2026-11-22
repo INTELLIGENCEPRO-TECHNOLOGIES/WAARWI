@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Modal } from '../components/Modal';
 import { SubscriptionPaymentPanel, useCanPaySubscription } from '../components/SubscriptionPaymentPanel';
@@ -7,14 +7,14 @@ import { formatFCFA } from '../lib/format';
 import { renderMarkdown } from '../lib/markdown';
 import { clearRegistrationDraft, getTermsVersion, loadRegistrationDraft, registerCompany, registrationError, type RegistrationRequest } from '../lib/registration';
 import { supabase } from '../lib/supabase';
-import './Registration.css';
+import { RegistrationLayout } from './RegistrationLayout';
 
 const steps = ['Entreprise', 'Compte', 'Offre', 'Paiement'] as const;
 const stepTitles = ['Votre entreprise', 'Votre compte administrateur', 'Choisissez votre offre', 'Paiement de l’abonnement'];
 const stepDescriptions = [
-  'Renseignez les informations de votre entreprise et cochez son activité principale.',
-  'Ces coordonnées serviront à vous connecter et à suivre votre demande.',
-  'Choisissez un plan et vérifiez les conditions avant d’envoyer votre demande.',
+  'Renseignez votre entreprise et son activité.',
+  'Renseignez vos coordonnées de connexion.',
+  'Choisissez votre plan et consultez les conditions.',
   '',
 ];
 
@@ -68,6 +68,7 @@ export function Registration({ onExit, onRegistered, paymentId, resumePayment }:
   const [awaitingEmail, setAwaitingEmail] = useState(false);
   const [registeredId, setRegisteredId] = useState<string>();
   const heading = useRef<HTMLHeadingElement>(null);
+  const formContent = useRef<HTMLDivElement>(null);
   const submitting = useRef(false);
   const stepShown = resumePayment || registeredId ? 3 : step;
   const selectedPlan = plans?.find(plan => plan.code === request.plan);
@@ -139,6 +140,7 @@ export function Registration({ onExit, onRegistered, paymentId, resumePayment }:
 
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
+    if (formContent.current) formContent.current.scrollTop = 0;
     window.scrollTo(0, 0);
   }, [stepShown, awaitingEmail]);
 
@@ -212,47 +214,31 @@ export function Registration({ onExit, onRegistered, paymentId, resumePayment }:
   const termsArticle = terms && renderMarkdown(terms.markdown.replace(/^\s*#\s+[^\n]+\r?\n/, ''));
 
   return (
-    <div className="registration">
-      <header className="registration-header">
-        <a href="https://waarwi.com" aria-label="Waarwi, accueil" className="registration-brand">
-          <img src="/newlogo.png" alt="Waarwi" width="155" height="29" />
-        </a>
-        <button type="button" onClick={onExit} className="registration-link" disabled={busy}>
-          {stepShown === 3 ? 'Quitter l’inscription' : 'Se connecter'}<ArrowUpRight size={15} aria-hidden="true" />
-        </button>
-      </header>
-      <div className="registration-layout">
-        <aside className="registration-aside" aria-label="Progression de l’inscription">
-          <p className="registration-aside-title">Inscription</p>
-          <ol className="registration-progress">
-            {steps.map((label, index) => (
-              <li key={label} className={index < stepShown ? 'is-complete' : ''} aria-current={index === stepShown ? 'step' : undefined}>
-                <span className="registration-progress-number" aria-hidden="true">{index < stepShown ? <Check size={16} /> : `0${index + 1}`}</span>
-                {label}
-              </li>
-            ))}
-          </ol>
-          {(request.company.trim() || tenant?.name || selectedPlan) && (
-            <dl className="registration-summary">
-              {(request.company.trim() || tenant?.name) && <div><dt>Entreprise</dt><dd>{request.company.trim() || tenant?.name}</dd></div>}
-              {activityLabel && <div><dt>Activité</dt><dd>{activityLabel}</dd></div>}
-              {selectedPlan && <div><dt>Offre</dt><dd>{selectedPlan.name} <span><PlanPrice plan={selectedPlan} cycle={request.cycle} /></span></dd></div>}
-            </dl>
-          )}
-        </aside>
-        <main className="registration-main">
-          <div className="registration-content">
-            <header className="registration-heading">
-              <h1 tabIndex={-1} ref={heading}>{title}</h1>
-              {stepShown < 3 && !awaitingEmail && <p>{stepDescriptions[stepShown]}</p>}
-            </header>
-
-            {stepShown === 3 ? (
+    <>
+      <RegistrationLayout steps={steps} activeStep={stepShown} title={title}
+        description={stepShown < 3 && !awaitingEmail ? stepDescriptions[stepShown] : undefined}
+        headingRef={heading}
+        headerAction={
+          <button type="button" onClick={onExit} className="registration-link" disabled={busy}>
+            {stepShown === 3 ? 'Quitter l’inscription' : 'Se connecter'}<ArrowUpRight size={15} aria-hidden="true" />
+          </button>
+        }
+        summary={(request.company.trim() || tenant?.name || selectedPlan) && (
+          <dl className="registration-summary">
+            {(request.company.trim() || tenant?.name) && <div><dt>Entreprise</dt><dd>{request.company.trim() || tenant?.name}</dd></div>}
+            {activityLabel && <div><dt>Activité</dt><dd>{activityLabel}</dd></div>}
+            {selectedPlan && <div><dt>Offre</dt><dd>{selectedPlan.name} <span><PlanPrice plan={selectedPlan} cycle={request.cycle} /></span></dd></div>}
+          </dl>
+        )}
+      >
+        {stepShown === 3 ? (
+          <div className="registration-stage">
+            <div className="registration-stage-content">
               <div className="registration-payment">
                 <p role="status">
                   {tenant?.approval_status === 'approved'
                     ? 'Votre espace Waarwi est actif.'
-                    : 'Votre demande d’inscription a été envoyée. L’équipe Waarwi va examiner votre demande d’activation.'}
+                    : 'Votre demande est en cours de validation par l’équipe Waarwi.'}
                 </p>
                 {canContinueToPayment && canPay && (!trial || paymentId) && (
                   <SubscriptionPaymentPanel paymentId={paymentId} inDialog />
@@ -260,129 +246,152 @@ export function Registration({ onExit, onRegistered, paymentId, resumePayment }:
                 {!canContinueToPayment && (busy
                   ? <p role="status">Chargement de votre espace…</p>
                   : <button type="button" className="registration-link" onClick={() => void refresh()}>Charger mon espace</button>)}
+              </div>
+            </div>
+            <div className="registration-stage-footer">
+              <div className="registration-actions">
                 <button type="button" className="registration-primary" onClick={onExit} disabled={!canContinueToPayment}>
                   {tenant?.approval_status === 'approved' ? 'Accéder à mon espace' : 'Suivre ma demande'}<ArrowRight size={17} aria-hidden="true" />
                 </button>
               </div>
-            ) : awaitingEmail ? (
+            </div>
+          </div>
+        ) : awaitingEmail ? (
+          <div className="registration-stage">
+            <div className="registration-stage-content">
               <div className="registration-payment">
                 <p>Ouvrez le lien envoyé à <strong>{request.email}</strong> pour reprendre l’inscription.</p>
+              </div>
+            </div>
+            <div className="registration-stage-footer">
+              <div className="registration-actions">
                 <button type="button" className="registration-link" onClick={() => { clearRegistrationDraft(); setAwaitingEmail(false); goTo(1); }}>
                   <ArrowLeft size={17} aria-hidden="true" />Modifier mon adresse e-mail
                 </button>
               </div>
-            ) : (
-              <form onSubmit={next}>
-                {step === 0 && (
-                  <>
-                    <div className="registration-fields registration-company">
-                      <RegistrationField name="company" label="Nom de l’entreprise" value={request.company} onChange={event => update('company', event.target.value)} required minLength={2} maxLength={160} autoComplete="organization" />
-                      <RegistrationField name="city" label="Ville" value={request.city} onChange={event => update('city', event.target.value)} optional maxLength={100} autoComplete="address-level2" />
-                      <RegistrationField name="address" label="Adresse" value={request.address} onChange={event => update('address', event.target.value)} optional maxLength={250} autoComplete="street-address" />
-                    </div>
-                    <fieldset className="registration-fieldset">
-                      <legend>Activité principale <span aria-hidden="true">*</span></legend>
-                      {activities ? (
-                        <>
-                          <div className="registration-activities">
-                            {[...activities, { id: '__other__', name: 'Autre activité' }].map(activity => (
-                              <label key={activity.id} className="registration-choice">
-                                <input type="checkbox" name="activity" checked={request.activity === activity.id}
-                                  onChange={event => update('activity', event.target.checked ? activity.id : '')} />
-                                <span>{activity.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                          {request.activity === '__other__' && (
-                            <RegistrationField name="otherActivity" label="Précisez votre activité" value={request.otherActivity} onChange={event => update('otherActivity', event.target.value)} required minLength={2} maxLength={160} />
-                          )}
-                        </>
-                      ) : !catalogError && <p role="status">Chargement des activités…</p>}
-                    </fieldset>
-                  </>
-                )}
-
-                {step === 1 && (
-                  <div className="registration-fields">
-                    <RegistrationField name="fullName" label="Nom et prénom" value={request.fullName} onChange={event => update('fullName', event.target.value)} minLength={2} maxLength={160} required autoComplete="name" />
-                    <RegistrationField name="position" label="Fonction" value={request.position} onChange={event => update('position', event.target.value)} optional maxLength={100} autoComplete="organization-title" />
-                    <RegistrationField name="phone" type="tel" label="Numéro WhatsApp" value={request.phone} onChange={event => update('phone', event.target.value)} maxLength={28} required autoComplete="tel" placeholder="+221" />
-                    <RegistrationField name="email" type="email" label="Adresse e-mail" value={user?.email || request.email} onChange={event => update('email', event.target.value)} readOnly={!!user} required maxLength={254} autoComplete="email" />
-                    {!user && (
-                      <div className="registration-password">
-                        <RegistrationField name="password" type={visiblePassword ? 'text' : 'password'} label="Mot de passe" value={password} onChange={event => setPassword(event.target.value)} required minLength={6} autoComplete="new-password" aria-describedby="registration-password-hint" />
-                        <button type="button" aria-label={visiblePassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                          onClick={() => setVisiblePassword(value => !value)}>
-                          {visiblePassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                        <small id="registration-password-hint">Au moins 6 caractères.</small>
-                      </div>
-                    )}
-                    {user && <button type="button" className="registration-link self-end justify-self-start" onClick={() => void signOut()}>Utiliser un autre compte</button>}
-                  </div>
-                )}
-
-                {step === 2 && (
-                  <>
-                    {canSelectYearly && (
-                      <fieldset className="registration-cycle">
-                        <legend>Facturation</legend>
-                        {(['monthly', 'yearly'] as const).map(cycle => (
-                          <label className="registration-choice" key={cycle}>
-                            <input type="radio" name="cycle" checked={request.cycle === cycle} onChange={() => chooseCycle(cycle)} disabled={busy} />
-                            <span>{cycle === 'monthly' ? 'Mensuelle' : 'Annuelle'}</span>
-                          </label>
-                        ))}
-                      </fieldset>
-                    )}
-                    <fieldset className="registration-fieldset registration-plans">
-                      <legend>Offres disponibles</legend>
-                      {cyclePlans ? cyclePlans.map(plan => (
-                        <label key={plan.code} className="registration-plan">
-                          <input type="radio" name="plan" value={plan.code} checked={request.plan === plan.code} disabled={busy}
-                            onChange={() => update('plan', plan.code)} />
-                          <span className="registration-plan-name"><strong>{plan.name}</strong>{plan.description && <small>{plan.description}</small>}</span>
-                          <span className="registration-plan-price"><PlanPrice plan={plan} cycle={request.cycle} /></span>
-                        </label>
-                      )) : !catalogError && <p role="status">Chargement des offres…</p>}
-                    </fieldset>
-                    <div className="registration-consent">
-                      <label className="registration-choice">
-                        <input type="checkbox" name="terms" checked={termsAccepted} onChange={event => { setTermsAccepted(event.target.checked); setError(''); }}
-                          required disabled={!terms || busy} />
-                        <span>J’accepte les conditions générales d’utilisation.</span>
-                      </label>
-                      <button type="button" className="registration-link" onClick={() => setTermsOpen(true)} disabled={!terms}
-                        aria-haspopup="dialog">
-                        Lire les CGU<ArrowUpRight size={15} aria-hidden="true" />
-                      </button>
-                      {termsError && <p role="alert">Les conditions générales sont momentanément indisponibles. <button type="button" className="registration-link" onClick={() => setLoadAttempt(value => value + 1)}>Réessayer</button></p>}
-                      {!terms && !termsError && <p role="status">Chargement des conditions générales…</p>}
-                    </div>
-                  </>
-                )}
-
-                {catalogError && <p role="alert" className="registration-error">Impossible de charger les activités ou les offres. <button type="button" className="registration-link" onClick={() => setLoadAttempt(value => value + 1)}>Réessayer</button></p>}
-                {error && <p role="alert" className="registration-error">{error}</p>}
-                <div className="registration-actions">
-                  {step > 0 && <button type="button" onClick={() => goTo(step - 1)} className="registration-link" disabled={busy}>
-                    <ArrowLeft size={17} aria-hidden="true" />Retour
-                  </button>}
-                  <button type="submit" className="registration-primary" disabled={busy || (step === 0 && !activities) || (step === 2 && (!plans || !terms))}>
-                    {busy ? 'Envoi en cours…' : step === 2 ? 'Envoyer ma demande' : 'Continuer'}
-                    <ArrowRight size={17} aria-hidden="true" />
-                  </button>
-                </div>
-              </form>
-            )}
+            </div>
           </div>
-        </main>
-      </div>
+        ) : (
+          <form className="registration-stage" onSubmit={next}>
+            <div className="registration-stage-content" ref={formContent}>
+              {step === 0 && (
+                <>
+                  <div className="registration-fields registration-company">
+                    <RegistrationField name="company" label="Nom de l’entreprise" value={request.company} onChange={event => update('company', event.target.value)} required minLength={2} maxLength={160} autoComplete="organization" />
+                    <RegistrationField name="city" label="Ville" value={request.city} onChange={event => update('city', event.target.value)} optional maxLength={100} autoComplete="address-level2" />
+                    <RegistrationField name="address" label="Adresse" value={request.address} onChange={event => update('address', event.target.value)} optional maxLength={250} autoComplete="street-address" />
+                  </div>
+                  <fieldset className="registration-fieldset">
+                    <legend>Activité principale <span aria-hidden="true">*</span></legend>
+                    {activities ? (
+                      <>
+                        <div className="registration-activities">
+                          {activities.map(activity => (
+                            <label key={activity.id} className="registration-choice">
+                              <input type="checkbox" name="activity" checked={request.activity === activity.id}
+                                onChange={event => update('activity', event.target.checked ? activity.id : '')} />
+                              <span>{activity.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <div className="registration-other">
+                          <label className="registration-choice">
+                            <input type="checkbox" name="activity" checked={request.activity === '__other__'}
+                              onChange={event => update('activity', event.target.checked ? '__other__' : '')} />
+                            <span>Autre activité</span>
+                          </label>
+                          {request.activity === '__other__' && (
+                            <RegistrationField name="otherActivity" label="Précisez l’activité" value={request.otherActivity} onChange={event => update('otherActivity', event.target.value)} required minLength={2} maxLength={160} />
+                          )}
+                        </div>
+                      </>
+                    ) : !catalogError && <p role="status">Chargement des activités…</p>}
+                  </fieldset>
+                </>
+              )}
+
+              {step === 1 && (
+                <div className="registration-fields">
+                  <RegistrationField name="fullName" label="Nom et prénom" value={request.fullName} onChange={event => update('fullName', event.target.value)} minLength={2} maxLength={160} required autoComplete="name" />
+                  <RegistrationField name="position" label="Fonction" value={request.position} onChange={event => update('position', event.target.value)} optional maxLength={100} autoComplete="organization-title" />
+                  <RegistrationField name="phone" type="tel" label="Numéro WhatsApp" value={request.phone} onChange={event => update('phone', event.target.value)} maxLength={28} required autoComplete="tel" placeholder="+221" />
+                  <RegistrationField name="email" type="email" label="Adresse e-mail" value={user?.email || request.email} onChange={event => update('email', event.target.value)} readOnly={!!user} required maxLength={254} autoComplete="email" />
+                  {!user && (
+                    <div className="registration-password">
+                      <RegistrationField name="password" type={visiblePassword ? 'text' : 'password'} label="Mot de passe" value={password} onChange={event => setPassword(event.target.value)} required minLength={6} autoComplete="new-password" aria-describedby="registration-password-hint" />
+                      <button type="button" aria-label={visiblePassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                        onClick={() => setVisiblePassword(value => !value)}>
+                        {visiblePassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                      <small id="registration-password-hint">Au moins 6 caractères.</small>
+                    </div>
+                  )}
+                  {user && <button type="button" className="registration-link self-end justify-self-start" onClick={() => void signOut()}>Utiliser un autre compte</button>}
+                </div>
+              )}
+
+              {step === 2 && (
+                <>
+                  {canSelectYearly && (
+                    <fieldset className="registration-cycle">
+                      <legend>Facturation</legend>
+                      {(['monthly', 'yearly'] as const).map(cycle => (
+                        <label className="registration-choice" key={cycle}>
+                          <input type="radio" name="cycle" checked={request.cycle === cycle} onChange={() => chooseCycle(cycle)} disabled={busy} />
+                          <span>{cycle === 'monthly' ? 'Mensuelle' : 'Annuelle'}</span>
+                        </label>
+                      ))}
+                    </fieldset>
+                  )}
+                  <fieldset className="registration-fieldset registration-plans">
+                    <legend>Offres disponibles</legend>
+                    {cyclePlans ? cyclePlans.map(plan => (
+                      <label key={plan.code} className="registration-plan">
+                        <input type="radio" name="plan" value={plan.code} checked={request.plan === plan.code} disabled={busy}
+                          onChange={() => update('plan', plan.code)} />
+                        <span className="registration-plan-name"><strong>{plan.name}</strong>{plan.description && <small>{plan.description}</small>}</span>
+                        <span className="registration-plan-price"><PlanPrice plan={plan} cycle={request.cycle} /></span>
+                      </label>
+                    )) : !catalogError && <p role="status">Chargement des offres…</p>}
+                  </fieldset>
+                  <div className="registration-consent">
+                    <label className="registration-choice">
+                      <input type="checkbox" name="terms" checked={termsAccepted} onChange={event => { setTermsAccepted(event.target.checked); setError(''); }}
+                        required disabled={!terms || busy} />
+                      <span>J’accepte les conditions générales d’utilisation.</span>
+                    </label>
+                    <button type="button" className="registration-link" onClick={() => setTermsOpen(true)} disabled={!terms}
+                      aria-haspopup="dialog">
+                      Lire les CGU<ArrowUpRight size={15} aria-hidden="true" />
+                    </button>
+                    {termsError && <p role="alert">Les conditions générales sont momentanément indisponibles. <button type="button" className="registration-link" onClick={() => setLoadAttempt(value => value + 1)}>Réessayer</button></p>}
+                    {!terms && !termsError && <p role="status">Chargement des conditions générales…</p>}
+                  </div>
+                </>
+              )}
+
+              {catalogError && <p role="alert" className="registration-error">Impossible de charger les activités ou les offres. <button type="button" className="registration-link" onClick={() => setLoadAttempt(value => value + 1)}>Réessayer</button></p>}
+            </div>
+            <div className="registration-stage-footer">
+              {error && <p role="alert" className="registration-error">{error}</p>}
+              <div className="registration-actions">
+                {step > 0 && <button type="button" onClick={() => goTo(step - 1)} className="registration-link" disabled={busy}>
+                  <ArrowLeft size={17} aria-hidden="true" />Retour
+                </button>}
+                <button type="submit" className="registration-primary" disabled={busy || (step === 0 && !activities) || (step === 2 && (!plans || !terms))}>
+                  {busy ? 'Envoi en cours…' : step === 2 ? 'Envoyer ma demande' : 'Continuer'}
+                  <ArrowRight size={17} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </RegistrationLayout>
       <Modal open={termsOpen} onClose={() => setTermsOpen(false)} title="Conditions générales d’utilisation"
         size="lg" layer="top" fullscreenMobile focusOnOpen panelClassName="registration-terms-panel"
         footer={<button type="button" onClick={() => setTermsOpen(false)} className="registration-primary">Revenir à l’inscription</button>}>
         {termsArticle && <article className="registration-terms" dangerouslySetInnerHTML={{ __html: termsArticle }} />}
       </Modal>
-    </div>
+    </>
   );
 }
