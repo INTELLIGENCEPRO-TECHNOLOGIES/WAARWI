@@ -1,9 +1,6 @@
 [functions.admin-users]
 verify_jwt = true
 
-[functions.admin-user]
-verify_jwt = true
-
 [functions.send-notification-email]
 verify_jwt = false
 
