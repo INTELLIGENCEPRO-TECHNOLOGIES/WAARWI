@@ -1206,8 +1206,8 @@ function PlansSection() {
     return (
       <PlatformWorkPage title={editing ? 'Modifier l’offre' : 'Nouvelle offre'} backLabel="Retour aux offres"
         onBack={() => setForm(null)} busy={saving}>
-        <form className="pa-form" onSubmit={event => { event.preventDefault(); void save(); }}>
-          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+        <form className="pa-form pa-plan-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+          <div className="pa-plan-meta">
             <label className="pa-field-label">Code de l’offre
               <input className="pa-field" required readOnly={editing} value={form.code}
                 onChange={event => setForm({ ...form, code: event.target.value })} />
@@ -1215,14 +1215,11 @@ function PlansSection() {
             <label className="pa-field-label">Nom
               <input className="pa-field" required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />
             </label>
-            <label className="pa-field-label sm:col-span-2">Description
-              <input className="pa-field" value={form.description || ''} onChange={event => setForm({ ...form, description: event.target.value })} />
-            </label>
           </div>
 
           <section className="pa-panel space-y-3">
             <h3 className="pa-heading">Tarifs</h3>
-            <div className="grid gap-x-5 gap-y-3 sm:grid-cols-3">
+            <div className="pa-plan-values">
               {([['price_monthly', 'Mensuel (FCFA)'], ['price_yearly', 'Annuel (FCFA)'], ['price_lifetime', 'À vie (FCFA)']] as const).map(([key, label]) => (
                 <label key={key} className="pa-field-label">{label}
                   <input className="pa-field" type="number" min={0} step="1" value={form[key] ?? ''}
@@ -1233,8 +1230,11 @@ function PlansSection() {
           </section>
 
           <section className="pa-panel space-y-3">
-            <h3 className="pa-heading">Remises sur le paiement d’avance</h3>
-            <div className="grid gap-x-5 gap-y-3 sm:grid-cols-3">
+            <div>
+              <h3 className="pa-heading">Remises sur le paiement d’avance</h3>
+              <p className="pa-row-subtitle">Montants calculés au tarif de l’offre.</p>
+            </div>
+            <div className="pa-plan-values">
               {prepaidPeriods.map(months => {
                 const key = discountField(months);
                 const rate = Math.round(Number(form[key] || 0) * 100);
@@ -1245,14 +1245,14 @@ function PlansSection() {
                       <input className="pa-field" type="number" min={0} max={99.99} step={0.01}
                         value={form[key] ?? 0} onChange={event => setForm({ ...form, [key]: event.target.value })} />
                     </label>
-                    <p className="pa-row-subtitle mt-1">{formatFCFA(quote)} au tarif de l’offre</p>
+                    <p className="pa-row-subtitle mt-1">{formatFCFA(quote)}</p>
                   </div>
                 );
               })}
             </div>
           </section>
 
-          <section className="pa-panel grid gap-3 sm:grid-cols-2">
+          <section className="pa-panel pa-plan-meta">
             <label className="pa-inline text-sm">
               <input type="checkbox" checked={form.is_public !== false}
                 onChange={event => setForm({ ...form, is_public: event.target.checked })} />
@@ -1265,7 +1265,15 @@ function PlansSection() {
           </section>
 
           <details className="pa-panel">
-            <summary className="pa-expander">Limites et modules</summary>
+            <summary className="pa-expander">Description, limites et modules</summary>
+            <div className="pa-form-grid mb-3">
+              <label className="pa-field-label">Description
+                <input className="w-input-ul" value={form.description || ''} onChange={event => setForm({ ...form, description: event.target.value })} />
+              </label>
+              <label className="pa-field-label">Fonctionnalités affichées, une par ligne
+                <textarea className="w-input-ul" rows={2} value={form.features} onChange={event => setForm({ ...form, features: event.target.value })} />
+              </label>
+            </div>
             <p className="pa-row-subtitle mt-2">Saisir −1 pour une limite illimitée.</p>
             <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 mt-3">
               {limits.map(([key, label]) => (
@@ -1286,9 +1294,6 @@ function PlansSection() {
             </div>
           </details>
 
-          <label className="pa-field-label">Fonctionnalités affichées, une par ligne
-            <textarea className="pa-field" rows={3} value={form.features} onChange={event => setForm({ ...form, features: event.target.value })} />
-          </label>
           <div className="pa-form-actions">
             {editing && <button type="button" className="pa-link pa-danger mr-auto" disabled={saving}
               onClick={() => setToDelete({ code: form.code, name: form.name })}>Supprimer l’offre</button>}

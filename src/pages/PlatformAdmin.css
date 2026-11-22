@@ -318,6 +318,14 @@
 .pa-back { width: fit-content; min-height: 2rem; color: var(--w-text-sec); font-weight: 500; }
 .pa-work-title { margin: 0; font-size: 1.15rem; line-height: 1.25; font-weight: 700; overflow-wrap: anywhere; outline: none; }
 .pa-form-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .8rem 1.4rem; }
+.pa-plan-meta, .pa-plan-values { display: grid; gap: .65rem clamp(.5rem, 1.45vw, 1.25rem); }
+.pa-plan-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pa-plan-values { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pa-plan-meta > *, .pa-plan-values > * { min-width: 0; }
+@container (width < 43rem) {
+  .pa-plan-form { gap: .7rem; }
+  .pa-plan-form > .pa-panel { padding-block: .55rem; }
+}
 .pa-form-grid > *, .pa-work-page > *, .pa-record-summary > * { min-width: 0; }
 .pa-form-actions {
   display: flex;
