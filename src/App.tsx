@@ -11,6 +11,7 @@ import { Dashboard } from './pages/Dashboard';
 import { TenantMessagePopup } from './components/TenantMessagePopup';
 import { MultiCashAnnouncement } from './components/MultiCashAnnouncement';
 import { PendingApproval } from './components/PendingApproval';
+import { SubscriptionHistoryAccess } from './components/SubscriptionHistory';
 import { SubscriptionPaymentDialog, SubscriptionPaymentPanel, SubscriptionPaymentReturn, useCanPaySubscription } from './components/SubscriptionPaymentPanel';
 import UpdateNotification from './components/UpdateNotification';
 import { useToast } from './context/ToastContext';
@@ -18,6 +19,7 @@ import { installDraftFlushListeners, setDraftErrorHandler, hasAnyDraft, hasPendi
 
 function SuspendedTenant() {
   const { tenant, signOut } = useApp();
+  const canViewHistory = useCanPaySubscription();
   return (
     <div className="min-h-[100dvh] bg-[var(--w-surface)] flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-md text-center space-y-5">
@@ -32,6 +34,7 @@ function SuspendedTenant() {
           <p className="text-xs text-slate-400 mt-1">Veuillez contacter l'équipe Waarwi pour plus d'informations.</p>
         </div>
         <SubscriptionPaymentPanel />
+        {canViewHistory && <SubscriptionHistoryAccess />}
         <div className="flex flex-col items-center gap-3 pt-4">
           <button onClick={signOut} className="flex items-center gap-2.5 px-8 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-sm font-bold transition-all">
             <LogOut className="w-4 h-4" />Se déconnecter
@@ -333,9 +336,9 @@ function Inner() {
   useEffect(() => { if (route === 'supplier_orders') setSupplierOrdersMounted(true); }, [route]);
   const [tiersMounted, setTiersMounted] = useState(false);
   useEffect(() => { if (route === 'tiers') setTiersMounted(true); }, [route]);
-  const [settingsEntry, setSettingsEntry] = useState({ n: 0, toRegisters: false });
+  const [settingsEntry, setSettingsEntry] = useState<{ n: number; tab?: 'cash_registers' | 'subscription' }>({ n: 0 });
   useEffect(() => {
-    if (route !== 'settings') setSettingsEntry(e => (e.toRegisters ? { ...e, toRegisters: false } : e));
+    if (route !== 'settings') setSettingsEntry(e => (e.tab ? { n: e.n } : e));
   }, [route]);
 
 
@@ -371,21 +374,28 @@ function Inner() {
   if (!user) return <Auth />;
   if (!tenant && !isSuperAdmin) return <Auth />;
 
+  const approvalStatus = tenant?.approval_status;
+  const tenantPending = tenant && !isSuperAdmin && approvalStatus && approvalStatus !== 'approved';
+  const tenantSuspended = tenant && !isSuperAdmin && ((tenant as any)?.is_active === false || tenant.status === 'suspended');
+
   if (paymentReturn && canPaySubscription) {
-    return <SubscriptionPaymentReturn paymentId={paymentReturn} onClose={() => {
+    const closeReturn = () => {
       const url = new URL(window.location.href);
       url.searchParams.delete('subscription_payment');
       window.history.replaceState(window.history.state, '', url);
       setPaymentReturn(null);
+    };
+    return <SubscriptionPaymentReturn paymentId={paymentReturn} onClose={closeReturn} onOpenHistory={tenantPending || tenantSuspended ? undefined : () => {
+      closeReturn();
+      setSettingsEntry(entry => ({ n: entry.n + 1, tab: 'subscription' }));
+      setRoute('settings');
     }} />;
   }
 
-  const approvalStatus = (tenant as any)?.approval_status;
-  if (tenant && !isSuperAdmin && approvalStatus && approvalStatus !== 'approved') {
+  if (tenantPending) {
     return <PendingApproval />;
   }
 
-  const tenantSuspended = tenant && !isSuperAdmin && ((tenant as any)?.is_active === false || (tenant as any)?.status === 'suspended');
   if (tenantSuspended) {
     return <SuspendedTenant />;
   }
@@ -413,7 +423,7 @@ function Inner() {
         {route === 'acc_tiers' && <Accounting section="tiers" />}
         {route === 'acc_search' && <Accounting section="search" />}
         {route === 'acc_cloture' && <Accounting section="cloture" />}
-        {route === 'settings' && <Settings key={settingsEntry.n} initialTab={settingsEntry.toRegisters ? 'cash_registers' : undefined} />}
+        {route === 'settings' && <Settings key={settingsEntry.n} initialTab={settingsEntry.tab} />}
         {route === 'reports' && <Reports />}
         {route === 'ipm' && <IPM />}
         {route === 'warranties' && <Warranties />}
@@ -425,7 +435,7 @@ function Inner() {
         <>
           <TenantMessagePopup />
           <MultiCashAnnouncement key={`${user.id}:${tenant?.id || ''}`} route={route}
-            onConfigure={() => { setSettingsEntry(e => ({ n: e.n + 1, toRegisters: true })); setRoute('settings'); }} />
+            onConfigure={() => { setSettingsEntry(e => ({ n: e.n + 1, tab: 'cash_registers' })); setRoute('settings'); }} />
           <UpdateNotification />
         </>
       )}

@@ -3,8 +3,10 @@ import { ArrowUpRight, CreditCard, Loader2, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDateTime, formatFCFA } from '../lib/format';
 import { Modal } from './Modal';
+import { SubscriptionHistoryAccess } from './SubscriptionHistory';
+import { SubscriptionReceiptButton } from './SubscriptionReceiptButton';
 import {
-  callSubscriptionPayments, formatSubscriptionDiscount, subscriptionCycleLabels, subscriptionPaymentDuration, subscriptionPaymentLabel,
+  callSubscriptionPayments, formatSubscriptionDiscount, hasSubscriptionReceipt, subscriptionCycleLabels, subscriptionPaymentDuration, subscriptionPaymentLabel,
   type SubscriptionPaymentContext,
 } from '../lib/subscriptionPayments';
 
@@ -212,6 +214,7 @@ export function SubscriptionPaymentPanel({ paymentId, inDialog = false }: { paym
           {payment.state === 'paid' && payment.subscription_id && <p>Votre abonnement a été mis à jour.</p>}
         </div>
       )}
+      {payment && hasSubscriptionReceipt(payment) && <SubscriptionReceiptButton paymentId={payment.id} />}
       {paymentId && !context && !error && <p className="text-sm text-[var(--w-text-sec)]">Vérification du paiement…</p>}
       {paymentId && context && !payment && <p className="text-sm text-[var(--w-text-sec)]">Paiement indisponible sur ce compte.</p>}
       {checkoutPaused && checkoutAvailable && (
@@ -242,16 +245,27 @@ export function SubscriptionPaymentPanel({ paymentId, inDialog = false }: { paym
   );
 }
 
-export function SubscriptionPaymentReturn({ paymentId, onClose }: { paymentId: string; onClose: () => void }) {
+export function SubscriptionPaymentReturn({ paymentId, onClose, onOpenHistory }: {
+  paymentId: string;
+  onClose: () => void;
+  onOpenHistory?: () => void;
+}) {
   return (
     <main className="min-h-[100dvh] bg-[var(--w-surface)] px-5 py-12">
       <div className="mx-auto max-w-md space-y-6">
         <img src="/newlogo.png" alt="Waarwi" className="h-8 w-auto object-contain w-platform-logo" />
         <h1 className="text-xl font-semibold text-[var(--w-text)]">Votre abonnement Waarwi</h1>
         <SubscriptionPaymentPanel paymentId={paymentId} />
-        <button type="button" onClick={onClose} className="min-h-10 text-sm font-semibold text-[var(--w-text)] underline underline-offset-4">
-          Revenir à Waarwi
-        </button>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          {onOpenHistory ? (
+            <button type="button" onClick={onOpenHistory} className="min-h-10 text-sm font-semibold text-[var(--w-text)] underline underline-offset-4">
+              Voir mes reçus
+            </button>
+          ) : <SubscriptionHistoryAccess />}
+          <button type="button" onClick={onClose} className="min-h-10 text-sm text-[var(--w-text-sec)] hover:underline">
+            Revenir à Waarwi
+          </button>
+        </div>
       </div>
     </main>
   );

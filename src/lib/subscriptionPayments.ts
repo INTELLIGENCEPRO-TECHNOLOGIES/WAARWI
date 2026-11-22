@@ -66,8 +66,16 @@ export function subscriptionPaymentLabel(payment: SubscriptionPayment) {
   }[payment.state];
 }
 
-export async function callSubscriptionPayments<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke<T>('subscription-payments', { body });
+export function callSubscriptionPayments<T>(body: Record<string, unknown>): Promise<T> {
+  return callSubscriptionFunction('subscription-payments', body);
+}
+
+export function callSubscriptionRecords<T>(body: Record<string, unknown>): Promise<T> {
+  return callSubscriptionFunction('subscription-records', body);
+}
+
+async function callSubscriptionFunction<T>(name: 'subscription-payments' | 'subscription-records', body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T>(name, { body });
   if (error) {
     const response = error.context;
     const payload = response instanceof Response ? await response.json().catch(() => null) : null;
@@ -75,4 +83,8 @@ export async function callSubscriptionPayments<T>(body: Record<string, unknown>)
   }
   if (!data) throw new Error('Réponse du service de paiement indisponible.');
   return data;
+}
+
+export function hasSubscriptionReceipt(payment: SubscriptionPayment) {
+  return payment.environment === 'prod' && payment.state === 'paid' && !!payment.paid_at;
 }
