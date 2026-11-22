@@ -1,3 +1,4 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
@@ -11,6 +12,21 @@ function json(data: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function notifyApproval(supabaseUrl: string, authorization: string, tenantId: string) {
+  EdgeRuntime.waitUntil((async () => {
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
+        method: "POST",
+        headers: { "Authorization": authorization, "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "approval", tenant_id: tenantId }),
+      });
+      if (!response.ok) console.error("Approval notification failed", response.status);
+    } catch {
+      console.error("Approval notification request failed");
+    }
+  })());
 }
 
 function htmlPage(title: string, message: string, success: boolean) {
@@ -124,11 +140,7 @@ Deno.serve(async (req: Request) => {
       if (!result?.success) return json({ error: result?.error || "Echec" }, 400);
       const { data: approvedTenant } = await admin.from("tenants").select("id").eq("name", result.tenant_name).eq("email", result.tenant_email).maybeSingle();
       if (approvedTenant) {
-        fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "approval", tenant_id: approvedTenant.id }),
-        }).catch(() => {});
+        notifyApproval(SUPABASE_URL, `Bearer ${SERVICE_KEY}`, approvedTenant.id);
       }
       return json({ success: true, tenant_name: result.tenant_name });
     }
@@ -448,10 +460,7 @@ Deno.serve(async (req: Request) => {
       await logEvent("tenant.approve", tenant_id, {
         trial_days: approval.trial_days, plan: approval.plan, billing_cycle: approval.billing_cycle,
       });
-      fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
-        method: "POST", headers: { "Authorization": authHeader, "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "approval", tenant_id }),
-      }).catch(() => {});
+      notifyApproval(SUPABASE_URL, authHeader, tenant_id);
       return json({ success: true });
     }
 
