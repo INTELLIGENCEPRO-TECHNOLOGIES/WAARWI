@@ -15,6 +15,7 @@ export type PaymentOrder = {
   tenant_name: string;
   plan_code: string;
   billing_cycle: "monthly" | "yearly" | "lifetime";
+  billing_months?: number | null;
   purpose: "initial" | "renewal";
   amount: number;
   environment: "test" | "prod";
@@ -115,7 +116,9 @@ export async function createPayTechCheckout(
   const ipn = new URL("/functions/v1/paytech-subscription-ipn", supabaseUrl);
   ipn.searchParams.set("payment", order.id);
   ipn.searchParams.set("key", order.callback_key);
-  const cycle = { monthly: "mensuel", yearly: "annuel", lifetime: "à vie" }[order.billing_cycle];
+  const cycle = order.billing_cycle === "monthly"
+    ? (order.billing_months ?? 1) + " mois"
+    : order.billing_cycle === "yearly" ? "annuel" : "à vie";
   const itemName = "Waarwi " + planName + " · " + cycle;
 
   const result = await paytechRequest(config, "/payment/request-payment", {
