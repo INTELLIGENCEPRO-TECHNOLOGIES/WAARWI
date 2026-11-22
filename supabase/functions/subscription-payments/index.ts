@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
-  createPayTechCheckout, getPayTechConfiguration, getPayTechStatus, isUuid, PAYTECH_ORDER_TABLE,
+  createPayTechCheckout, getPayTechConfiguration, getPayTechStatus, isUuid, PAYTECH_ORDER_TABLE, PayTechCheckoutRefused,
   type PaymentOrder, type PayTechConfig,
 } from "../_shared/subscriptionPaytech.ts";
 
@@ -138,6 +138,9 @@ Deno.serve(async (req) => {
         console.error("Création du paiement Waarwi impossible", order.id, cause instanceof Error ? cause.message : "erreur de stockage");
         await db.from(PAYTECH_ORDER_TABLE).update({ state: "failed", updated_at: new Date().toISOString() })
           .eq("id", order.id).eq("state", "creating");
+        if (cause instanceof PayTechCheckoutRefused) {
+          return json({ error: "PayTech a refusé l’ouverture du paiement. Contacte l’équipe Waarwi." }, 502);
+        }
         return json({ error: "Impossible d’ouvrir PayTech. Réessaie dans quelques instants." }, 502);
       }
     }
