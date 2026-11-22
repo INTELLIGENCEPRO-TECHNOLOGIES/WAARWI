@@ -204,7 +204,8 @@
 
 .registration-fieldset legend span { color: var(--registration-muted); }
 
-.registration-activities {
+.registration-activities,
+.registration-other {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: clamp(18px, 2.5vw, 37px);
@@ -220,7 +221,8 @@
   cursor: pointer;
 }
 
-.registration-activities .registration-choice {
+.registration-activities .registration-choice,
+.registration-other .registration-choice {
   border-bottom: 1px solid var(--registration-line);
   padding: 7px 0;
 }
@@ -239,7 +241,8 @@
 }
 
 .registration-choice:has(input:disabled) { cursor: default; }
-.registration-activities + .registration-field { margin-top: 17px; max-width: 40rem; }
+.registration-other { align-items: center; }
+.registration-other .registration-field { grid-column: 2 / -1; padding-top: 7px; }
 
 .registration-cycle { display: flex; gap: 22px; margin-top: 0; }
 .registration-cycle legend { margin-bottom: 0; }
@@ -307,6 +310,26 @@
 .registration-payment > section { border-block: 1px solid var(--registration-line); padding: 18px 0; }
 .registration-payment > button { justify-self: start; }
 
+.registration-approval-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 clamp(24px, 4vw, 54px);
+}
+.registration-approval-details > div {
+  min-width: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--registration-line);
+}
+.registration-approval-details dt { color: var(--registration-muted); font-size: 13px; }
+.registration-approval-details dd { margin: 2px 0 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+
+.registration-approval-reason { margin-top: 24px; }
+.registration-approval-reason h2 { font-size: 16px; font-weight: 650; }
+.registration-approval-reason p { margin-top: 4px; color: var(--registration-muted); overflow-wrap: anywhere; }
+
+.registration-approval-payment { margin-top: 18px; }
+.registration-approval-actions { justify-content: flex-start; gap: 22px; }
+
 .registration-terms-panel { border-radius: 0 !important; animation: none !important; }
 .registration-terms-panel > :first-child,
 .registration-terms-panel > :last-child { border-radius: 0; }
@@ -337,35 +360,125 @@
 .registration-terms a { text-decoration: underline; }
 
 @media (max-width: 1120px) {
-  .registration-activities { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .registration-activities,
+  .registration-other { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
-  .registration-header {
-    min-height: 61px;
-    padding-inline: max(18px, env(safe-area-inset-left)) max(18px, env(safe-area-inset-right));
+  .registration {
+    --registration-left: max(16px, env(safe-area-inset-left));
+    --registration-right: max(16px, env(safe-area-inset-right));
+    height: var(--registration-height, 100dvh);
+    min-height: 0;
+    overflow: hidden;
   }
-  .registration-layout { display: block; }
-  .registration-aside { padding: 0 max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left)); }
+  .registration-header {
+    flex: none;
+    min-height: 46px;
+    padding: env(safe-area-inset-top) var(--registration-right) 0 var(--registration-left);
+  }
+  .registration-brand img { width: 105px; }
+  .registration-header .registration-link { min-height: 44px; font-size: 13px; }
+
+  .registration-layout,
+  .registration-main,
+  .registration-content,
+  .registration-stage {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .registration-aside {
+    flex: none;
+    padding: 0 var(--registration-right) 0 var(--registration-left);
+  }
   .registration-aside-title,
   .registration-progress-number,
   .registration-summary { display: none; }
-  .registration-progress { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .registration-progress li { font-size: 12px; min-height: 41px; justify-content: center; border-bottom: 2px solid transparent; }
-  .registration-main {
-    padding: 26px max(18px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  .registration-progress { display: grid; gap: 8px; }
+  .registration-progress li {
+    font-size: 12px;
+    min-height: 31px;
+    justify-content: center;
+    text-align: center;
+    border-bottom: 2px solid transparent;
   }
-  .registration-heading { margin-bottom: 25px; }
-  .registration-heading h1 { font-size: clamp(30px, 7.5vw, 43px); }
-  .registration-heading p { margin-top: 8px; font-size: 14px; }
-  .registration-fields { gap: 15px 20px; }
-  .registration-fieldset { margin-top: 23px; }
-  .registration-actions { margin-top: 22px; }
+  .registration-main { padding: 0; }
+  .registration-heading {
+    flex: none;
+    margin: 0;
+    padding: 10px var(--registration-right) 9px var(--registration-left);
+  }
+  .registration-heading h1 { font-size: clamp(21px, 5.8vw, 27px); letter-spacing: -.035em; }
+  .registration-heading p { margin-top: 3px; font-size: 13px; line-height: 1.35; }
+
+  .registration-stage-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 var(--registration-right) 5px var(--registration-left);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-padding-block: 5px;
+  }
+  .registration-stage-footer {
+    flex: none;
+    padding: 5px var(--registration-right) max(5px, env(safe-area-inset-bottom)) var(--registration-left);
+    border-top: 1px solid var(--registration-line);
+  }
+  .registration-stage-footer .registration-actions { margin: 0; }
+  .registration-stage-footer .registration-error { margin: 0 0 4px; font-size: 13px; line-height: 1.3; }
+
+  .registration-fields { gap: 8px 16px; }
+  .registration-field { font-size: 13px; gap: 0; }
+  .registration-field > span { gap: 0 5px; }
+  .registration-field input { height: 34px; padding-block: 4px; }
+  .registration-field small { font-size: 11px; }
+  .registration-password { grid-column: 1 / -1; }
+  .registration-password > button { top: 14px; height: 38px; }
+  .registration-fieldset { margin-top: 12px; }
+  .registration-fieldset legend,
+  .registration-cycle legend { margin-bottom: 2px; font-size: 13px; }
+  .registration-choice { min-height: 33px; gap: 7px; font-size: 13px; line-height: 1.22; }
+  .registration-activities .registration-choice,
+  .registration-other .registration-choice { padding: 3px 0; }
+  .registration-other .registration-field { padding-top: 0; }
+
+  .registration-plan { gap: 9px; padding: 8px 0; }
+  .registration-plan strong { font-size: 15px; }
+  .registration-plan small { font-size: 12px; line-height: 1.3; }
+  .registration-plan-price { font-size: 14px; }
   .registration-plan-price small { display: block; }
+  .registration-consent { margin-top: 9px; }
+  .registration-consent .registration-link { margin-left: 23px; min-height: 32px; }
+  .registration-payment { gap: 10px; }
+  .registration-payment > p,
+  .registration-approval-reason p { font-size: 14px; line-height: 1.4; }
+  .registration-payment > section { padding-block: 9px; }
+  .registration-approval-details > div { padding-block: 7px; }
+  .registration-approval-details dt { font-size: 12px; }
+  .registration-approval-details dd { font-size: 14px; margin-top: 0; }
+  .registration-approval-payment { margin-top: 8px; }
+  .registration-approval-reason { margin-top: 15px; }
+  .registration-approval-actions { justify-content: space-between; }
 }
 
-@media (max-width: 440px) {
-  .registration-fields:not(.registration-company) { grid-template-columns: minmax(0, 1fr); }
-  .registration-plan { gap: 9px; }
-  .registration-plan-price { font-size: 14px; }
+@media (max-width: 760px) and (max-height: 640px) {
+  .registration-heading { padding-block: 8px 6px; }
+  .registration-stage-content { padding-bottom: 2px; }
+  .registration-field { line-height: 1.3; }
+  .registration-field input { height: 28px; }
+  .registration-fields { row-gap: 5px; }
+  .registration-fieldset { margin-top: 8px; }
+  .registration-activities,
+  .registration-other { column-gap: 12px; }
+  .registration-activities .registration-choice,
+  .registration-other .registration-choice {
+    min-height: 26px;
+    padding-block: 1px;
+    font-size: 12px;
+    line-height: 1.19;
+  }
+  .registration-other .registration-field input { height: 27px; }
+  .registration-approval-details > div { padding-block: 5px; }
 }

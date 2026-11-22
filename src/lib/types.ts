@@ -16,10 +16,14 @@ export type Tenant = {
   business_type?: string;
   business_activity_type_id?: string | null;
   business_activity_type_name?: string | null;
+  registration_other_activity?: string | null;
   ticket_header_config?: TicketHeaderItem[] | null;
   a4_header_config?: A4HeaderConfig | null;
   enabled_modules?: string[];
   approval_status?: string;
+  rejection_reason?: string | null;
+  selected_plan_code?: string | null;
+  whatsapp_phone?: string | null;
   owner_user_id?: string | null;
   subscription_billing_online?: boolean;
   subscription_status?: string;
