@@ -22,6 +22,9 @@ verify_jwt = false
 [functions.subscription-payments]
 verify_jwt = true
 
+[functions.subscription-records]
+verify_jwt = true
+
 [functions.paytech-subscription-ipn]
 verify_jwt = false
 

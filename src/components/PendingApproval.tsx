@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { LogOut, Building2, Phone, Headphones, RefreshCw, Clock, CheckCircle2, XCircle, AlertTriangle, CreditCard, MessageCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { SubscriptionPaymentPanel } from './SubscriptionPaymentPanel';
+import { SubscriptionPaymentPanel, useCanPaySubscription } from './SubscriptionPaymentPanel';
+import { SubscriptionHistoryAccess } from './SubscriptionHistory';
 
 const STEPS = [
   { key: 'created', label: 'Compte créé', desc: 'Votre compte a été créé.' },
@@ -13,6 +14,7 @@ const STEPS = [
 
 export function PendingApproval() {
   const { tenant, signOut } = useApp();
+  const canViewHistory = useCanPaySubscription();
   const rejected = (tenant as any)?.approval_status === 'rejected';
   const reason = (tenant as any)?.rejection_reason as string | undefined;
   const [activityName, setActivityName] = useState<string | null>(null);
@@ -163,6 +165,7 @@ export function PendingApproval() {
           )}
 
           {!rejected && <div className="mt-6"><SubscriptionPaymentPanel /></div>}
+          {canViewHistory && <SubscriptionHistoryAccess />}
 
           {/* PROGRESS STEPS — clean minimal */}
           <div className="mt-10">

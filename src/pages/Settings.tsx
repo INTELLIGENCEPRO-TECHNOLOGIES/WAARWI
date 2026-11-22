@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight, Monitor } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
-import { SubscriptionPaymentPanel } from '../components/SubscriptionPaymentPanel';
+import { SubscriptionPaymentPanel, useCanPaySubscription } from '../components/SubscriptionPaymentPanel';
+import { SubscriptionHistory } from '../components/SubscriptionHistory';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { PermissionsTab } from '../components/PermissionsTab';
@@ -136,7 +137,7 @@ export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
       {tab === 'rep_commissions' && <RepCommissionSettingsTab />}
       {tab === 'expense_types' && <ExpenseCategoriesTab />}
       {tab === 'ticket_header' && <TicketHeaderConfigTab />}
-      {tab === 'subscription' && <SubscriptionTab />}
+      {tab === 'subscription' && <SubscriptionTab initialReceipts={initialTab === 'subscription'} />}
     </div>
   );
 }
@@ -2316,8 +2317,9 @@ function PricingTiersTab() {
 }
 
 /* ===================== SUBSCRIPTION ===================== */
-function SubscriptionTab() {
+function SubscriptionTab({ initialReceipts }: { initialReceipts: boolean }) {
   const { tenant } = useApp();
+  const canViewHistory = useCanPaySubscription();
   const [loading, setLoading] = useState(true);
   const [limits, setLimits] = useState<any>(null);
   const [usage, setUsage] = useState<any>(null);
@@ -2442,6 +2444,9 @@ function SubscriptionTab() {
       </section>
 
       <SubscriptionPaymentPanel />
+      {canViewHistory && (
+        <SubscriptionHistory key={tenant.id} initialSection={initialReceipts ? 'payments' : 'periods'} />
+      )}
 
       {/* Trial info */}
       {subStatus === 'trial_active' && trialEnd && (
