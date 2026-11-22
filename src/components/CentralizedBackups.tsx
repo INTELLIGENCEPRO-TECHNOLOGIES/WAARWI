@@ -1,14 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  Activity, AlertTriangle, Check, CheckCircle, Clock, Cloud, Database, Download,
-  HardDrive, Loader2, Pause, Play, RefreshCw, RotateCcw, Search, Server, Shield,
-  ShieldCheck, Upload, X, XCircle, ChevronRight, Settings2, History, Zap,
-  Maximize2, Minimize2, MoreHorizontal, Lock,
-} from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Check, ChevronRight, Cloud, Download, Loader2, Pause, Play, RefreshCw, RotateCcw, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { formatDateTime, formatDate } from '../lib/format';
+import { formatDateTime } from '../lib/format';
 import { useToast } from '../context/ToastContext';
-import { ConfirmDialog } from './Modal';
+import { PlatformConfirmation, PlatformWorkPage } from './PlatformWorkPage';
 
 async function callScheduler(action: string, payload: Record<string, unknown> = {}) {
   let { data: sess } = await supabase.auth.getSession();
@@ -62,1305 +57,745 @@ function formatRowCount(rc: Record<string, number> | null | undefined): string {
 
 type Tab = 'supervision' | 'tenants' | 'executions' | 'lws' | 'settings';
 
-const DOT_CLS: Record<string, string> = {
-  verified: 'bg-[#0b8f61]',
-  completed: 'bg-[#0b8f61]',
-  running: 'bg-amber-500 animate-pulse',
-  uploading: 'bg-amber-500 animate-pulse',
-  queued: 'bg-[#9098a3]',
-  failed: 'bg-[#c73737]',
-  pending: 'bg-[#9098a3]',
+type BackupFilter = 'all' | 'protected' | 'unprotected' | 'suspended';
+
+type Backup = {
+  id: string;
+  label?: string;
+  kind: string;
+  status: string;
+  created_at: string;
+  size_bytes?: number | null;
+  row_counts?: Record<string, number> | null;
+  format_version?: number;
+  error_message?: string | null;
 };
 
-function Dot({ status }: { status: string }) {
-  return <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${DOT_CLS[status] || 'bg-[#9098a3]'}`} />;
-}
+type BackupCompany = {
+  id: string;
+  name: string;
+  is_active: boolean;
+  last_backup?: Backup | null;
+  override?: { suspended?: boolean; notes?: string; custom_retention_daily?: number | null } | null;
+};
+
+type Transfer = {
+  id: string;
+  tenant_id: string;
+  tenants?: { name: string } | null;
+  queued_at: string;
+  size_bytes?: number;
+  status: string;
+  error_message?: string;
+};
+
+type Run = {
+  id: string;
+  started_at: string;
+  finished_at?: string | null;
+  status: string;
+  triggered_by: string;
+  tenants_succeeded?: number;
+  tenants_failed?: number;
+  tenants_skipped?: number;
+};
+
+type RunItem = {
+  id: string;
+  tenant_id: string;
+  tenants?: { name: string } | null;
+  status: string;
+  size_bytes?: number;
+  row_count?: number;
+  error_message?: string;
+};
+
+const statusLabels: Record<string, string> = {
+  verified: 'Vérifiée', completed: 'Terminé', running: 'En cours', uploading: 'Envoi en cours',
+  queued: 'En attente', failed: 'Échec', pending: 'En attente', succeeded: 'Réussi',
+  skipped: 'Ignoré', partial_failure: 'Échec partiel',
+};
 
 function StatusLabel({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    verified: 'Vérifiée', completed: 'Terminé', running: 'En cours', uploading: 'Envoi…',
-    queued: 'En attente', failed: 'Échoué', pending: 'En attente',
-  };
-  return <span className="inline-flex items-center gap-[6px] text-[10px] font-semibold"><Dot status={status} />{map[status] || status}</span>;
+  return <span className="pa-status" data-alert={status === 'failed' || status === 'partial_failure'}>{statusLabels[status] || status}</span>;
 }
 
 function Spinner() {
-  return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-[#9098a3]" /></div>;
+  return <p className="pa-empty" role="status"><Loader2 size={16} className="animate-spin" /> Chargement…</p>;
 }
 
-// ============================================================
-// ROOT
-// ============================================================
-export function CentralizedBackups({ focusMode, onToggleFocus }: { focusMode: boolean; onToggleFocus: () => void }) {
+const tabs: { key: Tab; label: string }[] = [
+  { key: 'supervision', label: 'Supervision' },
+  { key: 'tenants', label: 'Entreprises' },
+  { key: 'executions', label: 'Exécutions' },
+  { key: 'lws', label: 'Copie distante LWS' },
+  { key: 'settings', label: 'Paramètres' },
+];
+
+const offsiteSecrets = [
+  'LWS_WEBDAV_URL', 'LWS_WEBDAV_USERNAME', 'LWS_WEBDAV_PASSWORD',
+  'BACKUP_ENCRYPTION_KEY_B64', 'BACKUP_ENCRYPTION_KEY_ID', 'OFFSITE_CRON_SECRET',
+] as const;
+
+const filters: Record<BackupFilter, string> = {
+  all: 'Toutes les entreprises', protected: 'Avec sauvegarde', unprotected: 'Sans sauvegarde', suspended: 'Planification suspendue',
+};
+
+export function CentralizedBackups() {
   const [tab, setTab] = useState<Tab>('supervision');
-
-  const tabs: { k: Tab; l: string }[] = [
-    { k: 'supervision', l: 'Supervision' },
-    { k: 'tenants', l: 'Entreprises' },
-    { k: 'executions', l: 'Exécutions' },
-    { k: 'lws', l: 'Copie distante LWS' },
-    { k: 'settings', l: 'Paramètres' },
-  ];
-
-  return (
-    <div className="pa-page pa-backup-console">
-      <div className="pa-section-head">
-        <span className="pa-muted text-sm">Sauvegardes locales et copies distantes</span>
-        <button type="button" onClick={onToggleFocus} className="pa-button" aria-pressed={focusMode}>
-          {focusMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          {focusMode ? 'Quitter le mode supervision' : 'Mode supervision'}
-        </button>
-      </div>
-      <nav className="pa-tabs" aria-label="Sauvegardes de la plateforme">
-        {tabs.map(item => (
-          <button type="button" key={item.k} aria-current={tab === item.k ? 'page' : undefined} onClick={() => setTab(item.k)}>{item.l}</button>
-        ))}
-      </nav>
-
-      {/* Views */}
-      <div>
-        {tab === 'supervision' && <SupervisionTab />}
-        {tab === 'tenants' && <TenantsTab />}
-        {tab === 'executions' && <HistoryTab />}
-        {tab === 'lws' && <OffsiteTab />}
-        {tab === 'settings' && <SettingsTab />}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// SUPERVISION TAB
-// ============================================================
-function SupervisionTab() {
-  const [data, setData] = useState<any>(null);
-  const [offsiteSummary, setOffsiteSummary] = useState<any>(null);
-  const [offsiteConfig, setOffsiteConfig] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const toast = useToast();
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const [d, s, c] = await Promise.all([
-        callScheduler('dashboard_summary'),
-        callOffsite('summary'),
-        callOffsite('get_config'),
-      ]);
-      setData(d);
-      setOffsiteSummary(s);
-      setOffsiteConfig(c);
-    } catch (e: any) { toast.error(e.message); }
-    finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => {
-    load();
-    intervalRef.current = setInterval(() => {
-      if (!document.hidden) load();
-    }, 60000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [load]);
-
-  if (loading) return <Spinner />;
-  if (!data) return null;
-
-  const cronStatus = data.cron_status as { exists: boolean; active?: boolean; schedule?: string; error?: string | null } | undefined;
-  const cronError = cronStatus?.error ?? null;
-  const cronReady = !!cronStatus?.exists && !!cronStatus?.active && !cronError;
-  const cronSecretOk = !!data.cron_secret_configured;
-  const planningOk = data.policy?.enabled && cronReady && cronSecretOk;
-
-  const totalTenants = data.total_tenants || 0;
-  const protectedTenants = data.protected_tenants || 0;
-  const unprotected = Math.max(0, totalTenants - protectedTenants);
-  const coveragePct = totalTenants > 0 ? Math.round((protectedTenants / totalTenants) * 100) : 0;
-  const lastRun = data.last_run;
-
-  const offsiteCfg = offsiteConfig?.config;
-  const offsiteCron = offsiteConfig?.cron_status as { exists?: boolean; active?: boolean; error?: string | null } | undefined;
-  const offsiteCronReady = !!offsiteCron?.exists && !!offsiteCron?.active && !offsiteCron?.error;
-  const secrets = offsiteConfig?.secrets_configured || {};
-  const allSecretsOk = secrets.LWS_WEBDAV_URL && secrets.LWS_WEBDAV_USERNAME && secrets.LWS_WEBDAV_PASSWORD && secrets.BACKUP_ENCRYPTION_KEY_B64 && secrets.BACKUP_ENCRYPTION_KEY_ID && secrets.OFFSITE_CRON_SECRET;
-  const offsiteOk = offsiteCfg?.enabled && allSecretsOk && offsiteCronReady;
-
-  const globalOk = planningOk && unprotected === 0;
-  const globalState = globalOk ? 'Nominal' : unprotected > 0 ? 'Dégradé' : 'Non configuré';
-  const globalCls = globalOk ? 'text-[#0b8f61]' : unprotected > 0 ? 'text-[#b66a06]' : 'text-[#67707c]';
-
-  const queuedCount = offsiteSummary?.total_queued ?? 0;
-  const failedCount = offsiteSummary?.total_failed ?? 0;
-  const verifiedCount = offsiteSummary?.total_verified ?? 0;
-  const incidents = failedCount + (unprotected > 0 ? unprotected : 0);
+  const [companyFilter, setCompanyFilter] = useState<BackupFilter>('all');
 
   return (
     <div>
-      {/* Telemetry band */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 border-b border-[#e5e7eb]">
-        <TelemetryCell label="État global" dotColor={globalOk ? '#0b8f61' : unprotected > 0 ? '#b66a06' : '#9098a3'}>
-          <div className={`text-[22px] font-bold tracking-tight ${globalCls}`}>{globalState}</div>
-          <div className="text-[9px] text-[#9098a3] mt-1">{globalOk ? 'Tous les services répondent' : 'Vérifier la configuration'}</div>
-        </TelemetryCell>
-        <TelemetryCell label="Couverture">
-          <div className="text-[22px] font-bold tracking-tight">{protectedTenants} / {totalTenants} <span className="text-[10px] font-medium text-[#67707c]">tenants</span></div>
-          <div className={`text-[9px] mt-1 ${coveragePct === 100 ? 'text-[#0b8f61]' : 'text-[#b66a06]'}`}>{coveragePct} % protégés</div>
-        </TelemetryCell>
-        <TelemetryCell label="Dernier cycle">
-          {lastRun ? (
-            <>
-              <div className="text-[22px] font-bold tracking-tight">{lastRun.tenants_succeeded ?? 0} / {(lastRun.tenants_succeeded ?? 0) + (lastRun.tenants_failed ?? 0)} <span className="text-[10px] font-medium text-[#67707c]">réussis</span></div>
-              <div className="text-[9px] text-[#9098a3] mt-1">{lastRun.started_at ? formatDateTime(lastRun.started_at) : '—'}</div>
-            </>
-          ) : (
-            <div className="text-[13px] text-[#9098a3]">Aucun cycle</div>
-          )}
-        </TelemetryCell>
-        <TelemetryCell label="Copie LWS">
-          <div className="text-[22px] font-bold tracking-tight">{verifiedCount} <span className="text-[10px] font-medium text-[#67707c]">vérifiées</span></div>
-          <div className="text-[9px] text-[#9098a3] mt-1">{offsiteOk ? 'AES-256-GCM' : 'Non configuré'}</div>
-        </TelemetryCell>
-        <TelemetryCell label="Incidents ouverts">
-          <div className={`text-[22px] font-bold tracking-tight ${incidents > 0 ? 'text-[#c73737]' : ''}`}>{incidents}</div>
-          <div className="text-[9px] text-[#9098a3] mt-1">{incidents === 0 ? 'Aucune action requise' : `${failedCount} échecs · ${unprotected} non protégés`}</div>
-        </TelemetryCell>
-      </div>
-
-      {/* Control grid: primary + rail */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] min-h-[400px]">
-        <div className="pr-0 xl:pr-7 pt-6">
-          <SupTenantTable load={load} />
-        </div>
-        <aside className="border-t xl:border-t-0 xl:border-l border-[#e5e7eb] pt-6 xl:pl-7 mt-6 xl:mt-0">
-          <HealthRail
-            planningOk={planningOk}
-            cronReady={cronReady}
-            cronSecretOk={cronSecretOk}
-            offsiteOk={offsiteOk}
-            allSecretsOk={allSecretsOk}
-            queuedCount={queuedCount}
-            policy={data.policy}
-            totalTenants={totalTenants}
-          />
-        </aside>
-      </div>
+      <nav className="pa-tabs" aria-label="Sauvegardes de la plateforme">
+        {tabs.map(item => (
+          <button type="button" key={item.key} aria-current={tab === item.key ? 'page' : undefined}
+            onClick={() => { setCompanyFilter('all'); setTab(item.key); }}>{item.label}</button>
+        ))}
+      </nav>
+      {tab === 'supervision' && <SupervisionTab onNavigate={setTab} onUnprotected={() => { setCompanyFilter('unprotected'); setTab('tenants'); }} />}
+      {tab === 'tenants' && <CompaniesTab initialFilter={companyFilter} />}
+      {tab === 'executions' && <HistoryTab />}
+      {tab === 'lws' && <OffsiteTab />}
+      {tab === 'settings' && <SettingsTab />}
     </div>
   );
 }
 
-function TelemetryCell({ label, children, dotColor }: { label: string; children: React.ReactNode; dotColor?: string }) {
-  return (
-    <div className="py-5 pr-5 first:pl-0 [&:not(:first-child)]:pl-5 [&:not(:first-child)]:border-l border-[#e5e7eb]">
-      <div className="flex items-center gap-[7px] text-[9px] font-bold text-[#67707c] tracking-[.08em] uppercase">
-        {dotColor && <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: dotColor }} />}
-        {label}
-      </div>
-      <div className="mt-2">{children}</div>
-    </div>
-  );
-}
-
-function SupTenantTable({ load }: { load: () => void }) {
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [lwsMap, setLwsMap] = useState<Record<string, any>>({});
-  const [tLoading, setTLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'warning' | 'error'>('all');
-  const [selectedTenant, setSelectedTenant] = useState<any>(null);
-  const [confirmBackup, setConfirmBackup] = useState<any>(null);
-  const [backingUp, setBackingUp] = useState<string | null>(null);
-  const toast = useToast();
-
-  const loadTenants = useCallback(async () => {
+function SupervisionTab({ onNavigate, onUnprotected }: { onNavigate: (tab: Tab) => void; onUnprotected: () => void }) {
+  const [data, setData] = useState<any>(null);
+  const [offsite, setOffsite] = useState<any>(null);
+  const [config, setConfig] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const load = useCallback(async () => {
     try {
-      const [tRes, txRes] = await Promise.all([
-        callScheduler('list_tenants_backup_status'),
-        callOffsite('list_transfers', { limit: 200 }),
+      const [summary, remote, settings] = await Promise.all([
+        callScheduler('dashboard_summary'), callOffsite('summary'), callOffsite('get_config'),
       ]);
-      setTenants(tRes.tenants || []);
-      const map: Record<string, any> = {};
-      for (const tx of (txRes.transfers || [])) {
-        if (!map[tx.tenant_id] || tx.queued_at > map[tx.tenant_id].queued_at) map[tx.tenant_id] = tx;
+      setData(summary);
+      setOffsite(remote);
+      setConfig(settings);
+    } catch (cause) { toast((cause as Error).message, 'error'); }
+    finally { setLoading(false); }
+  }, [toast]);
+
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 60000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  if (loading) return <Spinner />;
+  if (!data) return <p className="pa-empty">La supervision est indisponible.</p>;
+
+  const total = data.total_tenants || 0;
+  const protectedCount = data.protected_tenants || 0;
+  const cronReady = data.cron_status?.exists && data.cron_status?.active && !data.cron_status.error;
+  const planningReady = data.policy?.enabled && cronReady && data.cron_secret_configured;
+  const offsiteCron = config?.cron_status;
+  const remoteReady = config?.config?.enabled && offsiteCron?.exists && offsiteCron?.active && !offsiteCron.error
+    && offsiteSecrets.every(key => config?.secrets_configured?.[key]);
+  const lastRun = data.last_run as Run | null | undefined;
+
+  return (
+    <div className="pa-page">
+      <dl className="pa-record-summary">
+        <div><dt>Entreprises protégées</dt><dd>{protectedCount} sur {total}</dd></div>
+        <div><dt>Copies LWS vérifiées</dt><dd>{offsite?.total_verified ?? 0}</dd></div>
+        <div><dt>Transferts en attente</dt><dd>{offsite?.total_queued ?? 0}</dd></div>
+        <div><dt>Dernier cycle</dt><dd>{lastRun ? formatDateTime(lastRun.started_at) : 'Aucun cycle'}</dd></div>
+      </dl>
+      <div className="pa-overview-grid">
+        <section>
+          <h2 className="pa-heading mb-2">À contrôler</h2>
+          <div className="pa-divided">
+            <button type="button" className="pa-dashboard-link" onClick={onUnprotected}>
+              <span>Entreprises sans sauvegarde</span><strong>{Math.max(0, total - protectedCount)}</strong>
+            </button>
+            <button type="button" className="pa-dashboard-link" onClick={() => onNavigate('lws')}>
+              <span>Transferts en échec</span><strong>{offsite?.total_failed ?? 0}</strong>
+            </button>
+            <button type="button" className="pa-dashboard-link" onClick={() => onNavigate('executions')}>
+              <span>Dernière exécution</span>{lastRun ? <StatusLabel status={lastRun.status} /> : '—'}
+            </button>
+          </div>
+        </section>
+        <section>
+          <div className="pa-section-head">
+            <h2 className="pa-heading">Planification</h2>
+            <button type="button" className="pa-link" onClick={() => onNavigate('settings')}>Paramètres <ChevronRight size={15} /></button>
+          </div>
+          <dl className="pa-keyvals">
+            <KeyValue label="Sauvegarde automatique" value={planningReady ? 'Active' : 'Inactive'} />
+            <KeyValue label="Planificateur" value={cronReady ? 'Actif' : 'Inactif'} />
+            <KeyValue label="Copie distante LWS" value={remoteReady ? 'Active' : 'Inactive'} />
+            {data.policy?.cron_expression && <KeyValue label="Cadence" value={data.policy.cron_expression + ' · ' + (data.policy.timezone || 'Africa/Dakar')} />}
+          </dl>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
+  return <div><dt>{label}</dt><dd>{value}</dd></div>;
+}
+
+function CompaniesTab({ initialFilter }: { initialFilter: BackupFilter }) {
+  const [companies, setCompanies] = useState<BackupCompany[]>([]);
+  const [transferByTenant, setTransferByTenant] = useState<Record<string, Transfer>>({});
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<BackupFilter>(initialFilter);
+  const [selected, setSelected] = useState<string>();
+  const { toast } = useToast();
+
+  const load = useCallback(async () => {
+    try {
+      const [saved, remote] = await Promise.all([
+        callScheduler('list_tenants_backup_status'), callOffsite('list_transfers', { limit: 200 }),
+      ]);
+      setCompanies(saved.tenants || []);
+      const latest: Record<string, Transfer> = {};
+      for (const transfer of (remote.transfers || []) as Transfer[]) {
+        if (!latest[transfer.tenant_id] || transfer.queued_at > latest[transfer.tenant_id].queued_at) latest[transfer.tenant_id] = transfer;
       }
-      setLwsMap(map);
-    } catch (e: any) { toast.error(e.message); }
-    finally { setTLoading(false); }
-  }, []);
+      setTransferByTenant(latest);
+    } catch (cause) { toast((cause as Error).message, 'error'); }
+    finally { setLoading(false); }
+  }, [toast]);
 
-  useEffect(() => { loadTenants(); }, [loadTenants]);
+  useEffect(() => { void load(); }, [load]);
 
-  const handleBackupNow = async (tenant: any) => {
-    setBackingUp(tenant.id);
-    try {
-      await callScheduler('backup_now', { tenant_id: tenant.id });
-      toast.success(`Sauvegarde de ${tenant.name} lancée`);
-      setTimeout(() => { loadTenants(); load(); }, 2000);
-    } catch (e: any) { toast.error(e.message); }
-    finally { setBackingUp(null); setConfirmBackup(null); }
-  };
+  const company = companies.find(item => item.id === selected);
+  if (company) {
+    return <CompanyBackups key={company.id} company={company} transfer={transferByTenant[company.id]} onBack={() => setSelected(undefined)} onChange={load} />;
+  }
 
-  const toggleSuspend = async (tenant: any) => {
-    const current = tenant.override?.suspended;
-    try {
-      await callScheduler('set_tenant_override', { tenant_id: tenant.id, suspended: !current, notes: tenant.override?.notes || null });
-      toast.success(current ? `${tenant.name} réactivé` : `${tenant.name} suspendu`);
-      loadTenants();
-    } catch (e: any) { toast.error(e.message); }
-  };
-
-  if (tLoading) return <Spinner />;
-
-  const warningCount = tenants.filter(t => !t.last_backup && t.is_active && !t.override?.suspended).length;
-  const errorCount = tenants.filter(t => t.last_backup?.status === 'failed').length;
-
-  const filtered = tenants.filter(t => {
-    if (filter === 'warning') return !t.last_backup && t.is_active && !t.override?.suspended;
-    if (filter === 'error') return t.last_backup?.status === 'failed';
+  const q = search.trim().toLocaleLowerCase('fr');
+  const visible = companies.filter(item => {
+    if (q && !item.name.toLocaleLowerCase('fr').includes(q)) return false;
+    if (filter === 'protected') return !!item.last_backup;
+    if (filter === 'unprotected') return !item.last_backup;
+    if (filter === 'suspended') return !!item.override?.suspended;
     return true;
   });
 
   return (
-    <>
-      <div className="flex items-end justify-between gap-4 mb-4 flex-wrap">
-        <div>
-          <h3 className="text-[12px] font-bold text-[#101318] tracking-tight">Couverture des tenants</h3>
-          <div className="text-[9px] text-[#9098a3] mt-1">Dernier point de contrôle</div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            {(['all', 'warning', 'error'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`text-[9px] font-semibold pb-0.5 border-b transition-colors ${
-                  filter === f ? 'text-[#101318] border-[#101318]' : 'text-[#9098a3] border-transparent hover:text-[#101318]'
-                }`}
-              >
-                {f === 'all' ? `Tous ${tenants.length}` : f === 'warning' ? `À surveiller ${warningCount}` : `Échecs ${errorCount}`}
-              </button>
-            ))}
+    <div className="pa-page">
+      <div className="pa-toolbar">
+        <label className="pa-search">
+          <Search size={16} aria-hidden="true" />
+          <input aria-label="Rechercher une entreprise à sauvegarder" placeholder="Rechercher une entreprise…" value={search} onChange={event => setSearch(event.target.value)} />
+        </label>
+        <select aria-label="État des sauvegardes" className="w-input-ul" value={filter}
+          onChange={event => setFilter(event.target.value as BackupFilter)}>
+          {Object.entries(filters).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+        <button type="button" className="pa-icon-button" aria-label="Actualiser les sauvegardes" onClick={() => void load()}><RefreshCw size={16} /></button>
+      </div>
+      {loading ? <Spinner /> : visible.length === 0 ? <p className="pa-empty">Aucune entreprise pour ces critères.</p> : (
+        <div className="pa-table pa-backup-companies" role="table" aria-label="Sauvegardes par entreprise">
+          <div className="pa-list-head" role="row">
+            {['Entreprise', 'Dernière sauvegarde', 'Volume', 'Copie LWS', 'Actions'].map(label => <span role="columnheader" key={label}>{label}</span>)}
           </div>
-          <button onClick={() => { setTLoading(true); loadTenants(); }} className="text-[#67707c] hover:text-[#101318]">
-            <RefreshCw className="w-[15px] h-[15px]" />
-          </button>
-        </div>
-      </div>
-
-      <table className="w-full border-collapse text-[10px]">
-        <thead>
-          <tr className="border-t border-b border-[#e5e7eb]">
-            <th className="text-left py-2 pr-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase">Tenant</th>
-            <th className="text-left py-2 pr-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase hidden md:table-cell">Dernière sauvegarde</th>
-            <th className="text-left py-2 pr-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase hidden lg:table-cell">Volume</th>
-            <th className="text-left py-2 pr-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase hidden lg:table-cell">Copie LWS</th>
-            <th className="text-right py-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase w-8"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map(t => {
-            const lws = lwsMap[t.id];
-            const suspended = t.override?.suspended;
-            const hasBackup = !!t.last_backup;
-            const dotStatus = suspended ? 'queued' : !hasBackup ? 'failed' : t.last_backup.status;
-            return (
-              <tr key={t.id} className="border-b border-[#edf0f2] hover:bg-[#fafbfb] transition-colors">
-                <td className="py-2 pr-2">
-                  <div className="flex items-center gap-[10px] min-w-0">
-                    <Dot status={dotStatus} />
-                    <div className="min-w-0">
-                      <div className="font-semibold text-[10px] truncate">{t.name}</div>
-                      <div className="text-[8px] text-[#9098a3] mt-0.5">{suspended ? 'Suspendu' : t.is_active ? 'Actif' : 'Inactif'}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-2 pr-2 hidden md:table-cell">
-                  {hasBackup ? (
-                    <>
-                      <StatusLabel status={t.last_backup.status} />
-                      <div className="text-[8px] text-[#9098a3] mt-0.5">{formatDateTime(t.last_backup.created_at)}</div>
-                    </>
-                  ) : <span className="text-[#9098a3]">Aucune</span>}
-                </td>
-                <td className="py-2 pr-2 hidden lg:table-cell">
-                  {hasBackup ? (
-                    <>
-                      <div className="font-semibold">{formatBytes(t.last_backup.size_bytes)}</div>
-                    </>
-                  ) : '—'}
-                </td>
-                <td className="py-2 pr-2 hidden lg:table-cell">
-                  {lws ? <StatusLabel status={lws.status} /> : <span className="text-[#9098a3]">—</span>}
-                </td>
-                <td className="py-2 text-right">
-                  <button onClick={() => setSelectedTenant(t)} className="p-1 text-[#9098a3] hover:text-[#101318]">
-                    <MoreHorizontal className="w-[15px] h-[15px]" />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-          {filtered.length === 0 && (
-            <tr><td colSpan={5} className="py-8 text-center text-[#9098a3]">Aucun tenant ne correspond au filtre</td></tr>
-          )}
-        </tbody>
-      </table>
-      <div className="flex items-center justify-between text-[8px] text-[#9098a3] mt-2">
-        <span>{filtered.length} tenant{filtered.length > 1 ? 's' : ''} affiché{filtered.length > 1 ? 's' : ''} sur {tenants.length}</span>
-      </div>
-
-      {selectedTenant && (
-        <TenantDrawer
-          tenant={selectedTenant}
-          lws={lwsMap[selectedTenant.id]}
-          onClose={() => setSelectedTenant(null)}
-          onBackup={() => { setConfirmBackup(selectedTenant); }}
-          onSuspend={() => { toggleSuspend(selectedTenant); setSelectedTenant(null); }}
-        />
-      )}
-
-      {confirmBackup && (
-        <ConfirmDialog
-          open={true}
-          layer="top"
-          title={`Sauvegarder ${confirmBackup.name} ?`}
-          message="Un cycle de sauvegarde sera lancé pour ce tenant uniquement."
-          confirmLabel={backingUp ? 'Lancement…' : 'Confirmer'}
-          onConfirm={() => handleBackupNow(confirmBackup)}
-          onClose={() => setConfirmBackup(null)}
-        />
-      )}
-    </>
-  );
-}
-
-function HealthRail({ planningOk, cronReady, cronSecretOk, offsiteOk, allSecretsOk, queuedCount, policy, totalTenants }: {
-  planningOk: boolean; cronReady: boolean; cronSecretOk: boolean; offsiteOk: boolean; allSecretsOk: boolean; queuedCount: number; policy: any; totalTenants: number;
-}) {
-  const [countdown, setCountdown] = useState('');
-
-  useEffect(() => {
-    function calc() {
-      const now = new Date();
-      const tz = policy?.timezone || 'Africa/Dakar';
-      try {
-        const parts = new Intl.DateTimeFormat('en-CA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz }).formatToParts(now);
-        const h = Number(parts.find(p => p.type === 'hour')?.value || 0);
-        const m = Number(parts.find(p => p.type === 'minute')?.value || 0);
-        const s = Number(parts.find(p => p.type === 'second')?.value || 0);
-        const elapsed = h * 3600 + m * 60 + s;
-        let remaining = 2 * 3600 - elapsed;
-        if (remaining <= 0) remaining += 86400;
-        const rh = Math.floor(remaining / 3600);
-        const rm = Math.floor((remaining % 3600) / 60);
-        setCountdown(`dans ${rh} h ${String(rm).padStart(2, '0')} min · ${totalTenants} tenants planifiés`);
-      } catch { setCountdown('—'); }
-    }
-    calc();
-    const id = setInterval(calc, 30000);
-    return () => clearInterval(id);
-  }, [policy, totalTenants]);
-
-  const checks = [
-    { label: 'Planificateur', ok: planningOk, val: planningOk ? 'Actif' : 'Inactif' },
-    { label: 'Secret cron', ok: cronSecretOk, val: cronSecretOk ? 'Configuré' : 'Manquant' },
-    { label: 'Chiffrement', ok: allSecretsOk, val: allSecretsOk ? 'AES-256-GCM' : 'Non configuré' },
-    { label: 'WebDAV LWS', ok: offsiteOk, val: offsiteOk ? 'Connecté' : 'Inactif' },
-    { label: 'File distante', ok: true, val: `${queuedCount} attente` },
-  ];
-
-  const chainOk = planningOk && offsiteOk;
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <div className="text-[8px] font-bold text-[#9098a3] tracking-[.13em] uppercase">Santé du système</div>
-        <div className="flex items-center justify-between mt-2 text-[12px] font-bold">
-          <span>Chaîne de protection</span>
-          <span className={`inline-flex items-center gap-[6px] text-[9px] font-semibold ${chainOk ? 'text-[#0b8f61]' : 'text-[#b66a06]'}`}>
-            <Dot status={chainOk ? 'verified' : 'queued'} />
-            {chainOk ? 'Opérationnelle' : 'Incomplète'}
-          </span>
-        </div>
-        <div className="mt-4 space-y-0">
-          {checks.map(c => (
-            <div key={c.label} className="grid grid-cols-[1fr_auto] gap-3 items-center py-2 border-b border-[#f0f1f3] last:border-0">
-              <span className="flex items-center gap-2 text-[9px] text-[#67707c]">
-                <Dot status={c.ok ? 'verified' : 'queued'} />
-                {c.label}
-              </span>
-              <span className={`text-[9px] font-semibold text-right ${c.ok ? 'text-[#0b8f61]' : 'text-[#101318]'}`}>{c.val}</span>
+          {visible.map(item => (
+            <div className="pa-list-row" role="row" key={item.id}>
+              <div role="cell" className="pa-row-title">
+                <button type="button" className="pa-name-button" onClick={() => setSelected(item.id)}>{item.name}</button>
+                <p className="pa-row-subtitle">{item.override?.suspended ? 'Planification suspendue' : item.is_active ? 'Entreprise active' : 'Entreprise inactive'}</p>
+              </div>
+              <div role="cell" className="pa-row-plan">
+                {item.last_backup ? <StatusLabel status={item.last_backup.status} /> : 'Aucune'}
+                {item.last_backup && <p className="pa-row-subtitle">{formatDateTime(item.last_backup.created_at)}</p>}
+              </div>
+              <div role="cell" className="pa-desktop-cell">{formatBytes(item.last_backup?.size_bytes)}</div>
+              <div role="cell" className="pa-row-status">{transferByTenant[item.id] ? <StatusLabel status={transferByTenant[item.id].status} /> : '—'}</div>
+              <div role="cell" className="pa-row-actions">
+                <button type="button" className="pa-link" aria-label={'Sauvegardes de ' + item.name} onClick={() => setSelected(item.id)}>
+                  Consulter <ChevronRight size={15} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="border-t border-[#e5e7eb] pt-6">
-        <div className="text-[8px] font-bold text-[#9098a3] tracking-[.13em] uppercase">Prochain cycle automatique</div>
-        <div className="mt-3">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[24px] font-bold tracking-tight">02:00</span>
-            <span className="text-[10px] text-[#67707c]">{policy?.timezone || 'Africa/Dakar'}</span>
-          </div>
-          <div className="text-[9px] text-[#9098a3] mt-1">{countdown}</div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
-// ============================================================
-// TENANT DRAWER
-// ============================================================
-function TenantDrawer({ tenant, lws, onClose, onBackup, onSuspend }: {
-  tenant: any; lws?: any; onClose: () => void; onBackup: () => void; onSuspend: () => void;
+function CompanyBackups({ company, transfer, onBack, onChange }: {
+  company: BackupCompany; transfer?: Transfer; onBack: () => void; onChange: () => Promise<void>;
 }) {
-  const [backups, setBackups] = useState<any[]>([]);
+  const [backups, setBackups] = useState<Backup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sendingLws, setSendingLws] = useState<string | null>(null);
-  const toast = useToast();
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const d = await callScheduler('tenant_backup_history', { tenant_id: tenant.id, limit: 30 });
-        setBackups(d.backups || []);
-      } catch (e: any) { toast.error(e.message); }
-      finally { setLoading(false); }
-    })();
-  }, [tenant.id]);
-
-  const sendToLws = async (backupId: string) => {
-    setSendingLws(backupId);
-    try {
-      const r = await callOffsite('queue_transfer', { backup_id: backupId });
-      toast.success(r.already_exists ? 'Transfert déjà en file' : 'Transfert ajouté à la file');
-    } catch (e: any) { toast.error(e.message); }
-    finally { setSendingLws(null); }
-  };
-
-  return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
-      <aside className="fixed top-0 right-0 bottom-0 w-[min(420px,94vw)] bg-white z-[51] shadow-[0_20px_70px_rgba(16,19,24,.12)] overflow-y-auto">
-        <div className="p-7">
-          {/* Header */}
-          <div className="flex justify-between items-start pb-5 border-b border-[#e5e7eb]">
-            <div>
-              <h2 className="text-[18px] font-bold tracking-tight">{tenant.name}</h2>
-              <p className="text-[9px] text-[#9098a3] mt-1">Détail de la protection du tenant</p>
-            </div>
-            <button onClick={onClose} className="p-1 text-[#67707c] hover:text-[#101318]"><X className="w-[17px] h-[17px]" /></button>
-          </div>
-
-          {/* Current state */}
-          <div className="mt-6">
-            <div className="text-[10px] font-bold text-[#9098a3] tracking-[.09em] uppercase mb-2">État actuel</div>
-            <div className="space-y-0">
-              <KVRow k="Sauvegarde locale" v={tenant.last_backup ? 'Vérifiée' : 'Aucune'} ok={!!tenant.last_backup} />
-              <KVRow k="Copie distante" v={lws ? (lws.status === 'verified' ? 'Synchronisée' : lws.status) : 'Aucune'} ok={lws?.status === 'verified'} />
-              <KVRow k="Dernière exécution" v={tenant.last_backup?.created_at ? formatDateTime(tenant.last_backup.created_at) : '—'} />
-              <KVRow k="Volume protégé" v={tenant.last_backup ? formatBytes(tenant.last_backup.size_bytes) : '—'} />
-              <KVRow k="Statut" v={tenant.override?.suspended ? 'Suspendu' : tenant.is_active ? 'Actif' : 'Inactif'} />
-            </div>
-          </div>
-
-          {/* Backups list */}
-          <div className="mt-6">
-            <div className="text-[10px] font-bold text-[#9098a3] tracking-[.09em] uppercase mb-2">Historique des sauvegardes</div>
-            {loading ? <Spinner /> : backups.length === 0 ? (
-              <div className="text-[10px] text-[#9098a3] py-4">Aucune sauvegarde enregistrée</div>
-            ) : (
-              <div className="border-l border-[#cfd3d9] ml-[3px] space-y-0">
-                {backups.slice(0, 10).map(b => (
-                  <div key={b.id} className="relative pl-4 pb-4">
-                    <span className={`absolute left-[-3.5px] top-[3px] w-[6px] h-[6px] rounded-full ${DOT_CLS[b.status] || 'bg-[#9098a3]'}`} />
-                    <div className="text-[9px] font-semibold">{b.label || b.kind}</div>
-                    <div className="text-[8px] text-[#9098a3] mt-1">
-                      {formatDateTime(b.created_at)} · {formatBytes(b.size_bytes)} · {formatRowCount(b.row_counts)} lignes
-                    </div>
-                    {b.status === 'verified' && (b.format_version ?? 0) >= 2 && (
-                      <button
-                        onClick={() => sendToLws(b.id)}
-                        disabled={sendingLws === b.id}
-                        className="mt-1.5 inline-flex items-center gap-1 text-[8px] font-semibold text-[#67707c] hover:text-[#101318] disabled:opacity-50"
-                      >
-                        {sendingLws === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Cloud className="w-3 h-3" />}
-                        Envoyer vers LWS
-                      </button>
-                    )}
-                    {b.error_message && <div className="text-[8px] text-[#c73737] mt-0.5">{b.error_message}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="mt-6 space-y-2">
-            <button
-              onClick={onBackup}
-              className="w-full h-[34px] bg-[#101318] text-white text-[10px] font-semibold inline-flex items-center justify-center gap-[7px] hover:bg-[#292e35] transition-colors"
-            >
-              <Play className="w-[14px] h-[14px]" />
-              Sauvegarder ce tenant
-            </button>
-            <button
-              onClick={onSuspend}
-              className="w-full h-[34px] border border-[#cfd3d9] bg-white text-[10px] font-semibold inline-flex items-center justify-center gap-[7px] hover:bg-[#f7f8f9] transition-colors"
-            >
-              {tenant.override?.suspended ? <Play className="w-[14px] h-[14px]" /> : <Pause className="w-[14px] h-[14px]" />}
-              {tenant.override?.suspended ? 'Réactiver' : 'Suspendre'}
-            </button>
-          </div>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-function KVRow({ k, v, ok }: { k: string; v: string; ok?: boolean }) {
-  return (
-    <div className="grid grid-cols-[1fr_auto] gap-4 py-3 border-b border-[#edf0f2] text-[10px]">
-      <span className="text-[#67707c]">{k}</span>
-      <span className={`font-semibold text-right ${ok === true ? 'text-[#0b8f61]' : ok === false ? 'text-[#c73737]' : ''}`}>{v}</span>
-    </div>
-  );
-}
-
-// ============================================================
-// TENANTS TAB
-// ============================================================
-function TenantsTab() {
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [lwsMap, setLwsMap] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'protected' | 'unprotected' | 'suspended'>('all');
-  const [selectedTenant, setSelectedTenant] = useState<any>(null);
-  const [confirmBackup, setConfirmBackup] = useState<any>(null);
-  const [backingUp, setBackingUp] = useState<string | null>(null);
-  const toast = useToast();
-
+  const [confirmation, setConfirmation] = useState<'backup' | 'suspend' | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
+  const { toast, success, error } = useToast();
   const load = useCallback(async () => {
     try {
-      const [tRes, txRes] = await Promise.all([
-        callScheduler('list_tenants_backup_status'),
-        callOffsite('list_transfers', { limit: 200 }),
-      ]);
-      setTenants(tRes.tenants || []);
-      const map: Record<string, any> = {};
-      for (const tx of (txRes.transfers || [])) {
-        if (!map[tx.tenant_id] || tx.queued_at > map[tx.tenant_id].queued_at) map[tx.tenant_id] = tx;
-      }
-      setLwsMap(map);
-    } catch (e: any) { toast.error(e.message); }
+      const data = await callScheduler('tenant_backup_history', { tenant_id: company.id, limit: 30 });
+      setBackups(data.backups || []);
+    } catch (cause) { toast((cause as Error).message, 'error'); }
     finally { setLoading(false); }
-  }, []);
+  }, [company.id, toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  const handleBackupNow = async (tenant: any) => {
-    setBackingUp(tenant.id);
+  const queue = async (id: string) => {
+    setSending(id);
     try {
-      await callScheduler('backup_now', { tenant_id: tenant.id });
-      toast.success(`Sauvegarde de ${tenant.name} lancée`);
-      setTimeout(load, 2000);
-    } catch (e: any) { toast.error(e.message); }
-    finally { setBackingUp(null); setConfirmBackup(null); }
+      const result = await callOffsite('queue_transfer', { backup_id: id });
+      success(result.already_exists ? 'Transfert déjà en file' : 'Transfert ajouté à la file');
+      await onChange();
+    } catch (cause) { error((cause as Error).message); }
+    finally { setSending(null); }
   };
 
-  const toggleSuspend = async (tenant: any) => {
-    try {
-      await callScheduler('set_tenant_override', { tenant_id: tenant.id, suspended: !tenant.override?.suspended, notes: tenant.override?.notes || null });
-      toast.success(tenant.override?.suspended ? `${tenant.name} réactivé` : `${tenant.name} suspendu`);
-      load();
-    } catch (e: any) { toast.error(e.message); }
-  };
-
-  if (loading) return <Spinner />;
-
-  const q = search.toLowerCase();
-  const filtered = tenants.filter(t => {
-    if (q && !t.name.toLowerCase().includes(q)) return false;
-    if (filter === 'protected') return !!t.last_backup;
-    if (filter === 'unprotected') return !t.last_backup && t.is_active && !t.override?.suspended;
-    if (filter === 'suspended') return !!t.override?.suspended;
-    return true;
-  });
-
-  const protectedCount = tenants.filter(t => t.last_backup).length;
+  const isSuspended = !!company.override?.suspended;
+  const toggleLabel = isSuspended ? 'Réactiver la planification' : 'Suspendre la planification';
+  if (confirmation) {
+    return (
+      <PlatformConfirmation title={confirmation === 'backup' ? 'Sauvegarder ' + company.name + ' ?' : toggleLabel + ' ?'}
+        backLabel="Retour à la sauvegarde" onBack={() => setConfirmation(null)}
+        message={confirmation === 'backup' ? 'Waarwi lance une sauvegarde pour cette entreprise.'
+          : isSuspended ? 'Les cycles automatiques incluront de nouveau cette entreprise.' : 'Les cycles automatiques excluront cette entreprise.'}
+        label={confirmation === 'backup' ? 'Lancer la sauvegarde' : toggleLabel}
+        onConfirm={async () => {
+          if (confirmation === 'backup') {
+            await callScheduler('backup_now', { tenant_id: company.id });
+            success('Sauvegarde lancée');
+            await load();
+          } else {
+            await callScheduler('set_tenant_override', {
+              tenant_id: company.id, suspended: !isSuspended,
+              notes: company.override?.notes || null,
+              custom_retention_daily: company.override?.custom_retention_daily ?? null,
+            });
+            success(isSuspended ? 'Planification réactivée' : 'Planification suspendue');
+          }
+          await onChange();
+          setConfirmation(null);
+        }} />
+    );
+  }
 
   return (
-    <div className="pt-6">
-      <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
-        <div>
-          <h3 className="text-[16px] font-bold tracking-tight">Tenants protégés</h3>
-          <p className="text-[10px] text-[#67707c] mt-1">État détaillé, dernière sauvegarde et disponibilité de chaque copie distante.</p>
+    <PlatformWorkPage title={company.name} backLabel="Retour aux sauvegardes" onBack={onBack}
+      actions={<>
+        <button type="button" className="pa-button" data-variant="primary" onClick={() => setConfirmation('backup')}><Play size={16} /> Sauvegarder</button>
+        <button type="button" className="pa-link" onClick={() => setConfirmation('suspend')}>{isSuspended ? <Play size={16} /> : <Pause size={16} />} {toggleLabel}</button>
+      </>}>
+      <dl className="pa-record-summary">
+        <KeyValue label="Dernière sauvegarde" value={company.last_backup ? formatDateTime(company.last_backup.created_at) : 'Aucune'} />
+        <KeyValue label="Volume" value={formatBytes(company.last_backup?.size_bytes)} />
+        <KeyValue label="Copie distante" value={transfer ? <StatusLabel status={transfer.status} /> : 'Aucune'} />
+        <KeyValue label="Planification" value={isSuspended ? 'Suspendue' : 'Active'} />
+      </dl>
+      <section>
+        <div className="pa-section-head">
+          <h3 className="pa-heading">Historique des sauvegardes</h3>
+          <button type="button" className="pa-icon-button" aria-label="Actualiser l’historique" onClick={() => void load()}><RefreshCw size={16} /></button>
         </div>
-        <div className="flex items-center gap-3 border-b border-[#cfd3d9] pb-0.5 text-[#9098a3]">
-          <Search className="w-[14px] h-[14px]" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher un tenant…"
-            className="border-0 outline-0 bg-transparent text-[10px] text-[#101318] placeholder-[#a4aab2] w-[180px]"
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4 mb-4">
-        {(['all', 'protected', 'unprotected', 'suspended'] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`text-[9px] font-semibold pb-0.5 border-b transition-colors ${
-              filter === f ? 'text-[#101318] border-[#101318]' : 'text-[#9098a3] border-transparent'
-            }`}
-          >
-            {f === 'all' ? `Tous ${tenants.length}` : f === 'protected' ? `Protégés ${protectedCount}` : f === 'unprotected' ? `Non protégés ${tenants.length - protectedCount}` : `Suspendus ${tenants.filter(t => t.override?.suspended).length}`}
-          </button>
-        ))}
-      </div>
-
-      <table className="w-full border-collapse text-[10px]">
-        <thead>
-          <tr className="border-t border-b border-[#e5e7eb]">
-            <th className="text-left py-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase">Tenant</th>
-            <th className="text-left py-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase hidden md:table-cell">Dernier point</th>
-            <th className="text-left py-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase hidden lg:table-cell">Intégrité</th>
-            <th className="text-left py-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase hidden lg:table-cell">LWS</th>
-            <th className="text-right py-2 w-8"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map(t => {
-            const lws = lwsMap[t.id];
-            const suspended = t.override?.suspended;
-            return (
-              <tr key={t.id} className="border-b border-[#edf0f2] hover:bg-[#fafbfb] transition-colors">
-                <td className="py-2.5">
-                  <div className="flex items-center gap-[10px]">
-                    <Dot status={suspended ? 'queued' : !t.last_backup ? 'failed' : t.last_backup.status} />
-                    <div className="min-w-0">
-                      <div className="font-semibold truncate">{t.name}</div>
-                      <div className="text-[8px] text-[#9098a3] mt-0.5">{suspended ? 'Suspendu' : t.is_active ? 'Actif' : 'Inactif'}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-2.5 hidden md:table-cell">{t.last_backup?.created_at ? formatDateTime(t.last_backup.created_at) : '—'}</td>
-                <td className="py-2.5 hidden lg:table-cell">{t.last_backup ? <StatusLabel status={t.last_backup.status} /> : <span className="text-[#9098a3]">—</span>}</td>
-                <td className="py-2.5 hidden lg:table-cell">{lws ? <StatusLabel status={lws.status} /> : <span className="text-[#9098a3]">—</span>}</td>
-                <td className="py-2.5 text-right">
-                  <button onClick={() => setSelectedTenant(t)} className="p-1 text-[#9098a3] hover:text-[#101318]">
-                    <MoreHorizontal className="w-[15px] h-[15px]" />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div className="flex items-center justify-between text-[8px] text-[#9098a3] mt-2">
-        <span>{filtered.length} tenants visibles sur {tenants.length}</span>
-        <span>Couverture globale : <strong className={protectedCount === tenants.length ? 'text-[#0b8f61]' : 'text-[#b66a06]'}>{tenants.length > 0 ? Math.round((protectedCount / tenants.length) * 100) : 0} %</strong></span>
-      </div>
-
-      {selectedTenant && (
-        <TenantDrawer
-          tenant={selectedTenant}
-          lws={lwsMap[selectedTenant.id]}
-          onClose={() => setSelectedTenant(null)}
-          onBackup={() => { setConfirmBackup(selectedTenant); }}
-          onSuspend={() => { toggleSuspend(selectedTenant); setSelectedTenant(null); }}
-        />
-      )}
-      {confirmBackup && (
-        <ConfirmDialog
-          open={true}
-          layer="top"
-          title={`Sauvegarder ${confirmBackup.name} ?`}
-          message="Un cycle sera lancé pour ce tenant."
-          confirmLabel={backingUp ? 'Lancement…' : 'Confirmer'}
-          onConfirm={() => handleBackupNow(confirmBackup)}
-          onClose={() => setConfirmBackup(null)}
-        />
-      )}
-    </div>
+        {loading ? <Spinner /> : backups.length === 0 ? <p className="pa-empty">Aucune sauvegarde enregistrée.</p> : (
+          <div className="pa-divided">
+            {backups.map(item => (
+              <div className="pa-setting-row" key={item.id}>
+                <div>
+                  <strong>{item.label || item.kind}</strong>
+                  <p className="pa-row-subtitle">{formatDateTime(item.created_at)} · {formatBytes(item.size_bytes)} · {formatRowCount(item.row_counts)} lignes</p>
+                  {item.error_message && <p className="pa-danger text-xs">{item.error_message}</p>}
+                </div>
+                <div className="pa-inline">
+                  <StatusLabel status={item.status} />
+                  {item.status === 'verified' && (item.format_version ?? 0) >= 2 && (
+                    <button type="button" className="pa-link" onClick={() => void queue(item.id)} disabled={sending !== null}>
+                      {sending === item.id ? <Loader2 size={15} className="animate-spin" /> : <Cloud size={15} />} Envoyer vers LWS
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </PlatformWorkPage>
   );
 }
 
-// ============================================================
-// HISTORY TAB (Executions)
-// ============================================================
+function runDuration(run: Run) {
+  if (!run.finished_at) return '—';
+  const seconds = Math.max(0, Math.round((Date.parse(run.finished_at) - Date.parse(run.started_at)) / 1000));
+  return seconds >= 60 ? Math.floor(seconds / 60) + ' min ' + seconds % 60 + ' s' : seconds + ' s';
+}
+
 function HistoryTab() {
-  const [runs, setRuns] = useState<any[]>([]);
+  const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRun, setSelectedRun] = useState<any>(null);
-  const [runDetail, setRunDetail] = useState<any>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const toast = useToast();
+  const [selected, setSelected] = useState<Run | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    (async () => {
-      try {
-        const d = await callScheduler('list_runs', { limit: 30 });
-        setRuns(d.runs || []);
-      } catch (e: any) { toast.error(e.message); }
-      finally { setLoading(false); }
-    })();
-  }, []);
+    callScheduler('list_runs', { limit: 30 }).then(data => setRuns(data.runs || []))
+      .catch(cause => toast(cause.message, 'error')).finally(() => setLoading(false));
+  }, [toast]);
 
-  const loadRunDetail = async (runId: string) => {
-    setDetailLoading(true);
-    try {
-      const d = await callScheduler('get_run_detail', { run_id: runId });
-      setRunDetail(d);
-    } catch (e: any) { toast.error(e.message); }
-    finally { setDetailLoading(false); }
-  };
-
+  if (selected) return <RunDetails key={selected.id} run={selected} onBack={() => setSelected(null)} />;
   if (loading) return <Spinner />;
+  if (runs.length === 0) return <p className="pa-empty">Aucune exécution enregistrée.</p>;
 
   return (
-    <div className="pt-6">
-      <div className="mb-5">
-        <h3 className="text-[16px] font-bold tracking-tight">Journal d'exécution</h3>
-        <p className="text-[10px] text-[#67707c] mt-1">Traçabilité des cycles automatiques et manuels.</p>
+    <div className="pa-table pa-backup-runs" role="table" aria-label="Journal d’exécution">
+      <div className="pa-list-head" role="row">
+        {['Démarrage', 'Origine', 'Résultat', 'Durée'].map(label => <span role="columnheader" key={label}>{label}</span>)}
       </div>
-
-      <div className="border-t border-[#e5e7eb]">
-        {/* Header row */}
-        <div className="grid grid-cols-[1.2fr_.9fr_.9fr_auto] gap-4 items-center min-h-[33px] text-[8px] font-bold text-[#9098a3] tracking-[.09em] uppercase">
-          <span>Démarrage</span>
-          <span className="hidden sm:block">Origine</span>
-          <span>Résultat</span>
-          <span className="text-right">Durée</span>
+      {runs.map(run => (
+        <div className="pa-list-row" role="row" key={run.id}>
+          <div className="pa-row-title" role="cell">
+            <button type="button" className="pa-name-button" aria-label={'Détail du cycle du ' + formatDateTime(run.started_at)}
+              onClick={() => setSelected(run)}>{formatDateTime(run.started_at)}</button>
+          </div>
+          <div className="pa-row-plan" role="cell">{run.triggered_by === 'cron' ? 'Automatique' : 'Manuel'}</div>
+          <div className="pa-row-status" role="cell">
+            <StatusLabel status={run.status} />
+            <p className="pa-row-subtitle">{run.tenants_succeeded ?? 0} réussies · {run.tenants_failed ?? 0} en échec</p>
+          </div>
+          <div className="pa-row-date pa-muted" role="cell">{runDuration(run)}</div>
         </div>
-        {runs.map(run => {
-          const total = (run.tenants_succeeded ?? 0) + (run.tenants_failed ?? 0);
-          const duration = run.started_at && run.finished_at ? Math.round((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000) : null;
-          const durationStr = duration !== null ? duration >= 60 ? `${Math.floor(duration / 60)} min ${duration % 60} s` : `${duration} s` : '—';
-          return (
-            <button
-              key={run.id}
-              onClick={() => { setSelectedRun(run); loadRunDetail(run.id); }}
-              className="grid grid-cols-[1.2fr_.9fr_.9fr_auto] gap-4 items-center min-h-[51px] border-b border-[#edf0f2] text-[10px] text-left hover:bg-[#fafbfb] transition-colors w-full"
-            >
-              <span>
-                <strong>{formatDateTime(run.started_at)}</strong>
-                <span className="block text-[8px] text-[#9098a3] mt-0.5">{run.id?.slice(0, 8)}</span>
-              </span>
-              <span className="hidden sm:block text-[#67707c]">{run.triggered_by === 'cron' ? 'Automatique · cron' : 'Manuel · administrateur'}</span>
-              <span><StatusLabel status={run.status} /> <span className="ml-1 text-[#67707c]">{run.tenants_succeeded ?? 0} / {total}</span></span>
-              <strong className="text-right">{durationStr}</strong>
-            </button>
-          );
-        })}
-        {runs.length === 0 && (
-          <div className="py-8 text-center text-[10px] text-[#9098a3]">Aucune exécution enregistrée</div>
-        )}
-      </div>
-
-      {/* Run detail drawer */}
-      {selectedRun && (
-        <>
-          <div className="fixed inset-0 z-50 bg-black/20" onClick={() => { setSelectedRun(null); setRunDetail(null); }} />
-          <aside className="fixed top-0 right-0 bottom-0 w-[min(420px,94vw)] bg-white z-[51] shadow-[0_20px_70px_rgba(16,19,24,.12)] overflow-y-auto">
-            <div className="p-7">
-              <div className="flex justify-between items-start pb-5 border-b border-[#e5e7eb]">
-                <div>
-                  <h2 className="text-[18px] font-bold tracking-tight">Détail du cycle</h2>
-                  <p className="text-[9px] text-[#9098a3] mt-1">{formatDateTime(selectedRun.started_at)}</p>
-                </div>
-                <button onClick={() => { setSelectedRun(null); setRunDetail(null); }} className="p-1 text-[#67707c] hover:text-[#101318]"><X className="w-[17px] h-[17px]" /></button>
-              </div>
-
-              <div className="mt-5 space-y-0">
-                <KVRow k="Origine" v={selectedRun.triggered_by === 'cron' ? 'Automatique' : 'Manuel'} />
-                <KVRow k="Statut" v={selectedRun.status} ok={selectedRun.status === 'completed'} />
-                <KVRow k="Réussis" v={`${selectedRun.tenants_succeeded ?? 0}`} />
-                <KVRow k="Échoués" v={`${selectedRun.tenants_failed ?? 0}`} ok={selectedRun.tenants_failed === 0 ? true : false} />
-                <KVRow k="Ignorés" v={`${selectedRun.tenants_skipped ?? 0}`} />
-              </div>
-
-              {detailLoading ? <Spinner /> : runDetail?.items && (
-                <div className="mt-5">
-                  <div className="text-[10px] font-bold text-[#9098a3] tracking-[.09em] uppercase mb-2">Par tenant</div>
-                  <div className="border-l border-[#cfd3d9] ml-[3px]">
-                    {runDetail.items.map((item: any) => (
-                      <div key={item.id} className="relative pl-4 pb-4">
-                        <span className={`absolute left-[-3.5px] top-[3px] w-[6px] h-[6px] rounded-full ${DOT_CLS[item.status] || 'bg-[#9098a3]'}`} />
-                        <div className="text-[9px] font-semibold">{item.tenants?.name || item.tenant_id?.slice(0, 8)}</div>
-                        <div className="text-[8px] text-[#9098a3] mt-1">
-                          {formatBytes(item.size_bytes)} · {item.row_count?.toLocaleString('fr-FR') || '—'} lignes
-                          {item.error_message && <span className="text-[#c73737]"> · {item.error_message}</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </aside>
-        </>
-      )}
+      ))}
     </div>
   );
 }
 
-// ============================================================
-// OFFSITE TAB (LWS)
-// ============================================================
+function RunDetails({ run, onBack }: { run: Run; onBack: () => void }) {
+  const [items, setItems] = useState<RunItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    callScheduler('get_run_detail', { run_id: run.id }).then(data => setItems(data.items || []))
+      .catch(cause => toast(cause.message, 'error')).finally(() => setLoading(false));
+  }, [run.id, toast]);
+
+  return (
+    <PlatformWorkPage title={'Cycle du ' + formatDateTime(run.started_at)} backLabel="Retour aux exécutions" onBack={onBack}>
+      <dl className="pa-record-summary">
+        <KeyValue label="Origine" value={run.triggered_by === 'cron' ? 'Automatique' : 'Manuelle'} />
+        <KeyValue label="Statut" value={<StatusLabel status={run.status} />} />
+        <KeyValue label="Durée" value={runDuration(run)} />
+        <KeyValue label="Ignorées" value={run.tenants_skipped ?? 0} />
+      </dl>
+      <section>
+        <h3 className="pa-heading mb-2">Résultat par entreprise</h3>
+        {loading ? <Spinner /> : items.length === 0 ? <p className="pa-empty">Aucun résultat enregistré pour ce cycle.</p> : (
+          <div className="pa-divided">
+            {items.map(item => (
+              <div className="pa-setting-row" key={item.id}>
+                <div>
+                  <strong>{item.tenants?.name || item.tenant_id?.slice(0, 8)}</strong>
+                  <p className="pa-row-subtitle">{formatBytes(item.size_bytes)} · {item.row_count?.toLocaleString('fr-FR') ?? '—'} lignes</p>
+                  {item.error_message && <p className="pa-danger text-xs">{item.error_message}</p>}
+                </div>
+                <StatusLabel status={item.status} />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </PlatformWorkPage>
+  );
+}
+
 function OffsiteTab() {
   const [config, setConfig] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
-  const [transfers, setTransfers] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
-  const toast = useToast();
+  const [action, setAction] = useState<string | null>(null);
+  const { toast, success, error } = useToast();
 
   const load = useCallback(async () => {
     try {
-      const [cfgRes, sumRes, txRes] = await Promise.all([
-        callOffsite('get_config'),
-        callOffsite('summary'),
-        callOffsite('list_transfers', { limit: 30 }),
+      const [settings, totals, history] = await Promise.all([
+        callOffsite('get_config'), callOffsite('summary'), callOffsite('list_transfers', { limit: 30 }),
       ]);
-      setConfig(cfgRes);
-      setSummary(sumRes);
-      setTransfers(txRes.transfers || []);
-    } catch (e: any) { toast.error(e.message); }
+      setConfig(settings);
+      setSummary(totals);
+      setTransfers(history.transfers || []);
+    } catch (cause) { toast((cause as Error).message, 'error'); }
     finally { setLoading(false); }
-  }, []);
+  }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const testConnection = async () => {
     setTesting(true);
     try {
-      const r = await callOffsite('test_connection');
-      if (r.success) toast.success('Connexion WebDAV opérationnelle');
-      else toast.error(r.error || 'Échec du test');
-    } catch (e: any) { toast.error(e.message); }
+      const result = await callOffsite('test_connection');
+      if (result.success) success('Connexion WebDAV opérationnelle');
+      else error(result.error || 'Échec du test');
+    } catch (cause) { error((cause as Error).message); }
     finally { setTesting(false); }
   };
 
   const processQueue = async () => {
     setProcessing(true);
     try {
-      const r = await callOffsite('process_queue');
-      const results: { id: string; status: string; error?: string }[] = r.results || [];
-      const verified = results.filter(x => x.status === 'verified').length;
-      const failed = results.filter(x => x.status === 'failed').length;
-      const skipped = results.filter(x => x.status === 'skipped').length;
-      if (results.length === 0) {
-        toast.success('Aucun transfert en attente');
-      } else if (failed === 0) {
-        toast.success(`${verified} transfert(s) réussi(s)${skipped ? `, ${skipped} ignoré(s)` : ''}`);
-      } else if (verified === 0) {
-        toast.error(`${failed} transfert(s) échoué(s)${skipped ? `, ${skipped} ignoré(s)` : ''}`);
-      } else {
-        toast.error(`${verified} réussi(s), ${failed} échoué(s)${skipped ? `, ${skipped} ignoré(s)` : ''}`);
-      }
-      load();
-    } catch (e: any) { toast.error(e.message); }
+      const result = await callOffsite('process_queue');
+      const processed: { status: string }[] = result.results || [];
+      const failed = processed.filter(item => item.status === 'failed').length;
+      const verified = processed.filter(item => item.status === 'verified').length;
+      const skipped = processed.filter(item => item.status === 'skipped').length;
+      const message = processed.length ? verified + ' vérifiés · ' + failed + ' en échec · ' + skipped + ' ignorés' : 'Aucun transfert en attente';
+      toast(message, failed > 0 ? 'error' : 'success');
+      await load();
+    } catch (cause) { error((cause as Error).message); }
     finally { setProcessing(false); }
   };
 
-  const retryTransfer = async (transferId: string) => {
-    setActionInProgress(transferId);
+  const handleTransfer = async (id: string, operation: 'retry_transfer' | 'verify_remote' | 'retrieve') => {
+    setAction(id);
     try {
-      await callOffsite('retry_transfer', { transfer_id: transferId });
-      toast.success('Transfert remis en file');
-      load();
-    } catch (e: any) { toast.error(e.message); }
-    finally { setActionInProgress(null); }
-  };
-
-  const verifyRemote = async (transferId: string) => {
-    setActionInProgress(transferId);
-    try {
-      const r = await callOffsite('verify_remote', { transfer_id: transferId });
-      if (r.verified) toast.success('Empreinte conforme');
-      else toast.error(r.error || 'Empreinte non conforme');
-      load();
-    } catch (e: any) { toast.error(e.message); }
-    finally { setActionInProgress(null); }
-  };
-
-  const retrieveTransfer = async (transferId: string) => {
-    setActionInProgress(transferId);
-    try {
-      const r = await callOffsite('retrieve', { transfer_id: transferId });
-      if (r.success) toast.success(r.message || 'Sauvegarde rapatriée');
-      else toast.error(r.error || 'Échec du rapatriement');
-      load();
-    } catch (e: any) { toast.error(e.message); }
-    finally { setActionInProgress(null); }
+      const result = await callOffsite(operation, { transfer_id: id });
+      if (operation === 'retry_transfer') success('Transfert remis en file');
+      else if (operation === 'verify_remote') {
+        if (result.verified) success('Empreinte conforme');
+        else error(result.error || 'Empreinte non conforme');
+      } else if (result.success) success(result.message || 'Sauvegarde rapatriée');
+      else error(result.error || 'Échec du rapatriement');
+      await load();
+    } catch (cause) { error((cause as Error).message); }
+    finally { setAction(null); }
   };
 
   if (loading) return <Spinner />;
 
-  const cfg = config?.config;
   const secrets = config?.secrets_configured || {};
-  const allSecretsOk = secrets.LWS_WEBDAV_URL && secrets.LWS_WEBDAV_USERNAME && secrets.LWS_WEBDAV_PASSWORD && secrets.BACKUP_ENCRYPTION_KEY_B64 && secrets.BACKUP_ENCRYPTION_KEY_ID && secrets.OFFSITE_CRON_SECRET;
-  const offsiteCron = config?.cron_status as { exists?: boolean; active?: boolean; error?: string | null } | undefined;
-  const offsiteCronReady = !!offsiteCron?.exists && !!offsiteCron?.active && !offsiteCron?.error;
-  const offsiteOk = cfg?.enabled && allSecretsOk && offsiteCronReady;
-
+  const missing = offsiteSecrets.filter(key => !secrets[key]);
+  const canTest = secrets.LWS_WEBDAV_URL && secrets.LWS_WEBDAV_USERNAME && secrets.LWS_WEBDAV_PASSWORD;
+  const cron = config?.cron_status;
+  const ready = config?.config?.enabled && !missing.length && cron?.exists && cron?.active && !cron.error;
   return (
-    <div className="pt-6">
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_310px]">
-        {/* Main */}
-        <div className="xl:pr-7">
-          <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
-            <div>
-              <h3 className="text-[16px] font-bold tracking-tight">Copies distantes LWS</h3>
-              <p className="text-[10px] text-[#67707c] mt-1">Disponibilité, intégrité et récupération des archives chiffrées hors site.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={testConnection}
-                disabled={testing || !(secrets.LWS_WEBDAV_URL && secrets.LWS_WEBDAV_USERNAME && secrets.LWS_WEBDAV_PASSWORD)}
-                className="h-[29px] px-[9px] border border-[#cfd3d9] bg-white text-[9px] font-semibold inline-flex items-center gap-[7px] hover:bg-[#f7f8f9] disabled:opacity-40"
-              >
-                {testing ? <Loader2 className="w-[14px] h-[14px] animate-spin" /> : <Cloud className="w-[14px] h-[14px]" />}
-                Tester la connexion
-              </button>
-              <button
-                onClick={processQueue}
-                disabled={processing}
-                className="h-[29px] px-[9px] bg-[#101318] text-white text-[9px] font-semibold inline-flex items-center gap-[7px] hover:bg-[#292e35] disabled:opacity-50"
-              >
-                {processing ? <Loader2 className="w-[14px] h-[14px] animate-spin" /> : <RefreshCw className="w-[14px] h-[14px]" />}
-                Traiter la file
-              </button>
-            </div>
-          </div>
-
-          <table className="w-full border-collapse text-[10px]">
-            <thead>
-              <tr className="border-t border-b border-[#e5e7eb]">
-                <th className="text-left py-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase">Tenant</th>
-                <th className="text-left py-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase hidden md:table-cell">Archive</th>
-                <th className="text-left py-2 text-[8px] font-bold text-[#9098a3] tracking-[.1em] uppercase">Transfert</th>
-                <th className="text-right py-2 w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {transfers.map(tx => (
-                <tr key={tx.id} className="border-b border-[#edf0f2] hover:bg-[#fafbfb] transition-colors">
-                  <td className="py-2.5">
-                    <div className="font-semibold">{tx.tenants?.name || tx.tenant_id?.slice(0, 8)}</div>
-                    <div className="text-[8px] text-[#9098a3] mt-0.5">{formatDateTime(tx.queued_at)}</div>
-                  </td>
-                  <td className="py-2.5 hidden md:table-cell font-mono text-[9px] text-[#67707c]">
-                    {formatBytes(tx.size_bytes)}
-                  </td>
-                  <td className="py-2.5">
-                    <StatusLabel status={tx.status} />
-                    {tx.status === 'failed' && tx.error_message && (
-                      <div className="text-[8px] text-[#c73737] mt-0.5 max-w-[260px] truncate" title={tx.error_message}>{tx.error_message}</div>
-                    )}
-                  </td>
-                  <td className="py-2.5 text-right">
-                    <div className="inline-flex items-center gap-1">
-                      {tx.status === 'failed' && (
-                        <button onClick={() => retryTransfer(tx.id)} disabled={actionInProgress === tx.id} className="p-1 text-[#9098a3] hover:text-[#101318] disabled:opacity-50" title="Relancer">
-                          <RotateCcw className="w-[13px] h-[13px]" />
-                        </button>
-                      )}
-                      {tx.status === 'verified' && (
-                        <>
-                          <button onClick={() => verifyRemote(tx.id)} disabled={actionInProgress === tx.id} className="p-1 text-[#9098a3] hover:text-[#101318] disabled:opacity-50" title="Vérifier">
-                            <Check className="w-[13px] h-[13px]" />
-                          </button>
-                          <button onClick={() => retrieveTransfer(tx.id)} disabled={actionInProgress === tx.id} className="h-[29px] px-[9px] border border-[#cfd3d9] bg-white text-[9px] font-semibold hover:bg-[#f7f8f9] disabled:opacity-50">
-                            Récupérer
-                          </button>
-                        </>
-                      )}
-                      {actionInProgress === tx.id && <Loader2 className="w-[13px] h-[13px] animate-spin text-[#9098a3]" />}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {transfers.length === 0 && (
-                <tr><td colSpan={4} className="py-8 text-center text-[#9098a3]">Aucun transfert enregistré</td></tr>
-              )}
-            </tbody>
-          </table>
+    <div className="pa-page">
+      <div className="pa-section-head">
+        <span className="pa-muted text-sm">Connexion LWS · {ready ? 'Active' : 'Inactive'}</span>
+        <div className="pa-inline">
+          <button type="button" className="pa-link" onClick={() => void testConnection()} disabled={!canTest || testing}>
+            {testing ? <Loader2 size={16} className="animate-spin" /> : <Cloud size={16} />} Tester la connexion
+          </button>
+          <button type="button" className="pa-button" data-variant="primary" onClick={() => void processQueue()} disabled={processing}>
+            <RefreshCw size={16} className={processing ? 'animate-spin' : undefined} /> Traiter la file
+          </button>
         </div>
-
-        {/* Side rail */}
-        <aside className="border-t xl:border-t-0 xl:border-l border-[#e5e7eb] pt-6 xl:pl-7 mt-6 xl:mt-0">
-          <div className="text-[8px] font-bold text-[#9098a3] tracking-[.13em] uppercase">Stockage CloudDrive</div>
-          <div className="flex items-center justify-between mt-2 text-[12px] font-bold">
-            <span>LWS CloudDrive</span>
-            <span className={`inline-flex items-center gap-[6px] text-[9px] font-semibold ${offsiteOk ? 'text-[#0b8f61]' : 'text-[#9098a3]'}`}>
-              <Dot status={offsiteOk ? 'verified' : 'queued'} />
-              {offsiteOk ? 'Connecté' : 'Inactif'}
-            </span>
-          </div>
-
-          <div className="mt-6 space-y-0">
-            <div className="flex items-center gap-[10px] py-3 border-b border-[#edf0f2]">
-              <Check className="w-[14px] h-[14px] text-[#0b8f61] shrink-0" />
-              <div>
-                <div className="text-[9px] font-semibold">WebDAV {offsiteOk ? 'opérationnel' : 'non configuré'}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-[10px] py-3 border-b border-[#edf0f2]">
-              <Lock className="w-[14px] h-[14px] text-[#0b8f61] shrink-0" />
-              <div>
-                <div className="text-[9px] font-semibold">Chiffrement AES-256-GCM</div>
-                <div className="text-[8px] text-[#9098a3] mt-0.5">{secrets.BACKUP_ENCRYPTION_KEY_ID ? 'Clé configurée' : 'Clé manquante'}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-[10px] py-3 border-b border-[#edf0f2]">
-              <Shield className="w-[14px] h-[14px] text-[#0b8f61] shrink-0" />
-              <div>
-                <div className="text-[9px] font-semibold">{summary?.total_verified ?? 0} empreintes conformes</div>
-                <div className="text-[8px] text-[#9098a3] mt-0.5">{(summary?.total_failed ?? 0) > 0 ? `${summary.total_failed} divergences` : 'Aucune divergence'}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Secret status */}
-          {!allSecretsOk && (
-            <div className="mt-5 text-[9px]">
-              <div className="font-semibold text-[#b66a06] mb-1">Secrets manquants</div>
-              {!secrets.LWS_WEBDAV_URL && <div className="text-[#9098a3]">LWS_WEBDAV_URL</div>}
-              {!secrets.LWS_WEBDAV_USERNAME && <div className="text-[#9098a3]">LWS_WEBDAV_USERNAME</div>}
-              {!secrets.LWS_WEBDAV_PASSWORD && <div className="text-[#9098a3]">LWS_WEBDAV_PASSWORD</div>}
-              {!secrets.BACKUP_ENCRYPTION_KEY_B64 && <div className="text-[#9098a3]">BACKUP_ENCRYPTION_KEY_B64</div>}
-              {!secrets.BACKUP_ENCRYPTION_KEY_ID && <div className="text-[#9098a3]">BACKUP_ENCRYPTION_KEY_ID</div>}
-              {!secrets.OFFSITE_CRON_SECRET && <div className="text-[#9098a3]">OFFSITE_CRON_SECRET</div>}
-            </div>
-          )}
-        </aside>
       </div>
+      <dl className="pa-record-summary">
+        <KeyValue label="Vérifiées" value={summary?.total_verified ?? 0} />
+        <KeyValue label="En attente" value={summary?.total_queued ?? 0} />
+        <KeyValue label="En échec" value={summary?.total_failed ?? 0} />
+        <KeyValue label="Chiffrement" value={secrets.BACKUP_ENCRYPTION_KEY_ID ? 'Clé configurée' : 'Clé manquante'} />
+      </dl>
+      {missing.length > 0 && <details>
+        <summary className="pa-link cursor-pointer">Configuration manquante ({missing.length})</summary>
+        <ul className="pa-column-list">{missing.map(key => <li className="pa-break" key={key}>{key}</li>)}</ul>
+      </details>}
+      {transfers.length === 0 ? <p className="pa-empty">Aucun transfert enregistré.</p> : (
+        <div className="pa-table pa-transfer-list" role="table" aria-label="Transferts LWS">
+          <div className="pa-list-head" role="row">
+            {['Entreprise', 'Archive', 'Statut', 'Actions'].map(label => <span role="columnheader" key={label}>{label}</span>)}
+          </div>
+          {transfers.map(item => (
+            <div className="pa-list-row" role="row" key={item.id}>
+              <div className="pa-row-title" role="cell">
+                <strong>{item.tenants?.name || item.tenant_id?.slice(0, 8)}</strong>
+                <p className="pa-row-subtitle">{formatDateTime(item.queued_at)}</p>
+              </div>
+              <div className="pa-row-amount" role="cell">{formatBytes(item.size_bytes)}</div>
+              <div className="pa-row-status" role="cell">
+                <StatusLabel status={item.status} />
+                {item.error_message && <p className="pa-row-subtitle">{item.error_message}</p>}
+              </div>
+              <div className="pa-row-actions" role="cell">
+                {action === item.id && <Loader2 size={15} className="animate-spin" />}
+                {item.status === 'failed' && <button type="button" className="pa-link" disabled={action !== null} onClick={() => void handleTransfer(item.id, 'retry_transfer')}>
+                  <RotateCcw size={15} /> Relancer
+                </button>}
+                {item.status === 'verified' && <>
+                  <button type="button" className="pa-link" disabled={action !== null} onClick={() => void handleTransfer(item.id, 'verify_remote')}>
+                    <Check size={15} /> Vérifier
+                  </button>
+                  <button type="button" className="pa-link" disabled={action !== null} onClick={() => void handleTransfer(item.id, 'retrieve')}>
+                    <Download size={15} /> Récupérer
+                  </button>
+                </>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-// ============================================================
-// SETTINGS TAB
-// ============================================================
+const defaultPolicy = {
+  enabled: false, cron_expression: '0 2 * * *', timezone: 'Africa/Dakar',
+  retention_daily: 7, retention_weekly: 4, retention_monthly: 6, max_concurrent: 2,
+};
+
+const defaultOffsite = { enabled: false, root_folder: '/Waarwi', auto_transfer: true };
+
 function SettingsTab() {
   const [data, setData] = useState<any>(null);
-  const [offsiteConfig, setOffsiteConfig] = useState<any>(null);
+  const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingOffsite, setSavingOffsite] = useState(false);
-  const [policyEditing, setPolicyEditing] = useState(false);
-  const [configEditing, setConfigEditing] = useState(false);
-  const toast = useToast();
-
-  const [form, setForm] = useState({
-    enabled: false, cron_expression: '0 2 * * *', timezone: 'Africa/Dakar',
-    retention_daily: 7, retention_weekly: 4, retention_monthly: 6, max_concurrent: 2,
-  });
-  const [configForm, setConfigForm] = useState({ enabled: false, root_folder: '/Waarwi', auto_transfer: true });
+  const [policyDraft, setPolicyDraft] = useState<typeof defaultPolicy | null>(null);
+  const [offsiteDraft, setOffsiteDraft] = useState<typeof defaultOffsite | null>(null);
+  const { toast, success, error } = useToast();
 
   const load = useCallback(async () => {
     try {
-      const [d, c] = await Promise.all([
-        callScheduler('dashboard_summary'),
-        callOffsite('get_config'),
-      ]);
-      setData(d);
-      setOffsiteConfig(c);
-      if (d.policy) {
-        setForm({
-          enabled: d.policy.enabled ?? false,
-          cron_expression: d.policy.cron_expression || '0 2 * * *',
-          timezone: d.policy.timezone || 'Africa/Dakar',
-          retention_daily: d.policy.retention_daily ?? 7,
-          retention_weekly: d.policy.retention_weekly ?? 4,
-          retention_monthly: d.policy.retention_monthly ?? 6,
-          max_concurrent: d.policy.max_concurrent ?? 2,
-        });
-      }
-      if (c.config) {
-        setConfigForm({
-          enabled: c.config.enabled ?? false,
-          root_folder: c.config.root_folder || '/Waarwi',
-          auto_transfer: c.config.auto_transfer ?? true,
-        });
-      }
-    } catch (e: any) { toast.error(e.message); }
+      const [settings, offsite] = await Promise.all([callScheduler('dashboard_summary'), callOffsite('get_config')]);
+      setData(settings);
+      setConfig(offsite);
+    } catch (cause) { toast((cause as Error).message, 'error'); }
     finally { setLoading(false); }
-  }, []);
+  }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  const savePolicy = async () => {
+  const save = async () => {
+    if (saving) return;
     setSaving(true);
     try {
-      await callScheduler('update_policy', form);
-      toast.success('Politique enregistrée');
-      setPolicyEditing(false);
-      load();
-    } catch (e: any) { toast.error(e.message); }
+      if (policyDraft) {
+        await callScheduler('update_policy', policyDraft);
+        success('Planification enregistrée');
+      } else if (offsiteDraft) {
+        await callOffsite('update_config', offsiteDraft);
+        success('Configuration distante enregistrée');
+      }
+      await load();
+      setPolicyDraft(null);
+      setOffsiteDraft(null);
+    } catch (cause) { error((cause as Error).message); }
     finally { setSaving(false); }
   };
 
-  const saveConfig = async () => {
-    setSavingOffsite(true);
-    try {
-      await callOffsite('update_config', configForm);
-      toast.success('Configuration distante enregistrée');
-      setConfigEditing(false);
-      load();
-    } catch (e: any) { toast.error(e.message); }
-    finally { setSavingOffsite(false); }
-  };
-
   if (loading) return <Spinner />;
+  if (!data || !config) return <p className="pa-empty">Les paramètres de protection sont indisponibles.</p>;
 
-  const secrets = offsiteConfig?.secrets_configured || {};
+  const policy = {
+    enabled: data.policy?.enabled ?? defaultPolicy.enabled,
+    cron_expression: data.policy?.cron_expression || defaultPolicy.cron_expression,
+    timezone: data.policy?.timezone || defaultPolicy.timezone,
+    retention_daily: data.policy?.retention_daily ?? defaultPolicy.retention_daily,
+    retention_weekly: data.policy?.retention_weekly ?? defaultPolicy.retention_weekly,
+    retention_monthly: data.policy?.retention_monthly ?? defaultPolicy.retention_monthly,
+    max_concurrent: data.policy?.max_concurrent ?? defaultPolicy.max_concurrent,
+  };
+  const offsite = {
+    enabled: config.config?.enabled ?? defaultOffsite.enabled,
+    root_folder: config.config?.root_folder || defaultOffsite.root_folder,
+    auto_transfer: config.config?.auto_transfer ?? defaultOffsite.auto_transfer,
+  };
+  const secrets = config.secrets_configured || {};
+
+  if (policyDraft || offsiteDraft) {
+    return (
+      <PlatformWorkPage title={policyDraft ? 'Modifier la planification' : 'Modifier la copie distante'} backLabel="Retour aux paramètres"
+        onBack={() => { setPolicyDraft(null); setOffsiteDraft(null); }} busy={saving}>
+        <form className="pa-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+          {policyDraft && <>
+            <label className="pa-inline">
+              <input type="checkbox" checked={policyDraft.enabled} onChange={event => setPolicyDraft({ ...policyDraft, enabled: event.target.checked })} />
+              Protection automatique
+            </label>
+            <div className="pa-form-grid">
+              <label className="pa-field-label">Expression cron
+                <input required className="w-input-ul" value={policyDraft.cron_expression}
+                  onChange={event => setPolicyDraft({ ...policyDraft, cron_expression: event.target.value })} />
+              </label>
+              <label className="pa-field-label">Fuseau horaire
+                <input required className="w-input-ul" value={policyDraft.timezone}
+                  onChange={event => setPolicyDraft({ ...policyDraft, timezone: event.target.value })} />
+              </label>
+              {([
+                ['max_concurrent', 'Exécutions simultanées'], ['retention_daily', 'Rétention quotidienne (jours)'],
+                ['retention_weekly', 'Rétention hebdomadaire (semaines)'], ['retention_monthly', 'Rétention mensuelle (mois)'],
+              ] as const).map(([key, label]) => (
+                <label className="pa-field-label" key={key}>{label}
+                  <input required type="number" min={1} className="w-input-ul" value={policyDraft[key]}
+                    onChange={event => setPolicyDraft({ ...policyDraft, [key]: Number(event.target.value) })} />
+                </label>
+              ))}
+            </div>
+          </>}
+          {offsiteDraft && <>
+            <label className="pa-inline">
+              <input type="checkbox" checked={offsiteDraft.enabled} onChange={event => setOffsiteDraft({ ...offsiteDraft, enabled: event.target.checked })} />
+              Copie distante activée
+            </label>
+            <label className="pa-inline">
+              <input type="checkbox" checked={offsiteDraft.auto_transfer} onChange={event => setOffsiteDraft({ ...offsiteDraft, auto_transfer: event.target.checked })} />
+              Transfert automatique
+            </label>
+            <label className="pa-field-label">Dossier racine
+              <input required className="w-input-ul" value={offsiteDraft.root_folder}
+                onChange={event => setOffsiteDraft({ ...offsiteDraft, root_folder: event.target.value })} />
+            </label>
+          </>}
+          <div className="pa-form-actions">
+            <button type="submit" className="pa-button" data-variant="primary" disabled={saving}>
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Enregistrer
+            </button>
+          </div>
+        </form>
+      </PlatformWorkPage>
+    );
+  }
 
   return (
-    <div className="pt-6">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h3 className="text-[16px] font-bold tracking-tight">Paramètres de protection</h3>
-          <p className="text-[10px] text-[#67707c] mt-1">Configuration globale appliquée aux tenants actifs de la plateforme.</p>
-        </div>
+    <div className="pa-page">
+      <div className="pa-overview-grid">
+        <section>
+          <div className="pa-section-head">
+            <h2 className="pa-heading">Planification et rétention</h2>
+            <button type="button" className="pa-link" onClick={() => setPolicyDraft(policy)}>Modifier la planification</button>
+          </div>
+          <dl className="pa-keyvals">
+            <KeyValue label="Protection automatique" value={policy.enabled ? 'Activée' : 'Désactivée'} />
+            <KeyValue label="Expression cron" value={policy.cron_expression} />
+            <KeyValue label="Fuseau horaire" value={policy.timezone} />
+            <KeyValue label="Exécutions simultanées" value={policy.max_concurrent} />
+            <KeyValue label="Rétention quotidienne" value={policy.retention_daily + ' jours'} />
+            <KeyValue label="Rétention hebdomadaire" value={policy.retention_weekly + ' semaines'} />
+            <KeyValue label="Rétention mensuelle" value={policy.retention_monthly + ' mois'} />
+          </dl>
+        </section>
+        <section>
+          <div className="pa-section-head">
+            <h2 className="pa-heading">Copie distante</h2>
+            <button type="button" className="pa-link" onClick={() => setOffsiteDraft(offsite)}>Modifier la copie distante</button>
+          </div>
+          <dl className="pa-keyvals">
+            <KeyValue label="Copie LWS" value={offsite.enabled ? 'Activée' : 'Désactivée'} />
+            <KeyValue label="Transfert automatique" value={offsite.auto_transfer ? 'Activé' : 'Désactivé'} />
+            <KeyValue label="Protocole" value="WebDAV" />
+            <KeyValue label="Dossier racine" value={offsite.root_folder} />
+          </dl>
+        </section>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 max-w-[1080px]">
-        {/* Scheduling */}
-        <div>
-          <div className="border-t border-[#e5e7eb]">
-            <div className="flex items-center justify-between mt-4 mb-1">
-              <h4 className="text-[11px] font-bold">Planification</h4>
-              {!policyEditing && <button onClick={() => setPolicyEditing(true)} className="text-[9px] font-semibold text-[#67707c] hover:text-[#101318]">Modifier</button>}
-            </div>
-            <p className="text-[9px] text-[#9098a3] leading-relaxed mb-3">Cadence du cycle automatique et capacité de traitement.</p>
-            {policyEditing ? (
-              <div className="space-y-3">
-                <SettingToggle label="Protection automatique" value={form.enabled} onChange={v => setForm(f => ({ ...f, enabled: v }))} />
-                <SettingInput label="Expression cron" value={form.cron_expression} onChange={v => setForm(f => ({ ...f, cron_expression: v }))} mono />
-                <SettingInput label="Fuseau horaire" value={form.timezone} onChange={v => setForm(f => ({ ...f, timezone: v }))} />
-                <SettingInput label="Exécutions simultanées" value={String(form.max_concurrent)} onChange={v => setForm(f => ({ ...f, max_concurrent: Number(v) || 2 }))} />
-                <div className="flex items-center gap-2 pt-2">
-                  <button onClick={savePolicy} disabled={saving} className="h-[29px] px-3 bg-[#101318] text-white text-[9px] font-semibold hover:bg-[#292e35] disabled:opacity-50">
-                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Enregistrer'}
-                  </button>
-                  <button onClick={() => setPolicyEditing(false)} className="h-[29px] px-3 border border-[#cfd3d9] text-[9px] font-semibold hover:bg-[#f7f8f9]">Annuler</button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <SettingRow label="Protection automatique" value={form.enabled ? 'Activée' : 'Désactivée'} ok={form.enabled} />
-                <SettingRow label="Expression cron" value={form.cron_expression} mono />
-                <SettingRow label="Fuseau horaire" value={form.timezone} />
-                <SettingRow label="Exécutions simultanées" value={`${form.max_concurrent} tenants`} />
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-[#e5e7eb] mt-7">
-            <h4 className="text-[11px] font-bold mt-4 mb-1">Rétention</h4>
-            <p className="text-[9px] text-[#9098a3] leading-relaxed mb-3">Conservation locale avant nettoyage automatique.</p>
-            {policyEditing ? (
-              <div className="space-y-3">
-                <SettingInput label="Quotidiennes (jours)" value={String(form.retention_daily)} onChange={v => setForm(f => ({ ...f, retention_daily: Number(v) || 7 }))} />
-                <SettingInput label="Hebdomadaires (semaines)" value={String(form.retention_weekly)} onChange={v => setForm(f => ({ ...f, retention_weekly: Number(v) || 4 }))} />
-                <SettingInput label="Mensuelles (mois)" value={String(form.retention_monthly)} onChange={v => setForm(f => ({ ...f, retention_monthly: Number(v) || 6 }))} />
-              </div>
-            ) : (
-              <div>
-                <SettingRow label="Quotidiennes" value={`${form.retention_daily} jours`} />
-                <SettingRow label="Hebdomadaires" value={`${form.retention_weekly} semaines`} />
-                <SettingRow label="Mensuelles" value={`${form.retention_monthly} mois`} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Offsite */}
-        <div>
-          <div className="border-t border-[#e5e7eb]">
-            <div className="flex items-center justify-between mt-4 mb-1">
-              <h4 className="text-[11px] font-bold">Copie distante</h4>
-              {!configEditing && <button onClick={() => setConfigEditing(true)} className="text-[9px] font-semibold text-[#67707c] hover:text-[#101318]">Modifier</button>}
-            </div>
-            <p className="text-[9px] text-[#9098a3] leading-relaxed mb-3">Transfert chiffré vers le stockage LWS après chaque sauvegarde planifiée.</p>
-            {configEditing ? (
-              <div className="space-y-3">
-                <SettingToggle label="Transfert automatique" value={configForm.auto_transfer} onChange={v => setConfigForm(f => ({ ...f, auto_transfer: v }))} />
-                <SettingToggle label="Copie distante activée" value={configForm.enabled} onChange={v => setConfigForm(f => ({ ...f, enabled: v }))} />
-                <SettingInput label="Dossier racine" value={configForm.root_folder} onChange={v => setConfigForm(f => ({ ...f, root_folder: v }))} mono />
-                <div className="flex items-center gap-2 pt-2">
-                  <button onClick={saveConfig} disabled={savingOffsite} className="h-[29px] px-3 bg-[#101318] text-white text-[9px] font-semibold hover:bg-[#292e35] disabled:opacity-50">
-                    {savingOffsite ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Enregistrer'}
-                  </button>
-                  <button onClick={() => setConfigEditing(false)} className="h-[29px] px-3 border border-[#cfd3d9] text-[9px] font-semibold hover:bg-[#f7f8f9]">Annuler</button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <SettingRow label="Transfert automatique" value={configForm.auto_transfer ? 'Activé' : 'Désactivé'} ok={configForm.auto_transfer} />
-                <SettingRow label="Copie distante" value={configForm.enabled ? 'Activée' : 'Désactivée'} ok={configForm.enabled} />
-                <SettingRow label="Protocole" value="WebDAV" />
-                <SettingRow label="Dossier racine" value={configForm.root_folder} mono />
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-[#e5e7eb] mt-7">
-            <h4 className="text-[11px] font-bold mt-4 mb-1">Sécurité</h4>
-            <p className="text-[9px] text-[#9098a3] leading-relaxed mb-3">Les valeurs sensibles restent masquées et ne sont jamais affichées dans l'interface.</p>
-            <div>
-              <SettingRow label="Clé de chiffrement" value={secrets.BACKUP_ENCRYPTION_KEY_B64 ? `Configurée${secrets.BACKUP_ENCRYPTION_KEY_ID ? ' · ID présent' : ''}` : 'Manquante'} ok={!!secrets.BACKUP_ENCRYPTION_KEY_B64} />
-              <SettingRow label="Secret du planificateur" value={data?.cron_secret_configured ? 'Configuré' : 'Manquant'} ok={!!data?.cron_secret_configured} />
-              <SettingRow label="Secret copie distante" value={secrets.OFFSITE_CRON_SECRET ? 'Configuré' : 'Manquant'} ok={!!secrets.OFFSITE_CRON_SECRET} />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// SETTINGS PRIMITIVES
-// ============================================================
-function SettingRow({ label, value, ok, mono }: { label: string; value: string; ok?: boolean; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-[1fr_auto] gap-4 items-center py-[11px] border-b border-[#edf0f2]">
-      <span className="text-[9px] text-[#67707c]">{label}</span>
-      <span className={`text-[9px] font-semibold text-right ${mono ? 'font-mono tracking-tight' : ''} ${ok === true ? 'text-[#0b8f61]' : ok === false ? 'text-[#c73737]' : ''}`}>{value}</span>
-    </div>
-  );
-}
-
-function SettingInput({ label, value, onChange, mono }: { label: string; value: string; onChange: (v: string) => void; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-[1fr_auto] gap-4 items-center py-[11px] border-b border-[#edf0f2]">
-      <label className="text-[9px] text-[#67707c]">{label}</label>
-      <input
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className={`text-[9px] font-semibold text-right bg-transparent border-b border-[#cfd3d9] outline-0 w-[140px] py-0.5 ${mono ? 'font-mono tracking-tight' : ''}`}
-      />
-    </div>
-  );
-}
-
-function SettingToggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <div className="grid grid-cols-[1fr_auto] gap-4 items-center py-[11px] border-b border-[#edf0f2]">
-      <label className="text-[9px] text-[#67707c]">{label}</label>
-      <button
-        onClick={() => onChange(!value)}
-        className={`relative w-[30px] h-[16px] rounded-full transition-colors ${value ? 'bg-[#0b8f61]' : 'bg-[#bec3ca]'}`}
-      >
-        <span className={`absolute top-[3px] left-[3px] w-[10px] h-[10px] bg-white rounded-full transition-transform ${value ? 'translate-x-[14px]' : ''}`} />
-      </button>
+      <section className="pa-panel">
+        <h2 className="pa-heading">Sécurité</h2>
+        <dl className="pa-record-summary">
+          <KeyValue label="Clé de chiffrement" value={secrets.BACKUP_ENCRYPTION_KEY_B64 ? 'Configurée' : 'Manquante'} />
+          <KeyValue label="Secret du planificateur" value={data.cron_secret_configured ? 'Configuré' : 'Manquant'} />
+          <KeyValue label="Secret de la copie distante" value={secrets.OFFSITE_CRON_SECRET ? 'Configuré' : 'Manquant'} />
+        </dl>
+      </section>
     </div>
   );
 }

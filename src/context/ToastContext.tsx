@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useState, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
 
 type Toast = { id: number; kind: 'success' | 'error' | 'info'; message: string };
@@ -6,12 +7,14 @@ type ToastCtx = {
   toast: (msg: string, kind?: Toast['kind']) => void;
   success: (msg: string) => void;
   error: (msg: string) => void;
+  setInlineTarget: (element: HTMLElement | null) => void;
 };
 
 const Ctx = createContext<ToastCtx | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [inlineTarget, setInlineTarget] = useState<HTMLElement | null>(null);
 
   const remove = (id: number) => setToasts(t => t.filter(x => x.id !== id));
   const toast = useCallback((message: string, kind: Toast['kind'] = 'info') => {
@@ -19,15 +22,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts(t => [...t, { id, kind, message }]);
     setTimeout(() => remove(id), 4000);
   }, []);
+  const latest = toasts[toasts.length - 1];
 
   return (
     <Ctx.Provider value={{
       toast,
       success: (m) => toast(m, 'success'),
       error: (m) => toast(m, 'error'),
+      setInlineTarget,
     }}>
       {children}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-[min(92vw,400px)]">
+      {inlineTarget ? latest && createPortal(
+        <div className="pa-notice" role={latest.kind === 'error' ? 'alert' : 'status'} data-kind={latest.kind}>
+          <span>{latest.message}</span>
+          <button type="button" aria-label="Fermer la notification" onClick={() => remove(latest.id)}><X size={14} /></button>
+        </div>,
+        inlineTarget,
+      ) : <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-[min(92vw,400px)]">
         {toasts.map(t => (
           <div key={t.id} className="flex items-start gap-3 p-3.5 rounded-xl shadow-elevated border border-neutral-200 bg-white text-neutral-900 animate-slide-up">
             {t.kind === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />}
@@ -40,7 +51,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <button onClick={() => remove(t.id)} className="text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>
           </div>
         ))}
-      </div>
+      </div>}
     </Ctx.Provider>
   );
 }

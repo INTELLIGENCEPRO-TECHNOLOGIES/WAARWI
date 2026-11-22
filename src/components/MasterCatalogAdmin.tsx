@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
-  Plus, Pencil, Trash2, Loader2, Search, Download, Upload, FileText,
-  Package, Tag, ChevronRight, Save, Folder, AlertCircle, X, Check
+  Plus, Pencil, Trash2, Loader2, Search, Download, Upload,
+  ChevronLeft, ChevronRight, Check
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
-import { Modal, ConfirmDialog } from './Modal';
+import { PlatformConfirmation, PlatformWorkPage } from './PlatformWorkPage';
 import { formatFCFA } from '../lib/format';
 
 type ActivityType = { id: string; name: string; slug: string; description: string; is_active: boolean; legacy_business_type: string | null };
@@ -31,7 +31,6 @@ export function MasterCatalogAdmin() {
   const [selectedCatalogId, setSelectedCatalogId] = useState<string>('');
 
   const reload = async () => {
-    setLoading(true);
     const [a, c, cats] = await Promise.all([
       supabase.from('business_activity_types').select('*').order('name'),
       supabase.from('master_catalogs').select('*').order('name'),
@@ -47,12 +46,12 @@ export function MasterCatalogAdmin() {
 
   useEffect(() => { reload(); }, []);
 
-  const tabs: { key: Tab; label: string; icon: any }[] = [
-    { key: 'catalogs', label: 'Catalogues', icon: Folder },
-    { key: 'activities', label: 'Types d\'activités', icon: Tag },
-    { key: 'categories', label: 'Catégories', icon: FileText },
-    { key: 'items', label: 'Articles', icon: Package },
-    { key: 'import', label: 'Import Excel', icon: Upload },
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'catalogs', label: 'Catalogues' },
+    { key: 'activities', label: 'Types d’activités' },
+    { key: 'categories', label: 'Catégories' },
+    { key: 'items', label: 'Articles' },
+    { key: 'import', label: 'Import Excel' },
   ];
 
   return (
@@ -70,13 +69,37 @@ export function MasterCatalogAdmin() {
       ) : (
         <>
           {tab === 'activities' && <ActivitiesTab activities={activities} onChange={reload} />}
-          {tab === 'catalogs' && <CatalogsTab catalogs={catalogs} activities={activities} onChange={reload} selectedId={selectedCatalogId} onSelect={setSelectedCatalogId} />}
+          {tab === 'catalogs' && <CatalogsTab catalogs={catalogs} activities={activities} onChange={reload} onBrowse={id => { setSelectedCatalogId(id); setTab('items'); }} />}
           {tab === 'categories' && <CategoriesTab catalogs={catalogs} categories={categories} selectedCatalogId={selectedCatalogId} onSelectCatalog={setSelectedCatalogId} onChange={reload} />}
           {tab === 'items' && <ItemsTab catalogs={catalogs} categories={categories} selectedCatalogId={selectedCatalogId} onSelectCatalog={setSelectedCatalogId} onChange={reload} />}
           {tab === 'import' && <ImportTab catalogs={catalogs} selectedCatalogId={selectedCatalogId} onSelectCatalog={setSelectedCatalogId} onChange={reload} />}
         </>
       )}
     </div>
+  );
+}
+
+
+function CatalogEditor({ title, backLabel, onBack, onSave, children }: {
+  title: string; backLabel: string; onBack: () => void; onSave: () => Promise<void>; children: ReactNode;
+}) {
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try { await onSave(); }
+    finally { setSaving(false); }
+  };
+  return (
+    <PlatformWorkPage title={title} backLabel={backLabel} onBack={onBack} busy={saving}>
+      <form className="pa-form" onSubmit={event => { event.preventDefault(); if (!saving) void save(); }}>
+        {children}
+        <div className="pa-form-actions">
+          <button type="submit" className="pa-button" data-variant="primary" disabled={saving}>
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Enregistrer
+          </button>
+        </div>
+      </form>
+    </PlatformWorkPage>
   );
 }
 
@@ -116,68 +139,61 @@ function ActivitiesTab({ activities, onChange }: { activities: ActivityType[]; o
     } catch (e: any) { toastError(e.message); }
   };
 
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{activities.length} type{activities.length > 1 ? 's' : ''} d'activité</div>
-        <button onClick={openNew} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition active:scale-95">
-          <Plus className="w-3.5 h-3.5" /> Nouveau type
-        </button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-        {activities.map(a => (
-          <div key={a.id} className="card-premium p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-slate-900 truncate">{a.name}</div>
-                <div className="text-[10px] font-mono text-slate-500 mt-0.5">{a.slug}</div>
-                {a.description && <div className="text-[11px] text-slate-600 mt-1 break-words">{a.description}</div>}
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${a.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{a.is_active ? 'Actif' : 'Inactif'}</span>
-                <button onClick={() => openEdit(a)} className="p-1.5 rounded-lg hover:bg-slate-100"><Pencil className="w-3.5 h-3.5 text-slate-600" /></button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+  if (editing) {
+    return (
+      <CatalogEditor title={isNew ? 'Nouveau type d’activité' : 'Modifier le type d’activité'}
+        backLabel="Retour aux types d’activité" onBack={() => setEditing(null)} onSave={save}>
+        <div className="pa-form-grid">
+          <label className="pa-field-label">Nom
+            <input className="w-input-ul" required value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} />
+          </label>
+          <label className="pa-field-label">Identifiant
+            <input className="w-input-ul" required readOnly={!isNew} value={editing.slug}
+              onChange={event => setEditing({ ...editing, slug: event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} />
+          </label>
+          <label className="pa-field-label">Type de commerce historique
+            <input className="w-input-ul" value={editing.legacy_business_type || ''}
+              onChange={event => setEditing({ ...editing, legacy_business_type: event.target.value || null })} />
+          </label>
+          <label className="pa-inline">
+            <input type="checkbox" checked={editing.is_active} onChange={event => setEditing({ ...editing, is_active: event.target.checked })} /> Actif
+          </label>
+        </div>
+        <label className="pa-field-label">Description
+          <textarea className="w-input-ul" rows={3} value={editing.description || ''} onChange={event => setEditing({ ...editing, description: event.target.value })} />
+        </label>
+      </CatalogEditor>
+    );
+  }
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? 'Nouveau type d\'activité' : 'Modifier le type d\'activité'} size="sm"
-        footer={<>
-          <button onClick={() => setEditing(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Save className="w-4 h-4" /></button>
-        </>}>
-        {editing && (
-          <div className="space-y-3">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nom</label>
-              <input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20" />
+  return (
+    <div className="pa-page">
+      <div className="pa-section-head">
+        <span className="pa-muted text-sm">{activities.length} type{activities.length !== 1 ? 's' : ''} d’activité</span>
+        <button type="button" onClick={openNew} className="pa-button" data-variant="primary"><Plus size={16} /> Nouveau type</button>
+      </div>
+      {activities.length === 0 ? <p className="pa-empty">Aucun type d’activité.</p> : (
+        <div className="pa-divided">
+          {activities.map(item => (
+            <div key={item.id} className="pa-setting-row">
+              <div>
+                <button type="button" className="pa-name-button" onClick={() => openEdit(item)}>{item.name}</button>
+                <p className="pa-row-subtitle">{item.slug}{item.description ? ' · ' + item.description : ''}</p>
+              </div>
+              <div className="pa-inline">
+                <span className="pa-muted">{item.is_active ? 'Actif' : 'Inactif'}</span>
+                <button type="button" className="pa-icon-button" aria-label={'Modifier ' + item.name} onClick={() => openEdit(item)}><Pencil size={16} /></button>
+              </div>
             </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Slug (identifiant unique)</label>
-              <input value={editing.slug} disabled={!isNew} onChange={e => setEditing({ ...editing, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 font-mono disabled:bg-[var(--w-surface-el)] disabled:text-slate-500" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</label>
-              <textarea value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Business type legacy (auto_parts, electronics, fashion, grocery, generic, services)</label>
-              <input value={editing.legacy_business_type || ''} onChange={e => setEditing({ ...editing, legacy_business_type: e.target.value || null })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 font-mono" />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} />
-              Actif
-            </label>
-          </div>
-        )}
-      </Modal>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ============== CATALOGS ============== */
-function CatalogsTab({ catalogs, activities, onChange, selectedId, onSelect }: { catalogs: Catalog[]; activities: ActivityType[]; onChange: () => void; selectedId: string; onSelect: (id: string) => void }) {
+function CatalogsTab({ catalogs, activities, onChange, onBrowse }: { catalogs: Catalog[]; activities: ActivityType[]; onChange: () => void; onBrowse: (id: string) => void }) {
   const { success, error: toastError } = useToast();
   const [editing, setEditing] = useState<Catalog | null>(null);
   const [isNew, setIsNew] = useState(false);
@@ -226,65 +242,59 @@ function CatalogsTab({ catalogs, activities, onChange, selectedId, onSelect }: {
     } catch (e: any) { toastError(e.message); }
   };
 
+  if (editing) {
+    return (
+      <CatalogEditor title={isNew ? 'Nouveau catalogue' : 'Modifier le catalogue'}
+        backLabel="Retour aux catalogues" onBack={() => setEditing(null)} onSave={save}>
+        <div className="pa-form-grid">
+          <label className="pa-field-label">Nom
+            <input className="w-input-ul" required value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} />
+          </label>
+          <label className="pa-field-label">Type d’activité
+            <select className="w-input-ul" required disabled={!isNew} value={editing.business_activity_type_id}
+              onChange={event => setEditing({ ...editing, business_activity_type_id: event.target.value })}>
+              <option value="">Choisir un type d’activité</option>
+              {activities.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <label className="pa-field-label">Description
+          <textarea className="w-input-ul" rows={3} value={editing.description || ''} onChange={event => setEditing({ ...editing, description: event.target.value })} />
+        </label>
+        <label className="pa-inline">
+          <input type="checkbox" checked={editing.is_active} onChange={event => setEditing({ ...editing, is_active: event.target.checked })} /> Actif
+        </label>
+      </CatalogEditor>
+    );
+  }
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{catalogs.length} catalogue{catalogs.length > 1 ? 's' : ''}</div>
-        <button onClick={openNew} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition active:scale-95">
-          <Plus className="w-3.5 h-3.5" /> Nouveau catalogue
-        </button>
+    <div className="pa-page">
+      <div className="pa-section-head">
+        <span className="pa-muted text-sm">{catalogs.length} catalogue{catalogs.length !== 1 ? 's' : ''}</span>
+        <button type="button" onClick={openNew} className="pa-button" data-variant="primary"><Plus size={16} /> Nouveau catalogue</button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-        {catalogs.map(c => {
-          const activity = activities.find(a => a.id === c.business_activity_type_id);
-          const isSel = selectedId === c.id;
-          return (
-            <button key={c.id} onClick={() => onSelect(c.id)} className={`card-premium p-3 text-left transition ${isSel ? 'ring-2 ring-brand-500 border-brand-400' : ''}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-slate-900 truncate">{c.name}</div>
-                  <div className="text-[10px] font-semibold text-brand-700 mt-0.5 truncate">{activity?.name || '—'}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{counts[c.id] !== undefined ? `${counts[c.id]} article${counts[c.id] > 1 ? 's' : ''}` : '...'}</div>
-                  {c.description && <div className="text-[11px] text-slate-600 mt-1 break-words line-clamp-2">{c.description}</div>}
+      {catalogs.length === 0 ? <p className="pa-empty">Aucun catalogue.</p> : (
+        <div className="pa-divided">
+          {catalogs.map(item => {
+            const activity = activities.find(type => type.id === item.business_activity_type_id);
+            const count = counts[item.id];
+            return (
+              <div key={item.id} className="pa-setting-row">
+                <div>
+                  <button type="button" className="pa-name-button" onClick={() => onBrowse(item.id)}>{item.name}</button>
+                  <p className="pa-row-subtitle">{activity?.name || '—'}{item.description ? ' · ' + item.description : ''}</p>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${c.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{c.is_active ? 'Actif' : 'Inactif'}</span>
-                  <span onClick={(e) => { e.stopPropagation(); openEdit(c); }} className="p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"><Pencil className="w-3.5 h-3.5 text-slate-600" /></span>
+                <div className="pa-inline">
+                  <span className="pa-muted">{count == null ? '—' : count + (count === 1 ? ' article' : ' articles')}</span>
+                  <span className="pa-muted">{item.is_active ? 'Actif' : 'Inactif'}</span>
+                  <button type="button" className="pa-icon-button" aria-label={'Modifier ' + item.name} onClick={() => openEdit(item)}><Pencil size={16} /></button>
                 </div>
               </div>
-            </button>
-          );
-        })}
-      </div>
-
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? 'Nouveau catalogue' : 'Modifier le catalogue'} size="sm"
-        footer={<>
-          <button onClick={() => setEditing(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Save className="w-4 h-4" /></button>
-        </>}>
-        {editing && (
-          <div className="space-y-3">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Type d'activité</label>
-              <select value={editing.business_activity_type_id} disabled={!isNew} onChange={e => setEditing({ ...editing, business_activity_type_id: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 disabled:bg-[var(--w-surface-el)]">
-                {activities.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nom</label>
-              <input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</label>
-              <textarea value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20" />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} />
-              Actif
-            </label>
-          </div>
-        )}
-      </Modal>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -326,79 +336,69 @@ function CategoriesTab({ catalogs, categories, selectedCatalogId, onSelectCatalo
     } catch (e: any) { toastError(e.message); }
   };
 
-  if (!selectedCatalogId) return <div className="text-center py-12 text-sm text-slate-500">Sélectionnez d'abord un catalogue.</div>;
+  if (!selectedCatalogId) return <div className="pa-empty">Sélectionnez d'abord un catalogue.</div>;
+
+  if (editing) {
+    const parent = rootCats.find(item => item.id === editing.parent_id);
+    return (
+      <CatalogEditor title={isNew ? (parent ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie') : 'Modifier la catégorie'}
+        backLabel="Retour aux catégories" onBack={() => setEditing(null)} onSave={save}>
+        {parent && <p className="pa-copy">Catégorie parente · {parent.name}</p>}
+        <div className="pa-form-grid">
+          <label className="pa-field-label">Nom
+            <input className="w-input-ul" required value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} />
+          </label>
+          <label className="pa-field-label">Ordre d’affichage
+            <input className="w-input-ul" type="number" value={editing.sort_order}
+              onChange={event => setEditing({ ...editing, sort_order: Number(event.target.value) })} />
+          </label>
+        </div>
+        <label className="pa-inline">
+          <input type="checkbox" checked={editing.is_active} onChange={event => setEditing({ ...editing, is_active: event.target.checked })} /> Actif
+        </label>
+      </CatalogEditor>
+    );
+  }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex-1 min-w-[200px]">
-          <select value={selectedCatalogId} onChange={e => onSelectCatalog(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
-            {catalogs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <button onClick={openNewRoot} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow">
-          <Plus className="w-3.5 h-3.5" /> Catégorie racine
-        </button>
+    <div className="pa-page">
+      <div className="pa-toolbar">
+        <CatalogSelect catalogs={catalogs} value={selectedCatalogId} onChange={onSelectCatalog} />
+        <button type="button" onClick={openNewRoot} className="pa-button" data-variant="primary"><Plus size={16} /> Nouvelle catégorie</button>
       </div>
-
-      <div className="space-y-1">
-        {rootCats.map(cat => {
-          const subs = catalogCats.filter(c => c.parent_id === cat.id);
-          return (
-            <div key={cat.id} className="card-premium p-3">
-              <div className="flex items-center gap-2">
-                <Folder className="w-4 h-4 text-brand-700 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-slate-900 truncate">{cat.name}</div>
-                  <div className="text-[10px] font-mono text-slate-500">{cat.slug}</div>
+      {rootCats.length === 0 ? <p className="pa-empty">Aucune catégorie dans ce catalogue.</p> : (
+        <div className="pa-divided">
+          {rootCats.map(category => (
+            <div key={category.id}>
+              <div className="pa-setting-row">
+                <button type="button" className="pa-name-button" onClick={() => openEdit(category)}>{category.name}</button>
+                <div className="pa-inline">
+                  <button type="button" className="pa-link" onClick={() => openNewChild(category.id)}><Plus size={15} /> Sous-catégorie</button>
+                  <button type="button" className="pa-icon-button" aria-label={'Modifier ' + category.name} onClick={() => openEdit(category)}><Pencil size={16} /></button>
                 </div>
-                <button onClick={() => openNewChild(cat.id)} className="p-1.5 rounded-lg hover:bg-slate-100" title="Ajouter une sous-catégorie"><Plus className="w-3.5 h-3.5 text-slate-600" /></button>
-                <button onClick={() => openEdit(cat)} className="p-1.5 rounded-lg hover:bg-slate-100"><Pencil className="w-3.5 h-3.5 text-slate-600" /></button>
               </div>
-              {subs.length > 0 && (
-                <div className="mt-2 ml-6 space-y-1">
-                  {subs.map(sub => (
-                    <div key={sub.id} className="flex items-center gap-2 p-2 rounded-lg bg-[var(--w-surface-el)]">
-                      <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-semibold text-slate-800 truncate">{sub.name}</div>
-                      </div>
-                      <button onClick={() => openEdit(sub)} className="p-1 rounded-lg hover:bg-white"><Pencil className="w-3 h-3 text-slate-600" /></button>
-                    </div>
-                  ))}
+              {catalogCats.filter(item => item.parent_id === category.id).map(item => (
+                <div key={item.id} className="pa-setting-row pa-subcategory">
+                  <button type="button" className="pa-link" onClick={() => openEdit(item)}><ChevronRight size={14} /> {item.name}</button>
+                  <button type="button" className="pa-icon-button" aria-label={'Modifier ' + item.name} onClick={() => openEdit(item)}><Pencil size={16} /></button>
                 </div>
-              )}
+              ))}
             </div>
-          );
-        })}
-        {rootCats.length === 0 && (
-          <div className="card-premium p-6 text-center text-sm text-slate-500">Aucune catégorie dans ce catalogue.</div>
-        )}
-      </div>
-
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? (editing?.parent_id ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie') : 'Modifier la catégorie'} size="sm"
-        footer={<>
-          <button onClick={() => setEditing(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Save className="w-4 h-4" /></button>
-        </>}>
-        {editing && (
-          <div className="space-y-3">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nom</label>
-              <input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value, slug: isNew ? e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') : editing.slug })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ordre d'affichage</label>
-              <input type="number" value={editing.sort_order} onChange={e => setEditing({ ...editing, sort_order: Number(e.target.value) })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 num" />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} />
-              Actif
-            </label>
-          </div>
-        )}
-      </Modal>
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+function CatalogSelect({ catalogs, value, onChange }: { catalogs: Catalog[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <label className="pa-field-label">Catalogue
+      <select className="w-input-ul" value={value} onChange={event => onChange(event.target.value)}>
+        {!value && <option value="">Choisir un catalogue</option>}
+        {catalogs.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -418,7 +418,6 @@ function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, on
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteAllOpen, setBulkDeleteAllOpen] = useState(false);
 
   const catalogCats = categories.filter(c => c.master_catalog_id === selectedCatalogId);
@@ -523,7 +522,6 @@ function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, on
 
   const doBulkDelete = async () => {
     if (selected.size === 0) return;
-    setBulkDeleting(true);
     try {
       const ids = Array.from(selected);
       const batchSize = 100;
@@ -536,12 +534,11 @@ function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, on
       setSelected(new Set());
       setBulkDeleteOpen(false);
       loadPage();
-    } catch (e: any) { toastError(e.message); } finally { setBulkDeleting(false); }
+    } catch (e: any) { toastError(e.message); }
   };
 
   const doBulkDeleteAll = async () => {
     if (!selectedCatalogId) return;
-    setBulkDeleting(true);
     try {
       const { error } = await supabase.from('master_catalog_items').delete().eq('master_catalog_id', selectedCatalogId);
       if (error) throw error;
@@ -550,142 +547,130 @@ function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, on
       setBulkDeleteAllOpen(false);
       loadPage();
       onChange();
-    } catch (e: any) { toastError(e.message); } finally { setBulkDeleting(false); }
+    } catch (e: any) { toastError(e.message); }
   };
 
-  if (!selectedCatalogId) return <div className="text-center py-12 text-sm text-slate-500">Sélectionnez d'abord un catalogue.</div>;
+  if (!selectedCatalogId) return <div className="pa-empty">Sélectionnez d'abord un catalogue.</div>;
 
   const subcatsFor = (catId: string | null) => catId ? catalogCats.filter(c => c.parent_id === catId) : [];
 
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex-1 min-w-[200px]">
-          <select value={selectedCatalogId} onChange={e => { onSelectCatalog(e.target.value); setPage(0); }} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
-            {catalogs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div className="flex-1 min-w-[200px] relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20" />
-        </div>
-        <button onClick={openNew} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow">
-          <Plus className="w-3.5 h-3.5" /> Nouvel article
-        </button>
-      </div>
+  if (deleteId) {
+    return <PlatformConfirmation title="Supprimer cet article ?" backLabel="Retour aux articles" onBack={() => setDeleteId(null)}
+      message="La suppression est définitive." label="Supprimer l’article" danger onConfirm={doDelete} />;
+  }
 
-      {/* Bulk actions bar */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
-            <input type="checkbox" checked={items.length > 0 && selected.size === items.length} onChange={toggleSelectAll} className="rounded" />
-            Tout sélectionner ({selected.size}/{items.length})
+  if (bulkDeleteOpen || bulkDeleteAllOpen) {
+    return <PlatformConfirmation title={bulkDeleteAllOpen ? 'Vider le catalogue ?' : 'Supprimer les articles sélectionnés ?'}
+      backLabel="Retour aux articles" onBack={() => { setBulkDeleteOpen(false); setBulkDeleteAllOpen(false); }}
+      message={(bulkDeleteAllOpen ? totalCount : selected.size) + ' articles seront supprimés définitivement du catalogue. Les entreprises qui les ont déjà importés conservent leur copie.'}
+      label={bulkDeleteAllOpen ? 'Vider le catalogue' : 'Supprimer la sélection'} danger
+      onConfirm={bulkDeleteAllOpen ? doBulkDeleteAll : doBulkDelete} />;
+  }
+
+  if (editing) {
+    return (
+      <CatalogEditor title={isNew ? 'Nouvel article' : 'Modifier l’article'} backLabel="Retour aux articles" onBack={() => setEditing(null)} onSave={save}>
+        <div className="pa-form-grid">
+          {([
+            ['designation', 'Désignation'], ['brand', 'Marque'], ['manufacturer_ref', 'Référence constructeur'],
+            ['model', 'Modèle'], ['unit', 'Unité'], ['barcode', 'Code-barres'],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="pa-field-label">{label}
+              <input className="w-input-ul" required={key === 'designation'} value={editing[key] || ''}
+                onChange={event => setEditing({ ...editing, [key]: event.target.value })} />
+            </label>
+          ))}
+          <label className="pa-field-label">Catégorie
+            <select className="w-input-ul" value={editing.category_id || ''}
+              onChange={event => setEditing({ ...editing, category_id: event.target.value || null, subcategory_id: null })}>
+              <option value="">—</option>
+              {rootCats.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
           </label>
-          <span className="text-xs font-bold text-slate-500">{totalCount} article{totalCount > 1 ? 's' : ''} au total</span>
+          <label className="pa-field-label">Sous-catégorie
+            <select className="w-input-ul" value={editing.subcategory_id || ''}
+              onChange={event => setEditing({ ...editing, subcategory_id: event.target.value || null })}>
+              <option value="">—</option>
+              {subcatsFor(editing.category_id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+          {([['purchase_price', 'Prix d’achat'], ['sale_price', 'Prix de vente'], ['vat_rate', 'TVA (%)']] as const).map(([key, label]) => (
+            <label key={key} className="pa-field-label">{label}
+              <input className="w-input-ul" type="number" step="any" value={editing[key] ?? 0}
+                onChange={event => setEditing({ ...editing, [key]: Number(event.target.value) })} />
+            </label>
+          ))}
+          <label className="pa-field-label">Adresse de l’image
+            <input className="w-input-ul" value={editing.image_url || ''} onChange={event => setEditing({ ...editing, image_url: event.target.value })} />
+          </label>
         </div>
-        <div className="flex items-center gap-2">
-          {selected.size > 0 && (
-            <button onClick={() => setBulkDeleteOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition">
-              <Trash2 className="w-3.5 h-3.5" /> Supprimer ({selected.size})
-            </button>
-          )}
-          {totalCount > 0 && (
-            <button onClick={() => setBulkDeleteAllOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 text-white hover:bg-red-700 transition">
-              <Trash2 className="w-3.5 h-3.5" /> Vider le catalogue
-            </button>
-          )}
-        </div>
+        <label className="pa-field-label">Description
+          <textarea className="w-input-ul" rows={3} value={editing.description || ''} onChange={event => setEditing({ ...editing, description: event.target.value })} />
+        </label>
+        <label className="pa-inline">
+          <input type="checkbox" checked={editing.is_active} onChange={event => setEditing({ ...editing, is_active: event.target.checked })} /> Actif
+        </label>
+      </CatalogEditor>
+    );
+  }
+
+  return (
+    <div className="pa-page">
+      <div className="pa-toolbar">
+        <CatalogSelect catalogs={catalogs} value={selectedCatalogId} onChange={id => { onSelectCatalog(id); setPage(0); }} />
+        <label className="pa-search">
+          <Search size={16} aria-hidden="true" />
+          <input value={search} onChange={event => setSearch(event.target.value)} aria-label="Rechercher un article de catalogue" placeholder="Désignation, marque ou référence" />
+        </label>
+        <button type="button" onClick={openNew} className="pa-button" data-variant="primary"><Plus size={16} /> Nouvel article</button>
+      </div>
+      <div className="pa-toolbar">
+        <label className="pa-inline text-xs">
+          <input type="checkbox" checked={items.length > 0 && selected.size === items.length} onChange={toggleSelectAll} /> Sélectionner la page
+        </label>
+        <span className="pa-muted text-xs">{totalCount} article{totalCount !== 1 ? 's' : ''}</span>
+        {selected.size > 0 && <button type="button" className="pa-link pa-danger" onClick={() => setBulkDeleteOpen(true)}>
+          Supprimer la sélection ({selected.size})
+        </button>}
+        {totalCount > 0 && <button type="button" className="pa-link pa-danger ml-auto" onClick={() => setBulkDeleteAllOpen(true)}>Vider le catalogue</button>}
       </div>
 
-      {loadingItems ? (
-        <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-600" /></div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-            {items.map(i => {
-              const isSel = selected.has(i.id);
-              return (
-                <div key={i.id} className={`card-premium p-3 transition ${isSel ? 'ring-2 ring-red-300 bg-red-50/30' : ''}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 min-w-0 flex-1">
-                      <input type="checkbox" checked={isSel} onChange={() => toggleSelect(i.id)} className="mt-1 rounded shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold text-slate-900 break-words">{i.designation}</div>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          {i.brand && <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}
-                          {i.manufacturer_ref && <span className="text-[10px] font-mono text-slate-500">{i.manufacturer_ref}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => openEdit(i)} className="p-1.5 rounded-lg hover:bg-slate-100"><Pencil className="w-3.5 h-3.5 text-slate-600" /></button>
-                      <button onClick={() => setDeleteId(i.id)} className="p-1.5 rounded-lg hover:bg-red-50"><Trash2 className="w-3.5 h-3.5 text-red-600" /></button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 mt-1.5 border-t border-[var(--w-separator)]">
-                    <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Achat</div><div className="text-[11px] font-bold text-slate-800 num mt-0.5">{formatFCFA(i.purchase_price)}</div></div>
-                    <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vente</div><div className="text-[11px] font-bold text-brand-700 num mt-0.5">{formatFCFA(i.sale_price)}</div></div>
-                    <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">TVA</div><div className="text-[11px] font-semibold text-slate-600 num mt-0.5">{i.vat_rate}%</div></div>
-                  </div>
+      {loadingItems ? <p className="pa-empty" role="status"><Loader2 size={16} className="animate-spin" /> Chargement…</p>
+        : items.length === 0 ? <p className="pa-empty">Aucun article.</p> : (
+          <div className="pa-table pa-catalog-items" aria-label="Articles du catalogue" role="table">
+            <div className="pa-list-head" role="row">
+              <span role="columnheader"><span className="sr-only">Sélection</span></span>
+              <span role="columnheader">Article</span>
+              <span className="pa-catalog-prices" role="columnheader"><span>Achat</span><span>Vente</span><span>TVA</span></span>
+              <span role="columnheader" className="text-right">Actions</span>
+            </div>
+            {items.map(item => (
+              <div key={item.id} className="pa-list-row" role="row">
+                <div className="pa-catalog-check" role="cell">
+                  <input aria-label={'Sélectionner ' + item.designation} type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} />
                 </div>
-              );
-            })}
-            {items.length === 0 && <div className="col-span-full card-premium p-6 text-center text-sm text-slate-500">Aucun article.</div>}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-1 pt-2">
-              <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 disabled:opacity-40 hover:bg-[var(--w-surface-el)] transition">Préc.</button>
-              <span className="px-3 py-1.5 text-xs font-bold text-slate-700">Page {page + 1} / {totalPages}</span>
-              <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 disabled:opacity-40 hover:bg-[var(--w-surface-el)] transition">Suiv.</button>
-            </div>
-          )}
-        </>
-      )}
-
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? 'Nouvel article' : 'Modifier l\'article'} size="md"
-        footer={<>
-          <button onClick={() => setEditing(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Save className="w-4 h-4" /></button>
-        </>}>
-        {editing && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Désignation *</label><input value={editing.designation} onChange={e => setEditing({ ...editing, designation: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Marque</label><input value={editing.brand} onChange={e => setEditing({ ...editing, brand: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Réf. constructeur</label><input value={editing.manufacturer_ref} onChange={e => setEditing({ ...editing, manufacturer_ref: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-mono" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Modèle</label><input value={editing.model} onChange={e => setEditing({ ...editing, model: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm" /></div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Catégorie</label>
-                <select value={editing.category_id || ''} onChange={e => setEditing({ ...editing, category_id: e.target.value || null, subcategory_id: null })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
-                  <option value="">—</option>
-                  {rootCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div className="pa-catalog-name" role="cell">
+                  <button type="button" className="pa-name-button" onClick={() => openEdit(item)}>{item.designation}</button>
+                  <p className="pa-row-subtitle">{[item.brand, item.manufacturer_ref, !item.is_active ? 'Inactif' : ''].filter(Boolean).join(' · ')}</p>
+                </div>
+                <div className="pa-catalog-prices" role="cell">
+                  <span><small>Achat </small>{formatFCFA(item.purchase_price)}</span>
+                  <span><small>Vente </small>{formatFCFA(item.sale_price)}</span>
+                  <span><small>TVA </small>{item.vat_rate} %</span>
+                </div>
+                <div role="cell" className="pa-row-actions">
+                  <button type="button" className="pa-icon-button" aria-label={'Modifier ' + item.designation} onClick={() => openEdit(item)}><Pencil size={16} /></button>
+                  <button type="button" className="pa-icon-button pa-danger" aria-label={'Supprimer ' + item.designation} onClick={() => setDeleteId(item.id)}><Trash2 size={16} /></button>
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sous-catégorie</label>
-                <select value={editing.subcategory_id || ''} onChange={e => setEditing({ ...editing, subcategory_id: e.target.value || null })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
-                  <option value="">—</option>
-                  {subcatsFor(editing.category_id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Unité</label><input value={editing.unit} onChange={e => setEditing({ ...editing, unit: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Code-barres</label><input value={editing.barcode} onChange={e => setEditing({ ...editing, barcode: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-mono" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Prix achat</label><input type="number" value={editing.purchase_price} onChange={e => setEditing({ ...editing, purchase_price: Number(e.target.value) })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm num" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Prix vente</label><input type="number" value={editing.sale_price} onChange={e => setEditing({ ...editing, sale_price: Number(e.target.value) })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm num" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">TVA (%)</label><input type="number" value={editing.vat_rate} onChange={e => setEditing({ ...editing, vat_rate: Number(e.target.value) })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm num" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Image URL</label><input value={editing.image_url} onChange={e => setEditing({ ...editing, image_url: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm" /></div>
-            </div>
-            <div><label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</label><textarea value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm" /></div>
-            <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} />Actif</label>
+            ))}
           </div>
         )}
-      </Modal>
-
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={doDelete} title="Supprimer cet article ?" message="Cette action est irréversible." confirmLabel="Supprimer" />
-      <ConfirmDialog open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} onConfirm={doBulkDelete} title={`Supprimer ${selected.size} article${selected.size > 1 ? 's' : ''} ?`} message="Cette action est irréversible. Les tenants qui les ont déjà importés conservent leur copie." confirmLabel={bulkDeleting ? 'Suppression…' : 'Supprimer'} />
-      <ConfirmDialog open={bulkDeleteAllOpen} onClose={() => setBulkDeleteAllOpen(false)} onConfirm={doBulkDeleteAll} title="Vider tout le catalogue ?" message={`Tous les ${totalCount} articles de ce catalogue seront supprimés définitivement. Les tenants qui les ont déjà importés conservent leur copie.`} confirmLabel={bulkDeleting ? 'Suppression…' : 'Tout supprimer'} />
+      {totalPages > 1 && <nav className="pa-inline justify-end text-xs" aria-label="Pages du catalogue">
+        <button type="button" className="pa-icon-button" aria-label="Page précédente" disabled={page === 0} onClick={() => setPage(page - 1)}><ChevronLeft size={16} /></button>
+        <span>{page + 1} / {totalPages}</span>
+        <button type="button" className="pa-icon-button" aria-label="Page suivante" disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight size={16} /></button>
+      </nav>}
     </div>
   );
 }
@@ -838,134 +823,70 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
   };
 
   return (
-    <div className="space-y-3">
-      {/* Catalog selector */}
-      <div className="card-premium p-4">
-        <div className="flex items-center gap-3">
-          <Folder className="w-5 h-5 text-brand-700 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold text-slate-900 mb-1">Catalogue cible</div>
-            <select value={selectedCatalogId} onChange={e => onSelectCatalog(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
-              {catalogs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-        </div>
+    <div className="pa-page">
+      <div className="pa-toolbar">
+        <CatalogSelect catalogs={catalogs} value={selectedCatalogId} onChange={onSelectCatalog} />
+        <button type="button" className="pa-link" onClick={downloadTemplate}><Download size={16} /> Télécharger le modèle</button>
+        <button type="button" className="pa-link" disabled={!selectedCatalogId} onClick={exportCatalog}><Download size={16} /> Exporter le catalogue</button>
       </div>
 
-      {/* Template + Export */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="card-premium p-4">
-          <div className="flex items-start gap-3">
-            <Download className="w-5 h-5 text-neutral-700 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <div className="text-sm font-bold text-slate-900">Modele Excel</div>
-              <div className="text-[11px] text-slate-500 mt-0.5 mb-2">Fichier avec les colonnes attendues et un exemple. Les champs marques * sont obligatoires.</div>
-              <button onClick={downloadTemplate} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 hover:border-neutral-300 text-slate-800 transition active:scale-95">
-                <Download className="w-3.5 h-3.5" /> Telecharger le modele
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="card-premium p-4">
-          <div className="flex items-start gap-3">
-            <Upload className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <div className="text-sm font-bold text-slate-900">Exporter le catalogue</div>
-              <div className="text-[11px] text-slate-500 mt-0.5 mb-2">Exporte tous les articles du catalogue sélectionné au même format que le modèle (ré-importable).</div>
-              <button onClick={exportCatalog} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition active:scale-95">
-                <Download className="w-3.5 h-3.5" /> Exporter
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Column reference */}
-      <div className="card-premium p-4">
-        <div className="text-xs font-bold text-slate-900 mb-2">Colonnes attendues</div>
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-1.5">
-          {IMPORT_HEADERS.map(h => (
-            <div key={h.key} className={`text-[11px] px-2 py-1.5 rounded-lg ${h.required ? 'bg-brand-50 border border-brand-200 font-bold text-brand-800' : 'bg-[var(--w-surface-el)] border border-[var(--w-separator)] text-slate-600'}`}>
-              {h.label}
-            </div>
-          ))}
-        </div>
-        <div className="text-[10px] text-slate-400 mt-2">Les colonnes marquees * sont obligatoires. Les autres sont optionnelles.</div>
-      </div>
-
-      {/* File upload */}
-      <div className="card-premium p-4">
-        <div className="text-sm font-bold text-slate-900 mb-2">Importer un fichier</div>
-        <label className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition">
-          <Upload className="w-6 h-6 text-slate-400" />
-          <div className="text-xs text-slate-600 text-center">Cliquez ou glissez un fichier Excel (.xlsx, .xls)</div>
-          {filename && <div className="text-[11px] font-semibold text-brand-700">{filename} — {rows.length} ligne{rows.length > 1 ? 's' : ''} detectees</div>}
-          <input type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
+      <section className="pa-panel space-y-3">
+        <h3 className="pa-heading">Importer des articles</h3>
+        <label className="pa-field-label">
+          Fichier Excel (.xlsx ou .xls)
+          <input type="file" className="pa-file" accept=".xlsx,.xls" disabled={importing}
+            onChange={event => {
+              const file = event.target.files?.[0];
+              if (file) void handleFile(file);
+              event.target.value = '';
+            }} />
         </label>
+        {filename && <p className="pa-copy">{filename} · {rows.length} ligne{rows.length !== 1 ? 's' : ''}</p>}
 
-        {rows.length > 0 && (
-          <>
-            {rows.length > CHUNK_SIZE && (
-              <div className="mt-3 flex items-start gap-2 p-3 rounded-xl bg-neutral-50 border border-neutral-200">
-                <AlertCircle className="w-4 h-4 text-neutral-700 mt-0.5 shrink-0" />
-                <div className="text-[11px] text-neutral-800">
-                  <span className="font-bold">{rows.length} articles détectés.</span> Import en{' '}
-                  <span className="font-bold">{Math.ceil(rows.length / CHUNK_SIZE)} lot{Math.ceil(rows.length / CHUNK_SIZE) > 1 ? 's' : ''} de {CHUNK_SIZE}</span> — traitement ensembliste optimisé, pas de timeout attendu.
-                </div>
-              </div>
-            )}
+        <details>
+          <summary className="pa-link cursor-pointer">Colonnes attendues</summary>
+          <p className="pa-row-subtitle">Les colonnes marquées d’un astérisque sont obligatoires.</p>
+          <ul className="pa-column-list">
+            {IMPORT_HEADERS.map(column => <li key={column.key}>{column.label}</li>)}
+          </ul>
+        </details>
 
-            {/* Progress bar */}
-            {importProgress && (
-              <div className="mt-3 space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
-                  <span>Lot <span className="num">{importProgress.lotsDone}</span> / <span className="num">{importProgress.lotsTotal}</span></span>
-                  <span className="num text-slate-500">{importProgress.done.toLocaleString()} / {importProgress.total.toLocaleString()} articles • {importProgress.elapsed}s</span>
-                </div>
-                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-brand-500 via-brand-500 to-emerald-500 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.round((importProgress.done / importProgress.total) * 100)}%` }}
-                  />
-                </div>
-                <div className="text-[10px] text-slate-400 text-center font-semibold">
-                  {Math.round((importProgress.done / importProgress.total) * 100)}% — Ne fermez pas cette page…
-                </div>
-              </div>
-            )}
-
-            <div className="mt-3 flex items-center justify-between">
-              <button onClick={() => { setRows([]); setFilename(''); setResult(null); }} disabled={importing} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={runImport} disabled={importing || !selectedCatalogId} className="btn-icon-primary" title="Importer">
-                {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                {importing
-                  ? `Lot ${importProgress?.lotsDone ?? 0} / ${importProgress?.lotsTotal ?? Math.ceil(rows.length / CHUNK_SIZE)}…`
-                  : `Importer ${rows.length.toLocaleString()} article${rows.length > 1 ? 's' : ''}${rows.length > CHUNK_SIZE ? ` (${Math.ceil(rows.length / CHUNK_SIZE)} lots)` : ''}`
-                }
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Results */}
-      {result && (
-        <div className="card-premium p-4 space-y-2">
-          <div className="text-sm font-bold text-slate-900">Rapport d'import</div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100"><div className="text-[10px] font-bold uppercase text-emerald-700">Créés</div><div className="text-2xl font-bold text-emerald-800 num mt-1">{result.imported}</div></div>
-            <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200"><div className="text-[10px] font-bold uppercase text-neutral-700">Mis à jour</div><div className="text-2xl font-bold text-neutral-800 num mt-1">{result.updated}</div></div>
-            <div className="p-3 rounded-xl bg-red-50 border border-red-100"><div className="text-[10px] font-bold uppercase text-red-700">Erreurs</div><div className="text-2xl font-bold text-red-800 num mt-1">{result.errors?.length || 0}</div></div>
+        {importProgress && (
+          <div className="space-y-1" role="status">
+            <p className="pa-row-subtitle">Lot {importProgress.lotsDone} sur {importProgress.lotsTotal} · {importProgress.done} articles sur {importProgress.total} · {importProgress.elapsed} s</p>
+            <progress className="pa-progress" value={importProgress.done} max={importProgress.total} aria-label="Progression de l’import" />
           </div>
-          {result.errors && result.errors.length > 0 && (
-            <div className="max-h-40 overflow-auto bg-[var(--w-surface-el)] rounded-xl p-2 space-y-1">
-              {result.errors.map((e: any, i: number) => (
-                <div key={i} className="text-[11px] text-red-700 break-words">Ligne {e.row}: {e.error}</div>
-              ))}
-            </div>
+        )}
+        {rows.length > 0 && (
+          <div className="pa-form-actions">
+            <button type="button" className="pa-link" disabled={importing} onClick={() => { setRows([]); setFilename(''); setResult(null); }}>Annuler</button>
+            <button type="button" className="pa-button" data-variant="primary" disabled={importing || !selectedCatalogId} onClick={() => void runImport()}>
+              {importing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+              {importing ? 'Import en cours…' : 'Importer ' + rows.length + (rows.length === 1 ? ' article' : ' articles')}
+            </button>
+          </div>
+        )}
+      </section>
+
+      {result && (
+        <section className="pa-panel">
+          <h3 className="pa-heading">Résultat de l’import</h3>
+          <dl className="pa-record-summary">
+            <div><dt>Créés</dt><dd>{result.imported}</dd></div>
+            <div><dt>Mis à jour</dt><dd>{result.updated}</dd></div>
+            <div><dt>Erreurs</dt><dd>{result.errors?.length || 0}</dd></div>
+          </dl>
+          {result.errors?.length > 0 && (
+            <details>
+              <summary className="pa-link cursor-pointer">Voir les lignes en erreur</summary>
+              <ul className="pa-divided">
+                {result.errors.map((item: any, idx: number) => (
+                  <li key={idx} className="pa-setting-row pa-danger">Ligne {item.row} · {item.error}</li>
+                ))}
+              </ul>
+            </details>
           )}
-        </div>
+        </section>
       )}
     </div>
   );

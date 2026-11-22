@@ -6,7 +6,7 @@ import {
   callSubscriptionPayments, subscriptionCycleLabels, subscriptionPaymentDuration, subscriptionPaymentLabel,
   type SubscriptionPayment,
 } from '../lib/subscriptionPayments';
-import { Modal } from './Modal';
+import { PlatformWorkPage } from './PlatformWorkPage';
 
 type PaymentList = {
   payments: SubscriptionPayment[];
@@ -94,6 +94,37 @@ export function AdminSubscriptionPayments() {
   const savings = selected?.monthly_rate && selected.billing_months
     ? selected.monthly_rate * selected.billing_months - selected.amount : 0;
 
+  if (selected) {
+    return (
+      <PlatformWorkPage title={selected.tenant_name || 'Détail de l’encaissement'} backLabel="Retour aux encaissements"
+        onBack={() => setSelectedId(null)} busy={checking}>
+          <dl className="pa-keyvals">
+            {([
+              ['Entreprise', selected.tenant_name],
+              ['Référence', selected.id],
+              ['Offre', selected.plan_code + ' · ' + subscriptionCycleLabels[selected.billing_cycle]],
+              ['Durée', subscriptionPaymentDuration(selected)],
+              ['Montant', formatFCFA(selected.amount)],
+              ['Remise accordée', savings > 0 && formatFCFA(savings)],
+              ['Statut', subscriptionPaymentLabel(selected)],
+              ['Moyen de paiement', selected.payment_method],
+              ['Confirmé le', selected.paid_at && formatDateTime(selected.paid_at)],
+              ['Abonnement', selected.subscription_id],
+              ['Motif de rapprochement', selected.review_reason && reviewReasons[selected.review_reason]],
+            ] as const).filter(([, value]) => value).map(([label, value]) => (
+              <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+            ))}
+          </dl>
+          {selected.state !== 'creating' && selected.state !== 'failed' && (
+            <button type="button" onClick={() => void verify()} disabled={checking} className="pa-button mt-4">
+              <RefreshCw size={15} className={checking ? 'animate-spin' : undefined} />
+              Vérifier auprès de PayTech
+            </button>
+          )}
+      </PlatformWorkPage>
+    );
+  }
+
   return (
     <section className="pa-page" aria-label="Encaissements des abonnements">
       <div className="pa-toolbar">
@@ -179,33 +210,6 @@ export function AdminSubscriptionPayments() {
           </>
         )}
 
-      {selected && (
-        <Modal open onClose={() => setSelectedId(null)} title="Détail de l’encaissement" variant="flat" layer="top" panelClassName="pa-modal">
-          <dl className="pa-detail-list">
-            {([
-              ['Entreprise', selected.tenant_name],
-              ['Référence', selected.id],
-              ['Offre', selected.plan_code + ' · ' + subscriptionCycleLabels[selected.billing_cycle]],
-              ['Durée', subscriptionPaymentDuration(selected)],
-              ['Montant', formatFCFA(selected.amount)],
-              ['Remise accordée', savings > 0 && formatFCFA(savings)],
-              ['Statut', subscriptionPaymentLabel(selected)],
-              ['Moyen de paiement', selected.payment_method],
-              ['Confirmé le', selected.paid_at && formatDateTime(selected.paid_at)],
-              ['Abonnement', selected.subscription_id],
-              ['Motif de rapprochement', selected.review_reason && reviewReasons[selected.review_reason]],
-            ] as const).filter(([, value]) => value).map(([label, value]) => (
-              <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
-            ))}
-          </dl>
-          {selected.state !== 'creating' && selected.state !== 'failed' && (
-            <button type="button" onClick={() => void verify()} disabled={checking} className="pa-button mt-4">
-              <RefreshCw size={15} className={checking ? 'animate-spin' : undefined} />
-              Vérifier auprès de PayTech
-            </button>
-          )}
-        </Modal>
-      )}
     </section>
   );
 }
