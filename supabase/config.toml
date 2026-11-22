@@ -24,3 +24,10 @@ verify_jwt = true
 
 [functions.paytech-subscription-ipn]
 verify_jwt = false
+
+[remotes."codex/waarwi-subscription-payments"]
+project_id = "awrhkromycuzbqfycolc"
+
+[remotes."codex/waarwi-subscription-payments".edge_runtime.secrets]
+PAYTECH_ENV = "test"
+WAARWI_BILLING_APP_URL = "https://deploy-preview-1--waarwi.netlify.app"
