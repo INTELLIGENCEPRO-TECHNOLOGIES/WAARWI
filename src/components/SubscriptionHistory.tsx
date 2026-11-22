@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDate, formatDateTime, formatFCFA } from '../lib/format';
@@ -35,6 +36,7 @@ export function SubscriptionHistory({ initialSection = 'periods' }: { initialSec
   const [section, setSection] = useState<Section>(initialSection);
   const [page, setPage] = useState(0);
   const [retry, setRetry] = useState(0);
+  const paymentTick = useRealtimeTick(['tenant_subscription_payments', 'tenant_subscriptions']);
   const [history, setHistory] = useState<History>();
   const [error, setError] = useState('');
 
@@ -46,7 +48,7 @@ export function SubscriptionHistory({ initialSection = 'periods' }: { initialSec
       if (current) setError(cause instanceof Error ? cause.message : 'Historique indisponible.');
     });
     return () => { current = false; };
-  }, [section, page, retry]);
+  }, [section, page, retry, paymentTick]);
 
   function changePage(next: number) {
     setHistory(undefined);

@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, ChevronLeft, CreditCard, Package, HandCoins, RotateCcw, Search, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -65,7 +66,8 @@ type SessionDetail = {
 const PAGE_SIZE = 50;
 
 export function CashHistory() {
-  const { tenant, currentSite, profile, dataTick } = useApp();
+  const { tenant, currentSite, profile } = useApp();
+  const dataTick = useRealtimeTick(['cash_sessions', 'cash_movements', 'cash_registers', 'cash_control_lines', 'cash_regularizations', 'sales', 'sale_payments']);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);

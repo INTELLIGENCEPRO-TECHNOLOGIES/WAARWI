@@ -251,7 +251,7 @@ export function Registration({ onExit, onRegistered, paymentId, resumePayment }:
             <div className="registration-stage-footer">
               <div className="registration-actions">
                 <button type="button" className="registration-primary" onClick={onExit} disabled={!canContinueToPayment}>
-                  {tenant?.approval_status === 'approved' ? 'Accéder à mon espace' : 'Suivre ma demande'}<ArrowRight size={17} aria-hidden="true" />
+                  {tenant?.approval_status === 'approved' ? 'Se connecter' : 'Suivre ma demande'}<ArrowRight size={17} aria-hidden="true" />
                 </button>
               </div>
             </div>

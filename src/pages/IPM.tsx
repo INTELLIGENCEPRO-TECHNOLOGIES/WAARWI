@@ -1,3 +1,5 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState } from 'react';
 import { HeartPulse, Building2, FileText, Users, Receipt, CreditCard, AlertTriangle, Plus, Search, CreditCard as Edit2, Check, X, Loader2, Wallet, BarChart3, Ban, RefreshCw, Settings2, CheckCircle2, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -119,6 +121,8 @@ function IpmDashboard({ tenantId }: { tenantId: string }) {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const realtimeTick = useRealtimeTick(['ipm_ventes', 'ipm_reglements', 'ipm_rejets', 'ipm_organismes', 'ipm_beneficiaires', 'ipm_conventions']);
+
   useEffect(() => {
     (async () => {
       const [
@@ -170,7 +174,7 @@ function IpmDashboard({ tenantId }: { tenantId: string }) {
       });
       setLoading(false);
     })();
-  }, [tenantId]);
+  }, [tenantId, realtimeTick]);
 
   if (loading) return <DashSkeleton />;
   if (!stats) return <EmptyIpm message="Aucune donnée IPM disponible" />;
@@ -283,6 +287,7 @@ function IpmOrganismes({ tenantId }: { tenantId: string }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, [tenantId]);
+  useRealtimeRefresh(['ipm_organismes'], load);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return list;
@@ -463,6 +468,7 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, [tenantId]);
+  useRealtimeRefresh(['ipm_conventions', 'ipm_organismes'], load);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return list;
@@ -701,6 +707,7 @@ function IpmBeneficiaires({ tenantId }: { tenantId: string }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, [tenantId]);
+  useRealtimeRefresh(['ipm_beneficiaires', 'ipm_organismes', 'ipm_conventions'], load);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return list;
@@ -870,6 +877,7 @@ function IpmBordereaux({ tenantId }: { tenantId: string }) {
   };
 
   useEffect(() => { load(); }, [tenantId]);
+  useRealtimeRefresh(['ipm_bordereaux', 'ipm_ventes', 'ipm_organismes'], load);
 
   const filteredBord = useMemo(() => {
     if (!search.trim()) return list;
@@ -1292,6 +1300,7 @@ function IpmFactures({ tenantId }: { tenantId: string }) {
   };
 
   useEffect(() => { load(); }, [tenantId]);
+  useRealtimeRefresh(['ipm_factures', 'ipm_bordereaux', 'ipm_organismes', 'ipm_reglements'], load);
 
   const filteredFact = useMemo(() => {
     if (!search.trim()) return list;
@@ -1746,6 +1755,7 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
   };
 
   useEffect(() => { load(); }, [tenantId]);
+  useRealtimeRefresh(['ipm_reglements', 'ipm_factures', 'ipm_organismes'], load);
 
   const filteredRegl = useMemo(() => {
     if (!search.trim()) return list;
@@ -2058,6 +2068,7 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
   };
 
   useEffect(() => { load(); }, [tenantId, filter]);
+  useRealtimeRefresh(['ipm_rejets', 'ipm_ventes', 'ipm_organismes'], load);
 
   const openRetour = (v: any) => {
     setSelectedVente(v);

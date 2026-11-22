@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Loader2, Pencil, BarChart3, Users, Search, X, Power, Check,
@@ -63,9 +64,9 @@ export function Representatives() {
   const canManage = can('rep_manage');
   const canSeeCommission = can('rep_commission_view');
 
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!tenant) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const [r, s, st] = await Promise.all([
       supabase.from('sales_representatives').select('*').eq('tenant_id', tenant.id).order('code'),
       supabase.from('sales')
@@ -88,6 +89,7 @@ export function Representatives() {
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id]);
+  useRealtimeRefresh(['sales_representatives', 'rep_commission_settings', 'sales', 'sale_payments', 'sale_returns', 'sites'], () => load(true));
 
   const activeSales = useMemo(() => repSales.filter(s => s.status !== 'cancelled'), [repSales]);
 

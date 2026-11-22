@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Calculator, Loader2, Printer, Plus, X, Calendar, Filter, Check, BookOpen, Pencil, Trash2, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, Ban, Wallet, RotateCcw } from 'lucide-react';
 import { PageSearch } from '../components/PageSearch';
@@ -79,7 +80,8 @@ function computeDateRange(dateRange: DateRange, customFrom: string, customTo: st
 }
 
 export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite, dataTick } = useApp();
+  const { tenant, currentSite } = useApp();
+  const dataTick = useRealtimeTick(['sales', 'sale_items', 'sale_payments', 'sale_returns', 'sale_return_items', 'customers']);
   const { success: toastSuccess, error: toastError } = useToast();
   const { can } = usePermissions();
   const [sales, setSales] = useState<Sale[]>([]);

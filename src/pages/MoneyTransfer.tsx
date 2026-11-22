@@ -1,3 +1,5 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, Search, X, Check, AlertTriangle, Loader2, CreditCard as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, ChevronDown, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Smartphone, Activity, Package, Users, Receipt, HandCoins, Phone, Save } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -75,6 +77,7 @@ export function MoneyTransfer() {
   }, [tenant]);
 
   useEffect(() => { loadInitStatus(); }, [loadInitStatus]);
+  useRealtimeRefresh(['mt_init_status'], loadInitStatus);
 
   const isInitialized = initStatus === 'valide';
   const blockedPages: SubPage[] = ['operations', 'operations_grossiste', 'depenses', 'clients', 'soldes', 'clotures', 'rapports'];
@@ -200,6 +203,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
   }, [tenant, isInitialized]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_operations', 'mt_closures', 'mt_expenses', 'mt_accounts', 'mt_service_points', 'mt_services'], load);
 
   const getUserName = (userId: string | null) => {
     if (!userId) return 'Système';
@@ -1154,6 +1158,7 @@ function MTServicePoints() {
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_service_points', 'mt_service_point_services', 'mt_services', 'mt_accounts'], load);
 
   const save = async () => {
     if (!tenant || !form.name.trim()) return;
@@ -1304,6 +1309,7 @@ function MTServices() {
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_services', 'mt_commission_tiers', 'mt_accounts'], load);
 
   const uploadLogo = async (serviceId: string): Promise<string | null> => {
     if (!logoFile) return null;
@@ -1530,6 +1536,7 @@ function MTOperations() {
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_operations', 'mt_accounts', 'mt_services', 'mt_service_points', 'mt_customers'], load);
 
   const ptAccounts = useMemo(() => selectedPoint ? accounts.filter(a => a.service_point_id === selectedPoint) : accounts, [accounts, selectedPoint]);
   const ptCash = useMemo(() => ptAccounts.filter(a => a.type === 'cash').reduce((s, a) => s + Number(a.balance), 0), [ptAccounts]);
@@ -2039,6 +2046,7 @@ function MTWholesalers() {
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_wholesalers', 'mt_wholesaler_services', 'mt_services'], load);
 
   const save = async () => {
     if (!tenant || !form.name.trim()) return;
@@ -2225,6 +2233,7 @@ function MTWholesalerOperations() {
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_operations', 'mt_wholesalers', 'mt_accounts', 'mt_service_points', 'mt_services'], load);
 
   const getBal = useCallback((spId: string | null, svcId: string | null, type: string): number => {
     return accounts
@@ -2632,6 +2641,8 @@ function MTBalances() {
   const [selectedPointId, setSelectedPointId] = useState<string>('');
   const [dateRange, setDateRange] = useState<string>('today');
 
+  const realtimeTick = useRealtimeTick(['mt_accounts', 'mt_operations', 'mt_closures', 'mt_service_points', 'mt_services', 'mt_service_point_services', 'mt_init_balances', 'mt_reconciliations']);
+
   useEffect(() => {
     if (!tenant) return;
     (async () => {
@@ -2662,7 +2673,7 @@ function MTBalances() {
       if (p && p.length === 1 && !selectedPointId) setSelectedPointId(p[0].id);
       setLoading(false);
     })();
-  }, [tenant, dateRange]);
+  }, [tenant, dateRange, realtimeTick]);
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
@@ -3090,6 +3101,7 @@ function MTClosures() {
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_closures', 'mt_accounts', 'mt_service_points', 'mt_operations', 'mt_reconciliations'], load);
 
   const loadTheoretical = async (pointId: string) => {
     if (!tenant || !pointId) return;
@@ -3828,6 +3840,7 @@ function MTExpenses() {
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_expenses', 'mt_expense_categories', 'mt_accounts', 'mt_service_points'], load);
 
   const filtered = useMemo(() => {
     let out = expenses;
@@ -4102,6 +4115,7 @@ function MTCustomers() {
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['mt_customers', 'mt_customer_ledger', 'mt_operations'], load);
 
   const aggregates = useMemo(() => {
     const map = new Map<string, CustomerAgg>();

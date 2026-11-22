@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowLeftRight, BarChart3, HandCoins, Loader2, Lock, LogOut, ReceiptText, RefreshCw, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -60,6 +61,8 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
   }, []);
 
   useEffect(() => { loadSessions(scope); }, [scope, loadSessions]);
+  useRealtimeRefresh(['cash_sessions', 'cash_registers', 'cash_supervision_requests', 'cash_control_lines', 'cash_regularizations'],
+    () => loadSessions(scope));
 
   const selected = sessions.find(s => s.id === selectedId) || null;
   const isOpen = selected?.status === 'open';

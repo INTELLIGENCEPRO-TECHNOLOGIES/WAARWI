@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Filter, Globe, Phone, MessageCircle, Printer, X, Clock, CheckCircle2,
@@ -47,7 +48,8 @@ const STATUS_FLOW: OrderStatus[] = ['nouvelle', 'confirmee', 'en_preparation', '
 const STATUS_ORDER: OrderStatus[] = ['nouvelle', 'confirmee', 'en_preparation', 'prete', 'livree', 'annulee'];
 
 export function OnlineOrders() {
-  const { tenant, dataTick, currentSite } = useApp();
+  const { tenant, currentSite } = useApp();
+  const dataTick = useRealtimeTick(['online_orders', 'online_order_items', 'online_order_status_history']);
   const storeId = currentSite ? (currentSite.is_warehouse ? currentSite.parent_site_id || null : currentSite.id) : null;
   const { can } = usePermissions();
   const { success, error } = useToast();
@@ -122,14 +124,6 @@ export function OnlineOrders() {
     raf = requestAnimationFrame(tryScroll);
     return () => cancelAnimationFrame(raf);
   }, [highlightId, orders, loading]);
-
-  useEffect(() => {
-    if (!tenant) return;
-    const chan = supabase.channel(`online_orders_${tenant.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'online_orders', filter: `tenant_id=eq.${tenant.id}` }, () => load(true))
-      .subscribe();
-    return () => { supabase.removeChannel(chan); };
-  }, [tenant, load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

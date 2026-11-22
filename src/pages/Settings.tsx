@@ -1,3 +1,5 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight, Monitor } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
@@ -151,7 +153,18 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (tenant) setForm({ ...tenant }); }, [tenant]);
+  const previousTenant = useRef<typeof tenant>(null);
+  useEffect(() => {
+    if (!tenant) return;
+    const before = previousTenant.current;
+    previousTenant.current = tenant;
+    setForm((draft: Record<string, unknown>) => {
+      if (!before || before.id !== tenant.id) return { ...tenant };
+      const saved = before as unknown as Record<string, unknown>;
+      const edits = Object.entries(draft).filter(([key, value]) => value !== saved[key]);
+      return { ...tenant, ...Object.fromEntries(edits) };
+    });
+  }, [tenant]);
 
   const uploadLogo = async (file: File) => {
     if (!tenant) return;
@@ -295,6 +308,7 @@ function BoutiqueTab() {
   const { tenant, refresh } = useApp();
   const { success, error } = useToast();
   const [settings, setSettings] = useState<any>(null);
+  const savedSettings = useRef<Record<string, unknown> | null>(null);
   const [slug, setSlug] = useState('');
   const [editingSlug, setEditingSlug] = useState(false);
   const [slugInput, setSlugInput] = useState('');
@@ -314,16 +328,16 @@ function BoutiqueTab() {
     return msg;
   };
 
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!tenant) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     let [{ data: s }, { data: t }, { data: st }] = await Promise.all([
       supabase.from('shop_settings').select('*').eq('tenant_id', tenant.id).maybeSingle(),
       supabase.from('tenants').select('public_slug').eq('id', tenant.id).maybeSingle(),
       supabase.from('sites').select('id,name').eq('tenant_id', tenant.id).eq('is_warehouse', false).eq('is_active', true).order('name'),
     ]);
     setShopSites(st || []);
-    if (!s) {
+    if (!s && !silent) {
       const { data: created } = await supabase
         .from('shop_settings')
         .insert({ tenant_id: tenant.id, shop_name: tenant.name || '' })
@@ -331,12 +345,19 @@ function BoutiqueTab() {
         .maybeSingle();
       s = created;
     }
-    setSettings(s || null);
+    const before = savedSettings.current;
+    savedSettings.current = s || null;
+    setSettings((draft: Record<string, unknown> | null) => {
+      if (!silent || !before || !draft || !s) return s || null;
+      const edits = Object.entries(draft).filter(([key, value]) => value !== before[key]);
+      return { ...s, ...Object.fromEntries(edits) };
+    });
     setSlug(t?.public_slug || '');
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [tenant?.id]);
+  useRealtimeRefresh(['shop_settings', 'sites', 'tenants'], () => load(true), !saving);
 
   const saveSettings = async () => {
     if (!tenant || !settings) return;
@@ -562,6 +583,7 @@ function SitesTab() {
     }
   };
   useEffect(() => { load(); }, [tenant?.id]);
+  useRealtimeRefresh(['sites'], load);
 
   const stores = list.filter(s => !s.is_warehouse);
   const depots = list.filter(s => s.is_warehouse);
@@ -1027,6 +1049,7 @@ function PaymentsTab() {
     setList(data || []);
   };
   useEffect(() => { load(); }, [tenant?.id]);
+  useRealtimeRefresh(['payment_methods'], load);
 
   const toggleActive = async (m: any) => {
     await supabase.from('payment_methods').update({ is_active: !m.is_active }).eq('id', m.id);
@@ -1111,6 +1134,7 @@ function CategoriesTab() {
     setList(data || []);
   };
   useEffect(() => { load(); }, [tenant?.id]);
+  useRealtimeRefresh(['part_categories', 'categories', 'sites'], load);
 
   const roots = list.filter(c => !c.parent_id);
   const children = (parentId: string) => list.filter(c => c.parent_id === parentId);
@@ -1256,6 +1280,7 @@ function BrandsTab() {
     if (!selectedBrand && b?.length) setSelectedBrand(b[0].id);
   };
   useEffect(() => { load(); }, [tenant?.id]);
+  useRealtimeRefresh(['vehicle_brands', 'vehicle_models'], load);
 
   const openBrandModal = (brand?: any) => {
     setEditingBrand(brand || null);
@@ -1452,6 +1477,7 @@ function AccountingTab() {
     setList(data || []);
   };
   useEffect(() => { load(); }, [tenant?.id]);
+  useRealtimeRefresh(['accounts', 'accounting_accounts', 'accounting_account_mappings'], load);
 
   const save = async () => {
     if (!tenant || !form.code || !form.name) { error('Code et intitulé obligatoires'); return; }
@@ -1589,6 +1615,7 @@ function UsersTab() {
     setLoading(false);
   };
   useEffect(() => { if (tenant) load(); }, [tenant?.id]);
+  useRealtimeRefresh(['profiles', 'cash_register_assignments'], load);
 
   const save = async () => {
     if (!form.email) { error('Email requis'); return; }
@@ -2215,6 +2242,7 @@ function PricingTiersTab() {
   };
 
   useEffect(() => { load(); }, [tenant?.id]);
+  useRealtimeRefresh(['pricing_tier_definitions', 'article_pricing_tiers'], load);
 
   const addTier = async () => {
     if (!tenant || !newName.trim()) return;
@@ -2320,6 +2348,7 @@ function PricingTiersTab() {
 function SubscriptionTab({ initialReceipts }: { initialReceipts: boolean }) {
   const { tenant } = useApp();
   const canViewHistory = useCanPaySubscription();
+  const subscriptionTick = useRealtimeTick(['plans', 'tenant_subscriptions', 'tenant_subscription_payments']);
   const [loading, setLoading] = useState(true);
   const [limits, setLimits] = useState<any>(null);
   const [usage, setUsage] = useState<any>(null);
@@ -2339,7 +2368,7 @@ function SubscriptionTab({ initialReceipts }: { initialReceipts: boolean }) {
       setPlan(planData);
       setLoading(false);
     })();
-  }, [tenant]);
+  }, [tenant, subscriptionTick]);
 
   if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
   if (!tenant) return null;

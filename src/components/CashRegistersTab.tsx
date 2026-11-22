@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Plus, Search, X, Users, CreditCard as Edit2, Info, Monitor, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -91,6 +92,7 @@ export function CashRegistersTab() {
   }, [siteId, canEditAssignments]);
 
   useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh(['cash_registers', 'cash_register_assignments', 'cash_register_settings', 'sites', 'profiles'], load);
 
   const changeSite = (id: string) => {
     if (id === siteId) return;

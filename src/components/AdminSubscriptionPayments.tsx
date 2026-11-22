@@ -1,3 +1,4 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, RefreshCw, Search } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
@@ -47,6 +48,7 @@ export function AdminSubscriptionPayments() {
   const [through, setThrough] = useState('');
   const [page, setPage] = useState(0);
   const [reload, setReload] = useState(0);
+  const paymentTick = useRealtimeTick(['tenant_subscription_payments', 'tenants']);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const { success, error } = useToast();
@@ -68,7 +70,7 @@ export function AdminSubscriptionPayments() {
       }
     }, search ? 250 : 0);
     return () => { current = false; window.clearTimeout(timer); };
-  }, [search, state, environment, page, from, through, reload]);
+  }, [search, state, environment, page, from, through, reload, paymentTick]);
 
   const selected = result?.payments.find(payment => payment.id === selectedId);
   const total = result?.total ?? 0;

@@ -381,6 +381,46 @@ function Inner() {
     }
   }, [loading, user, profile, tenant, isSuperAdmin, route, enabled.join(','), can, permsLoading]);
 
+  const approvalStatus = tenant?.approval_status;
+  const tenantPending = tenant && !isSuperAdmin && approvalStatus && approvalStatus !== 'approved';
+  const tenantSuspended = tenant && !isSuperAdmin && ((tenant as any)?.is_active === false || tenant.status === 'suspended');
+  const registeredHere = !!tenant && tenant.id === registeredTenantId;
+  const registrationPayment = canPaySubscription && (registeredHere || approvalStatus === 'pending');
+  const approvalKey = tenant && user && !isSuperAdmin ? `${user.id}:${tenant.id}` : null;
+  const [waitingForApproval, setWaitingForApproval] = useState(() => {
+    try { return sessionStorage.getItem('waarwi:waiting-for-approval'); } catch { return null; }
+  });
+
+  useEffect(() => {
+    if (!approvalKey || !tenantPending) return;
+    setWaitingForApproval(approvalKey);
+    try { sessionStorage.setItem('waarwi:waiting-for-approval', approvalKey); } catch { /* storage unavailable */ }
+  }, [approvalKey, !!tenantPending]);
+
+  const registering = registrationMode === 'open';
+  const hasDraft = !tenant && registrationMode === 'default' && !!loadRegistrationDraft(user?.email);
+  const justApproved = approvalStatus === 'approved' && !tenantSuspended && approvalKey
+    && (waitingForApproval === approvalKey || registeredHere);
+
+  const closeRegistration = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('mode');
+    url.searchParams.delete('plan');
+    url.searchParams.delete('subscription_payment');
+    window.history.replaceState(window.history.state, '', url);
+    try { sessionStorage.removeItem('waarwi:registration-tenant'); } catch { /* storage unavailable */ }
+    setRegisteredTenantId(null);
+    setRegistrationMode('closed');
+    setPaymentReturn(null);
+  };
+
+  const enterApprovedSpace = () => {
+    setWaitingForApproval(null);
+    try { sessionStorage.removeItem('waarwi:waiting-for-approval'); } catch { /* storage unavailable */ }
+    closeRegistration();
+    setRoute('dashboard');
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center" style={{ background: 'var(--w-bg)' }}>
@@ -389,28 +429,10 @@ function Inner() {
     );
   }
 
-  const approvalStatus = tenant?.approval_status;
-  const tenantPending = tenant && !isSuperAdmin && approvalStatus && approvalStatus !== 'approved';
-  const tenantSuspended = tenant && !isSuperAdmin && ((tenant as any)?.is_active === false || tenant.status === 'suspended');
-  const registeredHere = !!tenant && tenant.id === registeredTenantId;
-  const registrationPayment = canPaySubscription && (registeredHere || approvalStatus === 'pending');
-
-  const registering = registrationMode === 'open';
-  const hasDraft = !tenant && registrationMode === 'default' && !!loadRegistrationDraft(user?.email);
+  if (justApproved && !paymentReturn) return <PendingApproval onEnter={enterApprovedSpace} />;
 
   if ((!isSuperAdmin && !tenant && (registering || hasDraft)) || ((registering || paymentReturn || registeredHere) && registrationPayment)) {
-    const closeRegistration = () => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('mode');
-      url.searchParams.delete('plan');
-      url.searchParams.delete('subscription_payment');
-      window.history.replaceState(window.history.state, '', url);
-      try { sessionStorage.removeItem('waarwi:registration-tenant'); } catch { /* storage unavailable */ }
-      setRegisteredTenantId(null);
-      setRegistrationMode('closed');
-      setPaymentReturn(null);
-    };
-    return <Registration onExit={closeRegistration} onRegistered={onRegistered}
+    return <Registration onExit={justApproved ? enterApprovedSpace : closeRegistration} onRegistered={onRegistered}
       paymentId={paymentReturn || undefined} resumePayment={registrationPayment} />;
   }
 

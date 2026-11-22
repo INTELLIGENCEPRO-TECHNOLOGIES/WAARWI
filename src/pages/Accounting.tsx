@@ -1,3 +1,5 @@
+import { useRealtimeTick } from '../lib/useRealtimeData';
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X, Check, Trash2, Download } from 'lucide-react';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
@@ -65,6 +67,7 @@ function PlanTab() {
     setList(data || []);
   };
   useEffect(() => { load(); }, [tenant?.id]);
+  useRealtimeRefresh(['accounts', 'accounting_accounts', 'accounting_account_mappings'], load);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -182,9 +185,9 @@ function JournalsTab() {
     { account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
   ]);
 
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!tenant) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     let q = supabase.from('journal_entries').select('*').eq('tenant_id', tenant.id).order('entry_date', { ascending: false }).limit(200);
     if (journalType) q = q.eq('journal_type', journalType);
     const { data } = await q;
@@ -192,6 +195,7 @@ function JournalsTab() {
     setLoading(false);
   };
   useEffect(() => { load(); }, [tenant?.id, journalType]);
+  useRealtimeRefresh(['journal_entries', 'journal_lines'], () => load(true));
   useEffect(() => {
     if (!tenant) return;
     supabase.from('accounts').select('code, name').eq('tenant_id', tenant.id).order('code').then(({ data }) => setAccounts(data || []));
@@ -631,9 +635,9 @@ function BalanceTab() {
   const [bulkAchatBusy, setBulkAchatBusy] = useState(false);
   const [bulkPayFournBusy, setBulkPayFournBusy] = useState(false);
 
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!tenant) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const now = new Date();
     let dateFrom: string | null = null;
     if (period === 'month') dateFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -650,6 +654,7 @@ function BalanceTab() {
   };
 
   useEffect(() => { load(); }, [tenant?.id, period]);
+  useRealtimeRefresh(['journal_entries', 'journal_lines', 'accounts'], () => load(true));
 
   const totalDebit = data.reduce((s: number, r: any) => s + Number(r.total_debit), 0);
   const totalCredit = data.reduce((s: number, r: any) => s + Number(r.total_credit), 0);
@@ -795,9 +800,9 @@ function GrandLivreTab() {
     supabase.from('accounts').select('code, name').eq('tenant_id', tenant.id).order('code').then(({ data }) => setAccounts(data || []));
   }, [tenant?.id]);
 
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!tenant) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const now = new Date();
     let dateFrom: string | null = null;
     if (period === 'month') dateFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -815,6 +820,7 @@ function GrandLivreTab() {
   };
 
   useEffect(() => { load(); }, [tenant?.id, period, accountFilter]);
+  useRealtimeRefresh(['journal_entries', 'journal_lines', 'accounts'], () => load(true));
 
   const groupedByAccount = useMemo(() => {
     const map: Record<string, { code: string; name: string; lines: any[]; totalDebit: number; totalCredit: number }> = {};
@@ -917,6 +923,8 @@ function TiersTab() {
   const [extrait, setExtrait] = useState<any[]>([]);
   const [extraitLoading, setExtraitLoading] = useState(false);
 
+  const realtimeTick = useRealtimeTick(['journal_entries', 'journal_lines', 'customers', 'suppliers']);
+
   useEffect(() => {
     if (!tenant) return;
     setLoading(true);
@@ -926,7 +934,7 @@ function TiersTab() {
         else setTiers(data || []);
         setLoading(false);
       });
-  }, [tenant, type]);
+  }, [tenant, type, realtimeTick]);
 
   function loadExtrait(account: any) {
     setSelected(account);

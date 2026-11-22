@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useState } from 'react';
 import { Loader2, Shield, Check, X, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -52,6 +53,7 @@ export function PermissionsTab() {
   };
 
   useEffect(() => { load(); }, [profile?.tenant_id]);
+  useRealtimeRefresh(['role_permissions'], load);
 
   const toggle = (role: string, key: PermissionKey) => {
     setData(prev => ({
