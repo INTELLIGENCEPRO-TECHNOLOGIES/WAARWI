@@ -585,7 +585,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           ) : (
             <button
               onClick={() => { setSearchExpanded(true); setTimeout(() => navSearchRef.current?.focus(), 10); }}
-              className={`clay-action flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
+              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
               title={t('nav.search')}
             >
               <Search className="w-4 h-4" />
@@ -629,7 +629,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
               onClick={() => toggleSection(group.titleKey)}
               aria-expanded={sectionOpen}
               aria-controls={sectionId}
-              className={`clay-action w-full flex items-center gap-1.5 px-3 mb-1 py-1 rounded text-[11px] font-semibold tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-0 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)] focus-visible:ring-neutral-400`}
+              className={`w-full flex items-center gap-1.5 px-3 mb-1 py-1 rounded text-[11px] font-semibold tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-0 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)] focus-visible:ring-neutral-400`}
             >
               {sectionOpen
                 ? <ChevronDown className="w-4 h-4 flex-shrink-0" />
@@ -852,13 +852,13 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           >
             {navList}
             <div className={`p-3 border-t space-y-2 border-[var(--w-separator-l)]`}>
-              <button onClick={signOut} className={`clay-action w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarVisualCollapsed ? 'justify-center' : ''} text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)]`}>
+              <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarVisualCollapsed ? 'justify-center' : ''} text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)]`}>
                 <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarVisualCollapsed && 'Déconnexion'}
               </button>
               <div className={`flex items-center ${sidebarVisualCollapsed ? 'flex-col gap-1' : 'gap-1'}`}>
                 <button
                   onClick={() => { setSidebarCollapsed(v => !v); if (isPOS) setSidebarManualOverride(true); }}
-                  className={`clay-action flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
+                  className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
                   title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
                 >
                   {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
@@ -953,7 +953,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     ) : (
                       <button
                         onClick={() => { setSearchExpanded(true); setTimeout(() => navSearchRef.current?.focus(), 10); }}
-                        className={`clay-action flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
+                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
                         title={t('nav.search')}
                       >
                         <Search className="w-4 h-4" />
@@ -993,7 +993,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                       onClick={() => toggleSection(group.titleKey)}
                       aria-expanded={sectionOpen}
                       aria-controls={sectionId}
-                      className={`clay-action w-full flex items-center gap-1.5 px-2.5 mb-0.5 py-1 rounded text-[9px] font-semibold tracking-widest uppercase transition-colors focus:outline-none focus-visible:ring-1 text-[var(--w-text-muted)] focus-visible:ring-neutral-400`}
+                      className={`w-full flex items-center gap-1.5 px-2.5 mb-0.5 py-1 rounded text-[9px] font-semibold tracking-widest uppercase transition-colors focus:outline-none focus-visible:ring-1 text-[var(--w-text-muted)] focus-visible:ring-neutral-400`}
                     >
                       {sectionOpen
                         ? <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1080,7 +1080,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     </div>
                   </div>
                 )}
-                <button onClick={signOut} className="clay-action w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium">
+                <button onClick={signOut} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-red-600 hover:bg-red-50">
                   <LogOut className="w-4 h-4" />
                   <span>Déconnexion</span>
                 </button>

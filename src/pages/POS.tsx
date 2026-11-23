@@ -2208,7 +2208,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       )}
       {canSupervise && (
         <button type="button" onClick={() => setSupervising(true)} className="w-full mt-2 inline-flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-neutral-700 hover:text-black hover:underline underline-offset-4 transition-colors">
-          <Eye className="w-3.5 h-3.5" />Superviser une caisse
+          <Eye className="w-3.5 h-3.5" />Supervision
         </button>
       )}
     </>
@@ -2603,10 +2603,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg p-1 space-y-0.5 animate-fade-in">
                   {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item clay-action"><BarChart2 className="w-4 h-4" />Stats</button>}
                   <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item clay-action"><Wallet className="w-4 h-4" />Encaisser un client</button>
-                  {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
+                  {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item clay-action relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
                   <div className="h-px bg-[var(--w-separator)] my-1" />
                   <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item clay-action"><LogOut className="w-4 h-4" />Quitter</button>
-                  {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item clay-action"><Eye className="w-4 h-4" />Superviser une caisse</button>}
+                  {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item clay-action"><Eye className="w-4 h-4" />Supervision</button>}
                   {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item clay-action"><Lock className="w-4 h-4" />Clôturer</button>}
                 </div>
               </>
@@ -2717,10 +2717,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <button onClick={() => { setMobileActionsOpen(false); openCustomerPayment(); }} className="pos-sheet-item clay-action"><Wallet className="w-5 h-5" />Encaisser un client</button>
               {can('pos_view_session_stats') && <button onClick={() => { setMobileActionsOpen(false); openStats(); }} className="pos-sheet-item clay-action"><BarChart2 className="w-5 h-5" />Stats</button>}
               <button onClick={() => { setMobileActionsOpen(false); holdCart(); }} className="pos-sheet-item clay-action"><Pause className="w-5 h-5" />Pause</button>
-              {hasModule('online_orders') && <button onClick={() => { setMobileActionsOpen(false); openWebOrders(); }} className="pos-sheet-item relative"><Globe className="w-5 h-5" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
+              {hasModule('online_orders') && <button onClick={() => { setMobileActionsOpen(false); openWebOrders(); }} className="pos-sheet-item clay-action relative"><Globe className="w-5 h-5" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
               <div className="h-px bg-[var(--w-separator)] my-1" />
               <button onClick={() => { setMobileActionsOpen(false); leaveSession(); }} className="pos-sheet-item clay-action"><LogOut className="w-5 h-5" />Quitter</button>
-              {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setMobileActionsOpen(false); setSupervising(true); }} className="pos-sheet-item clay-action"><Eye className="w-5 h-5" />Superviser une caisse</button>}
+              {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setMobileActionsOpen(false); setSupervising(true); }} className="pos-sheet-item clay-action"><Eye className="w-5 h-5" />Supervision</button>}
               {can('pos_close_session') && <button onClick={() => { setMobileActionsOpen(false); openCloseWorkflow(); }} className="pos-sheet-item clay-action"><Lock className="w-5 h-5" />Clôturer</button>}
             </div>
           </div>
