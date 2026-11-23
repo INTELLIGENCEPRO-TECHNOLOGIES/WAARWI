@@ -2553,18 +2553,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             );
           })()}
           <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={() => setCategoryPickerOpen(true)} className={`chip ${categoryId ? 'chip-active' : ''}`} title="Catégorie">
+          <button onClick={() => setCategoryPickerOpen(true)} className={`chip pos-clay-action ${categoryId ? 'pos-clay-selected' : ''}`} title="Catégorie">
             <Tag className="w-3.5 h-3.5" />
             <span className="hidden xl:inline max-w-[100px] truncate">{categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Cat.') : 'Catégorie'}</span>
             {categoryId && <button onClick={e => { e.stopPropagation(); setCategoryId(''); }} className="ml-0.5 hover:text-red-500"><X className="w-3 h-3" /></button>}
           </button>
           {/* Top / Alpha */}
-          <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
-            {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5 text-amber-500" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
+          <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip pos-clay-action" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
+            {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
             <span className="hidden xl:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
           </button>
           {/* Grid / List */}
-          <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
+          <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip pos-clay-action" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
             {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
             <span className="hidden xl:inline">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
           </button>
@@ -2574,10 +2574,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             </button>
           )}
           <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={openTickets} className="chip" data-label="Tickets"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
-          {can('pos_returns') && <button onClick={openReturn} className="chip" data-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
-          {can('pos_cash_movement') && <button onClick={openMovement} className="chip" data-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouv.</span></button>}
-          <button onClick={holdCart} className="chip" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
+          <button onClick={openTickets} className="chip pos-clay-action" data-label="Tickets"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
+          {can('pos_returns') && <button onClick={openReturn} className="chip pos-clay-action" data-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
+          {can('pos_cash_movement') && <button onClick={openMovement} className="chip pos-clay-action" data-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouv.</span></button>}
+          <button onClick={holdCart} className="chip pos-clay-action" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
           {/* Session popover button */}
           <div className="relative">
             {(() => {
@@ -2631,7 +2631,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </button>
               )}
             </div>
-            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 rounded-md transition-colors ${categoryId ? 'text-brand-700 bg-brand-50' : 'text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]'}`} title="Catégorie">
+            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 pos-clay-action ${categoryId ? 'pos-clay-selected' : ''}`} title="Catégorie">
               <Tag className="w-4.5 h-4.5" />
             </button>
             <button onClick={() => setMobileActionsOpen(true)} className="shrink-0 p-2 rounded-md text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] transition-colors relative" title="Actions">
@@ -2685,11 +2685,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 {categories.find(c => c.id === categoryId)?.name} <X className="w-2.5 h-2.5" />
               </button>
             )}
-            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
-              {sortMode === 'top' ? <TrendingUp className="w-3 h-3 text-amber-500" /> : <ArrowDownAZ className="w-3 h-3" />}
+            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold pos-clay-action">
+              {sortMode === 'top' ? <TrendingUp className="w-3 h-3" /> : <ArrowDownAZ className="w-3 h-3" />}
               {sortMode === 'top' ? 'Top' : 'A→Z'}
             </button>
-            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
+            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold pos-clay-action">
               {articleView === 'grid' ? <List className="w-3 h-3" /> : <LayoutGrid className="w-3 h-3" />}
               {articleView === 'grid' ? 'Liste' : 'Grille'}
             </button>
@@ -2710,12 +2710,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="absolute bottom-0 inset-x-0 bg-[var(--w-surface)] rounded-t-2xl shadow-lg animate-slide-up" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="w-10 h-1 rounded-full bg-[var(--w-text-disabled)] mx-auto mt-2 mb-3" />
             <div className="px-4 pb-4 space-y-0.5">
-              <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item"><List className="w-5 h-5" />Tickets</button>
-              {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item"><RotateCcw className="w-5 h-5" />Retour</button>}
-              {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
+              <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item pos-clay-action"><List className="w-5 h-5" />Tickets</button>
+              {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item pos-clay-action"><RotateCcw className="w-5 h-5" />Retour</button>}
+              {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item pos-clay-action"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
               <button onClick={() => { setMobileActionsOpen(false); openCustomerPayment(); }} className="pos-sheet-item"><Wallet className="w-5 h-5" />Encaisser un client</button>
               {can('pos_view_session_stats') && <button onClick={() => { setMobileActionsOpen(false); openStats(); }} className="pos-sheet-item"><BarChart2 className="w-5 h-5" />Stats</button>}
-              <button onClick={() => { setMobileActionsOpen(false); holdCart(); }} className="pos-sheet-item"><Pause className="w-5 h-5" />Pause</button>
+              <button onClick={() => { setMobileActionsOpen(false); holdCart(); }} className="pos-sheet-item pos-clay-action"><Pause className="w-5 h-5" />Pause</button>
               {hasModule('online_orders') && <button onClick={() => { setMobileActionsOpen(false); openWebOrders(); }} className="pos-sheet-item relative"><Globe className="w-5 h-5" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
               <div className="h-px bg-[var(--w-separator)] my-1" />
               <button onClick={() => { setMobileActionsOpen(false); leaveSession(); }} className="pos-sheet-item"><LogOut className="w-5 h-5" />Quitter</button>
