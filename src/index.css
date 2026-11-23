@@ -606,20 +606,18 @@ p { line-height: 1.6; }
   .cart-line:hover { border-color: var(--w-text-disabled); }
 
   /* ── POS command bar ─────────────────────────────────── */
-  .pos-header-sep { border-bottom-color: #C4C4C4; }
-  [data-theme="dark"] .pos-header-sep { border-bottom-color: #444444; }
+  .pos-header-sep { border-bottom-color: var(--w-separator); }
   .pos-command-bar {
-    background: #F5F5F5;
-    border-bottom: 1px solid #DDDDDD;
+    background: var(--w-surface);
+    border-bottom: 1px solid var(--w-separator);
+    container: pos-toolbar / inline-size;
   }
-  [data-theme="dark"] .pos-command-bar {
-    background: #1C1C1C;
-    border-bottom-color: #333333;
+  .pos-toolbar-label { display: none; }
+  .pos-session-label { line-height: 14px; }
+  @container pos-toolbar (min-width: 74rem) {
+    .pos-toolbar-label { display: inline; }
+    .pos-session-label { line-height: 1rem; }
   }
-  .pos-command-bar .chip:hover,
-  .pos-command-bar .chip-active { background: rgb(0 0 0 / 0.07); }
-  [data-theme="dark"] .pos-command-bar .chip:hover,
-  [data-theme="dark"] .pos-command-bar .chip-active { background: rgb(255 255 255 / 0.08); }
   .pos-search {
     background: #FFFFFF;
     border: 1px solid #DDDDDD;

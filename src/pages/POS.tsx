@@ -990,7 +990,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [desktopDepotOpen, setDesktopDepotOpen] = useState(false);
   const [mobileDepotOpen, setMobileDepotOpen] = useState(false);
   const mobileDepotTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const [mobileDepotPos, setMobileDepotPos] = useState<{ top: number; left: number; flip: boolean }>({ top: 0, left: 0, flip: false });
+  const [mobileDepotPos, setMobileDepotPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
   const [stockSourceLoading, setStockSourceLoading] = useState(false);
   const stockSourceRequest = useRef<AbortController | null>(null);
   const productActionRequest = useRef<AbortController | null>(null);
@@ -1087,15 +1087,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       const el = mobileDepotTriggerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      const menuH = depotAllOptions.length * 34 + 8;
+      const spaceAbove = r.top - 8;
       const spaceBelow = window.innerHeight - r.bottom - 8;
-      const flip = spaceBelow < menuH && r.top > spaceBelow;
+      const flip = spaceBelow < Math.min(depotAllOptions.length * 52 + 8, 320) && spaceAbove > spaceBelow;
       setMobileDepotPos({
-        top: flip ? Math.max(8, r.top - menuH - 4) : r.bottom + 4,
+        top: flip ? undefined : r.bottom + 4,
+        bottom: flip ? window.innerHeight - r.top + 4 : undefined,
         left: Math.max(8, Math.min(r.left, window.innerWidth - 184)),
-        flip,
+        maxHeight: Math.min(320, Math.max(0, (flip ? spaceAbove : spaceBelow) - 4)),
       });
     };
+    reposition();
     window.addEventListener('scroll', reposition, true);
     window.addEventListener('resize', reposition);
     const vv = window.visualViewport;
@@ -1419,9 +1421,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   }, [tenantId, catalogSiteId, stockSiteId, searchTerm, categoryIds, sortMode, topScores, catalogKey, screen, catalogRevision]);
 
   const handleStockSourceChange = async (nextSiteId: string) => {
-    if (!tenantId || nextSiteId === stockSiteId) return;
     setDesktopDepotOpen(false);
     setMobileDepotOpen(false);
+    if (!tenantId || nextSiteId === stockSiteId) return;
     setStockSourceLoading(true);
     stockSourceRequest.current?.abort();
     productActionRequest.current?.abort();
@@ -2482,6 +2484,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       </div>
     </div>
   );
+  const stockSourceName = depotAllOptions.find(o => o.id === saleSourceSiteId)?.name || currentSite?.name || 'Stock';
+  const activeCategoryName = categories.find(c => c.id === categoryId)?.name;
 
   return (
     <>
@@ -2523,8 +2527,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* ── Unified command bar ─────────────────────────────────────── */}
       <div className="pos-command-bar shrink-0 relative z-20" {...clayTouchHandlers}>
         {/* ═══ DESKTOP ═══ */}
-        <div className="hidden lg:flex items-center h-[52px] px-2 gap-1">
-          <div className="pos-search flex items-center gap-2 flex-1 min-w-0 h-9 mx-1 px-2.5">
+        <div className="hidden lg:flex flex-wrap items-center min-h-[52px] px-2 py-2 gap-1">
+          <div className="pos-search flex items-center gap-2 flex-1 min-w-44 h-9 mx-1 px-2.5">
             <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
             <input
               value={search}
@@ -2540,56 +2544,60 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             )}
           </div>
           {/* Source depot */}
-          {(() => {
-            if (depotAllOptions.length <= 1) return null;
-            const selectedName = depotAllOptions.find(o => o.id === saleSourceSiteId)?.name || currentSite?.name || 'Stock';
-            return (
-              <div className="relative shrink-0">
-                <button onClick={() => setDesktopDepotOpen(v => !v)} className="chip" title="Dépot source" disabled={stockSourceLoading}>
-                  {stockSourceLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  <span className="whitespace-nowrap">Dépot source: {selectedName}</span><ChevronDown className={`w-3 h-3 transition-transform ${desktopDepotOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {desktopDepotOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setDesktopDepotOpen(false)} />
-                    <div className="absolute left-0 top-full mt-1 z-[9999] w-48 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
-                      {depotAllOptions.map(o => (
-                        <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
-                          {o.id === saleSourceSiteId && <Check className="w-4 h-4" />}{o.name}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })()}
+          {depotAllOptions.length > 1 && (
+            <div className="relative shrink-0">
+              <button onClick={() => setDesktopDepotOpen(v => !v)} className="chip max-w-40" title={stockSourceName} aria-label={`Dépôt source : ${stockSourceName}`} aria-expanded={desktopDepotOpen} disabled={stockSourceLoading}>
+                {stockSourceLoading && <Loader2 className="w-3 h-3 shrink-0 animate-spin" />}
+                <span className="min-w-0 truncate">Dépôt : {stockSourceName}</span>
+                <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${desktopDepotOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {desktopDepotOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setDesktopDepotOpen(false)} />
+                  <div className="absolute left-0 top-full mt-1 z-[9999] w-72 max-h-[min(320px,60vh)] overflow-y-auto rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
+                    {depotAllOptions.map(o => (
+                      <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-left ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
+                        {o.id === saleSourceSiteId && <Check className="w-4 h-4 shrink-0" />}
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{o.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={() => setCategoryPickerOpen(true)} className={`chip clay-action ${categoryId ? 'clay-selected' : ''}`} title="Catégorie">
-            <Tag className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline max-w-[100px] truncate">{categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Cat.') : 'Catégorie'}</span>
-            {categoryId && <button onClick={e => { e.stopPropagation(); setCategoryId(''); }} className="ml-0.5 hover:text-red-500"><X className="w-3 h-3" /></button>}
-          </button>
+          <div className="relative flex shrink-0 items-center">
+            <button onClick={() => setCategoryPickerOpen(true)} className={`chip clay-action ${categoryId ? 'pr-7' : ''} ${categoryId || categoryPickerOpen ? 'clay-selected' : ''}`} title={activeCategoryName || 'Catégorie'} aria-expanded={categoryPickerOpen}>
+              <Tag className="w-3.5 h-3.5" />
+              <span className="pos-toolbar-label max-w-[100px] truncate">{activeCategoryName || 'Catégorie'}</span>
+            </button>
+            {categoryId && (
+              <button type="button" onClick={() => setCategoryId('')} className="absolute right-0.5 flex h-6 w-6 items-center justify-center rounded text-[var(--w-text-sec)] hover:text-[var(--w-text)]" aria-label="Effacer le filtre de catégorie">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           {/* Top / Alpha */}
           <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip clay-action" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
             {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
-            <span className="hidden xl:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
+            <span className="pos-toolbar-label">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
           </button>
           {/* Grid / List */}
           <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip clay-action" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
             {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-            <span className="hidden xl:inline">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
+            <span className="pos-toolbar-label">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
           </button>
           {autoMode && (
             <button onClick={() => setVehiclePickerOpen(true)} className="chip" title="Par véhicule">
-              <Car className="w-3.5 h-3.5 text-brand-700" /><span className="hidden xl:inline">Véhicule</span>
+              <Car className="w-3.5 h-3.5 text-brand-700" /><span className="pos-toolbar-label">Véhicule</span>
             </button>
           )}
           <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={openTickets} className="chip clay-action" data-label="Tickets"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
-          {can('pos_returns') && <button onClick={openReturn} className="chip clay-action" data-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
-          {can('pos_cash_movement') && <button onClick={openMovement} className="chip clay-action" data-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouv.</span></button>}
-          <button onClick={holdCart} className="chip clay-action" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
+          <button onClick={openTickets} className="chip clay-action" data-label="Tickets" aria-label="Tickets"><List className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Tickets</span></button>
+          {can('pos_returns') && <button onClick={openReturn} className="chip clay-action" data-label="Retour" aria-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Retour</span></button>}
+          {can('pos_cash_movement') && <button onClick={openMovement} className="chip clay-action" data-label="Mouvement" aria-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Mouv.</span></button>}
+          <button onClick={holdCart} className="chip clay-action" data-label="Pause" aria-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Pause</span></button>
           {/* Session popover button */}
           <div className="relative">
             <button
@@ -2599,7 +2607,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               aria-label="Session"
               data-label={sessionPopOpen ? undefined : 'Session'}
             >
-              <span className="leading-[14px] xl:leading-4">Session</span>
+              <span className="pos-session-label">Session</span>
               <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
             </button>
             {sessionPopOpen && (
@@ -2638,7 +2646,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </button>
               )}
             </div>
-            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 clay-action ${categoryId ? 'clay-selected' : ''}`} title="Catégorie">
+            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 clay-action ${categoryId || categoryPickerOpen ? 'clay-selected' : ''}`} aria-expanded={categoryPickerOpen} title="Catégorie">
               <Tag className="w-4.5 h-4.5" />
             </button>
             <button onClick={() => setMobileActionsOpen(true)} className={`relative shrink-0 p-2 clay-action ${mobileActionsOpen ? 'clay-selected' : ''}`} aria-expanded={mobileActionsOpen} title="Actions">
@@ -2647,50 +2655,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             </button>
           </div>
           {/* Line 2: thin filter pills */}
-          <div className="flex items-center h-8 px-2 gap-1 border-t border-[var(--w-separator)] overflow-x-auto scrollbar-hide">
-            {(() => {
-              if (depotAllOptions.length <= 1) return null;
-              const selectedName = depotAllOptions.find(o => o.id === saleSourceSiteId)?.name || currentSite?.name || 'Stock';
-              return (
-                <div className="relative shrink-0">
-                  <button ref={mobileDepotTriggerRef} onClick={() => {
-                    const el = mobileDepotTriggerRef.current;
-                    if (el) {
-                      const r = el.getBoundingClientRect();
-                      const menuH = depotAllOptions.length * 34 + 8;
-                      const spaceBelow = window.innerHeight - r.bottom - 8;
-                      const flip = spaceBelow < menuH && r.top > spaceBelow;
-                      setMobileDepotPos({
-                        top: flip ? Math.max(8, r.top - menuH - 4) : r.bottom + 4,
-                        left: Math.max(8, Math.min(r.left, window.innerWidth - 184)),
-                        flip,
-                      });
-                    }
-                    setMobileDepotOpen(v => !v);
-                  }} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]" disabled={stockSourceLoading}>
-                    {stockSourceLoading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : null}
-                    <span className="whitespace-nowrap">Dépot source: {selectedName}</span><ChevronDown className={`w-2.5 h-2.5 transition-transform ${mobileDepotOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {mobileDepotOpen && ReactDOM.createPortal(
-                    <>
-                      <div className="fixed inset-0 z-[9998]" onClick={() => setMobileDepotOpen(false)} />
-                      <div className="fixed z-[9999] w-44 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in" style={{ top: mobileDepotPos.top, left: mobileDepotPos.left }}>
-                        {depotAllOptions.map(o => (
-                          <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-[11px] ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
-                            {o.id === saleSourceSiteId && <Check className="w-3.5 h-3.5" />}{o.name}
-                          </button>
-                        ))}
-                      </div>
-                    </>,
-                    document.body
-                  )}
-                </div>
-              );
-            })()}
-            {categoryId && (
-              <button onClick={() => setCategoryId('')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold">
-                {categories.find(c => c.id === categoryId)?.name} <X className="w-2.5 h-2.5" />
-              </button>
+          <div className="flex min-h-8 flex-wrap items-center gap-1 border-t border-[var(--w-separator)] px-2 py-1">
+            {depotAllOptions.length > 1 && (
+              <div className="relative shrink-0">
+                <button ref={mobileDepotTriggerRef} onClick={() => setMobileDepotOpen(v => !v)} className="inline-flex max-w-24 items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]" title={stockSourceName} aria-label={`Dépôt source : ${stockSourceName}`} aria-expanded={mobileDepotOpen} disabled={stockSourceLoading}>
+                  {stockSourceLoading && <Loader2 className="w-2.5 h-2.5 shrink-0 animate-spin" />}
+                  <span className="min-w-0 truncate">Dépôt : {stockSourceName}</span>
+                  <ChevronDown className={`w-2.5 h-2.5 shrink-0 transition-transform ${mobileDepotOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {mobileDepotOpen && mobileDepotPos && ReactDOM.createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setMobileDepotOpen(false)} />
+                    <div className="fixed z-[9999] w-44 overflow-y-auto rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in" style={mobileDepotPos}>
+                      {depotAllOptions.map(o => (
+                        <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-left text-[11px] ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
+                          {o.id === saleSourceSiteId && <Check className="w-3.5 h-3.5 shrink-0" />}
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{o.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>,
+                  document.body
+                )}
+              </div>
             )}
             <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold clay-action">
               {sortMode === 'top' ? <TrendingUp className="w-3 h-3" /> : <ArrowDownAZ className="w-3 h-3" />}
@@ -2703,6 +2690,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {autoMode && (
               <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
                 <Car className="w-3 h-3" />Véhicule
+              </button>
+            )}
+            {categoryId && (
+              <button onClick={() => setCategoryId('')} className="inline-flex max-w-[7.5rem] items-center gap-1 rounded-full bg-[var(--w-active)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--w-text)]" aria-label="Effacer le filtre de catégorie" title={activeCategoryName}>
+                <span className="min-w-0 truncate">{activeCategoryName || 'Catégorie'}</span><X className="w-2.5 h-2.5 shrink-0" />
               </button>
             )}
             <span className="text-[var(--w-text-disabled)] text-[10px] num shrink-0 ml-auto">{filtered.length} art.</span>
@@ -2857,7 +2849,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
 
       {/* Category picker modal */}
-      <CategoryPickerModal open={categoryPickerOpen} onClose={() => setCategoryPickerOpen(false)} categories={categories} onSelect={v => { setCategoryId(v); setCategoryPickerOpen(false); }} />
+      <CategoryPickerModal open={categoryPickerOpen} onClose={() => setCategoryPickerOpen(false)} categories={categories} selected={categoryId} onSelect={v => { setCategoryId(v); setCategoryPickerOpen(false); }} />
 
       {/* Vehicle article picker */}
       {autoMode && <VehicleArticlePicker
