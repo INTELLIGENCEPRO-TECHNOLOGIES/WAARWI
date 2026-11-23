@@ -9,6 +9,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, ArrowRightLeft, UserCheck,
   X, Monitor, Check, Activity,
 } from 'lucide-react';
+import { AddressBook, CashRegister } from './Icons';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
@@ -56,7 +57,7 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
   ]},
   { titleKey: 'nav.pos', items: [
-    { key: 'pos', labelKey: 'nav.pos', icon: ShoppingCart },
+    { key: 'pos', labelKey: 'nav.pos', icon: CashRegister },
     { key: 'sales', labelKey: 'nav.sales', icon: Calculator },
     { key: 'cash_history', labelKey: 'nav.cashHistory', icon: History },
     { key: 'coffre', labelKey: 'nav.coffre', icon: Lock },
@@ -71,7 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'online_orders', labelKey: 'nav.onlineOrders', icon: Globe },
     { key: 'warranties', labelKey: 'nav.warranties', icon: ShieldCheck },
     { key: 'representatives', labelKey: 'nav.representatives', icon: UserCheck },
-    { key: 'tiers', labelKey: 'nav.tiers', icon: Users },
+    { key: 'tiers', labelKey: 'nav.tiers', icon: AddressBook },
     { key: 'supplier_orders', labelKey: 'nav.supplierOrders', icon: Truck },
   ]},
   { titleKey: 'nav.accounting', items: [
@@ -162,8 +163,8 @@ const BREADCRUMB_MAP: Record<string, { group: string; labelKey: string }> = {
 
 const POS_MOBILE_TABS: { key: Route; labelKey: string; icon: any }[] = [
   { key: 'dashboard', labelKey: 'nav.home', icon: LayoutDashboard },
-  { key: 'pos', labelKey: 'nav.pos', icon: ShoppingCart },
-  { key: 'tiers', labelKey: 'nav.tiers', icon: Users },
+  { key: 'pos', labelKey: 'nav.pos', icon: CashRegister },
+  { key: 'tiers', labelKey: 'nav.tiers', icon: AddressBook },
   { key: 'settings', labelKey: 'nav.settings', icon: Settings },
 ];
 
