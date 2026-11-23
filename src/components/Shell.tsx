@@ -690,10 +690,12 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         </div>
         <div className="flex-1 flex items-center gap-3 px-5">
           <div className="flex-1" />
-          {shellSubInfo && (
-            <SubscriptionStatus info={shellSubInfo} onClick={() => onRoute('settings')} />
+          {(shellSubInfo || onOpenSubscription) && (
+            <div className="flex shrink-0 items-center gap-3">
+              {shellSubInfo && <SubscriptionStatus info={shellSubInfo} compact={isDashboard} onClick={() => onRoute('settings')} />}
+              {onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
+            </div>
           )}
-          {!isDashboard && onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
           {shellSubInfo && sites.length > 1 && !isDashboard && <div className="w-px h-5 bg-neutral-200 shrink-0" />}
           {/* Desktop site selector dropdown — hidden on dashboard (has its own) */}
           {sites.length > 1 && !isDashboard && (
@@ -1151,7 +1153,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           ) : (isDashboard && !dashMenuOpen) ? (
             <div className="flex-1 min-h-0 px-1 sm:px-2 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0 [--dashboard-toolbar-start:3.5rem]">{children}</div>
           ) : (
-            <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[72px] lg:pb-8">{children}</div>
+            <div className={`w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[72px] lg:pb-8 ${isDashboard ? 'dashboard-with-shell-header' : ''}`}>{children}</div>
           )}
         </main>
 

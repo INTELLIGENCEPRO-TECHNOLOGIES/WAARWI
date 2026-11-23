@@ -620,23 +620,20 @@ p { line-height: 1.6; }
   .dashboard-toolbar-title { grid-area: title; }
   .dashboard-toolbar-controls { grid-area: controls; }
   .dashboard-toolbar-profile { grid-area: profile; justify-self: end; }
-  .dashboard-toolbar-subscription { display: none; }
+  .dashboard-with-shell-header .dashboard-toolbar-subscription { display: none; }
   .dashboard-toolbar-site-name { max-width: 9rem; }
+  .dashboard-toolbar-user-name { max-width: 12rem; }
 
-  @container dashboard-layout (min-width: 86rem) {
-    .dashboard-toolbar-subscription { display: block; }
-  }
-
-  @container dashboard-layout (max-width: 74rem) {
-    .dashboard-toolbar {
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-areas: "title profile" "controls controls";
-    }
+  @container dashboard-layout (max-width: 78rem) {
+    .dashboard-toolbar { column-gap: 0.625rem; }
+    .dashboard-toolbar-quick-label { display: none; }
+    .dashboard-toolbar-site-name { max-width: 6rem; }
+    .dashboard-toolbar-user-name { max-width: 8rem; }
   }
 
   @container dashboard-layout (max-width: 56rem) {
-    .dashboard-toolbar-quick-label { display: none; }
-    .dashboard-toolbar-site-name { max-width: 7.5rem; }
+    .dashboard-toolbar-site-name { max-width: 5rem; }
+    .dashboard-toolbar-user-name { max-width: 7rem; }
   }
 
   @container dashboard-layout (min-width: 76rem) {

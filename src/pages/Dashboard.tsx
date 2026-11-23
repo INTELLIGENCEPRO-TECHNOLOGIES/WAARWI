@@ -1835,10 +1835,10 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
         {/* LEFT: title */}
         <h1 className="dashboard-toolbar-title text-[15px] font-bold text-neutral-900 tracking-tight">Tableau de bord</h1>
 
-        <div className="dashboard-toolbar-controls flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="dashboard-toolbar-controls flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {/* Période / Session — underline tabs, no card */}
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-3">
               <button
                 onClick={() => toggleViewMode('period')}
                 aria-pressed={viewMode === 'period'}
@@ -1863,15 +1863,17 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
 
             {/* Date selector — no card, inline */}
             {viewMode !== 'session' && (
-              <div className="relative">
+              <div className="relative min-w-0">
                 <button
                   onClick={() => setShowPeriodMenu(!showPeriodMenu)}
                   aria-expanded={showPeriodMenu}
-                  className="flex min-h-9 items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors"
+                  title={periodLabel}
+                  aria-label={periodLabel}
+                  className="flex max-w-full min-h-9 items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors"
                 >
-                  <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-                  <span className="font-medium">{periodLabel}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${showPeriodMenu ? 'rotate-180' : ''}`} />
+                  <Calendar className="w-3.5 h-3.5 shrink-0 text-neutral-400" />
+                  <span className="truncate font-medium">{period === 'today' ? "Aujourd’hui" : periodLabel}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-neutral-400 transition-transform ${showPeriodMenu ? 'rotate-180' : ''}`} />
                 </button>
                 {showPeriodMenu && (
                   <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-neutral-200 shadow-elevated z-50 py-1">
@@ -1894,7 +1896,7 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
               onClick={() => setFabOpen(true)}
               aria-label="Actions rapides"
               title="Actions rapides"
-              className="flex min-h-9 items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors active:scale-95"
+              className="flex min-h-9 shrink-0 items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors active:scale-95"
             >
               <Activity className="w-3.5 h-3.5 text-neutral-400" />
               <span className="dashboard-toolbar-quick-label font-medium">Actions rapides</span>
@@ -1902,14 +1904,13 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
           </div>
 
           {/* RIGHT group */}
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-            {/* Subscription badge — compact with expiry */}
-            {subInfo && (
-              <div className={onOpenSubscription ? 'dashboard-toolbar-subscription' : ''}>
-                <SubscriptionStatus info={subInfo} onClick={() => nav('settings', { target: 'subscription' })} />
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            {(subInfo || onOpenSubscription) && (
+              <div className="dashboard-toolbar-subscription flex items-center gap-2">
+                {subInfo && <SubscriptionStatus info={subInfo} compact onClick={() => nav('settings', { target: 'subscription' })} />}
+                {onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
               </div>
             )}
-            {onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
 
             {/* Site selector — inline, no card */}
             {hasMultiSites && (
@@ -1963,7 +1964,7 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
               {userName.charAt(0).toUpperCase()}
             </div>
             <div className="text-left leading-tight">
-              <div className="max-w-60 text-[12px] font-semibold text-neutral-900 [overflow-wrap:anywhere]">{userName}</div>
+              <div className="dashboard-toolbar-user-name truncate text-[12px] font-semibold text-neutral-900" title={userName}>{userName}</div>
               <div className="text-[9px] text-neutral-400 uppercase tracking-wider font-medium">{profile?.role}</div>
             </div>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-neutral-400" />

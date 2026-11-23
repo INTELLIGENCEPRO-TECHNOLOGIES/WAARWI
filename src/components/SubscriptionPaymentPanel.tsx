@@ -18,7 +18,7 @@ export function useCanPaySubscription() {
 
 export function SubscriptionPaymentButton({ onClick, iconOnly = false }: { onClick: () => void; iconOnly?: boolean }) {
   const { tenant } = useApp();
-  const label = tenant?.plan_expires_at ? 'Renouveler mon abonnement' : 'Payer mon abonnement';
+  const label = tenant?.plan_expires_at ? 'Se réabonner' : 'Payer mon abonnement';
 
   return (
     <button type="button" onClick={onClick} title={label} aria-label={label} aria-haspopup="dialog"

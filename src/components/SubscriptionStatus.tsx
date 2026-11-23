@@ -6,7 +6,7 @@ const STATUS_STYLE: Record<string, { label: string; color: string }> = {
   expired: { label: 'Expiré', color: 'text-red-600' },
 };
 
-export default function SubscriptionStatus({ info, onClick }: { info: SubInfo; onClick: () => void }) {
+export default function SubscriptionStatus({ info, onClick, compact = false }: { info: SubInfo; onClick: () => void; compact?: boolean }) {
   const style = STATUS_STYLE[info.status] || { label: 'En attente', color: 'text-amber-600' };
   const date = info.expiresAt
     ? new Date(info.expiresAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -18,12 +18,14 @@ export default function SubscriptionStatus({ info, onClick }: { info: SubInfo; o
 
   return (
     <button
+      type="button"
       onClick={onClick}
+      title={`Abonnement ${info.planName} · ${detail}`}
       className="flex items-center gap-2 text-xs whitespace-nowrap hover:opacity-70 transition-opacity"
     >
-      <span className="text-[11px] text-neutral-500">Votre abonnement</span>
-      <span className="font-semibold text-neutral-800 max-w-[120px] truncate">{info.planName}</span>
-      <span className={`font-bold ${style.color}`}>{detail}</span>
+      {!compact && <span className="text-[11px] text-neutral-500">Votre abonnement</span>}
+      <span className={`truncate font-semibold text-neutral-800 ${compact ? 'max-w-20' : 'max-w-[120px]'}`}>{info.planName}</span>
+      <span className={`font-bold ${style.color}`}>{compact && date && info.status !== 'pending_review' ? `${style.label} · ${date}` : detail}</span>
     </button>
   );
 }
