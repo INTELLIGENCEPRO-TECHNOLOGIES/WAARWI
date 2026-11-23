@@ -30,8 +30,9 @@ export type Route =
   | 'ipm' | 'warranties' | 'money_transfer' | 'representatives'
   | 'settings' | 'platform_admin' | 'reports';
 
-type NavItem = { key: Route; labelKey: string; icon: any; children?: { key: Route; labelKey: string; icon: any }[]; aliases?: string[] };
-type NavGroup = { titleKey: string; items: NavItem[] };
+type NavItem = { key: Route; labelKey: string; icon: any };
+type NavGroup = { titleKey: string; items: NavItem[]; compactIcon?: NavItem['icon'] };
+const ACCOUNTING_SECTION = 'nav.accounting';
 
 const NAV_ALIASES: Partial<Record<Route, string[]>> = {
   billing: ['devis', 'retour', 'retours', 'avoir', 'avoirs', 'facture', 'factures', 'quote', 'quotes', 'return', 'returns', 'credit', 'credits', 'invoice', 'invoices'],
@@ -49,7 +50,8 @@ const NAV_ALIASES: Partial<Record<Route, string[]>> = {
   reports: ['rapport', 'rapports', 'statistique', 'statistiques', 'report', 'statistics'],
   money_transfer: ['transfert', 'transfert d argent', 'money', 'transfer', 'western union', 'ria', 'moneygram'],
   ipm: ['ipm', 'bordereau', 'bordereaux'],
-  accounting: ['comptabilite', 'compte', 'comptes', 'journal', 'balance', 'grand livre', 'cloture'],
+  acc_plan: ['compte', 'comptes'],
+  acc_cloture: ['cloture'],
 };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -75,16 +77,14 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'tiers', labelKey: 'nav.tiers', icon: AddressBook },
     { key: 'supplier_orders', labelKey: 'nav.supplierOrders', icon: Truck },
   ]},
-  { titleKey: 'nav.accounting', items: [
-    { key: 'acc_plan', labelKey: 'nav.accounting', icon: BookOpen, children: [
-      { key: 'acc_plan', labelKey: 'nav.accountingPlan', icon: BookOpen },
-      { key: 'acc_journals', labelKey: 'nav.journals', icon: FileText },
-      { key: 'acc_balance', labelKey: 'nav.balance', icon: TrendingUp },
-      { key: 'acc_grandlivre', labelKey: 'nav.generalLedger', icon: BookOpen },
-      { key: 'acc_tiers', labelKey: 'nav.tiers', icon: Users },
-      { key: 'acc_search', labelKey: 'nav.journal', icon: Search },
-      { key: 'acc_cloture', labelKey: 'nav.closings', icon: Lock },
-    ]},
+  { titleKey: ACCOUNTING_SECTION, compactIcon: BookOpen, items: [
+    { key: 'acc_plan', labelKey: 'nav.accountingPlan', icon: BookOpen },
+    { key: 'acc_journals', labelKey: 'nav.journals', icon: FileText },
+    { key: 'acc_balance', labelKey: 'nav.balance', icon: TrendingUp },
+    { key: 'acc_grandlivre', labelKey: 'nav.generalLedger', icon: BookOpen },
+    { key: 'acc_tiers', labelKey: 'nav.tiers', icon: Users },
+    { key: 'acc_search', labelKey: 'nav.journal', icon: Search },
+    { key: 'acc_cloture', labelKey: 'nav.closings', icon: Lock },
   ]},
   { titleKey: 'nav.tools', items: [
     { key: 'money_transfer', labelKey: 'nav.moneyTransfer', icon: ArrowRightLeft },
@@ -216,18 +216,11 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
   const visibleNav = NAV_GROUPS
     .map(g => ({
       ...g,
-      items: g.items
-        .filter(i => routeVisible(i.key))
-        .map(i => (i as NavItem).children
-          ? { ...i, children: (i as NavItem).children!.filter(c => routeVisible(c.key)) }
-          : i
-        ),
+      items: g.items.filter(i => routeVisible(i.key)),
     }))
     .filter(g => g.items.length > 0);
   const visibleMobileTabs = (route === 'pos' ? POS_MOBILE_TABS : DEFAULT_MOBILE_TABS).filter(t => routeVisible(t.key));
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileAcctOpen, setMobileAcctOpen] = useState<Route | null>(null);
-  const [desktopAcctOpen, setDesktopAcctOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -332,14 +325,17 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
       setOpenSections(raw ? JSON.parse(raw) : {});
     } catch { setOpenSections({}); }
   }, [sectionStorageKey]);
-  const isSectionOpen = (titleKey: string) => openSections[titleKey] !== false;
-  const toggleSection = (titleKey: string) => {
+  const isSectionOpen = (titleKey: string) => openSections[titleKey] ?? (titleKey !== ACCOUNTING_SECTION);
+  const setSectionExpanded = useCallback((titleKey: string, expanded?: boolean) => {
     setOpenSections(prev => {
-      const next = { ...prev, [titleKey]: prev[titleKey] === false };
+      const current = prev[titleKey] ?? (titleKey !== ACCOUNTING_SECTION);
+      const nextOpen = expanded ?? !current;
+      if (nextOpen === current) return prev;
+      const next = { ...prev, [titleKey]: nextOpen };
       if (sectionStorageKey) { try { localStorage.setItem(sectionStorageKey, JSON.stringify(next)); } catch {} }
       return next;
     });
-  };
+  }, [sectionStorageKey]);
 
   const ordersTick = useRealtimeTick(['online_orders']);
   useEffect(() => {
@@ -398,10 +394,9 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
   const [dashMenuOpen, setDashMenuOpen] = useState(false);
   useEffect(() => { if (!isDashboard) setDashMenuOpen(false); }, [isDashboard]);
 
-  const accRoutes = ['acc_plan', 'acc_journals', 'acc_balance', 'acc_grandlivre', 'acc_tiers', 'acc_search', 'acc_cloture'];
   useEffect(() => {
-    if (accRoutes.includes(route)) { setDesktopAcctOpen(true); setMobileAcctOpen('acc_plan'); }
-  }, [route]);
+    if (ROUTE_MODULE[route] === 'accounting') setSectionExpanded(ACCOUNTING_SECTION, true);
+  }, [route, setSectionExpanded]);
 
   // Track page usage for dynamic nav ordering
   const [usageTick, setUsageTick] = useState(0);
@@ -413,21 +408,9 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
 
-  // Build a flat searchable list of all nav items (including children)
-  const allNavItems = useMemo(() => {
-    const items: { key: Route; labelKey: string; icon: any; group: string }[] = [];
-    for (const g of NAV_GROUPS) {
-      for (const item of g.items) {
-        items.push({ key: item.key, labelKey: item.labelKey, icon: item.icon, group: g.titleKey });
-        if ((item as NavItem).children) {
-          for (const child of (item as NavItem).children!) {
-            items.push({ key: child.key, labelKey: child.labelKey, icon: child.icon, group: g.titleKey });
-          }
-        }
-      }
-    }
-    return items;
-  }, []);
+  const allNavItems = useMemo(() => NAV_GROUPS.flatMap(group =>
+    group.items.map(item => ({ ...item, group: group.titleKey })),
+  ), []);
 
   const searchResults = useMemo(() => {
     if (!navSearch.trim()) return [];
@@ -436,7 +419,9 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
       if (!routeVisible(item.key)) return false;
       const label = t(item.labelKey).toLowerCase();
       const aliases = NAV_ALIASES[item.key] || [];
-      return label.includes(q) || item.key.toLowerCase().includes(q) || aliases.some(a => a.includes(q) || q.includes(a));
+      const matchesAccounting = item.group === ACCOUNTING_SECTION
+        && (q === t(ACCOUNTING_SECTION).toLowerCase() || q === 'comptabilite');
+      return matchesAccounting || label.includes(q) || item.key.toLowerCase().includes(q) || aliases.some(a => a.includes(q) || q.includes(a));
     }).slice(0, 8);
   }, [navSearch, usageTick, permsLoading]);
 
@@ -446,7 +431,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
     const usage = getUsageMap();
     return visibleNav.map(g => ({
       ...g,
-      items: [...g.items].sort((a, b) => {
+      items: g.titleKey === ACCOUNTING_SECTION ? g.items : [...g.items].sort((a, b) => {
         const aUsage = usage[a.key] || 0;
         const bUsage = usage[b.key] || 0;
         if (bUsage !== aUsage) return bUsage - aUsage;
@@ -618,22 +603,38 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         <div className={`px-3 py-4 text-center text-[13px] text-[var(--w-text-muted)]`}>{t('nav.noResults')}</div>
       )}
       {!navSearch.trim() && sortedNav.map(group => {
-        const sectionOpen = sidebarVisualCollapsed || isSectionOpen(group.titleKey);
+        const CompactIcon = group.compactIcon;
+        const sectionOpen = sidebarVisualCollapsed ? !CompactIcon : isSectionOpen(group.titleKey);
         const sectionId = `nav-section-${group.titleKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
         return (
         <div key={group.titleKey}>
-          {!sidebarVisualCollapsed && (
+          {(!sidebarVisualCollapsed || CompactIcon) && (
             <button
               type="button"
-              onClick={() => toggleSection(group.titleKey)}
+              onClick={() => {
+                if (sidebarVisualCollapsed) {
+                  setSidebarCollapsed(false);
+                  if (isPOS) setSidebarManualOverride(true);
+                  setSectionExpanded(group.titleKey, true);
+                } else {
+                  setSectionExpanded(group.titleKey);
+                }
+              }}
               aria-expanded={sectionOpen}
               aria-controls={sectionId}
-              className={`w-full flex items-center gap-1.5 px-3 mb-1 py-1 rounded text-[11px] font-semibold tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-0 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)] focus-visible:ring-neutral-400`}
+              title={sidebarVisualCollapsed ? t(group.titleKey) : undefined}
+              className={`flex w-full items-center rounded text-[11px] font-semibold uppercase tracking-wider text-[var(--w-text-muted)] transition-colors hover:text-[var(--w-text-sec)] focus:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 ${sidebarVisualCollapsed ? 'h-[42px] justify-center' : 'mb-1 gap-1.5 px-3 py-1'}`}
             >
-              {sectionOpen
-                ? <ChevronDown className="w-4 h-4 flex-shrink-0" />
-                : <ChevronRight className="w-4 h-4 flex-shrink-0" />}
-              <span>{t(group.titleKey)}</span>
+              {sidebarVisualCollapsed && CompactIcon ? (
+                <CompactIcon className="h-[17px] w-[17px]" aria-hidden="true" />
+              ) : (
+                <>
+                  {sectionOpen
+                    ? <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                    : <ChevronRight className="w-4 h-4 flex-shrink-0" />}
+                  <span>{t(group.titleKey)}</span>
+                </>
+              )}
             </button>
           )}
           <div id={sectionId} className="space-y-0.5" style={{ display: sectionOpen ? undefined : 'none' }}>
@@ -641,49 +642,22 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
               const Icon = item.icon;
               const active = route === item.key;
               const badge = badgeFor(item.key);
-              const hasChildren = !!(item as NavItem).children && (item as NavItem).children!.length > 0;
-              const childActive = hasChildren && (item as NavItem).children!.some(c => c.key === route);
               return (
-                <div key={item.key}>
-                  <button
-                    onClick={() => {
-                      if (hasChildren) { setDesktopAcctOpen(o => !o); }
-                      else { handleRoute(item.key); setMobileOpen(false); }
-                    }}
-                    className={`nav-item clay-action ${(active || childActive) ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
-                    title={sidebarVisualCollapsed ? t(item.labelKey) : undefined}
-                  >
-                    <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-                    {!sidebarVisualCollapsed && <span className="whitespace-normal break-words">{t(item.labelKey)}</span>}
-                    {!sidebarVisualCollapsed && hasChildren && (
-                      <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${desktopAcctOpen ? 'rotate-180' : ''} text-[var(--w-text-muted)]`} />
-                    )}
-                    {!sidebarVisualCollapsed && !hasChildren && badge > 0 && (
-                      <span className={`ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-neutral-900' : 'bg-red-500 text-white'}`}>{badge > 99 ? '99+' : badge}</span>
-                    )}
-                    {sidebarVisualCollapsed && !hasChildren && badge > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">{badge > 9 ? '9+' : badge}</span>
-                    )}
-                  </button>
-                  {hasChildren && desktopAcctOpen && !sidebarVisualCollapsed && (
-                    <div className="ml-6 mt-0.5 space-y-0.5 animate-[fadeIn_0.15s_ease]">
-                      {(item as NavItem).children!.filter(c => routeVisible(c.key)).map(child => {
-                        const ChildIcon = child.icon;
-                        const childActive2 = route === child.key;
-                        return (
-                          <button
-                            key={child.key}
-                            onClick={() => { handleRoute(child.key); setMobileOpen(false); }}
-                            className={`nav-item clay-action text-[13px] ${childActive2 ? 'nav-item-active' : 'nav-item-idle'}`}
-                          >
-                            <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-                            <span className="whitespace-normal break-words">{t(child.labelKey)}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                <button
+                  key={item.key}
+                  onClick={() => { handleRoute(item.key); setMobileOpen(false); }}
+                  className={`nav-item clay-action ${active ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+                  title={sidebarVisualCollapsed ? t(item.labelKey) : undefined}
+                >
+                  <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
+                  {!sidebarVisualCollapsed && <span className="whitespace-normal break-words">{t(item.labelKey)}</span>}
+                  {!sidebarVisualCollapsed && badge > 0 && (
+                    <span className={`ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-neutral-900' : 'bg-red-500 text-white'}`}>{badge > 99 ? '99+' : badge}</span>
                   )}
-                </div>
+                  {sidebarVisualCollapsed && badge > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">{badge > 9 ? '9+' : badge}</span>
+                  )}
+                </button>
               );
             })}
           </div>
@@ -973,7 +947,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                   <div key={group.titleKey}>
                     <button
                       type="button"
-                      onClick={() => toggleSection(group.titleKey)}
+                      onClick={() => setSectionExpanded(group.titleKey)}
                       aria-expanded={sectionOpen}
                       aria-controls={sectionId}
                       className={`w-full flex items-center gap-1.5 px-2.5 mb-0.5 py-1 rounded text-[9px] font-semibold tracking-widest uppercase transition-colors focus:outline-none focus-visible:ring-1 text-[var(--w-text-muted)] focus-visible:ring-neutral-400`}
@@ -988,45 +962,18 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                         const Icon = item.icon;
                         const active = route === item.key;
                         const badge = badgeFor(item.key);
-                        const hasChildren = !!(item as NavItem).children && (item as NavItem).children!.length > 0;
-                        const childActive = hasChildren && (item as NavItem).children!.some(c => c.key === route);
                         return (
-                          <div key={item.key}>
-                            <button
-                              onClick={() => {
-                                if (hasChildren) { setMobileAcctOpen(o => o === item.key ? null : item.key); }
-                                else { handleRoute(item.key); closeDrawer(); }
-                              }}
-                              className={`float-nav-item-compact clay-action ${(active || childActive) ? 'float-nav-item-active' : ''}`}
-                            >
-                              <Icon className={`w-4 h-4 shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-                              <span className="truncate">{t(item.labelKey)}</span>
-                              {hasChildren && (
-                                <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${mobileAcctOpen === item.key ? 'rotate-180' : ''} text-[var(--w-text-muted)]`} />
-                              )}
-                              {!hasChildren && badge > 0 && (
-                                <span className="ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold bg-red-500 text-white">{badge > 99 ? '99+' : badge}</span>
-                              )}
-                            </button>
-                            {hasChildren && mobileAcctOpen === item.key && (
-                              <div className="ml-5 mt-0.5 space-y-0.5 animate-[fadeIn_0.15s_ease]">
-                                {(item as NavItem).children!.filter(c => routeVisible(c.key)).map(child => {
-                                  const ChildIcon = child.icon;
-                                  const childActive2 = route === child.key;
-                                  return (
-                                    <button
-                                      key={child.key}
-                                      onClick={() => { handleRoute(child.key); closeDrawer(); }}
-                                      className={`float-nav-item-compact clay-action text-[13px] ${childActive2 ? 'float-nav-item-active' : ''}`}
-                                    >
-                                      <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-                                      <span className="truncate">{t(child.labelKey)}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                          <button
+                            key={item.key}
+                            onClick={() => { handleRoute(item.key); closeDrawer(); }}
+                            className={`float-nav-item-compact clay-action ${active ? 'float-nav-item-active' : ''}`}
+                          >
+                            <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
+                            <span className="truncate">{t(item.labelKey)}</span>
+                            {badge > 0 && (
+                              <span className="ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold bg-red-500 text-white">{badge > 99 ? '99+' : badge}</span>
                             )}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
