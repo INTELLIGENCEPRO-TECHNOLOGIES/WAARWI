@@ -1,3 +1,4 @@
+import { clayTouchHandlers } from '../lib/clayTouch';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -8,6 +9,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, ArrowRightLeft, UserCheck,
   X, Monitor, Check, Activity,
 } from 'lucide-react';
+import { AddressBook, CashRegister } from './Icons';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
@@ -48,7 +50,6 @@ const NAV_ALIASES: Partial<Record<Route, string[]>> = {
   money_transfer: ['transfert', 'transfert d argent', 'money', 'transfer', 'western union', 'ria', 'moneygram'],
   ipm: ['ipm', 'bordereau', 'bordereaux'],
   accounting: ['comptabilite', 'compte', 'comptes', 'journal', 'balance', 'grand livre', 'cloture'],
-  settings: ['parametre', 'parametres', 'configuration', 'config', 'setting', 'reglage', 'reglages'],
 };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -56,7 +57,7 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
   ]},
   { titleKey: 'nav.pos', items: [
-    { key: 'pos', labelKey: 'nav.pos', icon: ShoppingCart },
+    { key: 'pos', labelKey: 'nav.pos', icon: CashRegister },
     { key: 'sales', labelKey: 'nav.sales', icon: Calculator },
     { key: 'cash_history', labelKey: 'nav.cashHistory', icon: History },
     { key: 'coffre', labelKey: 'nav.coffre', icon: Lock },
@@ -71,7 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'online_orders', labelKey: 'nav.onlineOrders', icon: Globe },
     { key: 'warranties', labelKey: 'nav.warranties', icon: ShieldCheck },
     { key: 'representatives', labelKey: 'nav.representatives', icon: UserCheck },
-    { key: 'tiers', labelKey: 'nav.tiers', icon: Users },
+    { key: 'tiers', labelKey: 'nav.tiers', icon: AddressBook },
     { key: 'supplier_orders', labelKey: 'nav.supplierOrders', icon: Truck },
   ]},
   { titleKey: 'nav.accounting', items: [
@@ -162,8 +163,8 @@ const BREADCRUMB_MAP: Record<string, { group: string; labelKey: string }> = {
 
 const POS_MOBILE_TABS: { key: Route; labelKey: string; icon: any }[] = [
   { key: 'dashboard', labelKey: 'nav.home', icon: LayoutDashboard },
-  { key: 'pos', labelKey: 'nav.pos', icon: ShoppingCart },
-  { key: 'tiers', labelKey: 'nav.tiers', icon: Users },
+  { key: 'pos', labelKey: 'nav.pos', icon: CashRegister },
+  { key: 'tiers', labelKey: 'nav.tiers', icon: AddressBook },
   { key: 'settings', labelKey: 'nav.settings', icon: Settings },
 ];
 
@@ -425,7 +426,6 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         }
       }
     }
-    items.push({ key: 'settings' as Route, labelKey: 'nav.settings', icon: Settings, group: 'nav.system' });
     return items;
   }, []);
 
@@ -546,7 +546,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           {!sidebarVisualCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Plateforme</div>}
           <button
             onClick={() => { onRoute('platform_admin'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item clay-action ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarVisualCollapsed ? t('nav.platform') : undefined}
           >
             <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
@@ -605,7 +605,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
               <button
                 key={item.key}
                 onClick={() => { handleRoute(item.key); setNavSearch(''); setMobileOpen(false); }}
-                className={`nav-item ${active ? 'nav-item-active' : 'nav-item-idle'}`}
+                className={`nav-item clay-action ${active ? 'nav-item-active' : 'nav-item-idle'}`}
               >
                 <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                 {!sidebarVisualCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
@@ -650,7 +650,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                       if (hasChildren) { setDesktopAcctOpen(o => !o); }
                       else { handleRoute(item.key); setMobileOpen(false); }
                     }}
-                    className={`nav-item ${(active || childActive) ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+                    className={`nav-item clay-action ${(active || childActive) ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
                     title={sidebarVisualCollapsed ? t(item.labelKey) : undefined}
                   >
                     <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
@@ -674,7 +674,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                           <button
                             key={child.key}
                             onClick={() => { handleRoute(child.key); setMobileOpen(false); }}
-                            className={`nav-item text-[13px] ${childActive2 ? 'nav-item-active' : 'nav-item-idle'}`}
+                            className={`nav-item clay-action text-[13px] ${childActive2 ? 'nav-item-active' : 'nav-item-idle'}`}
                           >
                             <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                             <span className="whitespace-normal break-words">{t(child.labelKey)}</span>
@@ -690,19 +690,6 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         </div>
         );
       })}
-      {routeVisible('settings') && (
-        <div>
-          {!sidebarVisualCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.system')}</div>}
-          <button
-            onClick={() => { onRoute('settings'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
-            title={sidebarVisualCollapsed ? t('nav.settings') : undefined}
-          >
-            <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-            {!sidebarVisualCollapsed && <span className="whitespace-normal break-words">{t('nav.settings')}</span>}
-          </button>
-        </div>
-      )}
       </>
       )}
     </nav>
@@ -847,6 +834,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
             onMouseLeave={onSidebarLeave}
             onFocus={onSidebarFocusIn}
             onBlur={onSidebarFocusOut}
+            {...clayTouchHandlers}
           >
             {navList}
             <div className={`p-3 border-t space-y-2 border-[var(--w-separator-l)]`}>
@@ -884,6 +872,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           >
             <div
               className="float-sidebar-content"
+              {...clayTouchHandlers}
             >
               <div className={`flex items-center px-4 pt-3.5 pb-3 border-b border-[var(--w-separator-l)]`}>
                 <div className="flex items-center min-w-0 shrink-0">
@@ -904,9 +893,6 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     {now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </span>
                 </div>
-                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)]`}>
-                  <Settings className="w-4 h-4" />
-                </button>
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto px-2.5 pb-1 space-y-1.5 scrollbar-hide">
@@ -915,7 +901,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Plateforme</div>
                     <button
                       onClick={() => { onRoute('platform_admin'); closeDrawer(); }}
-                      className={`float-nav-item-compact ${route === 'platform_admin' ? 'float-nav-item-active' : ''}`}
+                      className={`float-nav-item-compact clay-action ${route === 'platform_admin' ? 'float-nav-item-active' : ''}`}
                     >
                       <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                       <span className="truncate">{t('nav.platform')}</span>
@@ -968,7 +954,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                         <button
                           key={item.key}
                           onClick={() => { handleRoute(item.key); setNavSearch(''); closeDrawer(); }}
-                          className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''}`}
+                          className={`float-nav-item-compact clay-action ${active ? 'float-nav-item-active' : ''}`}
                         >
                           <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                           <span className="truncate">{t(item.labelKey)}</span>
@@ -1011,7 +997,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                                 if (hasChildren) { setMobileAcctOpen(o => o === item.key ? null : item.key); }
                                 else { handleRoute(item.key); closeDrawer(); }
                               }}
-                              className={`float-nav-item-compact ${(active || childActive) ? 'float-nav-item-active' : ''}`}
+                              className={`float-nav-item-compact clay-action ${(active || childActive) ? 'float-nav-item-active' : ''}`}
                             >
                               <Icon className={`w-4 h-4 shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                               <span className="truncate">{t(item.labelKey)}</span>
@@ -1031,7 +1017,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                                     <button
                                       key={child.key}
                                       onClick={() => { handleRoute(child.key); closeDrawer(); }}
-                                      className={`float-nav-item-compact text-[13px] ${childActive2 ? 'float-nav-item-active' : ''}`}
+                                      className={`float-nav-item-compact clay-action text-[13px] ${childActive2 ? 'float-nav-item-active' : ''}`}
                                     >
                                       <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                                       <span className="truncate">{t(child.labelKey)}</span>
@@ -1060,14 +1046,14 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                           <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors hover:bg-[var(--w-hover)]`}>
                             <button
                               onClick={() => { if (s.id === currentSite?.id) { closeDrawer(); return; } setSiteConfirmPending(s); closeDrawer(); }}
-                              className={`flex-1 flex items-center px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? 'text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-sec)]'}`}
+                              className={`clay-action flex-1 flex items-center px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? 'clay-selected text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-sec)]'}`}
                             >
                               <span className="truncate flex-1 text-left">{s.name}</span>
                             </button>
                             <button
                               onClick={() => { setDefaultSite(s); closeDrawer(); }}
                               title={isDefault ? 'Défaut' : 'Définir défaut'}
-                              className={`shrink-0 p-1.5 transition-colors ${isDefault ? 'text-[var(--w-text)]' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}
+                              className={`clay-action shrink-0 p-1.5 transition-colors ${isDefault ? 'text-[var(--w-text)]' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}
                             >
                               <Star className="w-3 h-3" fill={isDefault ? 'currentColor' : 'none'} />
                             </button>
@@ -1077,7 +1063,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     </div>
                   </div>
                 )}
-                <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-red-600 hover:bg-red-50`}>
+                <button onClick={signOut} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-red-600 hover:bg-red-50">
                   <LogOut className="w-4 h-4" />
                   <span>Déconnexion</span>
                 </button>
@@ -1216,7 +1202,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           ) : isPlatformAdmin ? (
             <div className="flex-1 min-h-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
-            <div className="flex-1 min-h-0 px-1 sm:px-2 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0">{children}</div>
+            <div className="flex-1 min-h-0 px-1 sm:px-2 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0 [--dashboard-toolbar-start:3.5rem]">{children}</div>
           ) : (
             <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[72px] lg:pb-8">{children}</div>
           )}

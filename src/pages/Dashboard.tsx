@@ -1431,16 +1431,12 @@ function KpiItem({ label, value, sub, negative, accent }: {
       ? 'text-amber-700'
       : 'text-[var(--w-text)]';
   return (
-    <div className="flex flex-col">
+    <div className="flex min-w-0 flex-col border-l border-[var(--w-separator)] pl-2">
       <p className={`text-[10px] font-medium uppercase tracking-wide mb-0.5 text-[var(--w-text-muted)]`}>{label}</p>
       <p className={`text-lg font-bold num leading-tight ${valColor}`}>{value}</p>
       {sub && <p className={`text-[9px] mt-0.5 text-[var(--w-text-disabled)]`}>{sub}</p>}
     </div>
   );
-}
-
-function KpiDivider() {
-  return <div className={`self-stretch w-px bg-[var(--w-separator)]`} style={{ minHeight: 36 }} />;
 }
 
 
@@ -1829,163 +1825,166 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
   const [fabOpen, setFabOpen] = useState(false);
   const [siteOpen, setSiteOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const userName = profile?.full_name || profile?.email || '?';
 
   return (
-    <div className="min-h-full bg-white animate-fade-in">
+    <div className="dashboard-desktop min-h-full bg-white animate-fade-in">
       {/* ── STICKY: TOP BAR ONLY ── */}
       <div className="sticky top-0 z-20 bg-white border-b border-neutral-100">
-      {/* ── TOP BAR — single clean row ── */}
-      <div className="pl-14 pr-5 xl:pr-8 h-[72px] flex items-center gap-6">
+      <div className="dashboard-toolbar">
         {/* LEFT: title */}
-        <h1 className="text-[15px] font-bold text-neutral-900 tracking-tight whitespace-nowrap shrink-0">Tableau de bord</h1>
+        <h1 className="dashboard-toolbar-title text-[15px] font-bold text-neutral-900 tracking-tight">Tableau de bord</h1>
 
-        {/* CENTER group */}
-        <div className="flex items-center gap-5 ml-2">
-          {/* Période / Session — underline tabs, no card */}
-          <div className="flex items-center gap-4">
+        <div className="dashboard-toolbar-controls flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {/* Période / Session — underline tabs, no card */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => toggleViewMode('period')}
+                aria-pressed={viewMode === 'period'}
+                className={`relative pb-1 text-xs font-semibold transition-colors ${
+                  viewMode === 'period' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'
+                }`}
+              >
+                Période
+                {viewMode === 'period' && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-neutral-900 rounded-full" />}
+              </button>
+              <button
+                onClick={() => toggleViewMode('session')}
+                aria-pressed={viewMode === 'session'}
+                className={`relative pb-1 text-xs font-semibold transition-colors ${
+                  viewMode === 'session' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'
+                }`}
+              >
+                Session
+                {viewMode === 'session' && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-neutral-900 rounded-full" />}
+              </button>
+            </div>
+
+            {/* Date selector — no card, inline */}
+            {viewMode !== 'session' && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowPeriodMenu(!showPeriodMenu)}
+                  aria-expanded={showPeriodMenu}
+                  className="flex min-h-9 items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                  <span className="font-medium">{periodLabel}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${showPeriodMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showPeriodMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-neutral-200 shadow-elevated z-50 py-1">
+                    {periodOptions.map((opt: any) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setPeriod(opt.value); setShowPeriodMenu(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${period === opt.value ? 'bg-neutral-100 text-neutral-900 font-semibold' : 'text-neutral-600 hover:bg-neutral-50'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Actions rapides — inline, no card */}
             <button
-              onClick={() => toggleViewMode('period')}
-              className={`relative pb-1 text-xs font-semibold transition-colors ${
-                viewMode === 'period' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'
-              }`}
+              onClick={() => setFabOpen(true)}
+              aria-label="Actions rapides"
+              title="Actions rapides"
+              className="flex min-h-9 items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors active:scale-95"
             >
-              Période
-              {viewMode === 'period' && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-neutral-900 rounded-full" />}
-            </button>
-            <button
-              onClick={() => toggleViewMode('session')}
-              className={`relative pb-1 text-xs font-semibold transition-colors ${
-                viewMode === 'session' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'
-              }`}
-            >
-              Session
-              {viewMode === 'session' && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-neutral-900 rounded-full" />}
+              <Activity className="w-3.5 h-3.5 text-neutral-400" />
+              <span className="dashboard-toolbar-quick-label font-medium">Actions rapides</span>
             </button>
           </div>
 
-          {/* Subtle vertical separator */}
-          <div className="w-px h-5 bg-neutral-200" />
+          {/* RIGHT group */}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            {/* Subscription badge — compact with expiry */}
+            {subInfo && (
+              <div className={onOpenSubscription ? 'dashboard-toolbar-subscription' : ''}>
+                <SubscriptionStatus info={subInfo} onClick={() => nav('settings', { target: 'subscription' })} />
+              </div>
+            )}
+            {onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
 
-          {/* Date selector — no card, inline */}
-          {viewMode !== 'session' && (
-            <div className="relative">
-              <button
-                onClick={() => setShowPeriodMenu(!showPeriodMenu)}
-                className="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors"
-              >
-                <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="font-medium">{periodLabel}</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${showPeriodMenu ? 'rotate-180' : ''}`} />
-              </button>
-              {showPeriodMenu && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-neutral-200 shadow-elevated z-50 py-1">
-                  {periodOptions.map((opt: any) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => { setPeriod(opt.value); setShowPeriodMenu(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${period === opt.value ? 'bg-neutral-100 text-neutral-900 font-semibold' : 'text-neutral-600 hover:bg-neutral-50'}`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Actions rapides — inline, no card */}
-          <button
-            onClick={() => setFabOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors active:scale-95"
-          >
-            <Activity className="w-3.5 h-3.5 text-neutral-400" />
-            <span className="font-medium">Actions rapides</span>
-          </button>
-        </div>
-
-        {/* RIGHT group */}
-        <div className="ml-auto flex items-center gap-4">
-          {/* Subscription badge — compact with expiry */}
-          {subInfo && (
-            <div className={onOpenSubscription ? 'hidden xl:block' : ''}>
-              <SubscriptionStatus info={subInfo} onClick={() => nav('settings', { target: 'subscription' })} />
-            </div>
-          )}
-          {onOpenSubscription && <SubscriptionPaymentButton onClick={onOpenSubscription} />}
-
-          {/* Subtle vertical separator */}
-          <div className="w-px h-5 bg-neutral-200" />
-
-          {/* Site selector — inline, no card */}
-          {hasMultiSites && (
-            <div className="relative">
-              <button
-                onClick={() => setSiteOpen(!siteOpen)}
-                className="flex items-center gap-1.5 text-xs text-neutral-700 hover:text-neutral-900 transition-colors"
-              >
-                <Network className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="font-semibold">{currentSite?.name}</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${siteOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {siteOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setSiteOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl border border-neutral-200 shadow-elevated py-1 z-50 max-h-80 overflow-y-auto">
-                    <div className="px-3 py-1.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Magasins</div>
-                    {sites.map((s: any) => {
-                      const isActive = currentSite?.id === s.id;
-                      return (
-                        <div
-                          key={s.id}
-                          className={`flex items-center gap-2 px-2.5 py-2 mx-1 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-neutral-100' : 'hover:bg-neutral-50'}`}
-                          onClick={() => { if (isActive) { setSiteOpen(false); return; } setCurrentSite(s); setSiteOpen(false); }}
-                        >
-                          <div className={`w-[18px] h-[18px] rounded border-2 flex items-center justify-center shrink-0 ${isActive ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'}`}>
-                            {isActive && <CheckIcon className="w-2.5 h-2.5 text-white" />}
+            {/* Site selector — inline, no card */}
+            {hasMultiSites && (
+              <div className="relative">
+                <button
+                  onClick={() => setSiteOpen(!siteOpen)}
+                  title={currentSite?.name}
+                  aria-expanded={siteOpen}
+                  className="flex min-h-9 items-center gap-1.5 text-xs text-neutral-700 hover:text-neutral-900 transition-colors"
+                >
+                  <Network className="w-3.5 h-3.5 text-neutral-400" />
+                  <span className="dashboard-toolbar-site-name truncate text-left font-semibold">{currentSite?.name}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${siteOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {siteOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setSiteOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl border border-neutral-200 shadow-elevated py-1 z-50 max-h-80 overflow-y-auto">
+                      <div className="px-3 py-1.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Magasins</div>
+                      {sites.map((s: any) => {
+                        const isActive = currentSite?.id === s.id;
+                        return (
+                          <div
+                            key={s.id}
+                            className={`flex items-center gap-2 px-2.5 py-2 mx-1 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-neutral-100' : 'hover:bg-neutral-50'}`}
+                            onClick={() => { if (isActive) { setSiteOpen(false); return; } setCurrentSite(s); setSiteOpen(false); }}
+                          >
+                            <div className={`w-[18px] h-[18px] rounded border-2 flex items-center justify-center shrink-0 ${isActive ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'}`}>
+                              {isActive && <CheckIcon className="w-2.5 h-2.5 text-white" />}
+                            </div>
+                            <span className={`flex-1 text-sm truncate ${isActive ? 'font-semibold text-neutral-900' : 'text-neutral-600'}`}>{s.name}</span>
                           </div>
-                          <span className={`flex-1 text-sm truncate ${isActive ? 'font-semibold text-neutral-900' : 'text-neutral-600'}`}>{s.name}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* User — compact, no card */}
-          <div className="relative">
-            <button
-              onClick={() => setUserOpen(v => !v)}
-              className="flex items-center gap-2 pl-0.5 pr-1 h-9 rounded-lg hover:bg-neutral-50 transition-colors"
-            >
-              <div className="w-7 h-7 rounded-lg bg-neutral-900 flex items-center justify-center text-white text-[11px] font-bold">
-                {(profile?.full_name || profile?.email || '?').charAt(0).toUpperCase()}
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="text-left leading-tight">
-                <div className="text-[12px] font-semibold text-neutral-900 whitespace-nowrap max-w-[120px] truncate">{profile?.full_name || profile?.email}</div>
-                <div className="text-[9px] text-neutral-400 uppercase tracking-wider font-medium">{profile?.role}</div>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
-            </button>
-            {userOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setUserOpen(false)} />
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-neutral-200 rounded-xl shadow-elevated py-1 animate-slide-down z-20">
-                  <div className="px-3 py-2.5 border-b border-neutral-100">
-                    <div className="text-sm font-semibold text-neutral-900 truncate">{profile?.full_name}</div>
-                    <div className="text-xs text-neutral-500 truncate">{profile?.email}</div>
-                  </div>
-                  <button onClick={() => { setUserOpen(false); nav('settings'); }} className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 transition-colors">
-                    <Monitor className="w-4 h-4 text-neutral-400" /> Paramètres
-                  </button>
-                  <button onClick={() => { setUserOpen(false); signOut(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
-                    <LogOut className="w-4 h-4" /> Déconnexion
-                  </button>
-                </div>
-              </>
             )}
           </div>
+        </div>
+
+        {/* User — compact, no card */}
+        <div className="dashboard-toolbar-profile relative">
+          <button
+            onClick={() => setUserOpen(v => !v)}
+            aria-expanded={userOpen}
+            className="flex min-h-9 items-center gap-2 rounded-lg py-1 pl-0.5 pr-1 transition-colors hover:bg-neutral-50"
+          >
+            <div aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-neutral-900 text-[11px] font-bold text-white">
+              {userName.charAt(0).toUpperCase()}
+            </div>
+            <div className="text-left leading-tight">
+              <div className="max-w-60 text-[12px] font-semibold text-neutral-900 [overflow-wrap:anywhere]">{userName}</div>
+              <div className="text-[9px] text-neutral-400 uppercase tracking-wider font-medium">{profile?.role}</div>
+            </div>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+          </button>
+          {userOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setUserOpen(false)} />
+              <div className="absolute right-0 mt-2 w-56 bg-white border border-neutral-200 rounded-xl shadow-elevated py-1 animate-slide-down z-20">
+                <div className="px-3 py-2.5 border-b border-neutral-100">
+                  <div className="text-sm font-semibold text-neutral-900 [overflow-wrap:anywhere]">{profile?.full_name}</div>
+                  <div className="text-xs text-neutral-500 [overflow-wrap:anywhere]">{profile?.email}</div>
+                </div>
+                <button onClick={() => { setUserOpen(false); nav('settings'); }} className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 transition-colors">
+                  <Monitor className="w-4 h-4 text-neutral-400" /> Paramètres
+                </button>
+                <button onClick={() => { setUserOpen(false); signOut(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
+                  <LogOut className="w-4 h-4" /> Déconnexion
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -2038,7 +2037,7 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
           <div className="flex-1 flex flex-col gap-2 min-w-0">
           {/* Situation du jour */}
           <div
-            className="relative overflow-hidden rounded-xl p-5 flex flex-col transition-all duration-300"
+            className="relative flex flex-col overflow-hidden rounded-xl p-5 transition-all duration-300 last:flex-1"
             style={{ background: 'var(--w-surface)', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 0 0 1px var(--w-separator)' }}
           >
 
@@ -2046,49 +2045,39 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <TrendingUp className={`w-5 h-5 text-[var(--w-text-sec)]`} />
-                <h2 className={`text-base font-bold text-[var(--w-text)]`}>{viewMode === 'session' ? 'Session de caisse' : `Situation ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}`}</h2>
+                <h2 className={`text-base font-bold text-[var(--w-text)]`}>{viewMode === 'session' ? 'Session de caisse' : `Situation ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}`}</h2>
               </div>
 
             </div>
 
             {viewMode === 'session' && !stats.sessionReady ? (
               <p role="status" className="py-4 text-xs text-[var(--w-text-muted)]">Données de caisse en attente…</p>
-            ) : <div className="grid grid-cols-[minmax(185px,1.35fr)_minmax(0,4fr)] items-center gap-5 flex-1 min-h-0">
+            ) : <div className="dashboard-summary-body grid min-h-0 flex-1 items-center gap-4">
               {/* Main amount */}
               <div>
                 <p className={`text-[11px] font-medium mb-1 text-[var(--w-text-muted)]`}>{viewMode === 'session' ? 'CA net session' : `Encaissements ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}`}</p>
                 <p className={`text-3xl font-bold num tracking-tight leading-none text-[var(--w-text)]`}>{formatFCFA(viewMode === 'session' ? stats.sessionCaNet : stats.todayCollected)}</p>
               </div>
 
-              {/* KPI Line — divider-separated, no mini-cards */}
+              {/* Indicateurs */}
               {viewMode === 'session' ? (
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-3">
                   <KpiItem label="Nb ventes" value={String(stats.sessionNbVentes)} />
-                  <KpiDivider />
                   <KpiItem label="Encaissements" value={formatCompactFCFA(stats.sessionEncaissements)} />
-                  {canViewMargin && <>
-                    <KpiDivider />
+                  {canViewMargin && (
                     <KpiItem label="Marge brute" value={formatCompactFCFA(stats.sessionMargeBrute)} sub={stats.sessionTauxMarge > 0 ? `${Math.round(stats.sessionTauxMarge)}%` : undefined} />
-                  </>}
-                  <KpiDivider />
+                  )}
                   <KpiItem label="Ventes à crédit" value={String(stats.sessionCreditCount)} sub={formatCompactFCFA(stats.sessionCreditTotal)} />
-                  <KpiDivider />
                   <KpiItem label="Dépenses" value={formatCompactFCFA(stats.sessionDepenses)} negative />
-                  <KpiDivider />
                   <KpiItem label="Caisse théorique" value={formatCompactFCFA((stats.sessionInfo?.openingAmount || 0) + stats.sessionEncaissements + stats.sessionEntreesDirectes - stats.sessionDepenses - stats.sessionRemboursements - stats.sessionRetraits - stats.sessionPretsClients)} />
                 </div>
               ) : (
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-3">
                   <KpiItem label="CA net" value={formatCompactFCFA(stats.todaySales)} />
-                  <KpiDivider />
                   <KpiItem label="Encaiss. directs" value={formatCompactFCFA(stats.todayDirectCash)} />
-                  <KpiDivider />
                   <KpiItem label="Ventes" value={String(stats.todayCount)} />
-                  <KpiDivider />
                   <KpiItem label="Solde caisse" value={formatCompactFCFA(stats.periodCashBalance)} />
-                  <KpiDivider />
                   <KpiItem label="Dépenses" value={formatCompactFCFA(stats.periodExpenses)} negative />
-                  <KpiDivider />
                   <KpiItem label="Créances" value={stats.balancesReady ? formatCompactFCFA(stats.receivables) : '—'} sub={`${stats.customersToChase} client${stats.customersToChase > 1 ? 's' : ''}`} accent={stats.receivables > 0 ? 'amber' : undefined} />
                 </div>
               )}
@@ -2111,27 +2100,27 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
 
           {/* ── RENTABILITÉ — single analytical band (permission-gated) ── */}
           {canViewMargin && (viewMode !== 'session' || stats.sessionReady) && (
-            <div className="bg-white rounded-xl border border-neutral-200 px-5 py-3">
+            <div className="flex flex-1 flex-col rounded-xl border border-neutral-200 bg-white px-5 py-3">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-neutral-700" />
                 <h2 className="text-sm font-bold text-neutral-900">{viewMode === 'session' ? 'Rentabilité · Session' : 'Rentabilité'}</h2>
                 <span className="text-[10px] text-neutral-400 font-medium ml-1">{viewMode === 'session' ? 'Session en cours' : periodLabel}</span>
               </div>
-              <div className="grid grid-cols-4 items-stretch gap-x-6">
+              <div className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] content-center gap-3">
                 <div className="flex flex-col">
                   <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-0.5">Marge brute</p>
                   <p className="text-lg font-bold text-neutral-900 num leading-tight">{formatCompactFCFA(viewMode === 'session' ? stats.sessionMargeBrute : stats.periodMargeBrute)}</p>
                   {(viewMode === 'session' ? stats.sessionTauxMarge : stats.periodTauxMarge) > 0 && <p className="text-[10px] text-neutral-400 mt-0.5 num">{Math.round(viewMode === 'session' ? stats.sessionTauxMarge : stats.periodTauxMarge)}% de marge</p>}
                 </div>
-                <div className="flex flex-col border-l border-neutral-200 pl-6">
+                <div className="flex flex-col border-l border-neutral-200 pl-3">
                   <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-0.5">{viewMode === 'session' ? 'Dépenses session' : 'Charges exploit.'}</p>
                   <p className={`text-lg font-bold num leading-tight ${(viewMode === 'session' ? stats.sessionDepenses : stats.periodCharges) > 0 ? 'text-red-600' : 'text-neutral-900'}`}>{formatCompactFCFA(viewMode === 'session' ? stats.sessionDepenses : stats.periodCharges)}</p>
                 </div>
-                <div className="flex flex-col border-l border-neutral-200 pl-6">
+                <div className="flex flex-col border-l border-neutral-200 pl-3">
                   <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-0.5">{viewMode === 'session' ? 'Résultat session' : 'Résultat exploit.'}</p>
                   <p className={`text-lg font-bold num leading-tight ${(viewMode === 'session' ? stats.sessionResultat : stats.periodResultat) < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{(viewMode === 'session' ? stats.sessionResultat : stats.periodResultat) < 0 ? '-' : ''}{formatCompactFCFA(Math.abs(viewMode === 'session' ? stats.sessionResultat : stats.periodResultat))}</p>
                 </div>
-                <div className="flex flex-col border-l border-neutral-200 pl-6">
+                <div className="flex flex-col border-l border-neutral-200 pl-3">
                   <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-0.5">Ticket moyen</p>
                   <p className="text-lg font-bold text-neutral-900 num leading-tight">{(viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount) > 0 ? formatCompactFCFA(Math.round((viewMode === 'session' ? stats.sessionCaNet : stats.todaySales) / (viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount))) : '--'}</p>
                 </div>
@@ -2141,11 +2130,9 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
           </div>
 
           {/* Right column — single "Situation actuelle" block */}
-          <div className="w-[300px] shrink-0 flex flex-col bg-white rounded-xl border border-neutral-200 px-5 py-4">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-neutral-900">Situation actuelle</h2>
-              </div>
+          <div className="flex w-[clamp(235px,29%,300px)] shrink-0 flex-col rounded-xl border border-neutral-200 bg-white px-5 py-4">
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+              <h2 className="text-sm font-bold text-neutral-900">Situation actuelle</h2>
               <span className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider">État de l'entreprise</span>
             </div>
 

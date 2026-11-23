@@ -1,3 +1,4 @@
+import { clayTouchHandlers } from '../lib/clayTouch';
 import { useSalePrice } from '../lib/useSalePrice';
 import { formatVatAmount } from '../lib/salesVat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -47,6 +48,7 @@ import {
   Store,
   History,
   Menu as MenuIcon,
+  MoreHorizontal,
   Eye,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -85,12 +87,14 @@ import { CategoryPickerModal } from './ArticlesComponents';
 import { PosNumpad, type NumpadField } from '../components/PosNumpad';
 import { QtyInput } from '../components/QtyInput';
 import { PosRegisterPicker } from '../components/PosRegisterPicker';
-import { newIdempotencyKey, registerLabel, registerText, type PosCashContext } from '../lib/cashSession';
+import { newIdempotencyKey, registerText, type OperationalCashSession, type PosCashContext } from '../lib/cashSession';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 
 import { fetchPosArticlesById, fetchPosCatalog, type PosArticle as ArticleLite, type PosArticleTier } from '../lib/posCatalog';
 
 const noScores: Record<string, number> = {};
+
+type PosCashSession = CashSession & Pick<OperationalCashSession, 'register_code' | 'register_name'>;
 
 type HeldCart = {
   id: string;
@@ -945,7 +949,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersStatus, setCustomersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const methods = useMemo(() => (refData?.paymentMethods || []).filter(m => m.tenant_id === tenant?.id && m.payment_type !== 'credit') as PaymentMethod[], [refData, tenant?.id]);
-  const [session, setSession] = useState<CashSession | null>(null);
+  const [session, setSession] = useState<PosCashSession | null>(null);
   const cashCtx: CashOpContext | null = session ? {
     mode: 'personal', sessionId: session.id, siteId: session.site_id,
     registerLabel: '', operatorName: cashierName, siteName: currentSite?.name || '',
@@ -987,7 +991,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [desktopDepotOpen, setDesktopDepotOpen] = useState(false);
   const [mobileDepotOpen, setMobileDepotOpen] = useState(false);
   const mobileDepotTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const [mobileDepotPos, setMobileDepotPos] = useState<{ top: number; left: number; flip: boolean }>({ top: 0, left: 0, flip: false });
+  const [mobileDepotPos, setMobileDepotPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
   const [stockSourceLoading, setStockSourceLoading] = useState(false);
   const stockSourceRequest = useRef<AbortController | null>(null);
   const productActionRequest = useRef<AbortController | null>(null);
@@ -1084,15 +1088,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       const el = mobileDepotTriggerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      const menuH = depotAllOptions.length * 34 + 8;
+      const spaceAbove = r.top - 8;
       const spaceBelow = window.innerHeight - r.bottom - 8;
-      const flip = spaceBelow < menuH && r.top > spaceBelow;
+      const flip = spaceBelow < Math.min(depotAllOptions.length * 52 + 8, 320) && spaceAbove > spaceBelow;
       setMobileDepotPos({
-        top: flip ? Math.max(8, r.top - menuH - 4) : r.bottom + 4,
+        top: flip ? undefined : r.bottom + 4,
+        bottom: flip ? window.innerHeight - r.top + 4 : undefined,
         left: Math.max(8, Math.min(r.left, window.innerWidth - 184)),
-        flip,
+        maxHeight: Math.min(320, Math.max(0, (flip ? spaceAbove : spaceBelow) - 4)),
       });
     };
+    reposition();
     window.addEventListener('scroll', reposition, true);
     window.addEventListener('resize', reposition);
     const vv = window.visualViewport;
@@ -1268,7 +1274,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         throw result.error || new Error('Impossible de vérifier l’état des caisses');
       }
       const ctx = result.data as PosCashContext;
-      let existingSession = ctx.my_session as CashSession | null;
+      let existingSession = ctx.my_session as PosCashSession | null;
       if (!ctx.multi_enabled) {
         // Legacy sessions can predate cash_register_id.
         const legacy = await supabase.from('cash_sessions').select('*')
@@ -1416,9 +1422,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   }, [tenantId, catalogSiteId, stockSiteId, searchTerm, categoryIds, sortMode, topScores, catalogKey, screen, catalogRevision]);
 
   const handleStockSourceChange = async (nextSiteId: string) => {
-    if (!tenantId || nextSiteId === stockSiteId) return;
     setDesktopDepotOpen(false);
     setMobileDepotOpen(false);
+    if (!tenantId || nextSiteId === stockSiteId) return;
     setStockSourceLoading(true);
     stockSourceRequest.current?.abort();
     productActionRequest.current?.abort();
@@ -2207,7 +2213,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       )}
       {canSupervise && (
         <button type="button" onClick={() => setSupervising(true)} className="w-full mt-2 inline-flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-neutral-700 hover:text-black hover:underline underline-offset-4 transition-colors">
-          <Eye className="w-3.5 h-3.5" />Superviser une caisse
+          <Eye className="w-3.5 h-3.5" />Supervision
         </button>
       )}
     </>
@@ -2409,12 +2415,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         </button>
       </div>
 
-      {/* Footer — DESKTOP with virtual numpad (Warwi branded) */}
+      {/* Encaissement sur ordinateur */}
       {cart.length > 0 && (
-        <div className="hidden lg:flex flex-col flex-shrink-0 border-t border-[var(--w-separator)] bg-[var(--w-surface)] pb-1">
-          {/* Compact totals row */}
-          <div className="px-3 py-1.5 space-y-0.5 shrink-0">
-            <div className="flex items-center justify-between text-[11px]">
+        <div className="hidden flex-col flex-shrink-0 border-t border-[var(--w-separator)] bg-[var(--w-surface)] lg:flex">
+          <PosNumpad
+            target={{
+              qty: selectedLine?.quantity || 1,
+              price: selectedLine?.unit_price || 0,
+              discount: selectedLine?.discount || 0,
+            }}
+            onCommit={commitNumpad}
+            canDiscount={can('apply_discounts')}
+            compact={true}
+          />
+          <section aria-label="Encaissement" className="space-y-1.5 border-t border-[var(--w-separator)] px-3 pb-3 pt-2 [@media(max-height:640px)]:space-y-1 [@media(max-height:640px)]:pb-2">
+            <div className="text-[11px] [@media(max-height:640px)]:hidden">
               <span className="text-neutral-500">Panier {cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="flex items-center justify-between text-[11px]">
@@ -2424,7 +2439,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {can('apply_discounts') && (
               <div className="flex items-center justify-between text-[11px] gap-2">
                 <span className="text-neutral-500 shrink-0">Remise globale</span>
-                <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[11px] text-right num w-24 outline-none pb-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
+                <input type="number" aria-label="Remise globale" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[11px] text-right num w-24 outline-none pb-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
+              </div>
+            )}
+            {pricing.price?.enabled && (
+              <div className="flex items-center justify-between text-[11px] text-[var(--w-text-sec)]">
+                <span>TVA</span>
+                <span className="num">{formatVatAmount(pricing.price.vat)}</span>
               </div>
             )}
             {ipmBeneficiaire && total > 0 && (
@@ -2447,29 +2468,32 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 )}
               </div>
             )}
-            <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Total</span>
-              {pricing.price?.enabled && <div className="text-xs text-neutral-600">TVA {formatVatAmount(pricing.price.vat)}</div>}
-              <div className="text-xl font-bold text-neutral-900 num leading-none">{pricing.price?.enabled ? formatVatAmount(total) : formatFCFA(total)}</div>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-[var(--w-separator)] pt-2">
+              <div className="flex w-full flex-wrap items-baseline justify-between gap-x-3 gap-y-1 [@media(max-height:640px)]:w-auto [@media(max-height:640px)]:flex-col [@media(max-height:640px)]:gap-0">
+                <span className="text-sm font-semibold text-[var(--w-text)]">{pricing.price?.enabled ? 'Total TTC' : 'Total'}</span>
+                <span className="num whitespace-nowrap text-2xl font-bold leading-tight text-[var(--w-text)] [@media(max-height:640px)]:text-xl">{pricing.price?.enabled ? formatVatAmount(total) : formatFCFA(total)}</span>
+              </div>
+              <button type="button" onClick={openPayment} disabled={stockSourceLoading} className="btn-primary min-h-11 w-full text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--w-text)] [@media(max-height:640px)]:w-auto">
+                <CreditCard aria-hidden="true" className="h-4 w-4" />
+                Encaisser la vente
+              </button>
             </div>
-          </div>
-          {/* Virtual numpad — Warwi branded, fills remaining space */}
-          <PosNumpad
-            target={{
-              qty: selectedLine?.quantity || 1,
-              price: selectedLine?.unit_price || 0,
-              discount: selectedLine?.discount || 0,
-              total: total,
-            }}
-            onCommit={commitNumpad}
-            onValidate={openPayment}
-            canDiscount={can('apply_discounts')}
-            compact={true}
-          />
+          </section>
         </div>
       )}
     </div>
   );
+
+  const activeRegisterHeader = multiCash && (session?.register_code || session?.register_name) && (
+    <div className="border-b border-[var(--w-separator)] px-3 py-2">
+      <div className="text-[11px] text-[var(--w-text-muted)]">Caisse active</div>
+      <div className="break-words text-sm font-semibold text-[var(--w-text)]">
+        {registerText(session.register_code, session.register_name)}
+      </div>
+    </div>
+  );
+  const stockSourceName = depotAllOptions.find(o => o.id === saleSourceSiteId)?.name || currentSite?.name || 'Stock';
+  const activeCategoryName = categories.find(c => c.id === categoryId)?.name;
 
   return (
     <>
@@ -2509,114 +2533,115 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     <>
     <div className="flex-1 flex flex-col overflow-hidden w-full min-h-0" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-top))' }}>
       {/* ── Unified command bar ─────────────────────────────────────── */}
-      <div className="pos-command-bar shrink-0 relative z-20">
+      <div className="pos-command-bar shrink-0 relative z-20" {...clayTouchHandlers}>
         {/* ═══ DESKTOP ═══ */}
-        <div className="hidden lg:flex items-center h-[52px] px-2 gap-1">
-          <div className="pos-search flex items-center gap-2 flex-1 min-w-0 h-9 mx-1 px-2.5">
-            <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Rechercher…"
-              className="flex-1 min-w-0 w-0 bg-transparent text-sm text-[var(--w-text)] focus:outline-none placeholder:text-[var(--w-text-disabled)]"
-              autoFocus={desktopAutoFocus}
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="shrink-0 p-1 text-[var(--w-text-muted)] hover:text-[var(--w-text)] transition-colors">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-          {/* Source depot */}
-          {(() => {
-            if (depotAllOptions.length <= 1) return null;
-            const selectedName = depotAllOptions.find(o => o.id === saleSourceSiteId)?.name || currentSite?.name || 'Stock';
-            return (
+        <div className="pos-toolbar-desktop hidden min-h-[52px] flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-2 lg:flex">
+          <div role="group" aria-label="Recherche et filtres du catalogue" className="flex flex-auto flex-wrap items-center gap-1.5">
+            <div className="pos-search flex h-[34px] min-w-44 flex-1 items-center gap-2 px-2.5">
+              <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher…"
+                className="flex-1 min-w-0 w-0 bg-transparent text-sm text-[var(--w-text)] focus:outline-none placeholder:text-[var(--w-text-disabled)]"
+                autoFocus={desktopAutoFocus}
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="shrink-0 p-1 text-[var(--w-text-muted)] hover:text-[var(--w-text)] transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {/* Source depot */}
+            {depotAllOptions.length > 1 && (
               <div className="relative shrink-0">
-                <button onClick={() => setDesktopDepotOpen(v => !v)} className="chip" title="Dépot source" disabled={stockSourceLoading}>
-                  {stockSourceLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  <span className="whitespace-nowrap">Dépot source: {selectedName}</span><ChevronDown className={`w-3 h-3 transition-transform ${desktopDepotOpen ? 'rotate-180' : ''}`} />
+                <button onClick={() => setDesktopDepotOpen(v => !v)} className="chip pos-toolbar-depot" title={stockSourceName} aria-label={`Dépôt source : ${stockSourceName}`} aria-expanded={desktopDepotOpen} disabled={stockSourceLoading}>
+                  {stockSourceLoading && <Loader2 className="w-3 h-3 shrink-0 animate-spin" />}
+                  <span className="min-w-0 truncate">Dépôt : {stockSourceName}</span>
+                  <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${desktopDepotOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {desktopDepotOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setDesktopDepotOpen(false)} />
-                    <div className="absolute left-0 top-full mt-1 z-[9999] w-48 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
+                    <div className="absolute left-0 top-full mt-1 z-[9999] w-72 max-h-[min(320px,60vh)] overflow-y-auto rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
                       {depotAllOptions.map(o => (
-                        <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
-                          {o.id === saleSourceSiteId && <Check className="w-4 h-4" />}{o.name}
+                        <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-left ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
+                          {o.id === saleSourceSiteId && <Check className="w-4 h-4 shrink-0" />}
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{o.name}</span>
                         </button>
                       ))}
                     </div>
                   </>
                 )}
               </div>
-            );
-          })()}
-          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={() => setCategoryPickerOpen(true)} className={`chip ${categoryId ? 'chip-active' : ''}`} title="Catégorie">
-            <Tag className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline max-w-[100px] truncate">{categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Cat.') : 'Catégorie'}</span>
-            {categoryId && <button onClick={e => { e.stopPropagation(); setCategoryId(''); }} className="ml-0.5 hover:text-red-500"><X className="w-3 h-3" /></button>}
-          </button>
-          {/* Top / Alpha */}
-          <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
-            {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5 text-amber-500" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
-            <span className="hidden xl:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
-          </button>
-          {/* Grid / List */}
-          <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
-            {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-            <span className="hidden xl:inline">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
-          </button>
-          {autoMode && (
-            <button onClick={() => setVehiclePickerOpen(true)} className="chip" title="Par véhicule">
-              <Car className="w-3.5 h-3.5 text-brand-700" /><span className="hidden xl:inline">Véhicule</span>
-            </button>
-          )}
-          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={openTickets} className="chip" data-label="Tickets"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
-          {can('pos_returns') && <button onClick={openReturn} className="chip" data-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
-          {can('pos_cash_movement') && <button onClick={openMovement} className="chip" data-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouv.</span></button>}
-          <button onClick={holdCart} className="chip" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
-          {/* Session popover button */}
-          <div className="relative">
-            {(() => {
-              const reg = multiCash && ((session as any)?.register_code || (session as any)?.register_name);
-              return (
-                <button onClick={() => setSessionPopOpen(v => !v)} className={`pos-session-btn ml-1 ${sessionPopOpen ? 'is-open' : ''}`} aria-expanded={sessionPopOpen}>
-                  {reg ? (
-                    <span className="flex flex-col items-start min-w-0 leading-tight">
-                      <span className="text-[10px] font-medium text-[var(--w-text-muted)]">Session</span>
-                      <span title={registerText((session as any).register_code, (session as any).register_name)} className="text-xs font-bold text-[var(--w-text)] max-w-[10rem] truncate">{registerLabel((session as any).register_code, (session as any).register_name).primary}</span>
-                    </span>
-                  ) : (
-                    <span className="text-xs font-bold text-[var(--w-text)]">Session</span>
-                  )}
-                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-[var(--w-text-muted)] transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
-                </button>
-              );
-            })()}
-            {sessionPopOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setSessionPopOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
-                  {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item"><BarChart2 className="w-4 h-4" />Stats</button>}
-                  <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item"><Wallet className="w-4 h-4" />Encaisser un client</button>
-                  {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
-                  <div className="h-px bg-[var(--w-separator)] my-1" />
-                  <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item"><LogOut className="w-4 h-4" />Quitter</button>
-                  {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item"><Eye className="w-4 h-4" />Superviser une caisse</button>}
-                  {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item text-red-600"><Lock className="w-4 h-4" />Clôturer</button>}
-                </div>
-              </>
             )}
+            <div className="relative flex shrink-0 items-center">
+              <button onClick={() => setCategoryPickerOpen(true)} className={`chip clay-action ${categoryId ? 'pr-7' : ''} ${categoryId || categoryPickerOpen ? 'clay-selected' : ''}`} title={activeCategoryName || 'Catégorie'} aria-expanded={categoryPickerOpen}>
+                <Tag className="w-3.5 h-3.5" />
+                <span className="pos-toolbar-label max-w-[100px] truncate">{activeCategoryName || 'Catégorie'}</span>
+              </button>
+              {categoryId && (
+                <button type="button" onClick={() => setCategoryId('')} className="absolute right-0.5 flex h-7 w-6 items-center justify-center rounded text-[var(--w-text-sec)] hover:text-[var(--w-text)]" aria-label="Effacer le filtre de catégorie">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {/* Top / Alpha */}
+            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip clay-action" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
+              {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
+              <span className="pos-toolbar-label">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
+            </button>
+            {/* Grid / List */}
+            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip clay-action" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
+              {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+              <span className="pos-toolbar-label">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
+            </button>
+            {autoMode && (
+              <button onClick={() => setVehiclePickerOpen(true)} className="chip" title="Par véhicule">
+                <Car className="w-3.5 h-3.5 text-brand-700" /><span className="pos-toolbar-label">Véhicule</span>
+              </button>
+            )}
+          </div>
+          <div role="group" aria-label="Actions de caisse" className="flex shrink-0 items-center gap-1.5 border-l border-[var(--w-separator)] pl-3">
+            <button onClick={openTickets} className="chip clay-action" data-label="Tickets" aria-label="Tickets"><List className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Tickets</span></button>
+            {can('pos_returns') && <button onClick={openReturn} className="chip clay-action" data-label="Retour" aria-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Retour</span></button>}
+            {can('pos_cash_movement') && <button onClick={openMovement} className="chip clay-action" data-label="Mouvement" aria-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Mouv.</span></button>}
+            <button onClick={holdCart} className="chip clay-action" data-label="Pause" aria-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Pause</span></button>
+            {/* Session popover button */}
+            <div className="relative">
+              <button
+                onClick={() => setSessionPopOpen(v => !v)}
+                className={`chip clay-action ${sessionPopOpen ? 'clay-selected' : ''}`}
+                aria-expanded={sessionPopOpen}
+                aria-label="Session"
+                data-label={sessionPopOpen ? undefined : 'Session'}
+              >
+                <span>Session</span>
+                <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {sessionPopOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setSessionPopOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg p-1 space-y-0.5 animate-fade-in">
+                    {activeRegisterHeader}
+                    {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item clay-action"><BarChart2 className="w-4 h-4" />Stats</button>}
+                    <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item clay-action"><Wallet className="w-4 h-4" />Encaisser un client</button>
+                    {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item clay-action relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
+                    <div className="h-px bg-[var(--w-separator)] my-1" />
+                    <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item clay-action"><LogOut className="w-4 h-4" />Quitter</button>
+                    {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item clay-action"><Eye className="w-4 h-4" />Supervision</button>}
+                    {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item clay-action"><Lock className="w-4 h-4" />Clôturer</button>}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
         {/* ═══ MOBILE ═══ */}
         <div className="lg:hidden">
           {/* Line 1: search + filter + actions */}
-          <div className="flex items-center h-11 px-2 gap-1.5">
+          <div className="flex min-h-[52px] items-center gap-1.5 px-2 py-1">
             <div className="flex items-center gap-1.5 flex-1 min-w-0 h-9">
               <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
               <input
@@ -2631,74 +2656,58 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </button>
               )}
             </div>
-            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 rounded-md transition-colors ${categoryId ? 'text-brand-700 bg-brand-50' : 'text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]'}`} title="Catégorie">
-              <Tag className="w-4.5 h-4.5" />
+            <span className="num shrink-0 text-[10px] text-[var(--w-text-muted)]">{filtered.length} art.</span>
+            <button onClick={() => setCategoryPickerOpen(true)} className={`pos-touch-control shrink-0 clay-action ${categoryId || categoryPickerOpen ? 'clay-selected' : ''}`} aria-expanded={categoryPickerOpen} title="Catégorie">
+              <Tag className="h-5 w-5" />
             </button>
-            <button onClick={() => setMobileActionsOpen(true)} className="shrink-0 p-2 rounded-md text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] transition-colors relative" title="Actions">
-              <MenuIcon className="w-4.5 h-4.5" />
+            <button onClick={() => setMobileActionsOpen(true)} className={`pos-touch-control relative shrink-0 clay-action ${mobileActionsOpen ? 'clay-selected' : ''}`} aria-expanded={mobileActionsOpen} aria-label="Actions de caisse" title="Actions">
+              <MoreHorizontal className="h-5 w-5" />
               {webOrdersCounts.a_transformer > 0 && <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />}
             </button>
           </div>
-          {/* Line 2: thin filter pills */}
-          <div className="flex items-center h-8 px-2 gap-1 border-t border-[var(--w-separator)] overflow-x-auto scrollbar-hide">
-            {(() => {
-              if (depotAllOptions.length <= 1) return null;
-              const selectedName = depotAllOptions.find(o => o.id === saleSourceSiteId)?.name || currentSite?.name || 'Stock';
-              return (
-                <div className="relative shrink-0">
-                  <button ref={mobileDepotTriggerRef} onClick={() => {
-                    const el = mobileDepotTriggerRef.current;
-                    if (el) {
-                      const r = el.getBoundingClientRect();
-                      const menuH = depotAllOptions.length * 34 + 8;
-                      const spaceBelow = window.innerHeight - r.bottom - 8;
-                      const flip = spaceBelow < menuH && r.top > spaceBelow;
-                      setMobileDepotPos({
-                        top: flip ? Math.max(8, r.top - menuH - 4) : r.bottom + 4,
-                        left: Math.max(8, Math.min(r.left, window.innerWidth - 184)),
-                        flip,
-                      });
-                    }
-                    setMobileDepotOpen(v => !v);
-                  }} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]" disabled={stockSourceLoading}>
-                    {stockSourceLoading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : null}
-                    <span className="whitespace-nowrap">Dépot source: {selectedName}</span><ChevronDown className={`w-2.5 h-2.5 transition-transform ${mobileDepotOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {mobileDepotOpen && ReactDOM.createPortal(
-                    <>
-                      <div className="fixed inset-0 z-[9998]" onClick={() => setMobileDepotOpen(false)} />
-                      <div className="fixed z-[9999] w-44 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in" style={{ top: mobileDepotPos.top, left: mobileDepotPos.left }}>
-                        {depotAllOptions.map(o => (
-                          <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-[11px] ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
-                            {o.id === saleSourceSiteId && <Check className="w-3.5 h-3.5" />}{o.name}
-                          </button>
-                        ))}
-                      </div>
-                    </>,
-                    document.body
-                  )}
-                </div>
-              );
-            })()}
-            {categoryId && (
-              <button onClick={() => setCategoryId('')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold">
-                {categories.find(c => c.id === categoryId)?.name} <X className="w-2.5 h-2.5" />
-              </button>
+          {/* Mobile catalogue filters */}
+          <div role="group" aria-label="Filtres du catalogue" className="flex flex-wrap items-center gap-1 border-t border-[var(--w-separator)] px-2 py-1">
+            {depotAllOptions.length > 1 && (
+              <div className="relative shrink-0">
+                <button ref={mobileDepotTriggerRef} onClick={() => setMobileDepotOpen(v => !v)} className="pos-touch-control max-w-24 gap-0.5 rounded-md px-1.5 text-[11px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]" title={stockSourceName} aria-label={`Dépôt source : ${stockSourceName}`} aria-expanded={mobileDepotOpen} disabled={stockSourceLoading}>
+                  {stockSourceLoading && <Loader2 className="w-2.5 h-2.5 shrink-0 animate-spin" />}
+                  <span className="min-w-0 truncate">Dépôt : {stockSourceName}</span>
+                  <ChevronDown className={`w-2.5 h-2.5 shrink-0 transition-transform ${mobileDepotOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {mobileDepotOpen && mobileDepotPos && ReactDOM.createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setMobileDepotOpen(false)} />
+                    <div className="fixed z-[9999] w-44 overflow-y-auto rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in" style={mobileDepotPos}>
+                      {depotAllOptions.map(o => (
+                        <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-left text-[11px] ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
+                          {o.id === saleSourceSiteId && <Check className="w-3.5 h-3.5 shrink-0" />}
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{o.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>,
+                  document.body
+                )}
+              </div>
             )}
-            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
-              {sortMode === 'top' ? <TrendingUp className="w-3 h-3 text-amber-500" /> : <ArrowDownAZ className="w-3 h-3" />}
+            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="pos-touch-control shrink-0 gap-1 px-2 text-[11px] font-semibold clay-action">
+              {sortMode === 'top' ? <TrendingUp className="w-3 h-3" /> : <ArrowDownAZ className="w-3 h-3" />}
               {sortMode === 'top' ? 'Top' : 'A→Z'}
             </button>
-            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
+            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="pos-touch-control shrink-0 gap-1 px-2 text-[11px] font-semibold clay-action">
               {articleView === 'grid' ? <List className="w-3 h-3" /> : <LayoutGrid className="w-3 h-3" />}
               {articleView === 'grid' ? 'Liste' : 'Grille'}
             </button>
             {autoMode && (
-              <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
+              <button onClick={() => setVehiclePickerOpen(true)} className="pos-touch-control shrink-0 gap-1 rounded-md px-1.5 text-[11px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
                 <Car className="w-3 h-3" />Véhicule
               </button>
             )}
-            <span className="text-[var(--w-text-disabled)] text-[10px] num shrink-0 ml-auto">{filtered.length} art.</span>
+            {categoryId && (
+              <button onClick={() => setCategoryId('')} className="pos-touch-control max-w-[7.5rem] gap-1 rounded-md bg-[var(--w-active)] px-1.5 text-[11px] font-semibold text-[var(--w-text)]" aria-label="Effacer le filtre de catégorie" title={activeCategoryName}>
+                <span className="min-w-0 truncate">{activeCategoryName || 'Catégorie'}</span><X className="w-2.5 h-2.5 shrink-0" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2707,20 +2716,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {mobileActionsOpen && (
         <div className="fixed inset-0 z-50 lg:hidden animate-fade-in">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setMobileActionsOpen(false)} />
-          <div className="absolute bottom-0 inset-x-0 bg-[var(--w-surface)] rounded-t-2xl shadow-lg animate-slide-up" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="absolute bottom-0 inset-x-0 max-h-[100dvh] overflow-y-auto bg-[var(--w-surface)] rounded-t-2xl shadow-lg animate-slide-up" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="w-10 h-1 rounded-full bg-[var(--w-text-disabled)] mx-auto mt-2 mb-3" />
-            <div className="px-4 pb-4 space-y-0.5">
-              <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item"><List className="w-5 h-5" />Tickets</button>
-              {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item"><RotateCcw className="w-5 h-5" />Retour</button>}
-              {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
-              <button onClick={() => { setMobileActionsOpen(false); openCustomerPayment(); }} className="pos-sheet-item"><Wallet className="w-5 h-5" />Encaisser un client</button>
-              {can('pos_view_session_stats') && <button onClick={() => { setMobileActionsOpen(false); openStats(); }} className="pos-sheet-item"><BarChart2 className="w-5 h-5" />Stats</button>}
-              <button onClick={() => { setMobileActionsOpen(false); holdCart(); }} className="pos-sheet-item"><Pause className="w-5 h-5" />Pause</button>
-              {hasModule('online_orders') && <button onClick={() => { setMobileActionsOpen(false); openWebOrders(); }} className="pos-sheet-item relative"><Globe className="w-5 h-5" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
+            <div className="px-4 pb-4 space-y-0.5" {...clayTouchHandlers}>
+              {activeRegisterHeader}
+              <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item clay-action"><List className="w-5 h-5" />Tickets</button>
+              {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item clay-action"><RotateCcw className="w-5 h-5" />Retour</button>}
+              {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item clay-action"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
+              <button onClick={() => { setMobileActionsOpen(false); openCustomerPayment(); }} className="pos-sheet-item clay-action"><Wallet className="w-5 h-5" />Encaisser un client</button>
+              {can('pos_view_session_stats') && <button onClick={() => { setMobileActionsOpen(false); openStats(); }} className="pos-sheet-item clay-action"><BarChart2 className="w-5 h-5" />Stats</button>}
+              <button onClick={() => { setMobileActionsOpen(false); holdCart(); }} className="pos-sheet-item clay-action"><Pause className="w-5 h-5" />Pause</button>
+              {hasModule('online_orders') && <button onClick={() => { setMobileActionsOpen(false); openWebOrders(); }} className="pos-sheet-item clay-action relative"><Globe className="w-5 h-5" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
               <div className="h-px bg-[var(--w-separator)] my-1" />
-              <button onClick={() => { setMobileActionsOpen(false); leaveSession(); }} className="pos-sheet-item"><LogOut className="w-5 h-5" />Quitter</button>
-              {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setMobileActionsOpen(false); setSupervising(true); }} className="pos-sheet-item"><Eye className="w-5 h-5" />Superviser une caisse</button>}
-              {can('pos_close_session') && <button onClick={() => { setMobileActionsOpen(false); openCloseWorkflow(); }} className="pos-sheet-item text-red-600"><Lock className="w-5 h-5" />Clôturer</button>}
+              <button onClick={() => { setMobileActionsOpen(false); leaveSession(); }} className="pos-sheet-item clay-action"><LogOut className="w-5 h-5" />Quitter</button>
+              {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setMobileActionsOpen(false); setSupervising(true); }} className="pos-sheet-item clay-action"><Eye className="w-5 h-5" />Supervision</button>}
+              {can('pos_close_session') && <button onClick={() => { setMobileActionsOpen(false); openCloseWorkflow(); }} className="pos-sheet-item clay-action"><Lock className="w-5 h-5" />Clôturer</button>}
             </div>
           </div>
         </div>
@@ -2818,7 +2828,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         </div>
 
-        <aside className="hidden lg:flex w-[400px] xl:w-[440px] bg-[var(--w-surface)] border-l border-[var(--w-separator)] flex-col shadow-[inset_8px_0_24px_-16px_rgb(15_23_42_/0.08)]">
+        <aside aria-label="Panier" className="hidden lg:flex w-[400px] xl:w-[440px] bg-[var(--w-surface)] border-l border-[var(--w-separator)] flex-col shadow-[inset_8px_0_24px_-16px_rgb(15_23_42_/0.08)]">
           {CartPanel}
         </aside>
 
@@ -2849,7 +2859,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
 
       {/* Category picker modal */}
-      <CategoryPickerModal open={categoryPickerOpen} onClose={() => setCategoryPickerOpen(false)} categories={categories} onSelect={v => { setCategoryId(v); setCategoryPickerOpen(false); }} />
+      <CategoryPickerModal open={categoryPickerOpen} onClose={() => setCategoryPickerOpen(false)} categories={categories} selected={categoryId} onSelect={v => { setCategoryId(v); setCategoryPickerOpen(false); }} />
 
       {/* Vehicle article picker */}
       {autoMode && <VehicleArticlePicker
