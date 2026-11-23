@@ -1,6 +1,6 @@
 import { useSalePrice } from '../lib/useSalePrice';
 import { formatVatAmount } from '../lib/salesVat';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import ReactDOM from 'react-dom';
 import {
   Search,
@@ -903,6 +903,17 @@ function POSLandingResume({
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
+
+function setClayTouchPressed(event: PointerEvent<HTMLDivElement>, pressed: boolean) {
+  if (event.pointerType !== 'touch' || !(event.target instanceof Element)) return;
+  event.target.closest('button.pos-clay-action')?.toggleAttribute('data-clay-pressed', pressed);
+}
+
+const clayTouchHandlers = {
+  onPointerDown: (event: PointerEvent<HTMLDivElement>) => setClayTouchPressed(event, true),
+  onPointerUp: (event: PointerEvent<HTMLDivElement>) => setClayTouchPressed(event, false),
+  onPointerCancel: (event: PointerEvent<HTMLDivElement>) => setClayTouchPressed(event, false),
+};
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange, setCurrentSite } = useApp();
@@ -2509,7 +2520,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     <>
     <div className="flex-1 flex flex-col overflow-hidden w-full min-h-0" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-top))' }}>
       {/* ── Unified command bar ─────────────────────────────────────── */}
-      <div className="pos-command-bar shrink-0 relative z-20">
+      <div className="pos-command-bar shrink-0 relative z-20" {...clayTouchHandlers}>
         {/* ═══ DESKTOP ═══ */}
         <div className="hidden lg:flex items-center h-[52px] px-2 gap-1">
           <div className="pos-search flex items-center gap-2 flex-1 min-w-0 h-9 mx-1 px-2.5">
@@ -2709,7 +2720,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setMobileActionsOpen(false)} />
           <div className="absolute bottom-0 inset-x-0 bg-[var(--w-surface)] rounded-t-2xl shadow-lg animate-slide-up" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="w-10 h-1 rounded-full bg-[var(--w-text-disabled)] mx-auto mt-2 mb-3" />
-            <div className="px-4 pb-4 space-y-0.5">
+            <div className="px-4 pb-4 space-y-0.5" {...clayTouchHandlers}>
               <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item pos-clay-action"><List className="w-5 h-5" />Tickets</button>
               {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item pos-clay-action"><RotateCcw className="w-5 h-5" />Retour</button>}
               {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item pos-clay-action"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
