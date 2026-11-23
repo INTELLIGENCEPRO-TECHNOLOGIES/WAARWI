@@ -638,19 +638,6 @@ p { line-height: 1.6; }
     border-color: #E5E5E5;
     box-shadow: 0 0 0 1px #E5E5E5;
   }
-  .pos-session-btn {
-    @apply inline-flex items-center gap-2 h-9 pl-2.5 pr-2 rounded-md transition-colors;
-    background: #FFFFFF;
-    border: 1px solid #DDDDDD;
-  }
-  .pos-session-btn:hover,
-  .pos-session-btn.is-open { border-color: #BBBBBB; }
-  [data-theme="dark"] .pos-session-btn {
-    background: #262626;
-    border-color: #3A3A3A;
-  }
-  [data-theme="dark"] .pos-session-btn:hover,
-  [data-theme="dark"] .pos-session-btn.is-open { border-color: #555555; }
   .pos-pop-item {
     @apply flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium transition-colors;
     color: var(--w-text);

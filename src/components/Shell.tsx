@@ -49,7 +49,6 @@ const NAV_ALIASES: Partial<Record<Route, string[]>> = {
   money_transfer: ['transfert', 'transfert d argent', 'money', 'transfer', 'western union', 'ria', 'moneygram'],
   ipm: ['ipm', 'bordereau', 'bordereaux'],
   accounting: ['comptabilite', 'compte', 'comptes', 'journal', 'balance', 'grand livre', 'cloture'],
-  settings: ['parametre', 'parametres', 'configuration', 'config', 'setting', 'reglage', 'reglages'],
 };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -426,7 +425,6 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         }
       }
     }
-    items.push({ key: 'settings' as Route, labelKey: 'nav.settings', icon: Settings, group: 'nav.system' });
     return items;
   }, []);
 
@@ -691,19 +689,6 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         </div>
         );
       })}
-      {routeVisible('settings') && (
-        <div>
-          {!sidebarVisualCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.system')}</div>}
-          <button
-            onClick={() => { onRoute('settings'); setMobileOpen(false); }}
-            className={`nav-item clay-action ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
-            title={sidebarVisualCollapsed ? t('nav.settings') : undefined}
-          >
-            <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-            {!sidebarVisualCollapsed && <span className="whitespace-normal break-words">{t('nav.settings')}</span>}
-          </button>
-        </div>
-      )}
       </>
       )}
     </nav>
@@ -907,9 +892,6 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     {now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </span>
                 </div>
-                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`clay-action shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)]`}>
-                  <Settings className="w-4 h-4" />
-                </button>
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto px-2.5 pb-1 space-y-1.5 scrollbar-hide">

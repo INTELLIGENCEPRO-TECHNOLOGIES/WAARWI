@@ -86,12 +86,14 @@ import { CategoryPickerModal } from './ArticlesComponents';
 import { PosNumpad, type NumpadField } from '../components/PosNumpad';
 import { QtyInput } from '../components/QtyInput';
 import { PosRegisterPicker } from '../components/PosRegisterPicker';
-import { newIdempotencyKey, registerLabel, registerText, type PosCashContext } from '../lib/cashSession';
+import { newIdempotencyKey, registerText, type OperationalCashSession, type PosCashContext } from '../lib/cashSession';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 
 import { fetchPosArticlesById, fetchPosCatalog, type PosArticle as ArticleLite, type PosArticleTier } from '../lib/posCatalog';
 
 const noScores: Record<string, number> = {};
+
+type PosCashSession = CashSession & Pick<OperationalCashSession, 'register_code' | 'register_name'>;
 
 type HeldCart = {
   id: string;
@@ -946,7 +948,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersStatus, setCustomersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const methods = useMemo(() => (refData?.paymentMethods || []).filter(m => m.tenant_id === tenant?.id && m.payment_type !== 'credit') as PaymentMethod[], [refData, tenant?.id]);
-  const [session, setSession] = useState<CashSession | null>(null);
+  const [session, setSession] = useState<PosCashSession | null>(null);
   const cashCtx: CashOpContext | null = session ? {
     mode: 'personal', sessionId: session.id, siteId: session.site_id,
     registerLabel: '', operatorName: cashierName, siteName: currentSite?.name || '',
@@ -1269,7 +1271,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         throw result.error || new Error('Impossible de vérifier l’état des caisses');
       }
       const ctx = result.data as PosCashContext;
-      let existingSession = ctx.my_session as CashSession | null;
+      let existingSession = ctx.my_session as PosCashSession | null;
       if (!ctx.multi_enabled) {
         // Legacy sessions can predate cash_register_id.
         const legacy = await supabase.from('cash_sessions').select('*')
@@ -2472,6 +2474,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     </div>
   );
 
+  const activeRegisterHeader = multiCash && (session?.register_code || session?.register_name) && (
+    <div className="border-b border-[var(--w-separator)] px-3 py-2">
+      <div className="text-[11px] text-[var(--w-text-muted)]">Caisse active</div>
+      <div className="break-words text-sm font-semibold text-[var(--w-text)]">
+        {registerText(session.register_code, session.register_name)}
+      </div>
+    </div>
+  );
+
   return (
     <>
     {isResumeScreen && session ? (
@@ -2581,26 +2592,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <button onClick={holdCart} className="chip clay-action" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
           {/* Session popover button */}
           <div className="relative">
-            {(() => {
-              const reg = multiCash && ((session as any)?.register_code || (session as any)?.register_name);
-              return (
-                <button onClick={() => setSessionPopOpen(v => !v)} className={`pos-session-btn ml-1 ${sessionPopOpen ? 'is-open' : ''}`} aria-expanded={sessionPopOpen}>
-                  {reg ? (
-                    <span className="flex flex-col items-start min-w-0 leading-tight">
-                      <span className="text-[10px] font-medium text-[var(--w-text-muted)]">Session</span>
-                      <span title={registerText((session as any).register_code, (session as any).register_name)} className="text-xs font-bold text-[var(--w-text)] max-w-[10rem] truncate">{registerLabel((session as any).register_code, (session as any).register_name).primary}</span>
-                    </span>
-                  ) : (
-                    <span className="text-xs font-bold text-[var(--w-text)]">Session</span>
-                  )}
-                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-[var(--w-text-muted)] transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
-                </button>
-              );
-            })()}
+            <button
+              onClick={() => setSessionPopOpen(v => !v)}
+              className={`chip clay-action ${sessionPopOpen ? 'clay-selected' : ''}`}
+              aria-expanded={sessionPopOpen}
+              aria-label="Session"
+              data-label={sessionPopOpen ? undefined : 'Session'}
+            >
+              <span className="hidden xl:inline">Session</span>
+              <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
+            </button>
             {sessionPopOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSessionPopOpen(false)} />
                 <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg p-1 space-y-0.5 animate-fade-in">
+                  {activeRegisterHeader}
                   {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item clay-action"><BarChart2 className="w-4 h-4" />Stats</button>}
                   <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item clay-action"><Wallet className="w-4 h-4" />Encaisser un client</button>
                   {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item clay-action relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
@@ -2635,7 +2641,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 clay-action ${categoryId ? 'clay-selected' : ''}`} title="Catégorie">
               <Tag className="w-4.5 h-4.5" />
             </button>
-            <button onClick={() => setMobileActionsOpen(true)} className="shrink-0 p-2 rounded-md text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] transition-colors relative" title="Actions">
+            <button onClick={() => setMobileActionsOpen(true)} className={`relative shrink-0 p-2 clay-action ${mobileActionsOpen ? 'clay-selected' : ''}`} aria-expanded={mobileActionsOpen} title="Actions">
               <MenuIcon className="w-4.5 h-4.5" />
               {webOrdersCounts.a_transformer > 0 && <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />}
             </button>
@@ -2708,9 +2714,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {mobileActionsOpen && (
         <div className="fixed inset-0 z-50 lg:hidden animate-fade-in">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setMobileActionsOpen(false)} />
-          <div className="absolute bottom-0 inset-x-0 bg-[var(--w-surface)] rounded-t-2xl shadow-lg animate-slide-up" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="absolute bottom-0 inset-x-0 max-h-[100dvh] overflow-y-auto bg-[var(--w-surface)] rounded-t-2xl shadow-lg animate-slide-up" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="w-10 h-1 rounded-full bg-[var(--w-text-disabled)] mx-auto mt-2 mb-3" />
             <div className="px-4 pb-4 space-y-0.5" {...clayTouchHandlers}>
+              {activeRegisterHeader}
               <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item clay-action"><List className="w-5 h-5" />Tickets</button>
               {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item clay-action"><RotateCcw className="w-5 h-5" />Retour</button>}
               {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item clay-action"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
