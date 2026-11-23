@@ -1,3 +1,4 @@
+import { clayTouchHandlers } from '../lib/clayTouch';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -546,7 +547,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           {!sidebarVisualCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Plateforme</div>}
           <button
             onClick={() => { onRoute('platform_admin'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item clay-action ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarVisualCollapsed ? t('nav.platform') : undefined}
           >
             <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
@@ -584,7 +585,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           ) : (
             <button
               onClick={() => { setSearchExpanded(true); setTimeout(() => navSearchRef.current?.focus(), 10); }}
-              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
+              className={`clay-action flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
               title={t('nav.search')}
             >
               <Search className="w-4 h-4" />
@@ -605,7 +606,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
               <button
                 key={item.key}
                 onClick={() => { handleRoute(item.key); setNavSearch(''); setMobileOpen(false); }}
-                className={`nav-item ${active ? 'nav-item-active' : 'nav-item-idle'}`}
+                className={`nav-item clay-action ${active ? 'nav-item-active' : 'nav-item-idle'}`}
               >
                 <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                 {!sidebarVisualCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
@@ -628,7 +629,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
               onClick={() => toggleSection(group.titleKey)}
               aria-expanded={sectionOpen}
               aria-controls={sectionId}
-              className={`w-full flex items-center gap-1.5 px-3 mb-1 py-1 rounded text-[11px] font-semibold tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-0 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)] focus-visible:ring-neutral-400`}
+              className={`clay-action w-full flex items-center gap-1.5 px-3 mb-1 py-1 rounded text-[11px] font-semibold tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-0 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)] focus-visible:ring-neutral-400`}
             >
               {sectionOpen
                 ? <ChevronDown className="w-4 h-4 flex-shrink-0" />
@@ -650,7 +651,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                       if (hasChildren) { setDesktopAcctOpen(o => !o); }
                       else { handleRoute(item.key); setMobileOpen(false); }
                     }}
-                    className={`nav-item ${(active || childActive) ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+                    className={`nav-item clay-action ${(active || childActive) ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
                     title={sidebarVisualCollapsed ? t(item.labelKey) : undefined}
                   >
                     <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
@@ -674,7 +675,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                           <button
                             key={child.key}
                             onClick={() => { handleRoute(child.key); setMobileOpen(false); }}
-                            className={`nav-item text-[13px] ${childActive2 ? 'nav-item-active' : 'nav-item-idle'}`}
+                            className={`nav-item clay-action text-[13px] ${childActive2 ? 'nav-item-active' : 'nav-item-idle'}`}
                           >
                             <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                             <span className="whitespace-normal break-words">{t(child.labelKey)}</span>
@@ -695,7 +696,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           {!sidebarVisualCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.system')}</div>}
           <button
             onClick={() => { onRoute('settings'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item clay-action ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarVisualCollapsed ? t('nav.settings') : undefined}
           >
             <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
@@ -847,16 +848,17 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
             onMouseLeave={onSidebarLeave}
             onFocus={onSidebarFocusIn}
             onBlur={onSidebarFocusOut}
+            {...clayTouchHandlers}
           >
             {navList}
             <div className={`p-3 border-t space-y-2 border-[var(--w-separator-l)]`}>
-              <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarVisualCollapsed ? 'justify-center' : ''} text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)]`}>
+              <button onClick={signOut} className={`clay-action w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarVisualCollapsed ? 'justify-center' : ''} text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)]`}>
                 <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarVisualCollapsed && 'Déconnexion'}
               </button>
               <div className={`flex items-center ${sidebarVisualCollapsed ? 'flex-col gap-1' : 'gap-1'}`}>
                 <button
                   onClick={() => { setSidebarCollapsed(v => !v); if (isPOS) setSidebarManualOverride(true); }}
-                  className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
+                  className={`clay-action flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
                   title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
                 >
                   {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
@@ -884,6 +886,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           >
             <div
               className="float-sidebar-content"
+              {...clayTouchHandlers}
             >
               <div className={`flex items-center px-4 pt-3.5 pb-3 border-b border-[var(--w-separator-l)]`}>
                 <div className="flex items-center min-w-0 shrink-0">
@@ -904,7 +907,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     {now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </span>
                 </div>
-                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)]`}>
+                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`clay-action shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)]`}>
                   <Settings className="w-4 h-4" />
                 </button>
               </div>
@@ -915,7 +918,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Plateforme</div>
                     <button
                       onClick={() => { onRoute('platform_admin'); closeDrawer(); }}
-                      className={`float-nav-item-compact ${route === 'platform_admin' ? 'float-nav-item-active' : ''}`}
+                      className={`float-nav-item-compact clay-action ${route === 'platform_admin' ? 'float-nav-item-active' : ''}`}
                     >
                       <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                       <span className="truncate">{t('nav.platform')}</span>
@@ -950,7 +953,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     ) : (
                       <button
                         onClick={() => { setSearchExpanded(true); setTimeout(() => navSearchRef.current?.focus(), 10); }}
-                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
+                        className={`clay-action flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
                         title={t('nav.search')}
                       >
                         <Search className="w-4 h-4" />
@@ -968,7 +971,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                         <button
                           key={item.key}
                           onClick={() => { handleRoute(item.key); setNavSearch(''); closeDrawer(); }}
-                          className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''}`}
+                          className={`float-nav-item-compact clay-action ${active ? 'float-nav-item-active' : ''}`}
                         >
                           <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                           <span className="truncate">{t(item.labelKey)}</span>
@@ -990,7 +993,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                       onClick={() => toggleSection(group.titleKey)}
                       aria-expanded={sectionOpen}
                       aria-controls={sectionId}
-                      className={`w-full flex items-center gap-1.5 px-2.5 mb-0.5 py-1 rounded text-[9px] font-semibold tracking-widest uppercase transition-colors focus:outline-none focus-visible:ring-1 text-[var(--w-text-muted)] focus-visible:ring-neutral-400`}
+                      className={`clay-action w-full flex items-center gap-1.5 px-2.5 mb-0.5 py-1 rounded text-[9px] font-semibold tracking-widest uppercase transition-colors focus:outline-none focus-visible:ring-1 text-[var(--w-text-muted)] focus-visible:ring-neutral-400`}
                     >
                       {sectionOpen
                         ? <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1011,7 +1014,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                                 if (hasChildren) { setMobileAcctOpen(o => o === item.key ? null : item.key); }
                                 else { handleRoute(item.key); closeDrawer(); }
                               }}
-                              className={`float-nav-item-compact ${(active || childActive) ? 'float-nav-item-active' : ''}`}
+                              className={`float-nav-item-compact clay-action ${(active || childActive) ? 'float-nav-item-active' : ''}`}
                             >
                               <Icon className={`w-4 h-4 shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                               <span className="truncate">{t(item.labelKey)}</span>
@@ -1031,7 +1034,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                                     <button
                                       key={child.key}
                                       onClick={() => { handleRoute(child.key); closeDrawer(); }}
-                                      className={`float-nav-item-compact text-[13px] ${childActive2 ? 'float-nav-item-active' : ''}`}
+                                      className={`float-nav-item-compact clay-action text-[13px] ${childActive2 ? 'float-nav-item-active' : ''}`}
                                     >
                                       <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                                       <span className="truncate">{t(child.labelKey)}</span>
@@ -1060,14 +1063,14 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                           <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors hover:bg-[var(--w-hover)]`}>
                             <button
                               onClick={() => { if (s.id === currentSite?.id) { closeDrawer(); return; } setSiteConfirmPending(s); closeDrawer(); }}
-                              className={`flex-1 flex items-center px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? 'text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-sec)]'}`}
+                              className={`clay-action flex-1 flex items-center px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? 'clay-selected text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-sec)]'}`}
                             >
                               <span className="truncate flex-1 text-left">{s.name}</span>
                             </button>
                             <button
                               onClick={() => { setDefaultSite(s); closeDrawer(); }}
                               title={isDefault ? 'Défaut' : 'Définir défaut'}
-                              className={`shrink-0 p-1.5 transition-colors ${isDefault ? 'text-[var(--w-text)]' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}
+                              className={`clay-action shrink-0 p-1.5 transition-colors ${isDefault ? 'text-[var(--w-text)]' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}
                             >
                               <Star className="w-3 h-3" fill={isDefault ? 'currentColor' : 'none'} />
                             </button>
@@ -1077,7 +1080,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     </div>
                   </div>
                 )}
-                <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-red-600 hover:bg-red-50`}>
+                <button onClick={signOut} className="clay-action w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium">
                   <LogOut className="w-4 h-4" />
                   <span>Déconnexion</span>
                 </button>

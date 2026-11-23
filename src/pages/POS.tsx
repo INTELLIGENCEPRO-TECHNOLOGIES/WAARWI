@@ -1,6 +1,7 @@
+import { clayTouchHandlers } from '../lib/clayTouch';
 import { useSalePrice } from '../lib/useSalePrice';
 import { formatVatAmount } from '../lib/salesVat';
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import {
   Search,
@@ -903,17 +904,6 @@ function POSLandingResume({
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
-
-function setClayTouchPressed(event: PointerEvent<HTMLDivElement>, pressed: boolean) {
-  if (event.pointerType !== 'touch' || !(event.target instanceof Element)) return;
-  event.target.closest('button.pos-clay-action')?.toggleAttribute('data-clay-pressed', pressed);
-}
-
-const clayTouchHandlers = {
-  onPointerDown: (event: PointerEvent<HTMLDivElement>) => setClayTouchPressed(event, true),
-  onPointerUp: (event: PointerEvent<HTMLDivElement>) => setClayTouchPressed(event, false),
-  onPointerCancel: (event: PointerEvent<HTMLDivElement>) => setClayTouchPressed(event, false),
-};
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange, setCurrentSite } = useApp();
@@ -2564,18 +2554,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             );
           })()}
           <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={() => setCategoryPickerOpen(true)} className={`chip pos-clay-action ${categoryId ? 'pos-clay-selected' : ''}`} title="Catégorie">
+          <button onClick={() => setCategoryPickerOpen(true)} className={`chip clay-action ${categoryId ? 'clay-selected' : ''}`} title="Catégorie">
             <Tag className="w-3.5 h-3.5" />
             <span className="hidden xl:inline max-w-[100px] truncate">{categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Cat.') : 'Catégorie'}</span>
             {categoryId && <button onClick={e => { e.stopPropagation(); setCategoryId(''); }} className="ml-0.5 hover:text-red-500"><X className="w-3 h-3" /></button>}
           </button>
           {/* Top / Alpha */}
-          <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip pos-clay-action" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
+          <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip clay-action" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
             {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
             <span className="hidden xl:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
           </button>
           {/* Grid / List */}
-          <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip pos-clay-action" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
+          <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip clay-action" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
             {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
             <span className="hidden xl:inline">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
           </button>
@@ -2585,10 +2575,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             </button>
           )}
           <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={openTickets} className="chip pos-clay-action" data-label="Tickets"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
-          {can('pos_returns') && <button onClick={openReturn} className="chip pos-clay-action" data-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
-          {can('pos_cash_movement') && <button onClick={openMovement} className="chip pos-clay-action" data-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouv.</span></button>}
-          <button onClick={holdCart} className="chip pos-clay-action" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
+          <button onClick={openTickets} className="chip clay-action" data-label="Tickets"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
+          {can('pos_returns') && <button onClick={openReturn} className="chip clay-action" data-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
+          {can('pos_cash_movement') && <button onClick={openMovement} className="chip clay-action" data-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouv.</span></button>}
+          <button onClick={holdCart} className="chip clay-action" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
           {/* Session popover button */}
           <div className="relative">
             {(() => {
@@ -2610,14 +2600,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {sessionPopOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSessionPopOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
-                  {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item"><BarChart2 className="w-4 h-4" />Stats</button>}
-                  <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item"><Wallet className="w-4 h-4" />Encaisser un client</button>
+                <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg p-1 space-y-0.5 animate-fade-in">
+                  {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item clay-action"><BarChart2 className="w-4 h-4" />Stats</button>}
+                  <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item clay-action"><Wallet className="w-4 h-4" />Encaisser un client</button>
                   {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
                   <div className="h-px bg-[var(--w-separator)] my-1" />
-                  <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item"><LogOut className="w-4 h-4" />Quitter</button>
-                  {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item"><Eye className="w-4 h-4" />Superviser une caisse</button>}
-                  {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item text-red-600"><Lock className="w-4 h-4" />Clôturer</button>}
+                  <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item clay-action"><LogOut className="w-4 h-4" />Quitter</button>
+                  {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item clay-action"><Eye className="w-4 h-4" />Superviser une caisse</button>}
+                  {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item clay-action"><Lock className="w-4 h-4" />Clôturer</button>}
                 </div>
               </>
             )}
@@ -2642,7 +2632,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </button>
               )}
             </div>
-            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 pos-clay-action ${categoryId ? 'pos-clay-selected' : ''}`} title="Catégorie">
+            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 clay-action ${categoryId ? 'clay-selected' : ''}`} title="Catégorie">
               <Tag className="w-4.5 h-4.5" />
             </button>
             <button onClick={() => setMobileActionsOpen(true)} className="shrink-0 p-2 rounded-md text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] transition-colors relative" title="Actions">
@@ -2696,11 +2686,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 {categories.find(c => c.id === categoryId)?.name} <X className="w-2.5 h-2.5" />
               </button>
             )}
-            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold pos-clay-action">
+            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold clay-action">
               {sortMode === 'top' ? <TrendingUp className="w-3 h-3" /> : <ArrowDownAZ className="w-3 h-3" />}
               {sortMode === 'top' ? 'Top' : 'A→Z'}
             </button>
-            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold pos-clay-action">
+            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold clay-action">
               {articleView === 'grid' ? <List className="w-3 h-3" /> : <LayoutGrid className="w-3 h-3" />}
               {articleView === 'grid' ? 'Liste' : 'Grille'}
             </button>
@@ -2721,17 +2711,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="absolute bottom-0 inset-x-0 bg-[var(--w-surface)] rounded-t-2xl shadow-lg animate-slide-up" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="w-10 h-1 rounded-full bg-[var(--w-text-disabled)] mx-auto mt-2 mb-3" />
             <div className="px-4 pb-4 space-y-0.5" {...clayTouchHandlers}>
-              <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item pos-clay-action"><List className="w-5 h-5" />Tickets</button>
-              {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item pos-clay-action"><RotateCcw className="w-5 h-5" />Retour</button>}
-              {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item pos-clay-action"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
-              <button onClick={() => { setMobileActionsOpen(false); openCustomerPayment(); }} className="pos-sheet-item"><Wallet className="w-5 h-5" />Encaisser un client</button>
-              {can('pos_view_session_stats') && <button onClick={() => { setMobileActionsOpen(false); openStats(); }} className="pos-sheet-item"><BarChart2 className="w-5 h-5" />Stats</button>}
-              <button onClick={() => { setMobileActionsOpen(false); holdCart(); }} className="pos-sheet-item pos-clay-action"><Pause className="w-5 h-5" />Pause</button>
+              <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item clay-action"><List className="w-5 h-5" />Tickets</button>
+              {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item clay-action"><RotateCcw className="w-5 h-5" />Retour</button>}
+              {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item clay-action"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
+              <button onClick={() => { setMobileActionsOpen(false); openCustomerPayment(); }} className="pos-sheet-item clay-action"><Wallet className="w-5 h-5" />Encaisser un client</button>
+              {can('pos_view_session_stats') && <button onClick={() => { setMobileActionsOpen(false); openStats(); }} className="pos-sheet-item clay-action"><BarChart2 className="w-5 h-5" />Stats</button>}
+              <button onClick={() => { setMobileActionsOpen(false); holdCart(); }} className="pos-sheet-item clay-action"><Pause className="w-5 h-5" />Pause</button>
               {hasModule('online_orders') && <button onClick={() => { setMobileActionsOpen(false); openWebOrders(); }} className="pos-sheet-item relative"><Globe className="w-5 h-5" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
               <div className="h-px bg-[var(--w-separator)] my-1" />
-              <button onClick={() => { setMobileActionsOpen(false); leaveSession(); }} className="pos-sheet-item"><LogOut className="w-5 h-5" />Quitter</button>
-              {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setMobileActionsOpen(false); setSupervising(true); }} className="pos-sheet-item"><Eye className="w-5 h-5" />Superviser une caisse</button>}
-              {can('pos_close_session') && <button onClick={() => { setMobileActionsOpen(false); openCloseWorkflow(); }} className="pos-sheet-item text-red-600"><Lock className="w-5 h-5" />Clôturer</button>}
+              <button onClick={() => { setMobileActionsOpen(false); leaveSession(); }} className="pos-sheet-item clay-action"><LogOut className="w-5 h-5" />Quitter</button>
+              {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setMobileActionsOpen(false); setSupervising(true); }} className="pos-sheet-item clay-action"><Eye className="w-5 h-5" />Superviser une caisse</button>}
+              {can('pos_close_session') && <button onClick={() => { setMobileActionsOpen(false); openCloseWorkflow(); }} className="pos-sheet-item clay-action"><Lock className="w-5 h-5" />Clôturer</button>}
             </div>
           </div>
         </div>

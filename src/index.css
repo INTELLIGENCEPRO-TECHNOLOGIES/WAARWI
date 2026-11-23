@@ -662,7 +662,7 @@ p { line-height: 1.6; }
   }
   .pos-sheet-item:hover { background: var(--w-hover); }
 
-  button.pos-clay-action {
+  button.clay-action {
     border-radius: 6px;
     touch-action: manipulation;
     color: var(--w-text);
@@ -673,22 +673,22 @@ p { line-height: 1.6; }
     transition: background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
   }
   @media (hover: hover) {
-    button.pos-clay-action:hover { background: var(--w-hover); }
+    button.clay-action:hover { background: var(--w-hover); }
   }
-  button.pos-clay-action.pos-clay-selected,
-  button.pos-clay-action:is(:active, [data-clay-pressed]) {
+  button.clay-action:is(.clay-selected, .nav-item-active, .float-nav-item-active),
+  button.clay-action:is(:active, [data-clay-pressed]) {
     background: var(--w-active);
     box-shadow: inset 0 1px 3px rgb(0 0 0 / 17%),
                 inset 0 -1px 1px rgb(255 255 255 / 16%);
   }
-  button.pos-clay-action:is(:active, [data-clay-pressed]) { transform: translateY(1px); }
-  button.pos-clay-action:focus-visible {
+  button.clay-action:is(:active, [data-clay-pressed]) { transform: translateY(1px); }
+  button.clay-action:focus-visible {
     outline: 2px solid var(--w-text);
     outline-offset: 1px;
   }
   @media (prefers-reduced-motion: reduce) {
-    button.pos-clay-action { transition: none; }
-    button.pos-clay-action:is(:active, [data-clay-pressed]) { transform: none; }
+    button.clay-action { transition: none; }
+    button.clay-action:is(:active, [data-clay-pressed]) { transform: none; }
   }
 
   .animate-slide-up {
