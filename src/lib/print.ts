@@ -1,3 +1,4 @@
+import type { VatAmounts } from './salesVat';
 import { BUSINESS_TYPE_LABELS, mergeTicketHeaderConfig, mergeA4HeaderConfig } from './types';
 import type { TicketHeaderItem, TicketHeaderSize, A4HeaderConfig, A4LogoPosition } from './types';
 import { cashMovementLabel, cashMovementSign } from './cashMovements';
@@ -622,6 +623,7 @@ export function printTicket80(
     created_at: string;
     total: number;
     discount: number;
+    vat?: VatAmounts;
     items: PrintItem[];
     payments: PrintPayment[];
     customer?: PrintCustomer;
@@ -672,7 +674,10 @@ ${itemsHtml}
 <hr class="hr" />
 <div class="row"><span>Sous-total</span><span>${fmtMoney(subtotal)} FCFA</span></div>
 ${sale.discount > 0 ? `<div class="row"><span>Remise</span><span>- ${fmtMoney(sale.discount)} FCFA</span></div>` : ''}
-<div class="row total"><span>TOTAL</span><span>${fmtMoney(sale.total)} FCFA</span></div>
+${sale.vat?.vat_net_amount != null ? `
+<div class="row"><span>Total HT</span><span>${fmtMoney(sale.vat.vat_net_amount)} FCFA</span></div>
+<div class="row"><span>TVA</span><span>${fmtMoney(sale.vat.vat_amount ?? 0)} FCFA</span></div>` : ''}
+<div class="row total"><span>${sale.vat?.vat_net_amount != null ? 'TOTAL TTC' : 'TOTAL'}</span><span>${fmtMoney(sale.total)} FCFA</span></div>
 <hr class="hr" />
 ${sale.payments.map(p => `<div class="row payment"><span>${esc(p.method_name)}</span><span><strong>${fmtMoney(p.amount)} FCFA</strong></span></div>`).join('')}
 ${change > 0 ? `<div class="row change"><span>MONNAIE RENDUE</span><span>${fmtMoney(change)} FCFA</span></div>` : ''}
@@ -693,10 +698,11 @@ export function printReturnTicket80(
   tenant: PrintTenant,
   cashier: string,
   returnNumber?: string,
-  customerName?: string | null
+  customerName?: string | null,
+  vat?: VatAmounts
 ) {
   const itemsHtml = items
-    .map(i => `<div class="row"><span style="white-space:normal">${esc(i.name)} x${i.quantity}</span><span>- ${fmtMoney(i.quantity * i.unit_price)}</span></div>`)
+    .map(i => `<div class="row"><span style="white-space:normal">${esc(i.name)} x${i.quantity}</span><span>${vat?.vat_net_amount != null ? '' : `- ${fmtMoney(i.quantity * i.unit_price)}`}</span></div>`)
     .join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Retour</title>
@@ -708,6 +714,9 @@ ${tenantHeader80Compact(tenant)}
 <div class="line">Caissier: ${esc(cashier)}${customerName ? ` · Client: ${esc(customerName)}` : ''}</div>
 <hr class="hr" />
 ${itemsHtml}
+${vat?.vat_net_amount != null ? `
+<div class="row"><span>Total HT</span><span>${fmtMoney(vat.vat_net_amount)} FCFA</span></div>
+<div class="row"><span>TVA</span><span>${fmtMoney(vat.vat_amount ?? 0)} FCFA</span></div>` : ''}
 <div class="row total"><span>REMBOURSEMENT</span><span>- ${fmtMoney(total)} FCFA</span></div>
 </body></html>`;
   printHtml(html);
@@ -1146,6 +1155,7 @@ type CommercialDocOpts = {
   items: PrintItem[];
   subtotal: number;
   discount?: number;
+  vat?: VatAmounts;
   total: number;
   payments?: PrintPayment[];
   paid?: number;
@@ -1234,6 +1244,9 @@ async function printPagedDocument(opts: CommercialDocOpts, f: PagedFormat) {
     <div class="financial-box">
       <div class="fin-row subtotal-fin"><span>${subtotalLabel}</span><span>${fmtMoney(subtotal)} FCFA</span></div>
       ${hasDiscount ? `<div class="fin-row discount"><span>Remise</span><span>${masked ? MASK : `- ${fmtMoney(opts.discount || 0)} FCFA`}</span></div>` : ''}
+      ${opts.vat?.vat_net_amount != null && !masked ? `
+        <div class="fin-row"><span>Total HT</span><span>${fmtMoney(opts.vat.vat_net_amount)} FCFA</span></div>
+        <div class="fin-row"><span>TVA</span><span>${fmtMoney(opts.vat.vat_amount ?? 0)} FCFA</span></div>` : ''}
       <div class="fin-row grand"><span>TOTAL TTC</span><span>${masked ? MASK : `${fmtMoney(opts.total)} FCFA`}</span></div>
       ${isInvoiceType ? `
         <div class="fin-row paid-row"><span>Règlement</span><span>${masked ? MASK : `${fmtMoney(paidAmount)} FCFA`}</span></div>

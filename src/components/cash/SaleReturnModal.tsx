@@ -41,7 +41,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
     try {
     const { data, error: salesErr } = await supabase
       .from('sales')
-      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(id, article_id, name, quantity, unit_price, purchase_cost)')
+      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(id, article_id, name, quantity, unit_price, purchase_cost, vat_net_amount, vat_amount)')
       .eq('tenant_id', tenant.id)
       .eq('cash_session_id', bound.sessionId)
       .neq('status', 'cancelled')
@@ -50,18 +50,19 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
 
     // Fetch already-returned quantities for these sales (by sale_item_id)
     const saleIds = (data || []).map((s: any) => s.id);
-    let returnedMap: Record<string, number> = {};
+    const returned = new Map<string, { quantity: number; total: number }>();
     if (saleIds.length > 0) {
       const { data: retData, error: retErr } = await supabase
         .from('sale_returns')
-        .select('sale_id, sale_return_items(sale_item_id, quantity)')
+        .select('sale_id, sale_return_items(sale_item_id, quantity, total)')
         .eq('tenant_id', tenant.id)
-        .in('sale_id', saleIds);
+        .in('sale_id', saleIds).in('status', ['approved', 'pending']);
       if (retErr) { setLoadError(cashOpError(retErr, loadFail)); return; }
       for (const ret of retData || []) {
         for (const ri of (ret as any).sale_return_items || []) {
           if (ri.sale_item_id) {
-            returnedMap[ri.sale_item_id] = (returnedMap[ri.sale_item_id] || 0) + Number(ri.quantity);
+            const previous = returned.get(ri.sale_item_id) ?? { quantity: 0, total: 0 };
+            returned.set(ri.sale_item_id, { quantity: previous.quantity + Number(ri.quantity), total: previous.total + Number(ri.total) });
           }
         }
       }
@@ -69,8 +70,13 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
 
     setReturnSales((data || []).map((s: any) => {
       const items = (s.sale_items || []).map((i: any) => {
-        const alreadyReturned = returnedMap[i.id] || 0;
-        return { sale_item_id: i.id, article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), returned: alreadyReturned };
+        const previous = returned.get(i.id);
+        const remaining = Number(i.quantity) - (previous?.quantity ?? 0);
+        const displayPrice = i.vat_net_amount != null && remaining > 0
+          ? (Number(i.vat_net_amount) + Number(i.vat_amount) - (previous?.total ?? 0)) / remaining
+          : Number(i.unit_price);
+        return { sale_item_id: i.id, article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity),
+          unit_price: displayPrice, purchase_cost: Number(i.purchase_cost ?? 0), returned: previous?.quantity ?? 0 };
       });
       const fullyReturned = items.every((i: any) => i.returned >= i.quantity);
       return {
@@ -136,12 +142,13 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
 
       if (rpcErr) throw new Error(rpcErr.message);
 
+      const refunded = Number(result?.total ?? returnTotal);
       const retNum = result?.return_number || 'RET-?';
-      printReturnTicket80Shared(returnSelected.sale_number, lines, returnTotal, bound.printTenant, bound.userName, retNum, returnSelected.customer_name);
+      printReturnTicket80Shared(returnSelected.sale_number, lines, refunded, bound.printTenant, bound.userName, retNum, returnSelected.customer_name, result);
 
       setOpKey(newIdempotencyKey());
       onClose();
-      success(`Retour effectué: -${formatFCFA(returnTotal)} remboursé`);
+      success(`Retour effectué: -${formatFCFA(refunded)} remboursé`);
       onDone();
     } catch (e: any) {
       error(e.message || 'Erreur lors du retour');

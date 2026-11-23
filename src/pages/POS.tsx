@@ -1133,10 +1133,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [payOpen, setPayOpen] = useState(false);
   const [payments, setPayments] = useState<SalePayment[]>([]);
   const [paying, setPaying] = useState(false);
-  const [lastSale, setLastSale] = useState<{
-    sale_number: string; created_at: string; total: number; discount: number;
-    items: CartItem[]; payments: SalePayment[]; customer: Customer | null;
-  } | null>(null);
+  const [lastSale, setLastSale] = useState<PrintableSale | null>(null);
   const [printInvoice, setPrintInvoice] = useState(false);
   const [autoPrintTicket, setAutoPrintTicket] = useState(false);
   const [autoPrintInvoice, setAutoPrintInvoice] = useState(false);
@@ -1714,6 +1711,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
 
+  const loadIssuedSaleVat = async (saleId: string | null) => {
+    if (!saleId) return null;
+    const { data, error: failure } = await supabase.from('sales')
+      .select('vat_net_amount, vat_amount').eq('id', saleId).single();
+    if (failure) error('Vente enregistrée. Pour l’imprimer, ouvrez-la depuis le journal des ventes.');
+    return data;
+  };
+
   const validateCreditSale = async () => {
     if (!session || !currentSite) return;
     if (!customer) { error('Sélectionnez un client pour une vente à crédit'); return; }
@@ -1738,8 +1743,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       p_discount: discount,
       p_note: '',
     });
-    setPaying(false);
-    if (e) { error(e.message); return; }
+    if (e) { setPaying(false); error(e.message); return; }
     const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
     const creditSaleId = (data as any)?.sale_id || (data as any)?.id || null;
     if (creditSaleId && (docDeliveryDate || docReference || docWarranty || docRepresentative || docImei)) {
@@ -1780,9 +1784,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         numero_bon_pec: ipmDocuments.numero_bon || null,
       });
     }
-    setLastSale({
+    const vat = await loadIssuedSaleVat(creditSaleId);
+    setPaying(false);
+    if (vat) setLastSale({
       sale_number: saleNum, created_at: new Date().toISOString(),
-      total, discount, items: [...cart], payments: [], customer,
+      total, discount, items: [...cart], payments: [], customer, vat,
     });
     setPrintInvoice(false);
     success('Vente à crédit enregistrée');
@@ -1874,8 +1880,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }
 
     const { data, error: e } = await supabase.rpc(rpcName, params);
-    setPaying(false);
-    if (e) { error(e.message); return; }
+    if (e) { setPaying(false); error(e.message); return; }
     const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
     const saleId = (data as any)?.sale_id || (data as any)?.id || null;
 
@@ -1902,17 +1907,19 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       }
     }
 
+    const vat = await loadIssuedSaleVat(saleId);
+    setPaying(false);
     const completedSale = {
       sale_number: saleNum, created_at: new Date().toISOString(),
-      total, discount, items: [...cart], payments: [...payments], customer,
+      total, discount, items: [...cart], payments: [...payments], customer, vat: vat ?? undefined,
     };
-    setLastSale(completedSale);
+    if (vat) setLastSale(completedSale);
     setPrintInvoice(false);
     // Auto-print if enabled
-    if (autoPrintTicket) {
+    if (vat && autoPrintTicket) {
       try { printSaleTicket(completedSale); } catch {}
     }
-    if (autoPrintInvoice) {
+    if (vat && autoPrintInvoice) {
       try { printSaleInvoice(completedSale); } catch {}
     }
     // Link to web order if this sale originated from one

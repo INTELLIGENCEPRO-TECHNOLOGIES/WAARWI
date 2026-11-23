@@ -1,3 +1,4 @@
+import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -61,6 +62,9 @@ export type DocumentEditorProps = {
   setItems: (fn: any) => void;
   // Calculations
   subtotal: number;
+  vat?: VatAmounts;
+  documentTotal?: number;
+  additionalActions?: React.ReactNode;
   // Save
   saving: boolean;
   onSave?: (opts?: { silent?: boolean }) => void;
@@ -454,6 +458,17 @@ export function DocumentEditor(props: DocumentEditorProps) {
           onNewInvoice={postCreation ? onNewInvoice : undefined}
         />
       </div>
+
+      {isView && (props.vat?.vat_net_amount != null || props.additionalActions) && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--w-separator)] px-3 py-2 text-xs">
+          {props.vat?.vat_net_amount != null && <>
+            <span>Total HT <strong className="num">{formatVatAmount(props.vat.vat_net_amount)}</strong></span>
+            <span>TVA <strong className="num">{formatVatAmount(props.vat.vat_amount)}</strong></span>
+            <span>Total TTC <strong className="num">{formatVatAmount(props.documentTotal)}</strong></span>
+          </>}
+          {props.additionalActions}
+        </div>
+      )}
 
       {/* ═══ Header fields ═══ */}
       {canEdit && (

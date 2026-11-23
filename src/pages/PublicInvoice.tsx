@@ -1,3 +1,4 @@
+import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import { useEffect, useState } from 'react';
 import { Loader2, Printer, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -5,7 +6,7 @@ import { printDocumentA4, type PrintTenant } from '../lib/print';
 import { formatDate, formatFCFA } from '../lib/format';
 
 type publicPayload = {
-  sale: {
+  sale: VatAmounts & {
     sale_number: string;
     created_at: string;
     status: string;
@@ -55,6 +56,7 @@ export function PublicInvoice({ token }: { token: string }) {
       items: data.items.map(i => ({ name: i.name, internal_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount) })),
       subtotal: Number(data.sale.subtotal),
       discount: Number(data.sale.discount),
+      vat: data.sale,
       total: Number(data.sale.total),
       payments: data.payments.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(data.sale.paid),
@@ -188,9 +190,17 @@ export function PublicInvoice({ token }: { token: string }) {
                   </div>
                 </>
               )}
+              {sale.vat_net_amount != null && <>
+                <div className="flex items-center justify-between py-1 text-[12px]">
+                  <span>Total HT</span><span className="num">{formatVatAmount(sale.vat_net_amount)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 text-[12px]">
+                  <span>TVA</span><span className="num">{formatVatAmount(sale.vat_amount)}</span>
+                </div>
+              </>}
               <div className="flex items-center justify-between py-2 border-b-2 border-neutral-900">
-                <span className="text-[12px] font-bold uppercase tracking-wider text-neutral-700">Total</span>
-                <span className="text-xl font-black text-neutral-900 num">{formatFCFA(Number(sale.total))}</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-neutral-700">{sale.vat_net_amount != null ? 'Total TTC' : 'Total'}</span>
+                <span className="text-xl font-black text-neutral-900 num">{sale.vat_net_amount != null ? formatVatAmount(sale.total) : formatFCFA(Number(sale.total))}</span>
               </div>
               {Number(sale.paid) > 0 && (
                 <div className="flex items-center justify-between py-1.5 text-[12px]">

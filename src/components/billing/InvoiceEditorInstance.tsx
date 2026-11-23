@@ -1,3 +1,5 @@
+import { loadInvoiceReturnLines } from '../../lib/saleReturnLines';
+import type { VatAmounts } from '../../lib/salesVat';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { loadFormDraft, clearFormDraft, saveFormDraft, scheduleSaveFormDraft, type OpInProgress } from '../../lib/draftRecovery';
@@ -19,7 +21,8 @@ type QuoteItem = {
   tier_name?: string; ipm_eligible?: boolean;
 };
 
-type Invoice = {
+type Invoice = VatAmounts & {
+  discount?: number;
   id: string; sale_number: string; total: number; paid: number; status: string;
   customer_id: string | null;
   created_at: string;
@@ -346,20 +349,12 @@ export function InvoiceEditorInstance({
 
   // ── Load return lines ─────────────────────────────────────────
   const loadReturnLines = async (saleId: string) => {
-    const [{ data: saleItems }, { data: retQtys }] = await Promise.all([
-      supabase.from('sale_items').select('*').eq('sale_id', saleId),
-      supabase.rpc('get_sale_returned_quantities', { p_sale_id: saleId }),
-    ]);
-    const retMap: Record<string, number> = {};
-    (retQtys || []).forEach((r: any) => { retMap[r.article_id] = Number(r.total_returned); });
-    const lines = (saleItems || [])
-      .map((i: any) => {
-        const alreadyReturned = retMap[i.article_id] || 0;
-        const remaining = Math.max(0, Number(i.quantity) - alreadyReturned);
-        return { item_id: i.id, article_id: i.article_id, name: i.name, max_qty: remaining, quantity: Math.min(remaining, 1), unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, selected: false };
-      })
-      .filter((i: any) => i.max_qty > 0);
-    setReturnLines(lines);
+    setReturnLines([]);
+    try {
+      setReturnLines(await loadInvoiceReturnLines(saleId));
+    } catch (failure) {
+      error((failure as { message?: string }).message || 'Impossible de charger les lignes retournables.');
+    }
   };
 
   // ── Save invoice (create + edit) ──────────────────────────────
@@ -489,52 +484,28 @@ export function InvoiceEditorInstance({
       const repSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, createSubtotal);
       const newInvRepLabel = repLabelOf(invoiceForm.representative);
 
-      const { data: sale, error: e } = await supabase.from('sales').insert({
-        tenant_id: tenant.id, site_id: currentSite.id,
-        customer_id: invoiceForm.customer_id || null,
-        user_id: profile?.id || null,
-        sale_number: invNum, subtotal: createSubtotal, discount: 0, total: createSubtotal,
-        paid: effectivePaid, status,
-        source: 'billing', note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
-        cash_session_id: sessionId,
-        representative_id: invoiceForm.representative || null,
-        rep_commission: repSnapshot,
-        doc_header: { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null },
-      }).select('id').single();
-      if (e || !sale) { error(e?.message || 'Erreur'); return; }
-
-      const { error: itemsErr } = await supabase.rpc('insert_billing_sale_items', {
-        p_sale_id: sale.id,
+      const { data: saleId, error: e } = await supabase.rpc('create_billing_sale_with_items', {
+        p_sale: {
+          site_id: currentSite.id,
+          customer_id: invoiceForm.customer_id || null,
+          sale_number: invNum, subtotal: createSubtotal, discount: 0, total: createSubtotal,
+          paid: effectivePaid, status,
+          note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
+          cash_session_id: sessionId,
+          representative_id: invoiceForm.representative || null,
+          rep_commission: repSnapshot,
+          doc_header: { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null },
+        },
         p_items: valid.map(i => ({
-          article_id: i.article_id, name: i.name,
-          quantity: i.quantity, unit_price: i.unit_price,
-          discount: i.discount, total: i.total,
+          article_id: i.article_id, name: i.name, quantity: i.quantity,
+          unit_price: i.unit_price, discount: i.discount, total: i.total,
+        })),
+        p_payments: isCredit ? [] : payList.filter(p => p.amount > 0).map(p => ({
+          payment_method_id: p.method_id || null, amount: p.amount, reference: p.reference || '',
         })),
       });
-      if (itemsErr) {
-        const { error: discardErr } = await supabase.rpc('discard_failed_billing_sale', { p_sale_id: sale.id });
-        error((itemsErr.message || 'Erreur lors de l\'enregistrement des lignes de facture')
-          + (discardErr ? ` — la facture ${invNum} n'a pas pu être annulée : ${discardErr.message}` : ''));
-        return;
-      }
-
-      if (!isCredit && payList.some(p => p.amount > 0)) {
-        const { data: payRes, error: payErr } = await supabase.rpc('register_initial_billing_payments', {
-          p_sale_id: sale.id,
-          p_cash_session_id: sessionId,
-          p_payments: payList.map(p => ({
-            payment_method_id: p.method_id || null,
-            amount: p.amount,
-            reference: p.reference || '',
-          })),
-        });
-        if (payErr || !payRes?.success) {
-          const { error: discardErr } = await supabase.rpc('discard_failed_billing_sale', { p_sale_id: sale.id });
-          error((payErr?.message || 'Erreur lors de l\'enregistrement des règlements')
-            + (discardErr ? ` — la facture ${invNum} n'a pas pu être annulée : ${discardErr.message}` : ''));
-          return;
-        }
-      }
+      if (e || !saleId) { error(e?.message || 'La facture n’a pas été enregistrée.'); return; }
+      const sale = { id: saleId as string };
 
       if (invoiceForm.customer_id) {
         const unpaidAmount = createSubtotal - effectivePaid;
@@ -610,7 +581,7 @@ export function InvoiceEditorInstance({
       docDate: new Date(inv.created_at).toLocaleDateString('fr-FR'),
       docCreatedAt: inv.created_at,
       customer: inv.customers ? { name: inv.customers.name, phone: (inv.customers as any).phone || undefined, address: (inv.customers as any).address || undefined } : null,
-      items: pitems, subtotal: psubtotal, total: Number(inv.total),
+      items: pitems, subtotal: psubtotal, discount: Number(inv.discount ?? 0), vat: inv, total: Number(inv.total),
       payments: payList.map(p => ({ method_name: p.method_name, amount: p.amount })),
       paid: Number(inv.paid),
       issuedBy: creatorName((inv as any).user_id),
@@ -667,6 +638,8 @@ export function InvoiceEditorInstance({
       items={items}
       setItems={setItems}
       subtotal={subtotal}
+      vat={invoiceDetail ?? undefined}
+      documentTotal={invoiceDetail?.total}
       saving={saving}
       onSave={saveInvoice}
       onClose={onClose}

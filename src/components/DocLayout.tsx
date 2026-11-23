@@ -1,3 +1,4 @@
+import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 /**
  * DocLayout — Système d'affichage documentaire universel
  *
@@ -326,6 +327,7 @@ interface DocTotalsProps {
   subtotal: number;
   discount?: number;
   tax?: number;
+  vat?: VatAmounts;
   total: number;
   /** Label du total (défaut "Total à payer") */
   totalLabel?: string;
@@ -335,7 +337,7 @@ interface DocTotalsProps {
   remaining?: number;
 }
 
-export function DocTotals({ subtotal, discount = 0, tax = 0, total, totalLabel = 'Total à payer', paid, remaining }: DocTotalsProps) {
+export function DocTotals({ subtotal, discount = 0, tax = 0, vat, total, totalLabel = 'Total à payer', paid, remaining }: DocTotalsProps) {
   return (
     <div className="rounded-xl border border-neutral-200 overflow-hidden">
       {discount > 0 && (
@@ -344,9 +346,10 @@ export function DocTotals({ subtotal, discount = 0, tax = 0, total, totalLabel =
       {discount > 0 && (
         <TotalsRow label="Remise" value={`– ${formatFCFA(discount)}`} valueClass="text-rose-600" />
       )}
-      {tax > 0 && (
-        <TotalsRow label="TVA" value={formatFCFA(tax)} />
-      )}
+      {vat?.vat_net_amount != null ? <>
+        <TotalsRow label="Total HT" value={formatVatAmount(vat.vat_net_amount)} />
+        <TotalsRow label="TVA" value={formatVatAmount(vat.vat_amount)} />
+      </> : tax > 0 && <TotalsRow label="TVA" value={formatFCFA(tax)} />}
       <div className="flex items-center justify-between px-4 py-3.5 bg-neutral-900">
         <span className="text-[12px] font-bold uppercase tracking-wider text-white/70">{totalLabel}</span>
         <span className="text-[18px] font-black text-white num whitespace-nowrap">{formatFCFA(total)}</span>

@@ -1,3 +1,4 @@
+import type { VatAmounts } from '../lib/salesVat';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Calculator, Loader2, Printer, Plus, X, Calendar, Filter, Check, BookOpen, Pencil, Trash2, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, Ban, Wallet, RotateCcw } from 'lucide-react';
@@ -19,7 +20,8 @@ import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
 import { DocumentEditor, type DocLineItem, type DocHeaderForm, type DocPaymentLine } from '../components/DocumentEditor';
 import { DEFAULT_DOC_SETTINGS, mergeColumns, type DocSettings } from '../components/DocumentSettingsTab';
 
-type Sale = {
+type Sale = VatAmounts & {
+  discount?: number;
   id: string; sale_number: string; total: number; paid: number;
   status: string; created_at: string; source: string;
   user_id: string;
@@ -371,7 +373,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         sale_number: selected.sale_number,
         created_at: selected.created_at,
         total: Number(selected.total),
-        discount: 0,
+        discount: Number(selected.discount ?? 0),
+        vat: selected,
         items: items.map(i => ({
           name: i.name,
           supplier_ref: null,
@@ -410,6 +413,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       customer: selected.customers ? { name: selected.customers.name, phone: (selected.customers as any).phone || undefined, address: (selected.customers as any).address || undefined } : null,
       items: printItems,
       subtotal,
+      discount: Number(selected.discount ?? 0),
+      vat: selected,
       total: Number(selected.total),
       payments: pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: paidTotal,
