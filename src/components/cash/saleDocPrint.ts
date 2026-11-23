@@ -1,7 +1,8 @@
+import type { VatAmounts } from '../../lib/salesVat';
 import { printTicket80 as printTicket80Shared, printDocumentA4, type PrintTenant } from '../../lib/print';
 import type { CartItem, Customer, SalePayment } from '../../lib/types';
 
-export type PrintableSale = { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null };
+export type PrintableSale = { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null; vat?: VatAmounts };
 type DocHeader = Record<string, string | null> | null;
 
 export function printSaleTicketDoc(sale: PrintableSale, docHeader: DocHeader, tenant: PrintTenant, cashier: string) {
@@ -10,6 +11,7 @@ export function printSaleTicketDoc(sale: PrintableSale, docHeader: DocHeader, te
     created_at: sale.created_at,
     total: sale.total,
     discount: sale.discount,
+    vat: sale.vat,
     items: sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, internal_ref: i.internal_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount })),
     payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
     customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
@@ -28,7 +30,7 @@ export function printSaleInvoiceDoc(sale: PrintableSale, docHeader: DocHeader, t
     docDate: new Date(sale.created_at).toLocaleDateString('fr-FR'),
     docCreatedAt: sale.created_at,
     customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
-    items, subtotal, discount: sale.discount, total: sale.total,
+    items, subtotal, discount: sale.discount, total: sale.total, vat: sale.vat,
     payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
     paid, cashier, issuedBy,
     docHeader,

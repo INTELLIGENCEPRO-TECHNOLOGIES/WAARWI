@@ -1,8 +1,10 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X, Check, Trash2, Download } from 'lucide-react';
+import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, X, Check, Trash2, Download } from 'lucide-react';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
+import { AccountingCashReview } from '../components/AccountingCashReview';
+import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -28,7 +30,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
     grandlivre: { t: 'Grand Livre', s: 'Détail des mouvements par compte.' },
     tiers: { t: 'Tiers', s: 'Balance et interrogation des comptes clients/fournisseurs.' },
     search: { t: 'Recherche', s: "Recherche avancée d'écritures comptables." },
-    cloture: { t: 'Clôtures', s: 'Clôture des journaux et exercices.' },
+    cloture: { t: 'Clôtures', s: 'Contrôles et clôture mensuelle' },
   };
   const meta = titles[section];
   return (
@@ -634,6 +636,7 @@ function BalanceTab() {
   const [bulkPayBusy, setBulkPayBusy] = useState(false);
   const [bulkAchatBusy, setBulkAchatBusy] = useState(false);
   const [bulkPayFournBusy, setBulkPayFournBusy] = useState(false);
+  const [showCashReview, setShowCashReview] = useState(false);
 
   const load = async (silent = false) => {
     if (!tenant) return;
@@ -706,6 +709,11 @@ function BalanceTab() {
       if (error) throw error;
       const r = result as any;
       success(`${r.accounted} règlement${r.accounted > 1 ? 's' : ''} fournisseur${r.accounted > 1 ? 's' : ''} comptabilisé${r.accounted > 1 ? 's' : ''} ${r.errors > 0 ? `(${r.errors} erreur${r.errors > 1 ? 's' : ''})` : ''}`);
+      if (r.skipped_vault_unconfigured > 0) {
+        const count = Number(r.skipped_vault_unconfigured);
+        toastError(`${count} règlement${count > 1 ? 's' : ''} en attente. Renseignez le compte du coffre dans Mouvements de caisse.`);
+        setShowCashReview(true);
+      }
       load();
     } catch (e: any) { toastError(e.message); }
     finally { setBulkPayFournBusy(false); }
@@ -736,8 +744,16 @@ function BalanceTab() {
             {bulkPayFournBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Rglts fournisseurs
           </button>
+          <button type="button" className="btn btn-secondary" aria-expanded={showCashReview}
+            onClick={() => setShowCashReview(show => !show)}>
+            Mouvements de caisse
+          </button>
         </div>}
       </div>
+
+      {canManage && tenant && showCashReview && (
+        <AccountingCashReview key={tenant.id} tenantId={tenant.id} onPosted={() => void load(true)} />
+      )}
 
       {loading ? <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         : data.length === 0 ? (
@@ -1254,19 +1270,7 @@ function SearchDetailModal({ entry, tenant, onClose }: { entry: any; tenant: { i
 
 /* ===================== CLOTURES ===================== */
 function ClotureTab() {
-  return (
-    <div className="space-y-6">
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 mb-3">
-          <Lock className="w-6 h-6 text-amber-600" />
-        </div>
-        <h3 className="text-base font-semibold text-slate-800 mb-2">Clôtures temporairement indisponibles</h3>
-        <p className="text-sm text-slate-600 max-w-md mx-auto">
-          Les fonctions de clôture de journal et de clôture d'exercice sont en cours de finalisation
-          dans le moteur comptable. Elles seront réactivées une fois le processus complet mis en place.
-        </p>
-        <p className="text-xs text-slate-400 mt-3">Vos écritures comptables existantes ne sont pas affectées.</p>
-      </div>
-    </div>
-  );
+  const { tenant } = useApp();
+  const { can } = usePermissions();
+  return tenant ? <AccountingPeriodControls key={tenant.id} tenantId={tenant.id} canClose={can('manage_accounting')} /> : null;
 }

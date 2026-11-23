@@ -2,6 +2,7 @@ import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight, Monitor } from 'lucide-react';
+import { SalesVatSettings } from '../components/SalesVatSettings';
 import { BackupTab } from '../components/BackupTab';
 import { SubscriptionPaymentPanel, useCanPaySubscription } from '../components/SubscriptionPaymentPanel';
 import { SubscriptionHistory } from '../components/SubscriptionHistory';
@@ -25,7 +26,7 @@ import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
 import { usePermissions } from '../lib/permissions';
 
-type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription' | 'rep_commissions' | 'expense_types' | 'cash_registers';
+type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription' | 'rep_commissions' | 'expense_types' | 'cash_registers' | 'sales_vat';
 
 type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
 
@@ -64,6 +65,7 @@ export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
       title: 'Configuration avancée',
       tiles: [
         { k: 'accounting', label: 'Comptabilité', icon: BookOpen, color: 'text-cyan-700', bg: 'bg-cyan-50/80 border-cyan-200' },
+        ...(isOwner ? [{ k: 'sales_vat' as TabKey, label: 'TVA sur les ventes', icon: FileText, color: 'text-neutral-800', bg: 'bg-[var(--w-surface-el)] border-[var(--w-separator)]' }] : []),
         { k: 'boutique', label: 'Boutique en ligne', icon: ShoppingBag, color: 'text-pink-700', bg: 'bg-pink-50/80 border-pink-200' },
         { k: 'documents', label: 'Paramètres documents', icon: FileText, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
         { k: 'rep_commissions', label: 'Représentants & commissions', icon: Users, color: 'text-teal-700', bg: 'bg-teal-50/80 border-teal-200' },
@@ -131,6 +133,7 @@ export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
       {tab === 'categories' && <CategoriesTab />}
       {tab === 'brands' && autoMode && <BrandsTab />}
       {tab === 'accounting' && <AccountingTab />}
+      {tab === 'sales_vat' && isOwner && <SalesVatSettings />}
       {tab === 'stock' && <StockSettingsTab onRefresh={refresh} />}
       {tab === 'tiers' && <TiersSettingsTab onRefresh={refresh} />}
       {tab === 'pricing_tiers' && <PricingTiersTab />}

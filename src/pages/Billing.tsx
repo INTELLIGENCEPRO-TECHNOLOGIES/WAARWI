@@ -1,3 +1,8 @@
+import { useSalePrice, type PriceLine } from '../lib/useSalePrice';
+import { formatVatAmount } from '../lib/salesVat';
+import { loadInvoiceReturnLines } from '../lib/saleReturnLines';
+import { newIdempotencyKey } from '../lib/cashSession';
+import type { VatAmounts } from '../lib/salesVat';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useStickyOffset } from '../lib/useStickyOffset';
@@ -57,7 +62,8 @@ type QuoteItem = {
   quantity: number; unit_price: number; discount: number; total: number;
   tier_name?: string; ipm_eligible?: boolean;
 };
-type Invoice = {
+type Invoice = VatAmounts & {
+  discount?: number;
   id: string; sale_number: string; total: number; paid: number; status: string;
   customer_id: string | null;
   created_at: string;
@@ -68,7 +74,8 @@ type Invoice = {
   rep_commission?: any;
   customers: { name: string } | null;
 };
-type SaleReturn = {
+type SaleReturn = VatAmounts & {
+  vat_entry_id?: string | null;
   id: string; return_number: string; total: number; status: string;
   refund_method: string; reason: string; restock: boolean;
   credit_used?: number; customer_id: string | null;
@@ -210,7 +217,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [convertPayMethod, setConvertPayMethod] = useState('');
   const [convertPayAmount, setConvertPayAmount] = useState('');
   const [converting, setConverting] = useState(false);
-  const [convertItems, setConvertItems] = useState<{ article_id: string; name: string; quantity: number }[]>([]);
+  const [convertItems, setConvertItems] = useState<(PriceLine & { name: string })[]>([]);
   const [lotPickerConvertOpen, setLotPickerConvertOpen] = useState(false);
   const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
 
@@ -256,6 +263,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [returnDetail, setReturnDetail] = useState<SaleReturn | null>(null);
   const [returnItemsDetail, setReturnItemsDetail] = useState<any[]>([]);
   const [returnEditorOpen, setReturnEditorOpen] = useState(false);
+  const vatReturnAttempt = useRef<{ payload: string; key: string } | null>(null);
   const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', refund_method: 'cash' as string, restock: true });
   const [returnLines, setReturnLines] = useState<{ item_id: string; article_id: string; name: string; max_qty: number; quantity: number; unit_price: number; purchase_cost: number; selected: boolean }[]>([]);
   const [returnWorkflowBusy, setReturnWorkflowBusy] = useState(false);
@@ -448,6 +456,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const ipmConfig = useMemo(() => parseConvention(ipmConvention), [ipmConvention]);
   const ipmTaux = ipmConfig?.taux_defaut || 0;
   const invoiceEditorSubtotalRaw = useMemo(() => invoiceEditorItems.filter(i => i.name.trim()).reduce((s, i) => s + Number(i.total), 0), [invoiceEditorItems]);
+  const invoicePricing = useSalePrice(mobileInvoiceOpen && mobileInvoiceMode === 'create' ? currentSite?.id : null,
+    invoiceEditorItems.filter(i => i.name.trim()));
+  const convertPricing = useSalePrice(convertFrom ? billSourceSiteId || currentSite?.id : null, convertItems, Number(convertFrom?.discount ?? 0));
+  const convertTtc = convertPricing.price?.ttc ?? 0;
+
+  useEffect(() => {
+    if (!convertPayNow && convertPricing.price) setConvertPayAmount(String(convertPricing.price.ttc));
+  }, [convertPayNow, convertPricing.price]);
+
   const ipmResult = useMemo(() => {
     if (!ipmBeneficiaire || !ipmConfig) return null;
     const lignes: IpmArticleLine[] = invoiceEditorItems.filter(i => i.name.trim()).map(i => ({
@@ -1093,7 +1110,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       return next;
     });
   };
-  const invoiceEditorSubtotal = invoiceEditorSubtotalRaw;
+  const invoiceEditorSubtotal = invoicePricing.price?.ttc ?? invoiceEditorSubtotalRaw;
   const invoiceEditorPaid = invoicePayList.reduce((s, p) => s + p.amount, 0);
 
   const openInvoiceEditor = () => {
@@ -1322,9 +1339,19 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       return;
     }
 
+    if (!invoicePricing.price) {
+      error(invoicePricing.error || 'Le montant de la facture est en cours de calcul.');
+      if (invoicePricing.error) invoicePricing.refresh();
+      return;
+    }
+    if (ipmBeneficiaire && invoicePricing.price.vat > 0) {
+      error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
+      return;
+    }
+    const invoiceTtc = invoicePricing.price.ttc;
     const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
     const totalPaid = invoiceIsCredit ? 0 : invoicePayList.reduce((s, p) => s + p.amount, 0);
-    const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : subtotal;
+    const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : invoiceTtc;
     if (!invoiceIsCredit && totalPaid > clientDueAmount) { error('Le montant payé dépasse la part client'); return; }
 
     if (invoiceIsCredit && !invoiceForm.customer_id) {
@@ -1376,57 +1403,31 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       const repSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, subtotal);
       const newInvRepLabel = repLabelOf(invoiceForm.representative);
 
-      const { data: sale, error: e } = await supabase.from('sales').insert({
-        tenant_id: tenant.id, site_id: currentSite.id,
-        customer_id: invoiceForm.customer_id || null,
-        user_id: profile?.id || null,
-        sale_number: invNum, subtotal, discount: 0, total: subtotal,
-        paid: effectivePaid, status,
-        source: 'billing', note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
-        cash_session_id: sessionId,
-        representative_id: invoiceForm.representative || null,
-        rep_commission: repSnapshot,
-        doc_header: { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null },
-      }).select('id').single();
-      if (e || !sale) { error(e?.message || 'Erreur'); return; }
-
-      const { error: itemsErr } = await supabase.rpc('insert_billing_sale_items', {
-        p_sale_id: sale.id,
+      const { data: saleId, error: e } = await supabase.rpc('create_billing_sale_with_items', {
+        p_sale: {
+          site_id: currentSite.id,
+          customer_id: invoiceForm.customer_id || null,
+          sale_number: invNum, subtotal, discount: 0, total: invoiceTtc,
+          paid: effectivePaid, status,
+          note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
+          cash_session_id: sessionId,
+          representative_id: invoiceForm.representative || null,
+          rep_commission: repSnapshot,
+          doc_header: { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null },
+        },
         p_items: valid.map(i => ({
-          article_id: i.article_id, name: i.name,
-          quantity: i.quantity, unit_price: i.unit_price,
-          discount: i.discount, total: i.total,
+          article_id: i.article_id, name: i.name, quantity: i.quantity,
+          unit_price: i.unit_price, discount: i.discount, total: i.total,
+        })),
+        p_payments: invoiceIsCredit ? [] : invoicePayList.filter(p => p.amount > 0).map(p => ({
+          payment_method_id: p.method_id || null, amount: p.amount, reference: p.reference || '',
         })),
       });
-      if (itemsErr) {
-        const { error: discardErr } = await supabase.rpc('discard_failed_billing_sale', { p_sale_id: sale.id });
-        error((itemsErr.message || 'Erreur lors de l\'enregistrement des lignes de facture')
-          + (discardErr ? ` — la facture ${invNum} n'a pas pu être annulée : ${discardErr.message}` : ''));
-        return;
-      }
+      if (e || !saleId) { invoicePricing.refresh(); error(e?.message || 'La facture n’a pas été enregistrée.'); return; }
+      const sale = { id: saleId as string };
 
-      // Insert payments (skip if credit)
-      if (!invoiceIsCredit && invoicePayList.some(p => p.amount > 0)) {
-        const { data: payRes, error: payErr } = await supabase.rpc('register_initial_billing_payments', {
-          p_sale_id: sale.id,
-          p_cash_session_id: sessionId,
-          p_payments: invoicePayList.map(p => ({
-            payment_method_id: p.method_id || null,
-            amount: p.amount,
-            reference: p.reference || '',
-          })),
-        });
-        if (payErr || !payRes?.success) {
-          const { error: discardErr } = await supabase.rpc('discard_failed_billing_sale', { p_sale_id: sale.id });
-          error((payErr?.message || 'Erreur lors de l\'enregistrement des règlements')
-            + (discardErr ? ` — la facture ${invNum} n'a pas pu être annulée : ${discardErr.message}` : ''));
-          return;
-        }
-      }
-
-      // Update customer balance for unpaid portion
       if (invoiceForm.customer_id) {
-        const unpaidAmount = subtotal - effectivePaid;
+        const unpaidAmount = invoiceTtc - effectivePaid;
         if (unpaidAmount > 0) {
           const { data: cust } = await supabase.from('customers').select('balance').eq('id', invoiceForm.customer_id).single();
           await supabase.from('customers').update({ balance: Number(cust?.balance || 0) + unpaidAmount }).eq('id', invoiceForm.customer_id);
@@ -1459,7 +1460,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           date_vente: new Date().toISOString().slice(0, 10),
           part_ipm: ipmPartIpm,
           part_client: ipmPartClient,
-          montant_total: subtotal,
+          montant_total: invoiceTtc,
           taux_prise_en_charge: ipmTaux,
           montant_eligible: ipmResult?.montant_eligible || subtotal,
           montant_non_eligible: ipmResult?.montant_non_eligible || 0,
@@ -1490,12 +1491,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   // ── Convert quote → sale ─────────────────────────────────────
   const openConvert = async (q: Quote) => {
     setConvertFrom(q); setConvertPayNow(false); setConvertPayMethod(paymentMethods[0]?.id || '');
-    setConvertPayAmount(String(q.total));
+    setConvertItems([]);
+    setConvertPayAmount('');
     setConvertIpmDocs({ numero_ordonnance: '', medecin: '', numero_bon: '' });
     setConvertIpmBeneficiaire(null);
     setConvertIpmConvention(null);
-    const { data } = await supabase.from('quote_items').select('article_id, name, quantity').eq('quote_id', q.id);
-    setConvertItems((data || []).filter((i: any) => i.article_id).map((i: any) => ({ article_id: i.article_id, name: i.name, quantity: Number(i.quantity) })));
+    const { data } = await supabase.from('quote_items').select('article_id, name, quantity, unit_price, discount').eq('quote_id', q.id);
+    setConvertItems(data || []);
     // IPM lookup for conversion
     if (isPharmacy && q.customer_id && tenant) {
       const { data: benef } = await supabase
@@ -1545,7 +1547,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         .select('article_id, quantity')
         .eq('tenant_id', tenant!.id)
         .eq('site_id', currentSite.id)
-        .in('article_id', trackedConvertItems.map(i => i.article_id));
+        .in('article_id', trackedConvertItems.map(i => i.article_id!));
       const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
       const insufficient = trackedConvertItems.filter(i => (stockMap.get(i.article_id) || 0) < i.quantity);
       if (insufficient.length > 0) {
@@ -1564,6 +1566,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const executeConvert = async (lotSelections: ArticleLotSelection[] | null) => {
     if (!convertFrom || !currentSite) return;
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de convertir en facture'); return; }
+    if (!convertPricing.price) {
+      error(convertPricing.error || 'Le montant de la facture est en cours de calcul.');
+      if (convertPricing.error) convertPricing.refresh();
+      return;
+    }
+    if (convertIpmBeneficiaire && convertPricing.price.vat > 0) {
+      error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
+      return;
+    }
     setConverting(true);
 
     // Find active cash session for payment tracking
@@ -1576,13 +1587,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       }
     }
 
-    const payments: any[] = [];
+    const payments: object[] = [{ expected_ttc: convertTtc }];
     if (convertPayNow && Number(convertPayAmount) > 0 && convertPayMethod) {
       const pm = paymentMethods.find(p => p.id === convertPayMethod);
       payments.push({
         payment_method_id: convertPayMethod,
         method_name: pm?.name || 'Paiement',
-        amount: Math.min(Number(convertPayAmount), convertFrom.total),
+        amount: Math.min(Number(convertPayAmount), convertTtc),
         reference: '',
       });
     }
@@ -1592,7 +1603,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       p_cash_session_id: convertSessionId,
       p_payments: payments,
     });
-    if (e) { setConverting(false); error(e.message); return; }
+    if (e) { setConverting(false); convertPricing.refresh(); error(e.message); return; }
 
     if (lotSelections && lotSelections.length > 0) {
       for (const sel of lotSelections) {
@@ -1609,6 +1620,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     } else if (convertItems.length > 0) {
       const saleNum = (data as any)?.sale_number || '';
       for (const item of convertItems) {
+        if (!item.article_id) continue;
         await supabase.rpc('adjust_stock', {
           p_article_id: item.article_id,
           p_site_id: billSourceSiteId || currentSite.id,
@@ -1639,8 +1651,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (convertIpmBeneficiaire && tenant && saleId) {
       const cfg = parseConvention(convertIpmConvention);
       if (cfg) {
-        const ipmCalc = calculerIpm(cfg, [{ montant_ligne: convertFrom.total, ipm_eligible: true }], 0);
-        const payAmt = convertPayNow ? Math.min(Number(convertPayAmount), convertFrom.total) : 0;
+        const ipmCalc = calculerIpm(cfg, [{ montant_ligne: convertTtc, ipm_eligible: true }], 0);
+        const payAmt = convertPayNow ? Math.min(Number(convertPayAmount), convertTtc) : 0;
         await supabase.from('ipm_ventes').insert({
           tenant_id: tenant.id,
           organisme_id: convertIpmBeneficiaire.organisme_id,
@@ -1650,7 +1662,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           date_vente: new Date().toISOString().slice(0, 10),
           part_ipm: ipmCalc.part_ipm,
           part_client: ipmCalc.part_client,
-          montant_total: convertFrom.total,
+          montant_total: convertTtc,
           part_beneficiaire_payee: Math.min(payAmt, ipmCalc.part_client),
           statut: 'en_attente',
           numero_ordonnance: convertIpmDocs.numero_ordonnance || null,
@@ -1678,7 +1690,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       supabase.from('sale_items').select('*, articles(internal_ref, oem_ref)').eq('sale_id', s.id),
       supabase.from('sale_payments').select('*').eq('sale_id', s.id),
       supabase.from('ipm_ventes').select('*, ipm_organismes(nom)').eq('sale_id', s.id).limit(1).maybeSingle(),
-      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, doc_header, user_id, customers(name, phone, address)').eq('id', s.id).maybeSingle(),
+      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, discount, vat_net_amount, vat_amount, doc_header, user_id, customers(name, phone, address)').eq('id', s.id).maybeSingle(),
     ]);
     setInvoiceItems(it || []); setInvoicePays(pp || []);
     setInvoiceIpmVente(ipmV || null);
@@ -1686,7 +1698,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   };
 
   const reloadInvoice = async (id: string) => {
-    const { data } = await supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, doc_header, customers(name, phone, address)').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, discount, vat_net_amount, vat_amount, doc_header, customers(name, phone, address)').eq('id', id).maybeSingle();
     if (data) {
       setInvoiceDetail(data as any);
       const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', id);
@@ -1709,7 +1721,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       docDate: new Date(invoiceDetail.created_at).toLocaleDateString('fr-FR'),
       docCreatedAt: invoiceDetail.created_at,
       customer: invoiceDetail.customers ? { name: invoiceDetail.customers.name, phone: (invoiceDetail.customers as any).phone || undefined, address: (invoiceDetail.customers as any).address || undefined } : null,
-      items, subtotal, total: Number(invoiceDetail.total),
+      items, subtotal, discount: Number(invoiceDetail.discount ?? 0), vat: invoiceDetail, total: Number(invoiceDetail.total),
       payments: invoicePays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(invoiceDetail.paid),
       issuedBy: creatorName((invoiceDetail as any).user_id),
@@ -1933,21 +1945,14 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   // ── Returns ──────────────────────────────────────────────────
   const loadSaleItems = async (saleId: string) => {
-    const [{ data: items }, { data: retQtys }] = await Promise.all([
-      supabase.from('sale_items').select('*').eq('sale_id', saleId),
-      supabase.rpc('get_sale_returned_quantities', { p_sale_id: saleId }),
-    ]);
-    const retMap: Record<string, number> = {};
-    (retQtys || []).forEach((r: any) => { retMap[r.article_id] = Number(r.total_returned); });
-    const lines = (items || [])
-      .map(i => {
-        const alreadyReturned = retMap[i.article_id] || 0;
-        const remaining = Math.max(0, Number(i.quantity) - alreadyReturned);
-        return { item_id: i.id, article_id: i.article_id, name: i.name, max_qty: remaining, quantity: Math.min(remaining, 1), unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, selected: false };
-      })
-      .filter(i => i.max_qty > 0);
-    setReturnLines(lines);
+    setReturnLines([]);
+    try {
+      setReturnLines(await loadInvoiceReturnLines(saleId));
+    } catch (failure) {
+      error((failure as { message?: string }).message || 'Impossible de charger les lignes retournables.');
+    }
   };
+
   const handleSaleChange = async (saleId: string) => {
     setReturnForm(f => ({ ...f, sale_id: saleId }));
     if (saleId) await loadSaleItems(saleId);
@@ -1959,6 +1964,22 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const returnSale = sales.find(s => s.id === returnForm.sale_id);
   const returnIsFullReturn = returnForm.sale_id && returnLines.length > 0 && returnLines.every(i => i.selected && i.quantity === i.max_qty);
 
+  const prepareVatReturn = async (saleId: string, siteId: string, lines: { item_id: string; quantity: number }[],
+    reason: string, restock: boolean, issueCredit: boolean) => {
+    const items = lines.map(line => ({ sale_item_id: line.item_id, quantity: line.quantity }));
+    const payload = JSON.stringify({ saleId, siteId, items, reason, restock, issueCredit });
+    if (vatReturnAttempt.current?.payload !== payload) {
+      vatReturnAttempt.current = { payload, key: newIdempotencyKey() };
+    }
+    const { data, error: failure } = await supabase.rpc('prepare_vat_invoice_return', {
+      p_sale_id: saleId, p_site_id: siteId, p_items: items,
+      p_reason: reason, p_restock: restock, p_request_id: vatReturnAttempt.current.key, p_issue_credit: issueCredit,
+    });
+    if (failure) { error(failure.message); return null; }
+    vatReturnAttempt.current = null;
+    return data as SaleReturn;
+  };
+
   const saveReturn = async () => {
     if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
@@ -1966,6 +1987,24 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     const sel = returnLines.filter(i => i.selected && i.quantity > 0);
     if (sel.length === 0) { error('Sélectionnez au moins un article'); return; }
     setSaving(true);
+
+    const { data: sale } = await supabase.from('sales')
+      .select('id, customer_id, sale_number, site_id, vat_net_amount, customers(name, phone, address)')
+      .eq('id', returnForm.sale_id).maybeSingle();
+    if (!sale) { error('Facture introuvable'); setSaving(false); return; }
+
+    if (sale.vat_net_amount != null) {
+      const ret = await prepareVatReturn(sale.id, sale.site_id, sel, returnForm.reason, returnForm.restock, returnMode === 'avoir');
+      setSaving(false);
+      if (!ret) return;
+      setReturnOpen(false);
+      setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true });
+      setReturnLines([]);
+      await loadTab(billPage, true);
+      await openReturnDetail({ ...ret, customers: Array.isArray(sale.customers) ? sale.customers[0] ?? null : sale.customers, sales: { sale_number: sale.sale_number } });
+      success(ret.status === 'approved' ? 'Avoir fiscal émis.' : 'Retour enregistré. Choisissez le mode de remboursement.');
+      return;
+    }
 
     // Check if sale has IPM coverage
     const { data: ipmVente } = await supabase.from('ipm_ventes')
@@ -1985,8 +2024,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET',
     });
     const rNum = (numData as string) || ('RET-' + Date.now());
-    const { data: sale } = await supabase.from('sales').select('id, customer_id, sale_number, customers(name, phone, address)').eq('id', returnForm.sale_id).maybeSingle();
-    if (!sale) { error('Facture introuvable'); setSaving(false); return; }
     const { data: ret, error: e } = await supabase.from('sale_returns').insert({
       tenant_id: tenant.id, site_id: currentSite.id,
       sale_id: returnForm.sale_id, customer_id: sale.customer_id || null,
@@ -2052,8 +2089,12 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const openReturnDetail = async (r: SaleReturn) => {
     setReturnDetail(r);
     if (isDesktop) setReturnEditorOpen(true);
-    const { data } = await supabase.from('sale_return_items').select('*, articles(internal_ref, oem_ref)').eq('return_id', r.id);
-    setReturnItemsDetail(data || []);
+    const [{ data: items }, { data: fiscal }] = await Promise.all([
+      supabase.from('sale_return_items').select('*, articles(internal_ref, oem_ref)').eq('return_id', r.id),
+      supabase.from('sale_returns').select('vat_net_amount, vat_amount, vat_entry_id').eq('id', r.id).maybeSingle(),
+    ]);
+    setReturnItemsDetail(items || []);
+    if (fiscal) setReturnDetail(previous => previous?.id === r.id ? { ...previous, ...fiscal } : previous);
   };
   const approveAsAvoir = async (r: SaleReturn) => {
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'approuver les retours'); return; }
@@ -2086,11 +2127,28 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     setReturnDetail(prev => prev?.id === r.id ? { ...prev, status: 'approved', refund_method: 'cash' } : prev);
   };
 
+  const postVatReturn = async (r: SaleReturn) => {
+    setReturnWorkflowBusy(true);
+    const { data, error: failure } = await supabase.rpc('post_vat_sale_return', { p_return_id: r.id });
+    setReturnWorkflowBusy(false);
+    if (failure) { error(failure.message); return; }
+    setReturnDetail(previous => previous?.id === r.id ? { ...previous, vat_entry_id: data.entry_id } : previous);
+    success('Avoir comptabilisé.');
+  };
+
+  const vatReturnAction = returnDetail?.vat_net_amount != null && returnDetail.status === 'approved'
+    ? returnDetail.vat_entry_id
+      ? <span className="text-xs text-neutral-600">Avoir comptabilisé</span>
+      : can('manage_accounting') && <button type="button" className="btn-secondary" disabled={returnWorkflowBusy}
+          onClick={() => void postVatReturn(returnDetail)}>Comptabiliser l’avoir</button>
+    : null;
+
   const printReturn = () => {
     if (!returnDetail || !tenant) return;
-    const isCredit = returnDetail.refund_method === 'avoir';
-    const items = returnItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price) }));
-    const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+    const isCredit = returnDetail.refund_method === 'avoir' || (returnDetail.vat_net_amount != null && returnDetail.status === 'approved');
+    const items = returnItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price),
+      discount: returnDetail.vat_net_amount != null ? Number(i.quantity) * Number(i.unit_price) - Number(i.total) : 0 }));
+    const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - i.discount, 0);
     const extra: { label: string; value: string }[] = [];
     if (returnDetail.sales?.sale_number) extra.push({ label: 'Vente liée', value: returnDetail.sales.sale_number });
     printDocumentA4({
@@ -2100,7 +2158,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       docDate: new Date(returnDetail.created_at).toLocaleDateString('fr-FR'),
       customer: returnDetail.customers ? { name: returnDetail.customers.name, phone: (returnDetail.customers as any).phone || undefined, address: (returnDetail.customers as any).address || undefined } : null,
       extraMeta: extra,
-      items, subtotal, total: Number(returnDetail.total),
+      items, subtotal, vat: returnDetail, total: Number(returnDetail.total),
       footerNote: returnDetail.reason ? `Motif : ${returnDetail.reason}` : undefined,
       issuedBy: creatorName((returnDetail as any).user_id),
     });
@@ -2753,6 +2811,20 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               const sel = config.selectedItems.filter((i: any) => i.selected && i.quantity > 0);
               if (sel.length === 0) { error('Sélectionnez au moins un article'); return; }
               setSaving(true);
+              const { data: sourceInvoice } = await supabase.from('sales')
+                .select('id, sale_number, site_id, vat_net_amount, customers(name, phone, address)')
+                .eq('id', saleId).maybeSingle();
+              if (!sourceInvoice) { error('Facture introuvable'); setSaving(false); return; }
+              if (sourceInvoice.vat_net_amount != null) {
+                const ret = await prepareVatReturn(saleId, sourceInvoice.site_id, sel, config.reason, config.restock, false);
+                setSaving(false);
+                if (!ret) return;
+                closeInvoiceWindow(desc.windowId);
+                await loadTab(billPage, true);
+                await openReturnDetail({ ...ret, customers: Array.isArray(sourceInvoice.customers) ? sourceInvoice.customers[0] ?? null : sourceInvoice.customers, sales: { sale_number: sourceInvoice.sale_number } });
+                success('Retour enregistré. Choisissez le mode de remboursement.');
+                return;
+              }
               const localReturnTotal = sel.reduce((s: number, i: any) => s + Number(i.quantity) * Number(i.unit_price), 0);
               const { data: ipmVente } = await supabase.from('ipm_ventes')
                 .select('id, part_ipm, part_client, montant_total, bordereau_id, statut')
@@ -2815,7 +2887,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         </DesktopWindow>
       ))}
       {mobileInvoiceOpen && !isDesktop && mobileInvoiceMode === 'view' && (() => {
-        const viewInv = invoices[invoiceNavIdx] || null;
+        const listedInvoice = invoices[invoiceNavIdx];
+        const viewInv = invoiceDetail?.id === listedInvoice?.id ? invoiceDetail : listedInvoice;
         if (!viewInv) return null;
         const invDue = Math.max(0, Number(viewInv.total) - Number(viewInv.paid));
         const isCancelled = viewInv.status === 'cancelled';
@@ -2848,7 +2921,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 docNumber: viewInv.sale_number,
                 docDate: invoiceForm.doc_date || new Date(viewInv.created_at).toLocaleDateString('fr-FR'),
                 customer: (invoiceDetail || viewInv).customers ? { name: (invoiceDetail || viewInv).customers.name, phone: ((invoiceDetail || viewInv).customers as any).phone || undefined, address: ((invoiceDetail || viewInv).customers as any).address || undefined } : null,
-                items: pitems, subtotal: psubtotal, total: Number(viewInv.total),
+                items: pitems, subtotal: psubtotal, discount: Number(viewInv.discount ?? 0), vat: viewInv, total: Number(viewInv.total),
                 payments: invoicePayList.map(p => ({ method_name: p.method_name, amount: p.amount })),
                 paid: Number(viewInv.paid),
                 issuedBy: creatorName((viewInv as any).user_id),
@@ -2901,6 +2974,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           saving={savingInvoice}
           onSave={saveInvoice}
           total={invoiceEditorSubtotal}
+          vatSummary={invoicePricing.price?.enabled ? invoicePricing.price : undefined}
           saveLabel={mobileEditingInvoiceId ? 'Mettre à jour' : 'Enregistrer facture'}
           onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
           onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
@@ -3039,6 +3113,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           embedded
           docType="return"
           mode="view"
+          vat={returnDetail}
+          documentTotal={Number(returnDetail.total)}
+          additionalActions={vatReturnAction}
           articles={articles}
           customers={customers}
           headerForm={{
@@ -3059,7 +3136,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             quantity: Number(i.quantity),
             unit_price: Number(i.unit_price),
             discount: 0,
-            total: Number(i.quantity) * Number(i.unit_price),
+            total: returnDetail.vat_net_amount != null ? Number(i.total) : Number(i.quantity) * Number(i.unit_price),
           }))}
           setItems={() => {}}
           subtotal={returnItemsDetail.reduce((s: number, i: any) => s + Number(i.quantity) * Number(i.unit_price), 0)}
@@ -3132,7 +3209,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       <Modal open={!!convertFrom} onClose={() => !converting && setConvertFrom(null)} title="Convertir en facture" size="sm" layer="top"
         footer={<>
           <button onClick={() => setConvertFrom(null)} className="btn-icon" title="Annuler" disabled={converting}><X className="w-4 h-4" /></button>
-          <button onClick={confirmConvert} disabled={converting || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-icon-primary" title="Créer facture">{converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}</button>
+          <button onClick={confirmConvert} disabled={converting || !convertPricing.price || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-icon-primary" title="Créer facture">{converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}</button>
         </>}>
         {convertFrom && (() => {
           const convertIpmCfg = parseConvention(convertIpmConvention);
@@ -3147,8 +3224,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   <div className="text-[11px] text-slate-600 mt-0.5">{convertFrom.customers?.name || 'Client comptoir'}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Total</div>
-                  <div className="text-lg font-bold text-brand-900 num">{formatFCFA(convertFrom.total)}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Total de la facture</div>
+                  {convertPricing.price?.enabled && <div className="text-[11px] text-slate-600">HT {formatVatAmount(convertPricing.price.ht)} · TVA {formatVatAmount(convertPricing.price.vat)}</div>}
+                  <div className="text-lg font-bold text-brand-900 num">{convertPricing.price ? formatVatAmount(convertTtc) : convertPricing.error ? 'Montant indisponible' : 'Calcul…'}</div>
+                  {convertPricing.error && <button type="button" className="text-xs font-semibold underline" onClick={convertPricing.refresh}>Recalculer</button>}
                 </div>
               </div>
 
@@ -3223,7 +3302,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       <LotPickerModal
         open={lotPickerConvertOpen}
         onClose={() => setLotPickerConvertOpen(false)}
-        items={convertItems}
+        items={convertItems.flatMap(item => item.article_id ? [{ ...item, article_id: item.article_id }] : [])}
         onConfirm={(selections) => { setLotPickerConvertOpen(false); executeConvert(selections); }}
         title="Sélection des lots (Facturation)"
         confirmLabel="Confirmer & Facturer"
@@ -3314,6 +3393,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   return (
                     <DocTotals
                       subtotal={subtotal}
+                      discount={Number(invoiceDetail.discount ?? 0)}
+                      vat={invoiceDetail}
                       total={Number(invoiceDetail.total)}
                       paid={paidTotal > 0 ? paidTotal : undefined}
                       remaining={due > 0 ? due : undefined}
@@ -3603,6 +3684,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       {/* ── Return detail ─────────────────────────────────────── */}
       <DocPanel open={!!returnDetail && !returnEditorOpen} onClose={() => setReturnDetail(null)} title={returnDetail ? `${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}` : ''}
         footer={<>
+          {vatReturnAction}
           <button onClick={() => setReturnDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           <button onClick={printReturn} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
         </>}>
@@ -3698,6 +3780,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 </div>
               )}
 
+              {returnDetail.vat_net_amount != null && <DocTotals
+                subtotal={Number(returnDetail.total)} vat={returnDetail} total={Number(returnDetail.total)} totalLabel="Total TTC" />}
               {returnDetail.reason && <div className="py-2 text-sm border-b border-neutral-100"><span className="font-semibold">Motif :</span> {returnDetail.reason}</div>}
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Articles retournés</div>

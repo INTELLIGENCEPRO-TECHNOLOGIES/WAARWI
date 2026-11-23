@@ -516,7 +516,7 @@ export function PrixTab({ form, setForm, marginValue, marginStr, showPurchasePri
             <PriceInput value={form.purchase_price} onChange={v => setForm(f => ({ ...f, purchase_price: v === '' ? 0 : v }))} placeholder="Prix d'achat" />
           </Field>
         )}
-        <Field label="Prix de vente détail (FCFA)">
+        <Field label="Prix de vente détail HT (FCFA)">
           <PriceInput value={form.sale_price} onChange={v => setForm(f => ({ ...f, sale_price: v === '' ? 0 : v }))} placeholder="Prix de vente" />
         </Field>
         <Field label="TVA (%)">

@@ -1,3 +1,4 @@
+import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import {
   X, Printer, Link2, MessageCircle, Pencil,
   Coins, BookOpen, Loader2, Ban, Trash2, User, Calendar,
@@ -28,7 +29,7 @@ type PaymentLine = {
 };
 
 type Props = {
-  invoice: {
+  invoice: VatAmounts & {
     id: string;
     sale_number: string;
     total: number;
@@ -154,6 +155,14 @@ export function MobileInvoiceDetail({
             <span>Sous-total</span>
             <span className="num font-semibold">{formatFCFA(subtotal)}</span>
           </div>
+          {invoice.vat_net_amount != null && <>
+            <div className="flex justify-between text-xs">
+              <span>Total HT</span><span className="num">{formatVatAmount(invoice.vat_net_amount)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span>TVA</span><span className="num">{formatVatAmount(invoice.vat_amount)}</span>
+            </div>
+          </>}
           <div className="flex items-center justify-between text-sm font-bold text-neutral-900">
             <span>Total</span>
             <span className="num">{formatFCFA(invoice.total)}</span>

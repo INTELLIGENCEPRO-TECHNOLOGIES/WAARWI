@@ -1,3 +1,4 @@
+import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -61,6 +62,9 @@ export type DocumentEditorProps = {
   setItems: (fn: any) => void;
   // Calculations
   subtotal: number;
+  vat?: VatAmounts;
+  documentTotal?: number;
+  additionalActions?: React.ReactNode;
   // Save
   saving: boolean;
   onSave?: (opts?: { silent?: boolean }) => void;
@@ -455,6 +459,17 @@ export function DocumentEditor(props: DocumentEditorProps) {
         />
       </div>
 
+      {((!isEdit && props.vat?.vat_net_amount != null) || (isView && props.additionalActions)) && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--w-separator)] px-3 py-2 text-xs">
+          {props.vat?.vat_net_amount != null && <>
+            <span>Total HT <strong className="num">{formatVatAmount(props.vat.vat_net_amount)}</strong></span>
+            <span>TVA <strong className="num">{formatVatAmount(props.vat.vat_amount)}</strong></span>
+            <span>Total TTC <strong className="num">{formatVatAmount(props.documentTotal)}</strong></span>
+          </>}
+          {props.additionalActions}
+        </div>
+      )}
+
       {/* ═══ Header fields ═══ */}
       {canEdit && (
         headerValidated ? (
@@ -726,7 +741,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           {ipmBeneficiaire && ipmPartIpm > 0 && <span className={`text-xs font-bold text-[var(--w-text-sec)] num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>Client {formatFCFA(ipmPartClient)}</span>}
           {totalPaid > 0 && <span className={`text-xs font-bold text-emerald-600 num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>Payé {formatFCFA(totalPaid)}</span>}
           {balance > 0 && totalPaid > 0 && <span className={`text-xs font-bold text-amber-600 num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>Reste {formatFCFA(balance)}</span>}
-          <span className={`text-xs font-black text-[var(--w-text)] num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>TOTAL {formatFCFA(subtotal)}</span>
+          <span className={`text-xs font-black text-[var(--w-text)] num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>{docType === 'quote' ? 'TOTAL HT' : props.vat?.vat_net_amount != null ? 'TOTAL TTC' : 'TOTAL'} {props.vat?.vat_net_amount != null ? formatVatAmount(props.documentTotal) : formatFCFA(subtotal)}</span>
         </div>
         </div>
       </div>
