@@ -3,6 +3,7 @@ import { cashMovementLabel, type CashMovementKind } from '../lib/cashMovements';
 import { formatCurrency, formatDate } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { SearchableSelect } from './SearchableSelect';
+import { AccountingCashDocument } from './AccountingCashDocument';
 
 const PAGE_SIZE = 25;
 type Cursor = { time: string; id: string } | null;
@@ -37,7 +38,9 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
   const [rows, setRows] = useState<Movement[] | null>(null);
   const [cursorTrail, setCursorTrail] = useState<Cursor[]>([null]);
   const [hasMore, setHasMore] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [documentSaving, setDocumentSaving] = useState(false);
+  const busy = running || documentSaving;
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirmId, setConfirmId] = useState('');
@@ -62,7 +65,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
   };
 
   const run = async (operation: () => Promise<void>) => {
-    setBusy(true);
+    setRunning(true);
     setError('');
     setNotice('');
     setConfirmId('');
@@ -72,7 +75,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
       setError(failure && typeof failure === 'object' && 'message' in failure
         ? String(failure.message) : 'L’opération a échoué. Réessayez.');
     } finally {
-      setBusy(false);
+      setRunning(false);
     }
   };
 
@@ -204,6 +207,23 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
                     <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirmId(row.id)}>Comptabiliser</button>
                   )}
                 </div>
+              )}
+              {row.decision.action === 'review'
+                && (row.kind === 'customer_prepayment' || row.kind === 'customer_withdrawal' || row.kind === 'refund') && (
+                confirmId === row.id ? (
+                  <div className="col-span-full">
+                    <AccountingCashDocument key={row.id} tenantId={tenantId} movementId={row.id}
+                      onClose={() => setConfirmId('')} onSavingChange={setDocumentSaving}
+                      onPosted={() => void run(async () => {
+                        setNotice('Écriture comptabilisée et rattachée au mouvement.');
+                        onPosted();
+                        await fetchPage(cursorTrail);
+                      })} />
+                  </div>
+                ) : (
+                  <button type="button" className="btn-secondary col-span-2 justify-self-start sm:col-span-1"
+                    disabled={busy} onClick={() => setConfirmId(row.id)}>Vérifier la pièce</button>
+                )
               )}
             </li>
           ))}
