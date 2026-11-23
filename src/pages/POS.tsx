@@ -1,3 +1,5 @@
+import { useSalePrice } from '../lib/useSalePrice';
+import { formatVatAmount } from '../lib/salesVat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import {
@@ -1566,7 +1568,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const subtotal = cart.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-  const total = Math.max(0, subtotal - discount);
+  const issueSiteId = saleSourceSiteId || currentSite?.id;
+  const pricing = useSalePrice(issueSiteId, cart, discount);
+  const total = pricing.price?.ttc ?? Math.max(0, subtotal - discount);
+  const needsIpmReview = !!ipmBeneficiaire && Number(pricing.price?.vat) > 0;
+  const webOrderPricing = useRef<{ original: number; confirmed: number | null; paid: boolean } | null>(null);
+
+  useEffect(() => {
+    if (cart.length === 0 && webOrderPricing.current) {
+      webOrderPricing.current = null;
+      (window as any).__pendingWebOrderId = undefined;
+    }
+  }, [cart.length]);
   const ipmConfig = parseConvention(ipmConvention);
   const ipmTaux = ipmConfig?.taux_defaut || 0;
   const ipmModeCalcul = ipmConfig?.mode_calcul || 'total_facture';
@@ -1699,11 +1712,34 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // ─── Payment ──────────────────────────────────────────────────────────────
 
+  const checkSalePrice = () => {
+    if (!pricing.price) {
+      error(pricing.error || 'Le montant à encaisser est en cours de calcul.');
+      if (pricing.error) pricing.refresh();
+      return false;
+    }
+    if (needsIpmReview) {
+      error('La répartition d’une vente avec TVA entre le client et l’IPM doit être validée.');
+      return false;
+    }
+    const webOrder = webOrderPricing.current;
+    if (webOrder && pricing.price.vat > 0 && pricing.price.ttc !== webOrder.original && pricing.price.ttc !== webOrder.confirmed) {
+      if (webOrder.paid) {
+        error('Cette commande web a déjà été payée. Vérifiez son montant avant de la convertir en vente.');
+        return false;
+      }
+      if (!confirm(`Commande web à ${formatVatAmount(webOrder.original)}. Total avec TVA : ${formatVatAmount(pricing.price.ttc)}. Le client confirme-t-il ce montant ?`)) return false;
+      webOrder.confirmed = pricing.price.ttc;
+    }
+    return true;
+  };
+
   const openPayment = () => {
     if (stockSourceLoading) return;
     if (!refData) { error('Modes de règlement en cours de chargement'); return; }
     if (cart.length === 0) { error('Panier vide'); return; }
     if (!session) { error('Ouvrez d\'abord la caisse'); return; }
+    if (!checkSalePrice()) return;
     // Pre-select Espèces (cash) as the default payment method
     const cashMethod = methods.find(m => /esp[èe]ces|cash|espèces/i.test(m.name) || m.code?.toLowerCase() === 'cash') || methods[0] || null;
     setPayments(cashMethod ? [{ payment_method_id: cashMethod.id, method_name: cashMethod.name, amount: Math.max(0, total), reference: '' }] : []);
@@ -1720,7 +1756,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const validateCreditSale = async () => {
-    if (!session || !currentSite) return;
+    if (!session || !currentSite || !checkSalePrice()) return;
     if (!customer) { error('Sélectionnez un client pour une vente à crédit'); return; }
     if (cart.length === 0) { error('Panier vide'); return; }
     if ((customer as any).credit_blocked) { error('Ventes à crédit bloquées pour ce client'); return; }
@@ -1731,19 +1767,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       return;
     }
     setPaying(true);
-    const saleItems = cart.map(i => ({
+    const saleItems = cart.map((i, index) => ({
+      ...(index === 0 ? { expected_ttc: total } : {}),
       article_id: i.article_id, name: i.name, quantity: i.quantity,
       unit_price: i.unit_price, discount: i.discount, purchase_cost: i.purchase_cost,
     }));
     const { data, error: e } = await supabase.rpc('create_credit_sale', {
-      p_site_id: currentSite.id,
+      p_site_id: issueSiteId,
       p_cash_session_id: session.id,
       p_customer_id: customer.id,
       p_items: saleItems,
       p_discount: discount,
       p_note: '',
     });
-    if (e) { setPaying(false); error(e.message); return; }
+    if (e) { setPaying(false); pricing.refresh(); error(e.message); return; }
     const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
     const creditSaleId = (data as any)?.sale_id || (data as any)?.id || null;
     if (creditSaleId && (docDeliveryDate || docReference || docWarranty || docRepresentative || docImei)) {
@@ -1842,10 +1879,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const executeSale = async (lotSelections: ArticleLotSelection[] | null) => {
-    if (!session || !currentSite) return;
+    if (!session || !currentSite || !checkSalePrice()) return;
     setLotPickerOpen(false);
     setPaying(true);
-    const saleItems = cart.map(i => ({
+    const saleItems = cart.map((i, index) => ({
+      ...(index === 0 ? { expected_ttc: total } : {}),
       article_id: i.article_id, name: i.name, quantity: i.quantity,
       unit_price: i.unit_price, discount: i.discount, purchase_cost: i.purchase_cost,
     }));
@@ -1880,7 +1918,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }
 
     const { data, error: e } = await supabase.rpc(rpcName, params);
-    if (e) { setPaying(false); error(e.message); return; }
+    if (e) { setPaying(false); pricing.refresh(); error(e.message); return; }
     const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
     const saleId = (data as any)?.sale_id || (data as any)?.id || null;
 
@@ -2043,6 +2081,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         });
       }
       if (missing.length > 0) { error(`Articles introuvables: ${missing.join(', ')}`); return; }
+      webOrderPricing.current = {
+        original: Number(webOrderDetail.subtotal), confirmed: null, paid: webOrderDetail.payment_status === 'paye',
+      };
       setCart(newCart);
       setDiscount(0);
       setCustomer(null);
@@ -2325,7 +2366,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <span className="text-neutral-500">Panier {cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
         </div>
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-neutral-500">Sous-total</span>
+          <span className="text-neutral-500">{pricing.price?.enabled ? 'Sous-total HT' : 'Sous-total'}</span>
           <span className="font-semibold text-neutral-800 num">{formatFCFA(subtotal)}</span>
         </div>
         {can('apply_discounts') && (
@@ -2334,6 +2375,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[11px] text-right num w-24 outline-none pb-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
           </div>
         )}
+        {pricing.price?.enabled && <div className="flex justify-between text-[11px]">
+          <span>TVA</span><span className="num">{formatVatAmount(pricing.price.vat)}</span>
+        </div>}
         {ipmBeneficiaire && total > 0 && (
           <div className="px-2 py-1.5 bg-neutral-100 border border-neutral-200 rounded-lg text-[10px] space-y-1">
             <div className="flex items-center gap-2">
@@ -2356,7 +2400,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         )}
         <div className="flex items-center justify-between pt-1.5 border-t border-neutral-200">
           <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Total</span>
-          <div className="text-2xl font-bold text-neutral-900 num leading-none">{formatFCFA(total)}</div>
+          <div className="text-2xl font-bold text-neutral-900 num leading-none">{pricing.price?.enabled ? formatVatAmount(total) : formatFCFA(total)}</div>
         </div>
         <button onClick={openPayment} disabled={cart.length === 0}
           className="btn-icon-primary w-full h-10 rounded-md disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none mt-1 gap-2">
@@ -2374,7 +2418,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <span className="text-neutral-500">Panier {cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-neutral-500">Sous-total</span>
+              <span className="text-neutral-500">{pricing.price?.enabled ? 'Sous-total HT' : 'Sous-total'}</span>
               <span className="font-semibold text-neutral-800 num">{formatFCFA(subtotal)}</span>
             </div>
             {can('apply_discounts') && (
@@ -2405,7 +2449,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             )}
             <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Total</span>
-              <div className="text-xl font-bold text-neutral-900 num leading-none">{formatFCFA(total)}</div>
+              {pricing.price?.enabled && <div className="text-xs text-neutral-600">TVA {formatVatAmount(pricing.price.vat)}</div>}
+              <div className="text-xl font-bold text-neutral-900 num leading-none">{pricing.price?.enabled ? formatVatAmount(total) : formatFCFA(total)}</div>
             </div>
           </div>
           {/* Virtual numpad — Warwi branded, fills remaining space */}
@@ -2874,6 +2919,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {payOpen && (
         <PaymentScreen
           total={ipmPartClient}
+          showVat={pricing.price?.enabled}
           customer={customer}
           methods={methods}
           payments={payments}
@@ -3200,7 +3246,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 // ═══ Fullscreen immersive payment screen ═══════════════════════════════════════
 
 function PaymentScreen({
-  total, customer, methods, payments, setPayments, paying,
+  total, showVat, customer, methods, payments, setPayments, paying,
   onClose, onValidate, onValidateCredit,
   docSettings, docFields, setDocFields, ipmInfo,
   ipmDocRequired, ipmDocuments, setIpmDocuments, reps,
@@ -3208,6 +3254,7 @@ function PaymentScreen({
   autoPrintInvoice, setAutoPrintInvoice,
 }: {
   total: number;
+  showVat?: boolean;
   customer: Customer | null;
   methods: PaymentMethod[];
   payments: SalePayment[];
@@ -3229,6 +3276,7 @@ function PaymentScreen({
   autoPrintInvoice: boolean;
   setAutoPrintInvoice: (v: boolean) => void;
 }) {
+  const formatPayment = showVat ? formatVatAmount : formatFCFA;
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = total - totalPaid;
   const enough = totalPaid >= total && total > 0;
@@ -3273,12 +3321,12 @@ function PaymentScreen({
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-3">
           <div className="flex items-baseline gap-3">
-            <p className="text-[20px] font-bold text-neutral-900 num leading-none tracking-tight">{formatFCFA(total)}</p>
+            <p className="text-[20px] font-bold text-neutral-900 num leading-none tracking-tight">{formatPayment(total)}</p>
             {totalPaid > 0 && (
               <span className="text-[11px] num">
                 {remaining > 0
-                  ? <span className="text-amber-600 font-semibold">reste {formatFCFA(remaining)}</span>
-                  : <span className="text-neutral-500">monnaie {formatFCFA(-remaining)}</span>
+                  ? <span className="text-amber-600 font-semibold">reste {formatPayment(remaining)}</span>
+                  : <span className="text-neutral-500">monnaie {formatPayment(-remaining)}</span>
                 }
               </span>
             )}
@@ -3445,17 +3493,17 @@ function PaymentScreen({
             <button onClick={onValidate} disabled={paying || !ipmDocsValid}
               className="h-10 px-5 rounded-md bg-neutral-900 text-white text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50 order-1 sm:order-2 sm:ml-auto">
               {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              <span>{paying ? 'Traitement...' : `Valider · ${formatFCFA(total)}`}</span>
+              <span>{paying ? 'Traitement...' : `Valider · ${formatPayment(total)}`}</span>
             </button>
           ) : canPartial ? (
             <button onClick={onValidate} disabled={paying || !ipmDocsValid}
               className="h-10 px-5 rounded-md bg-neutral-900 text-white text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50 order-1 sm:order-2 sm:ml-auto">
               {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              <span>{paying ? 'Traitement...' : `Partiel · ${formatFCFA(remaining)} crédit`}</span>
+              <span>{paying ? 'Traitement...' : `Partiel · ${formatPayment(remaining)} crédit`}</span>
             </button>
           ) : (
             <div className="h-10 px-5 rounded-md bg-neutral-50 text-neutral-400 font-semibold text-[13px] flex items-center justify-center border border-neutral-100 order-1 sm:order-2 sm:ml-auto">
-              {totalPaid === 0 ? 'Choisir un mode' : `Reste ${formatFCFA(remaining)}`}
+              {totalPaid === 0 ? 'Choisir un mode' : `Reste ${formatPayment(remaining)}`}
             </div>
           )}
           <button onClick={onClose} className="h-10 px-4 rounded-md border border-neutral-200 text-[13px] font-semibold text-neutral-700 hover:border-neutral-400 transition-colors order-2 sm:order-1" disabled={paying}>

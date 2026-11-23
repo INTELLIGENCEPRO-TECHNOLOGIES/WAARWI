@@ -1,3 +1,4 @@
+import { formatVatAmount } from '../lib/salesVat';
 import { useState, useMemo, useRef, useEffect, type ReactNode } from 'react';
 import {
   X, Plus, Search, Trash2, ChevronRight,
@@ -42,6 +43,7 @@ type Props = {
   saving: boolean;
   onSave: () => void;
   total: number;
+  vatSummary?: { ht: number; vat: number };
   saveLabel?: string;
   itemPriceField?: 'sale_price' | 'purchase_price';
   banner?: ReactNode;
@@ -65,6 +67,7 @@ export function MobileBillingWizard({
   saving,
   onSave,
   total,
+  vatSummary,
   saveLabel = 'Enregistrer',
   itemPriceField = 'sale_price',
   banner,
@@ -161,8 +164,9 @@ export function MobileBillingWizard({
                 <ChevronLeft className="w-4 h-4" /> Infos
               </button>
               <div className="text-right">
-                <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold">Total</div>
-                <div className="text-lg font-black text-neutral-900 num">{formatFCFA(total)}</div>
+                <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold">{vatSummary ? 'Total TTC' : 'Total'}</div>
+                {vatSummary && <div className="text-[10px] text-neutral-600">HT {formatVatAmount(vatSummary.ht)} · TVA {formatVatAmount(vatSummary.vat)}</div>}
+                <div className="text-lg font-black text-neutral-900 num">{vatSummary ? formatVatAmount(total) : formatFCFA(total)}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">

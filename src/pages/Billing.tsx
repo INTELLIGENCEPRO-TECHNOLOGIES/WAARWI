@@ -1,3 +1,5 @@
+import { useSalePrice, type PriceLine } from '../lib/useSalePrice';
+import { formatVatAmount } from '../lib/salesVat';
 import { loadInvoiceReturnLines } from '../lib/saleReturnLines';
 import { newIdempotencyKey } from '../lib/cashSession';
 import type { VatAmounts } from '../lib/salesVat';
@@ -215,7 +217,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [convertPayMethod, setConvertPayMethod] = useState('');
   const [convertPayAmount, setConvertPayAmount] = useState('');
   const [converting, setConverting] = useState(false);
-  const [convertItems, setConvertItems] = useState<{ article_id: string; name: string; quantity: number }[]>([]);
+  const [convertItems, setConvertItems] = useState<(PriceLine & { name: string })[]>([]);
   const [lotPickerConvertOpen, setLotPickerConvertOpen] = useState(false);
   const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
 
@@ -454,6 +456,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const ipmConfig = useMemo(() => parseConvention(ipmConvention), [ipmConvention]);
   const ipmTaux = ipmConfig?.taux_defaut || 0;
   const invoiceEditorSubtotalRaw = useMemo(() => invoiceEditorItems.filter(i => i.name.trim()).reduce((s, i) => s + Number(i.total), 0), [invoiceEditorItems]);
+  const invoicePricing = useSalePrice(mobileInvoiceOpen && mobileInvoiceMode === 'create' ? currentSite?.id : null,
+    invoiceEditorItems.filter(i => i.name.trim()));
+  const convertPricing = useSalePrice(convertFrom ? billSourceSiteId || currentSite?.id : null, convertItems, Number(convertFrom?.discount ?? 0));
+  const convertTtc = convertPricing.price?.ttc ?? 0;
+
+  useEffect(() => {
+    if (!convertPayNow && convertPricing.price) setConvertPayAmount(String(convertPricing.price.ttc));
+  }, [convertPayNow, convertPricing.price]);
+
   const ipmResult = useMemo(() => {
     if (!ipmBeneficiaire || !ipmConfig) return null;
     const lignes: IpmArticleLine[] = invoiceEditorItems.filter(i => i.name.trim()).map(i => ({
@@ -1099,7 +1110,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       return next;
     });
   };
-  const invoiceEditorSubtotal = invoiceEditorSubtotalRaw;
+  const invoiceEditorSubtotal = invoicePricing.price?.ttc ?? invoiceEditorSubtotalRaw;
   const invoiceEditorPaid = invoicePayList.reduce((s, p) => s + p.amount, 0);
 
   const openInvoiceEditor = () => {
@@ -1328,9 +1339,19 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       return;
     }
 
+    if (!invoicePricing.price) {
+      error(invoicePricing.error || 'Le montant de la facture est en cours de calcul.');
+      if (invoicePricing.error) invoicePricing.refresh();
+      return;
+    }
+    if (ipmBeneficiaire && invoicePricing.price.vat > 0) {
+      error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
+      return;
+    }
+    const invoiceTtc = invoicePricing.price.ttc;
     const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
     const totalPaid = invoiceIsCredit ? 0 : invoicePayList.reduce((s, p) => s + p.amount, 0);
-    const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : subtotal;
+    const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : invoiceTtc;
     if (!invoiceIsCredit && totalPaid > clientDueAmount) { error('Le montant payé dépasse la part client'); return; }
 
     if (invoiceIsCredit && !invoiceForm.customer_id) {
@@ -1386,7 +1407,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         p_sale: {
           site_id: currentSite.id,
           customer_id: invoiceForm.customer_id || null,
-          sale_number: invNum, subtotal, discount: 0, total: subtotal,
+          sale_number: invNum, subtotal, discount: 0, total: invoiceTtc,
           paid: effectivePaid, status,
           note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
           cash_session_id: sessionId,
@@ -1402,11 +1423,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           payment_method_id: p.method_id || null, amount: p.amount, reference: p.reference || '',
         })),
       });
-      if (e || !saleId) { error(e?.message || 'La facture n’a pas été enregistrée.'); return; }
+      if (e || !saleId) { invoicePricing.refresh(); error(e?.message || 'La facture n’a pas été enregistrée.'); return; }
       const sale = { id: saleId as string };
 
       if (invoiceForm.customer_id) {
-        const unpaidAmount = subtotal - effectivePaid;
+        const unpaidAmount = invoiceTtc - effectivePaid;
         if (unpaidAmount > 0) {
           const { data: cust } = await supabase.from('customers').select('balance').eq('id', invoiceForm.customer_id).single();
           await supabase.from('customers').update({ balance: Number(cust?.balance || 0) + unpaidAmount }).eq('id', invoiceForm.customer_id);
@@ -1439,7 +1460,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           date_vente: new Date().toISOString().slice(0, 10),
           part_ipm: ipmPartIpm,
           part_client: ipmPartClient,
-          montant_total: subtotal,
+          montant_total: invoiceTtc,
           taux_prise_en_charge: ipmTaux,
           montant_eligible: ipmResult?.montant_eligible || subtotal,
           montant_non_eligible: ipmResult?.montant_non_eligible || 0,
@@ -1470,12 +1491,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   // ── Convert quote → sale ─────────────────────────────────────
   const openConvert = async (q: Quote) => {
     setConvertFrom(q); setConvertPayNow(false); setConvertPayMethod(paymentMethods[0]?.id || '');
-    setConvertPayAmount(String(q.total));
+    setConvertItems([]);
+    setConvertPayAmount('');
     setConvertIpmDocs({ numero_ordonnance: '', medecin: '', numero_bon: '' });
     setConvertIpmBeneficiaire(null);
     setConvertIpmConvention(null);
-    const { data } = await supabase.from('quote_items').select('article_id, name, quantity').eq('quote_id', q.id);
-    setConvertItems((data || []).filter((i: any) => i.article_id).map((i: any) => ({ article_id: i.article_id, name: i.name, quantity: Number(i.quantity) })));
+    const { data } = await supabase.from('quote_items').select('article_id, name, quantity, unit_price, discount').eq('quote_id', q.id);
+    setConvertItems(data || []);
     // IPM lookup for conversion
     if (isPharmacy && q.customer_id && tenant) {
       const { data: benef } = await supabase
@@ -1525,7 +1547,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         .select('article_id, quantity')
         .eq('tenant_id', tenant!.id)
         .eq('site_id', currentSite.id)
-        .in('article_id', trackedConvertItems.map(i => i.article_id));
+        .in('article_id', trackedConvertItems.map(i => i.article_id!));
       const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
       const insufficient = trackedConvertItems.filter(i => (stockMap.get(i.article_id) || 0) < i.quantity);
       if (insufficient.length > 0) {
@@ -1544,6 +1566,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const executeConvert = async (lotSelections: ArticleLotSelection[] | null) => {
     if (!convertFrom || !currentSite) return;
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de convertir en facture'); return; }
+    if (!convertPricing.price) {
+      error(convertPricing.error || 'Le montant de la facture est en cours de calcul.');
+      if (convertPricing.error) convertPricing.refresh();
+      return;
+    }
+    if (convertIpmBeneficiaire && convertPricing.price.vat > 0) {
+      error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
+      return;
+    }
     setConverting(true);
 
     // Find active cash session for payment tracking
@@ -1556,13 +1587,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       }
     }
 
-    const payments: any[] = [];
+    const payments: object[] = [{ expected_ttc: convertTtc }];
     if (convertPayNow && Number(convertPayAmount) > 0 && convertPayMethod) {
       const pm = paymentMethods.find(p => p.id === convertPayMethod);
       payments.push({
         payment_method_id: convertPayMethod,
         method_name: pm?.name || 'Paiement',
-        amount: Math.min(Number(convertPayAmount), convertFrom.total),
+        amount: Math.min(Number(convertPayAmount), convertTtc),
         reference: '',
       });
     }
@@ -1572,7 +1603,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       p_cash_session_id: convertSessionId,
       p_payments: payments,
     });
-    if (e) { setConverting(false); error(e.message); return; }
+    if (e) { setConverting(false); convertPricing.refresh(); error(e.message); return; }
 
     if (lotSelections && lotSelections.length > 0) {
       for (const sel of lotSelections) {
@@ -1589,6 +1620,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     } else if (convertItems.length > 0) {
       const saleNum = (data as any)?.sale_number || '';
       for (const item of convertItems) {
+        if (!item.article_id) continue;
         await supabase.rpc('adjust_stock', {
           p_article_id: item.article_id,
           p_site_id: billSourceSiteId || currentSite.id,
@@ -1619,8 +1651,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (convertIpmBeneficiaire && tenant && saleId) {
       const cfg = parseConvention(convertIpmConvention);
       if (cfg) {
-        const ipmCalc = calculerIpm(cfg, [{ montant_ligne: convertFrom.total, ipm_eligible: true }], 0);
-        const payAmt = convertPayNow ? Math.min(Number(convertPayAmount), convertFrom.total) : 0;
+        const ipmCalc = calculerIpm(cfg, [{ montant_ligne: convertTtc, ipm_eligible: true }], 0);
+        const payAmt = convertPayNow ? Math.min(Number(convertPayAmount), convertTtc) : 0;
         await supabase.from('ipm_ventes').insert({
           tenant_id: tenant.id,
           organisme_id: convertIpmBeneficiaire.organisme_id,
@@ -1630,7 +1662,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           date_vente: new Date().toISOString().slice(0, 10),
           part_ipm: ipmCalc.part_ipm,
           part_client: ipmCalc.part_client,
-          montant_total: convertFrom.total,
+          montant_total: convertTtc,
           part_beneficiaire_payee: Math.min(payAmt, ipmCalc.part_client),
           statut: 'en_attente',
           numero_ordonnance: convertIpmDocs.numero_ordonnance || null,
@@ -2942,6 +2974,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           saving={savingInvoice}
           onSave={saveInvoice}
           total={invoiceEditorSubtotal}
+          vatSummary={invoicePricing.price?.enabled ? invoicePricing.price : undefined}
           saveLabel={mobileEditingInvoiceId ? 'Mettre à jour' : 'Enregistrer facture'}
           onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
           onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
@@ -3176,7 +3209,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       <Modal open={!!convertFrom} onClose={() => !converting && setConvertFrom(null)} title="Convertir en facture" size="sm" layer="top"
         footer={<>
           <button onClick={() => setConvertFrom(null)} className="btn-icon" title="Annuler" disabled={converting}><X className="w-4 h-4" /></button>
-          <button onClick={confirmConvert} disabled={converting || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-icon-primary" title="Créer facture">{converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}</button>
+          <button onClick={confirmConvert} disabled={converting || !convertPricing.price || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-icon-primary" title="Créer facture">{converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}</button>
         </>}>
         {convertFrom && (() => {
           const convertIpmCfg = parseConvention(convertIpmConvention);
@@ -3191,8 +3224,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   <div className="text-[11px] text-slate-600 mt-0.5">{convertFrom.customers?.name || 'Client comptoir'}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Total</div>
-                  <div className="text-lg font-bold text-brand-900 num">{formatFCFA(convertFrom.total)}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Total de la facture</div>
+                  {convertPricing.price?.enabled && <div className="text-[11px] text-slate-600">HT {formatVatAmount(convertPricing.price.ht)} · TVA {formatVatAmount(convertPricing.price.vat)}</div>}
+                  <div className="text-lg font-bold text-brand-900 num">{convertPricing.price ? formatVatAmount(convertTtc) : convertPricing.error ? 'Montant indisponible' : 'Calcul…'}</div>
+                  {convertPricing.error && <button type="button" className="text-xs font-semibold underline" onClick={convertPricing.refresh}>Recalculer</button>}
                 </div>
               </div>
 
@@ -3267,7 +3302,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       <LotPickerModal
         open={lotPickerConvertOpen}
         onClose={() => setLotPickerConvertOpen(false)}
-        items={convertItems}
+        items={convertItems.flatMap(item => item.article_id ? [{ ...item, article_id: item.article_id }] : [])}
         onConfirm={(selections) => { setLotPickerConvertOpen(false); executeConvert(selections); }}
         title="Sélection des lots (Facturation)"
         confirmLabel="Confirmer & Facturer"

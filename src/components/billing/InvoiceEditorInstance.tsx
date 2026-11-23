@@ -1,3 +1,4 @@
+import { useSalePrice } from '../../lib/useSalePrice';
 import { loadInvoiceReturnLines } from '../../lib/saleReturnLines';
 import type { VatAmounts } from '../../lib/salesVat';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -225,7 +226,8 @@ export function InvoiceEditorInstance({
     return validerDocumentsIpm(ipmConfig, ipmDocuments, ipmBeneficiaire?.matricule);
   }, [ipmBeneficiaire, ipmConfig, ipmDocuments]);
 
-  const subtotal = subtotalRaw;
+  const pricing = useSalePrice(mode === 'create' ? currentSite?.id : null, items.filter(i => i.name.trim()));
+  const subtotal = pricing.price?.ttc ?? subtotalRaw;
   const totalPaid = payList.reduce((s, p) => s + p.amount, 0);
 
   // ── Rep helpers ────────────────────────────────────────────────
@@ -431,9 +433,19 @@ export function InvoiceEditorInstance({
       return;
     }
 
+    if (!pricing.price) {
+      error(pricing.error || 'Le montant de la facture est en cours de calcul.');
+      if (pricing.error) pricing.refresh();
+      return;
+    }
+    if (ipmBeneficiaire && pricing.price.vat > 0) {
+      error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
+      return;
+    }
+    const invoiceTtc = pricing.price.ttc;
     const createSubtotal = valid.reduce((s, i) => s + Number(i.total), 0);
     const createTotalPaid = isCredit ? 0 : payList.reduce((s, p) => s + p.amount, 0);
-    const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : createSubtotal;
+    const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : invoiceTtc;
     if (!isCredit && createTotalPaid > clientDueAmount) { error('Le montant payé dépasse la part client'); return; }
 
     if (isCredit && !invoiceForm.customer_id) {
@@ -488,7 +500,7 @@ export function InvoiceEditorInstance({
         p_sale: {
           site_id: currentSite.id,
           customer_id: invoiceForm.customer_id || null,
-          sale_number: invNum, subtotal: createSubtotal, discount: 0, total: createSubtotal,
+          sale_number: invNum, subtotal: invoiceTtc, discount: 0, total: createSubtotal,
           paid: effectivePaid, status,
           note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
           cash_session_id: sessionId,
@@ -504,11 +516,11 @@ export function InvoiceEditorInstance({
           payment_method_id: p.method_id || null, amount: p.amount, reference: p.reference || '',
         })),
       });
-      if (e || !saleId) { error(e?.message || 'La facture n’a pas été enregistrée.'); return; }
+      if (e || !saleId) { pricing.refresh(); error(e?.message || 'La facture n’a pas été enregistrée.'); return; }
       const sale = { id: saleId as string };
 
       if (invoiceForm.customer_id) {
-        const unpaidAmount = createSubtotal - effectivePaid;
+        const unpaidAmount = invoiceTtc - effectivePaid;
         if (unpaidAmount > 0) {
           const { data: cust } = await supabase.from('customers').select('balance').eq('id', invoiceForm.customer_id).single();
           await supabase.from('customers').update({ balance: Number(cust?.balance || 0) + unpaidAmount }).eq('id', invoiceForm.customer_id);
@@ -537,7 +549,7 @@ export function InvoiceEditorInstance({
           date_vente: new Date().toISOString().slice(0, 10),
           part_ipm: ipmPartIpm,
           part_client: ipmPartClient,
-          montant_total: createSubtotal,
+          montant_total: invoiceTtc,
           taux_prise_en_charge: ipmTaux,
           montant_eligible: ipmResult?.montant_eligible || createSubtotal,
           montant_non_eligible: ipmResult?.montant_non_eligible || 0,
@@ -638,8 +650,8 @@ export function InvoiceEditorInstance({
       items={items}
       setItems={setItems}
       subtotal={subtotal}
-      vat={invoiceDetail ?? undefined}
-      documentTotal={invoiceDetail?.total}
+      vat={pricing.price?.enabled ? { vat_net_amount: pricing.price.ht, vat_amount: pricing.price.vat } : invoiceDetail ?? undefined}
+      documentTotal={pricing.price?.ttc ?? invoiceDetail?.total}
       saving={saving}
       onSave={saveInvoice}
       onClose={onClose}

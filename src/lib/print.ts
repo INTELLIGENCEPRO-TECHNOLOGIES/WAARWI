@@ -672,7 +672,7 @@ ${docHeaderRows}
 <hr class="hr" />
 ${itemsHtml}
 <hr class="hr" />
-<div class="row"><span>Sous-total</span><span>${fmtMoney(subtotal)} FCFA</span></div>
+<div class="row"><span>${sale.vat?.vat_net_amount != null ? 'Sous-total HT' : 'Sous-total'}</span><span>${fmtMoney(subtotal)} FCFA</span></div>
 ${sale.discount > 0 ? `<div class="row"><span>Remise</span><span>- ${fmtMoney(sale.discount)} FCFA</span></div>` : ''}
 ${sale.vat?.vat_net_amount != null ? `
 <div class="row"><span>Total HT</span><span>${fmtMoney(sale.vat.vat_net_amount)} FCFA</span></div>
@@ -1247,7 +1247,7 @@ async function printPagedDocument(opts: CommercialDocOpts, f: PagedFormat) {
       ${opts.vat?.vat_net_amount != null && !masked ? `
         <div class="fin-row"><span>Total HT</span><span>${fmtMoney(opts.vat.vat_net_amount)} FCFA</span></div>
         <div class="fin-row"><span>TVA</span><span>${fmtMoney(opts.vat.vat_amount ?? 0)} FCFA</span></div>` : ''}
-      <div class="fin-row grand"><span>TOTAL TTC</span><span>${masked ? MASK : `${fmtMoney(opts.total)} FCFA`}</span></div>
+      <div class="fin-row grand"><span>${opts.docLabel === 'DEVIS' ? 'TOTAL HT' : 'TOTAL TTC'}</span><span>${masked ? MASK : `${fmtMoney(opts.total)} FCFA`}</span></div>
       ${isInvoiceType ? `
         <div class="fin-row paid-row"><span>Règlement</span><span>${masked ? MASK : `${fmtMoney(paidAmount)} FCFA`}</span></div>
         <div class="fin-row due-row"><span>Reste à payer</span><span>${masked ? MASK : `${fmtMoney(remaining)} FCFA`}</span></div>

@@ -52,7 +52,7 @@ export function SalesVatSettings() {
       <div>
         <h1 id="sales-vat-title" className="text-lg font-bold text-[var(--w-text)]">TVA sur les ventes</h1>
         <p className="mt-1 text-sm text-[var(--w-text-sec)]">
-          Les prix du catalogue restent TTC. Renseignez le taux de chaque article avant d’activer la TVA.
+          Les prix du catalogue sont HT. Waarwi ajoute la TVA au prix des articles concernés lorsque le magasin l’applique.
           Les articles à 0 % restent sans montant de TVA. Le réglage s’applique aux nouvelles ventes.
         </p>
       </div>
