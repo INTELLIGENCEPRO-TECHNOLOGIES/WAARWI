@@ -2415,12 +2415,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         </button>
       </div>
 
-      {/* Footer — DESKTOP with virtual numpad (Warwi branded) */}
+      {/* Encaissement sur ordinateur */}
       {cart.length > 0 && (
-        <div className="hidden lg:flex flex-col flex-shrink-0 border-t border-[var(--w-separator)] bg-[var(--w-surface)] pb-1">
-          {/* Compact totals row */}
-          <div className="px-3 py-1.5 space-y-0.5 shrink-0">
-            <div className="flex items-center justify-between text-[11px]">
+        <div className="hidden flex-col flex-shrink-0 border-t border-[var(--w-separator)] bg-[var(--w-surface)] lg:flex">
+          <PosNumpad
+            target={{
+              qty: selectedLine?.quantity || 1,
+              price: selectedLine?.unit_price || 0,
+              discount: selectedLine?.discount || 0,
+            }}
+            onCommit={commitNumpad}
+            canDiscount={can('apply_discounts')}
+            compact={true}
+          />
+          <section aria-label="Encaissement" className="space-y-1.5 border-t border-[var(--w-separator)] px-3 pb-3 pt-2 [@media(max-height:640px)]:space-y-1 [@media(max-height:640px)]:pb-2">
+            <div className="text-[11px] [@media(max-height:640px)]:hidden">
               <span className="text-neutral-500">Panier {cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="flex items-center justify-between text-[11px]">
@@ -2430,7 +2439,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {can('apply_discounts') && (
               <div className="flex items-center justify-between text-[11px] gap-2">
                 <span className="text-neutral-500 shrink-0">Remise globale</span>
-                <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[11px] text-right num w-24 outline-none pb-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
+                <input type="number" aria-label="Remise globale" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[11px] text-right num w-24 outline-none pb-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
+              </div>
+            )}
+            {pricing.price?.enabled && (
+              <div className="flex items-center justify-between text-[11px] text-[var(--w-text-sec)]">
+                <span>TVA</span>
+                <span className="num">{formatVatAmount(pricing.price.vat)}</span>
               </div>
             )}
             {ipmBeneficiaire && total > 0 && (
@@ -2453,25 +2468,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 )}
               </div>
             )}
-            <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Total</span>
-              {pricing.price?.enabled && <div className="text-xs text-neutral-600">TVA {formatVatAmount(pricing.price.vat)}</div>}
-              <div className="text-xl font-bold text-neutral-900 num leading-none">{pricing.price?.enabled ? formatVatAmount(total) : formatFCFA(total)}</div>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-[var(--w-separator)] pt-2">
+              <div className="flex w-full flex-wrap items-baseline justify-between gap-x-3 gap-y-1 [@media(max-height:640px)]:w-auto [@media(max-height:640px)]:flex-col [@media(max-height:640px)]:gap-0">
+                <span className="text-sm font-semibold text-[var(--w-text)]">{pricing.price?.enabled ? 'Total TTC' : 'Total'}</span>
+                <span className="num whitespace-nowrap text-2xl font-bold leading-tight text-[var(--w-text)] [@media(max-height:640px)]:text-xl">{pricing.price?.enabled ? formatVatAmount(total) : formatFCFA(total)}</span>
+              </div>
+              <button type="button" onClick={openPayment} disabled={stockSourceLoading} className="btn-primary min-h-11 w-full text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--w-text)] [@media(max-height:640px)]:w-auto">
+                <CreditCard aria-hidden="true" className="h-4 w-4" />
+                Encaisser la vente
+              </button>
             </div>
-          </div>
-          {/* Virtual numpad — Warwi branded, fills remaining space */}
-          <PosNumpad
-            target={{
-              qty: selectedLine?.quantity || 1,
-              price: selectedLine?.unit_price || 0,
-              discount: selectedLine?.discount || 0,
-              total: total,
-            }}
-            onCommit={commitNumpad}
-            onValidate={openPayment}
-            canDiscount={can('apply_discounts')}
-            compact={true}
-          />
+          </section>
         </div>
       )}
     </div>
@@ -2821,7 +2828,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         </div>
 
-        <aside className="hidden lg:flex w-[400px] xl:w-[440px] bg-[var(--w-surface)] border-l border-[var(--w-separator)] flex-col shadow-[inset_8px_0_24px_-16px_rgb(15_23_42_/0.08)]">
+        <aside aria-label="Panier" className="hidden lg:flex w-[400px] xl:w-[440px] bg-[var(--w-surface)] border-l border-[var(--w-separator)] flex-col shadow-[inset_8px_0_24px_-16px_rgb(15_23_42_/0.08)]">
           {CartPanel}
         </aside>
 
