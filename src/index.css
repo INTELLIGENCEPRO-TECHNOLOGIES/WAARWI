@@ -612,11 +612,15 @@ p { line-height: 1.6; }
     border-bottom: 1px solid var(--w-separator);
     container: pos-toolbar / inline-size;
   }
+  .pos-toolbar-desktop .chip { height: 34px; }
+  .pos-toolbar-depot { max-width: 8.5rem; }
   .pos-toolbar-label { display: none; }
-  .pos-session-label { line-height: 14px; }
   @container pos-toolbar (min-width: 74rem) {
+    .pos-toolbar-depot { max-width: 10rem; }
     .pos-toolbar-label { display: inline; }
-    .pos-session-label { line-height: 1rem; }
+  }
+  .pos-touch-control {
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center;
   }
   .pos-search {
     background: #FFFFFF;

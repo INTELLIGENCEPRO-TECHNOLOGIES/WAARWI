@@ -48,6 +48,7 @@ import {
   Store,
   History,
   Menu as MenuIcon,
+  MoreHorizontal,
   Eye,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -2527,111 +2528,113 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* ── Unified command bar ─────────────────────────────────────── */}
       <div className="pos-command-bar shrink-0 relative z-20" {...clayTouchHandlers}>
         {/* ═══ DESKTOP ═══ */}
-        <div className="hidden lg:flex flex-wrap items-center min-h-[52px] px-2 py-2 gap-1">
-          <div className="pos-search flex items-center gap-2 flex-1 min-w-44 h-9 mx-1 px-2.5">
-            <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Rechercher…"
-              className="flex-1 min-w-0 w-0 bg-transparent text-sm text-[var(--w-text)] focus:outline-none placeholder:text-[var(--w-text-disabled)]"
-              autoFocus={desktopAutoFocus}
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="shrink-0 p-1 text-[var(--w-text-muted)] hover:text-[var(--w-text)] transition-colors">
-                <X className="w-3.5 h-3.5" />
+        <div className="pos-toolbar-desktop hidden min-h-[52px] flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-2 lg:flex">
+          <div role="group" aria-label="Recherche et filtres du catalogue" className="flex flex-auto flex-wrap items-center gap-1.5">
+            <div className="pos-search flex h-[34px] min-w-44 flex-1 items-center gap-2 px-2.5">
+              <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher…"
+                className="flex-1 min-w-0 w-0 bg-transparent text-sm text-[var(--w-text)] focus:outline-none placeholder:text-[var(--w-text-disabled)]"
+                autoFocus={desktopAutoFocus}
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="shrink-0 p-1 text-[var(--w-text-muted)] hover:text-[var(--w-text)] transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {/* Source depot */}
+            {depotAllOptions.length > 1 && (
+              <div className="relative shrink-0">
+                <button onClick={() => setDesktopDepotOpen(v => !v)} className="chip pos-toolbar-depot" title={stockSourceName} aria-label={`Dépôt source : ${stockSourceName}`} aria-expanded={desktopDepotOpen} disabled={stockSourceLoading}>
+                  {stockSourceLoading && <Loader2 className="w-3 h-3 shrink-0 animate-spin" />}
+                  <span className="min-w-0 truncate">Dépôt : {stockSourceName}</span>
+                  <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${desktopDepotOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {desktopDepotOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setDesktopDepotOpen(false)} />
+                    <div className="absolute left-0 top-full mt-1 z-[9999] w-72 max-h-[min(320px,60vh)] overflow-y-auto rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
+                      {depotAllOptions.map(o => (
+                        <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-left ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
+                          {o.id === saleSourceSiteId && <Check className="w-4 h-4 shrink-0" />}
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{o.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            <div className="relative flex shrink-0 items-center">
+              <button onClick={() => setCategoryPickerOpen(true)} className={`chip clay-action ${categoryId ? 'pr-7' : ''} ${categoryId || categoryPickerOpen ? 'clay-selected' : ''}`} title={activeCategoryName || 'Catégorie'} aria-expanded={categoryPickerOpen}>
+                <Tag className="w-3.5 h-3.5" />
+                <span className="pos-toolbar-label max-w-[100px] truncate">{activeCategoryName || 'Catégorie'}</span>
+              </button>
+              {categoryId && (
+                <button type="button" onClick={() => setCategoryId('')} className="absolute right-0.5 flex h-7 w-6 items-center justify-center rounded text-[var(--w-text-sec)] hover:text-[var(--w-text)]" aria-label="Effacer le filtre de catégorie">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {/* Top / Alpha */}
+            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip clay-action" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
+              {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
+              <span className="pos-toolbar-label">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
+            </button>
+            {/* Grid / List */}
+            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip clay-action" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
+              {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+              <span className="pos-toolbar-label">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
+            </button>
+            {autoMode && (
+              <button onClick={() => setVehiclePickerOpen(true)} className="chip" title="Par véhicule">
+                <Car className="w-3.5 h-3.5 text-brand-700" /><span className="pos-toolbar-label">Véhicule</span>
               </button>
             )}
           </div>
-          {/* Source depot */}
-          {depotAllOptions.length > 1 && (
-            <div className="relative shrink-0">
-              <button onClick={() => setDesktopDepotOpen(v => !v)} className="chip max-w-40" title={stockSourceName} aria-label={`Dépôt source : ${stockSourceName}`} aria-expanded={desktopDepotOpen} disabled={stockSourceLoading}>
-                {stockSourceLoading && <Loader2 className="w-3 h-3 shrink-0 animate-spin" />}
-                <span className="min-w-0 truncate">Dépôt : {stockSourceName}</span>
-                <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${desktopDepotOpen ? 'rotate-180' : ''}`} />
+          <div role="group" aria-label="Actions de caisse" className="flex shrink-0 items-center gap-1.5 border-l border-[var(--w-separator)] pl-3">
+            <button onClick={openTickets} className="chip clay-action" data-label="Tickets" aria-label="Tickets"><List className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Tickets</span></button>
+            {can('pos_returns') && <button onClick={openReturn} className="chip clay-action" data-label="Retour" aria-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Retour</span></button>}
+            {can('pos_cash_movement') && <button onClick={openMovement} className="chip clay-action" data-label="Mouvement" aria-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Mouv.</span></button>}
+            <button onClick={holdCart} className="chip clay-action" data-label="Pause" aria-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Pause</span></button>
+            {/* Session popover button */}
+            <div className="relative">
+              <button
+                onClick={() => setSessionPopOpen(v => !v)}
+                className={`chip clay-action ${sessionPopOpen ? 'clay-selected' : ''}`}
+                aria-expanded={sessionPopOpen}
+                aria-label="Session"
+                data-label={sessionPopOpen ? undefined : 'Session'}
+              >
+                <span>Session</span>
+                <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
               </button>
-              {desktopDepotOpen && (
+              {sessionPopOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setDesktopDepotOpen(false)} />
-                  <div className="absolute left-0 top-full mt-1 z-[9999] w-72 max-h-[min(320px,60vh)] overflow-y-auto rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
-                    {depotAllOptions.map(o => (
-                      <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-left ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
-                        {o.id === saleSourceSiteId && <Check className="w-4 h-4 shrink-0" />}
-                        <span className="min-w-0 [overflow-wrap:anywhere]">{o.name}</span>
-                      </button>
-                    ))}
+                  <div className="fixed inset-0 z-40" onClick={() => setSessionPopOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg p-1 space-y-0.5 animate-fade-in">
+                    {activeRegisterHeader}
+                    {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item clay-action"><BarChart2 className="w-4 h-4" />Stats</button>}
+                    <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item clay-action"><Wallet className="w-4 h-4" />Encaisser un client</button>
+                    {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item clay-action relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
+                    <div className="h-px bg-[var(--w-separator)] my-1" />
+                    <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item clay-action"><LogOut className="w-4 h-4" />Quitter</button>
+                    {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item clay-action"><Eye className="w-4 h-4" />Supervision</button>}
+                    {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item clay-action"><Lock className="w-4 h-4" />Clôturer</button>}
                   </div>
                 </>
               )}
             </div>
-          )}
-          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <div className="relative flex shrink-0 items-center">
-            <button onClick={() => setCategoryPickerOpen(true)} className={`chip clay-action ${categoryId ? 'pr-7' : ''} ${categoryId || categoryPickerOpen ? 'clay-selected' : ''}`} title={activeCategoryName || 'Catégorie'} aria-expanded={categoryPickerOpen}>
-              <Tag className="w-3.5 h-3.5" />
-              <span className="pos-toolbar-label max-w-[100px] truncate">{activeCategoryName || 'Catégorie'}</span>
-            </button>
-            {categoryId && (
-              <button type="button" onClick={() => setCategoryId('')} className="absolute right-0.5 flex h-6 w-6 items-center justify-center rounded text-[var(--w-text-sec)] hover:text-[var(--w-text)]" aria-label="Effacer le filtre de catégorie">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-          {/* Top / Alpha */}
-          <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip clay-action" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
-            {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
-            <span className="pos-toolbar-label">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
-          </button>
-          {/* Grid / List */}
-          <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip clay-action" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
-            {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-            <span className="pos-toolbar-label">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
-          </button>
-          {autoMode && (
-            <button onClick={() => setVehiclePickerOpen(true)} className="chip" title="Par véhicule">
-              <Car className="w-3.5 h-3.5 text-brand-700" /><span className="pos-toolbar-label">Véhicule</span>
-            </button>
-          )}
-          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
-          <button onClick={openTickets} className="chip clay-action" data-label="Tickets" aria-label="Tickets"><List className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Tickets</span></button>
-          {can('pos_returns') && <button onClick={openReturn} className="chip clay-action" data-label="Retour" aria-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Retour</span></button>}
-          {can('pos_cash_movement') && <button onClick={openMovement} className="chip clay-action" data-label="Mouvement" aria-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Mouv.</span></button>}
-          <button onClick={holdCart} className="chip clay-action" data-label="Pause" aria-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="pos-toolbar-label">Pause</span></button>
-          {/* Session popover button */}
-          <div className="relative">
-            <button
-              onClick={() => setSessionPopOpen(v => !v)}
-              className={`chip clay-action ${sessionPopOpen ? 'clay-selected' : ''}`}
-              aria-expanded={sessionPopOpen}
-              aria-label="Session"
-              data-label={sessionPopOpen ? undefined : 'Session'}
-            >
-              <span className="pos-session-label">Session</span>
-              <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {sessionPopOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setSessionPopOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg p-1 space-y-0.5 animate-fade-in">
-                  {activeRegisterHeader}
-                  {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item clay-action"><BarChart2 className="w-4 h-4" />Stats</button>}
-                  <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item clay-action"><Wallet className="w-4 h-4" />Encaisser un client</button>
-                  {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item clay-action relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
-                  <div className="h-px bg-[var(--w-separator)] my-1" />
-                  <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item clay-action"><LogOut className="w-4 h-4" />Quitter</button>
-                  {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item clay-action"><Eye className="w-4 h-4" />Supervision</button>}
-                  {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item clay-action"><Lock className="w-4 h-4" />Clôturer</button>}
-                </div>
-              </>
-            )}
           </div>
         </div>
 
         {/* ═══ MOBILE ═══ */}
         <div className="lg:hidden">
           {/* Line 1: search + filter + actions */}
-          <div className="flex items-center h-11 px-2 gap-1.5">
+          <div className="flex min-h-[52px] items-center gap-1.5 px-2 py-1">
             <div className="flex items-center gap-1.5 flex-1 min-w-0 h-9">
               <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
               <input
@@ -2646,19 +2649,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </button>
               )}
             </div>
-            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 clay-action ${categoryId || categoryPickerOpen ? 'clay-selected' : ''}`} aria-expanded={categoryPickerOpen} title="Catégorie">
-              <Tag className="w-4.5 h-4.5" />
+            <span className="num shrink-0 text-[10px] text-[var(--w-text-muted)]">{filtered.length} art.</span>
+            <button onClick={() => setCategoryPickerOpen(true)} className={`pos-touch-control shrink-0 clay-action ${categoryId || categoryPickerOpen ? 'clay-selected' : ''}`} aria-expanded={categoryPickerOpen} title="Catégorie">
+              <Tag className="h-5 w-5" />
             </button>
-            <button onClick={() => setMobileActionsOpen(true)} className={`relative shrink-0 p-2 clay-action ${mobileActionsOpen ? 'clay-selected' : ''}`} aria-expanded={mobileActionsOpen} title="Actions">
-              <MenuIcon className="w-4.5 h-4.5" />
+            <button onClick={() => setMobileActionsOpen(true)} className={`pos-touch-control relative shrink-0 clay-action ${mobileActionsOpen ? 'clay-selected' : ''}`} aria-expanded={mobileActionsOpen} aria-label="Actions de caisse" title="Actions">
+              <MoreHorizontal className="h-5 w-5" />
               {webOrdersCounts.a_transformer > 0 && <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />}
             </button>
           </div>
-          {/* Line 2: thin filter pills */}
-          <div className="flex min-h-8 flex-wrap items-center gap-1 border-t border-[var(--w-separator)] px-2 py-1">
+          {/* Mobile catalogue filters */}
+          <div role="group" aria-label="Filtres du catalogue" className="flex flex-wrap items-center gap-1 border-t border-[var(--w-separator)] px-2 py-1">
             {depotAllOptions.length > 1 && (
               <div className="relative shrink-0">
-                <button ref={mobileDepotTriggerRef} onClick={() => setMobileDepotOpen(v => !v)} className="inline-flex max-w-24 items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]" title={stockSourceName} aria-label={`Dépôt source : ${stockSourceName}`} aria-expanded={mobileDepotOpen} disabled={stockSourceLoading}>
+                <button ref={mobileDepotTriggerRef} onClick={() => setMobileDepotOpen(v => !v)} className="pos-touch-control max-w-24 gap-0.5 rounded-md px-1.5 text-[11px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]" title={stockSourceName} aria-label={`Dépôt source : ${stockSourceName}`} aria-expanded={mobileDepotOpen} disabled={stockSourceLoading}>
                   {stockSourceLoading && <Loader2 className="w-2.5 h-2.5 shrink-0 animate-spin" />}
                   <span className="min-w-0 truncate">Dépôt : {stockSourceName}</span>
                   <ChevronDown className={`w-2.5 h-2.5 shrink-0 transition-transform ${mobileDepotOpen ? 'rotate-180' : ''}`} />
@@ -2679,25 +2683,24 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 )}
               </div>
             )}
-            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold clay-action">
+            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="pos-touch-control shrink-0 gap-1 px-2 text-[11px] font-semibold clay-action">
               {sortMode === 'top' ? <TrendingUp className="w-3 h-3" /> : <ArrowDownAZ className="w-3 h-3" />}
               {sortMode === 'top' ? 'Top' : 'A→Z'}
             </button>
-            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold clay-action">
+            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="pos-touch-control shrink-0 gap-1 px-2 text-[11px] font-semibold clay-action">
               {articleView === 'grid' ? <List className="w-3 h-3" /> : <LayoutGrid className="w-3 h-3" />}
               {articleView === 'grid' ? 'Liste' : 'Grille'}
             </button>
             {autoMode && (
-              <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
+              <button onClick={() => setVehiclePickerOpen(true)} className="pos-touch-control shrink-0 gap-1 rounded-md px-1.5 text-[11px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
                 <Car className="w-3 h-3" />Véhicule
               </button>
             )}
             {categoryId && (
-              <button onClick={() => setCategoryId('')} className="inline-flex max-w-[7.5rem] items-center gap-1 rounded-full bg-[var(--w-active)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--w-text)]" aria-label="Effacer le filtre de catégorie" title={activeCategoryName}>
+              <button onClick={() => setCategoryId('')} className="pos-touch-control max-w-[7.5rem] gap-1 rounded-md bg-[var(--w-active)] px-1.5 text-[11px] font-semibold text-[var(--w-text)]" aria-label="Effacer le filtre de catégorie" title={activeCategoryName}>
                 <span className="min-w-0 truncate">{activeCategoryName || 'Catégorie'}</span><X className="w-2.5 h-2.5 shrink-0" />
               </button>
             )}
-            <span className="text-[var(--w-text-disabled)] text-[10px] num shrink-0 ml-auto">{filtered.length} art.</span>
           </div>
         </div>
       </div>
