@@ -2599,7 +2599,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               aria-label="Session"
               data-label={sessionPopOpen ? undefined : 'Session'}
             >
-              <span className="hidden xl:inline">Session</span>
+              <span className="leading-[14px] xl:leading-4">Session</span>
               <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
             </button>
             {sessionPopOpen && (
