@@ -605,6 +605,44 @@ p { line-height: 1.6; }
   }
   .cart-line:hover { border-color: var(--w-text-disabled); }
 
+  .dashboard-desktop { container: dashboard-layout / inline-size; }
+  .dashboard-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "title controls profile";
+    align-items: center;
+    column-gap: 1rem;
+    row-gap: 0.25rem;
+    min-height: 72px;
+    padding-block: 0.5rem;
+    padding-inline: var(--dashboard-toolbar-start, 1rem) 1rem;
+  }
+  .dashboard-toolbar-title { grid-area: title; }
+  .dashboard-toolbar-controls { grid-area: controls; }
+  .dashboard-toolbar-profile { grid-area: profile; justify-self: end; }
+  .dashboard-toolbar-subscription { display: none; }
+  .dashboard-toolbar-site-name { max-width: 9rem; }
+
+  @container dashboard-layout (min-width: 86rem) {
+    .dashboard-toolbar-subscription { display: block; }
+  }
+
+  @container dashboard-layout (max-width: 74rem) {
+    .dashboard-toolbar {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas: "title profile" "controls controls";
+    }
+  }
+
+  @container dashboard-layout (max-width: 56rem) {
+    .dashboard-toolbar-quick-label { display: none; }
+    .dashboard-toolbar-site-name { max-width: 7.5rem; }
+  }
+
+  @container dashboard-layout (min-width: 76rem) {
+    .dashboard-summary-body { grid-template-columns: minmax(185px, 1.35fr) minmax(0, 4fr); }
+  }
+
   /* ── POS command bar ─────────────────────────────────── */
   .pos-header-sep { border-bottom-color: var(--w-separator); }
   .pos-command-bar {

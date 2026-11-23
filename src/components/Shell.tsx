@@ -1201,7 +1201,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           ) : isPlatformAdmin ? (
             <div className="flex-1 min-h-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
-            <div className="flex-1 min-h-0 px-1 sm:px-2 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0">{children}</div>
+            <div className="flex-1 min-h-0 px-1 sm:px-2 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0 [--dashboard-toolbar-start:3.5rem]">{children}</div>
           ) : (
             <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[72px] lg:pb-8">{children}</div>
           )}
