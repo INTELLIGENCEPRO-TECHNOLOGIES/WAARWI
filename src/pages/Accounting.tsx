@@ -30,7 +30,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
     grandlivre: { t: 'Grand Livre', s: 'Détail des mouvements par compte.' },
     tiers: { t: 'Tiers', s: 'Balance et interrogation des comptes clients/fournisseurs.' },
     search: { t: 'Recherche', s: "Recherche avancée d'écritures comptables." },
-    cloture: { t: 'Clôtures', s: 'Contrôles avant clôture' },
+    cloture: { t: 'Clôtures', s: 'Contrôles et clôture mensuelle' },
   };
   const meta = titles[section];
   return (
@@ -1271,5 +1271,6 @@ function SearchDetailModal({ entry, tenant, onClose }: { entry: any; tenant: { i
 /* ===================== CLOTURES ===================== */
 function ClotureTab() {
   const { tenant } = useApp();
-  return tenant ? <AccountingPeriodControls key={tenant.id} tenantId={tenant.id} /> : null;
+  const { can } = usePermissions();
+  return tenant ? <AccountingPeriodControls key={tenant.id} tenantId={tenant.id} canClose={can('manage_accounting')} /> : null;
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatDate, formatNumber } from '../lib/format';
+import { formatDate, formatDateTime, formatNumber } from '../lib/format';
 import { supabase } from '../lib/supabase';
 
 type Family = 'cash' | 'vault' | 'supplier';
@@ -13,6 +13,20 @@ type Issue = {
 };
 type Compare = { ledger_debit: number; ledger_credit: number; balance_debit: number; balance_credit: number };
 type ThirdPartyCheck = Compare & { family: 'client' | 'supplier'; configured: boolean; unassigned_lines: number };
+type ClosedMonth = {
+  status: 'closed';
+  closed_at: string;
+  closed_by_name: string | null;
+  note: string | null;
+  snapshot: { journal: { entries: number; debit: number; credit: number } };
+};
+type MonthClosure = ClosedMonth | { status: 'in_progress' } | {
+  status: 'open';
+  blocked: boolean;
+  has_observations: boolean;
+  review_token: string;
+  unposted_entries: number;
+};
 type Report = {
   from: string; to: string;
   journal: { entries: number; debit: number; credit: number; inconsistent_entries: number; duplicate_sources: number };
@@ -22,6 +36,7 @@ type Report = {
   third_parties: ThirdPartyCheck[];
   coverage: Coverage[];
   issues: Issue[];
+  month_closure: MonthClosure | null;
 };
 
 const FAMILY_LABELS: Record<Family, string> = { cash: 'Caisse', vault: 'Coffre', supplier: 'Règlements fournisseurs' };
@@ -92,20 +107,106 @@ function Operations({ data, issues }: { data: Coverage; issues: Issue[] }) {
   );
 }
 
-export function AccountingPeriodControls({ tenantId }: { tenantId: string }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const [dateFrom, setDateFrom] = useState(today.slice(0, 8) + '01');
-  const [dateTo, setDateTo] = useState(today);
+function MonthClosing({ tenantId, report, canClose, onClosed, onPendingChange }: {
+  tenantId: string; report: Report; canClose: boolean;
+  onClosed: (receipt: ClosedMonth) => void; onPendingChange: (pending: boolean) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const month = report.month_closure;
+
+  const close = async () => {
+    if (month?.status !== 'open' || !canClose || month.blocked
+        || submitting || (month.has_observations && !note.trim())) return;
+    setSubmitting(true);
+    onPendingChange(true);
+    setError('');
+    try {
+      const { data, error: rpcError } = await supabase.rpc('close_accounting_month', {
+        p_tenant_id: tenantId, p_month_start: report.from,
+        p_review_token: month.review_token, p_note: note.trim() || null,
+      });
+      if (rpcError) {
+        setError(rpcError.message);
+        return;
+      }
+      onClosed(data as ClosedMonth);
+    } catch {
+      setError('La clôture n’a pas été confirmée. Contrôlez à nouveau la période.');
+    } finally {
+      setSubmitting(false);
+      onPendingChange(false);
+    }
+  };
+
+  if (!month || month.status === 'in_progress') {
+    return canClose ? <p className="text-sm text-neutral-600">Sélectionnez un mois civil terminé pour le clôturer.</p> : null;
+  }
+  if (month.status === 'closed') {
+    return (
+      <section className="space-y-1 border-y border-neutral-200 py-3">
+        <h2 className="text-sm font-semibold">Mois clôturé</h2>
+        <p className="text-xs text-neutral-600">
+          {formatDateTime(month.closed_at)}{month.closed_by_name && ` · ${month.closed_by_name}`}
+        </p>
+        <p className="text-xs text-neutral-600">Écritures validées à la clôture · {count(month.snapshot.journal.entries)}</p>
+        {month.note && <p className="whitespace-pre-wrap break-words text-sm">{month.note}</p>}
+      </section>
+    );
+  }
+  return (
+    <section className="space-y-2 border-y border-neutral-200 py-3">
+      <h2 className="text-sm font-semibold">Clôture mensuelle</h2>
+      {month.blocked ? (
+        <p className="text-sm text-neutral-700">Corrigez les incohérences du journal et validez les écritures en attente avant la clôture.</p>
+      ) : <p className="text-sm text-neutral-600">Mois ouvert</p>}
+      {month.unposted_entries > 0 && <p className="text-xs text-neutral-600">Écritures à valider · {count(month.unposted_entries)}</p>}
+      {canClose && !month.blocked && (
+        confirming ? (
+          <>
+            <p className="text-sm">La clôture verrouille les écritures du {dateLabel(report.from)} au {dateLabel(report.to)}.</p>
+            <label className="block max-w-xl text-xs text-neutral-600">
+              {month.has_observations ? 'Note sur les écarts constatés (obligatoire)' : 'Note de clôture (facultative)'}
+              <textarea className="input mt-1" rows={2} maxLength={500} value={note} disabled={submitting}
+                onChange={event => setNote(event.target.value)} />
+            </label>
+            {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-secondary" disabled={submitting}
+                onClick={() => { setConfirming(false); setError(''); }}>Annuler</button>
+              <button type="button" className="btn-primary" onClick={() => void close()}
+                disabled={submitting || (month.has_observations && !note.trim())}>
+                {submitting ? 'Clôture en cours…' : 'Confirmer la clôture'}
+              </button>
+            </div>
+          </>
+        ) : <button type="button" className="btn-secondary" onClick={() => setConfirming(true)}>Clôturer le mois</button>
+      )}
+    </section>
+  );
+}
+
+export function AccountingPeriodControls({ tenantId, canClose }: { tenantId: string; canClose: boolean }) {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const [dateFrom, setDateFrom] = useState(new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10));
+  const [dateTo, setDateTo] = useState(new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10));
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [error, setError] = useState('');
+  const busy = loading || closing;
 
   const check = async () => {
+    if (busy) return;
     setReport(null);
     setLoading(true);
     setError('');
     try {
-      const { data, error: requestError } = await supabase.rpc('accounting_period_controls', {
+      const { data, error: requestError } = await supabase.rpc('preview_accounting_closure', {
         p_tenant_id: tenantId, p_date_from: dateFrom, p_date_to: dateTo,
       });
       if (requestError) {
@@ -131,15 +232,15 @@ export function AccountingPeriodControls({ tenantId }: { tenantId: string }) {
       <form className="flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); void check(); }}>
         <label className="min-w-0 flex-1 text-xs text-neutral-600 sm:flex-none">
           Du
-          <input type="date" className="input mt-1" value={dateFrom} max={dateTo} required disabled={loading}
+          <input type="date" className="input mt-1" value={dateFrom} max={dateTo} required disabled={busy}
             onChange={event => { setDateFrom(event.target.value); setReport(null); setError(''); }} />
         </label>
         <label className="min-w-0 flex-1 text-xs text-neutral-600 sm:flex-none">
           Au
-          <input type="date" className="input mt-1" value={dateTo} min={dateFrom} required disabled={loading}
+          <input type="date" className="input mt-1" value={dateTo} min={dateFrom} required disabled={busy}
             onChange={event => { setDateTo(event.target.value); setReport(null); setError(''); }} />
         </label>
-        <button type="submit" className="btn-primary" disabled={loading || !dateFrom || !dateTo || dateFrom > dateTo}>
+        <button type="submit" className="btn-primary" disabled={busy || !dateFrom || !dateTo || dateFrom > dateTo}>
           {loading ? 'Contrôle en cours…' : 'Contrôler la période'}
         </button>
       </form>
@@ -147,7 +248,10 @@ export function AccountingPeriodControls({ tenantId }: { tenantId: string }) {
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {report && bookRows && (
         <>
-          <p role="status" className="text-sm text-neutral-600">Du {dateLabel(report.from)} au {dateLabel(report.to)} · Contrôle en lecture seule</p>
+          <p role="status" className="text-sm text-neutral-600">Du {dateLabel(report.from)} au {dateLabel(report.to)}</p>
+          <MonthClosing tenantId={tenantId} report={report} canClose={canClose}
+            onPendingChange={setClosing}
+            onClosed={receipt => setReport(current => current && ({ ...current, month_closure: receipt }))} />
           <section className="space-y-2" aria-label="Vérification du journal et des comptes">
             <h2 className="text-sm font-semibold text-neutral-900">Écritures et comptes</h2>
             <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
