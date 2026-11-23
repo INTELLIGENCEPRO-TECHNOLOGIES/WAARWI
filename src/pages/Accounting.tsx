@@ -3,6 +3,7 @@ import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X, Check, Trash2, Download } from 'lucide-react';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
+import { AccountingCashReview } from '../components/AccountingCashReview';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -634,6 +635,7 @@ function BalanceTab() {
   const [bulkPayBusy, setBulkPayBusy] = useState(false);
   const [bulkAchatBusy, setBulkAchatBusy] = useState(false);
   const [bulkPayFournBusy, setBulkPayFournBusy] = useState(false);
+  const [showCashReview, setShowCashReview] = useState(false);
 
   const load = async (silent = false) => {
     if (!tenant) return;
@@ -706,6 +708,11 @@ function BalanceTab() {
       if (error) throw error;
       const r = result as any;
       success(`${r.accounted} règlement${r.accounted > 1 ? 's' : ''} fournisseur${r.accounted > 1 ? 's' : ''} comptabilisé${r.accounted > 1 ? 's' : ''} ${r.errors > 0 ? `(${r.errors} erreur${r.errors > 1 ? 's' : ''})` : ''}`);
+      if (r.skipped_vault_unconfigured > 0) {
+        const count = Number(r.skipped_vault_unconfigured);
+        toastError(`${count} règlement${count > 1 ? 's' : ''} en attente. Renseignez le compte du coffre dans Mouvements de caisse.`);
+        setShowCashReview(true);
+      }
       load();
     } catch (e: any) { toastError(e.message); }
     finally { setBulkPayFournBusy(false); }
@@ -736,8 +743,16 @@ function BalanceTab() {
             {bulkPayFournBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Rglts fournisseurs
           </button>
+          <button type="button" className="btn btn-secondary" aria-expanded={showCashReview}
+            onClick={() => setShowCashReview(show => !show)}>
+            Mouvements de caisse
+          </button>
         </div>}
       </div>
+
+      {canManage && tenant && showCashReview && (
+        <AccountingCashReview key={tenant.id} tenantId={tenant.id} onPosted={() => void load(true)} />
+      )}
 
       {loading ? <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         : data.length === 0 ? (
