@@ -1,9 +1,10 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X, Check, Trash2, Download } from 'lucide-react';
+import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, X, Check, Trash2, Download } from 'lucide-react';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { AccountingCashReview } from '../components/AccountingCashReview';
+import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -29,7 +30,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
     grandlivre: { t: 'Grand Livre', s: 'Détail des mouvements par compte.' },
     tiers: { t: 'Tiers', s: 'Balance et interrogation des comptes clients/fournisseurs.' },
     search: { t: 'Recherche', s: "Recherche avancée d'écritures comptables." },
-    cloture: { t: 'Clôtures', s: 'Clôture des journaux et exercices.' },
+    cloture: { t: 'Clôtures', s: 'Contrôles avant clôture' },
   };
   const meta = titles[section];
   return (
@@ -1269,19 +1270,6 @@ function SearchDetailModal({ entry, tenant, onClose }: { entry: any; tenant: { i
 
 /* ===================== CLOTURES ===================== */
 function ClotureTab() {
-  return (
-    <div className="space-y-6">
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 mb-3">
-          <Lock className="w-6 h-6 text-amber-600" />
-        </div>
-        <h3 className="text-base font-semibold text-slate-800 mb-2">Clôtures temporairement indisponibles</h3>
-        <p className="text-sm text-slate-600 max-w-md mx-auto">
-          Les fonctions de clôture de journal et de clôture d'exercice sont en cours de finalisation
-          dans le moteur comptable. Elles seront réactivées une fois le processus complet mis en place.
-        </p>
-        <p className="text-xs text-slate-400 mt-3">Vos écritures comptables existantes ne sont pas affectées.</p>
-      </div>
-    </div>
-  );
+  const { tenant } = useApp();
+  return tenant ? <AccountingPeriodControls key={tenant.id} tenantId={tenant.id} /> : null;
 }
