@@ -500,7 +500,7 @@ export function InvoiceEditorInstance({
         p_sale: {
           site_id: currentSite.id,
           customer_id: invoiceForm.customer_id || null,
-          sale_number: invNum, subtotal: invoiceTtc, discount: 0, total: createSubtotal,
+          sale_number: invNum, subtotal: createSubtotal, discount: 0, total: invoiceTtc,
           paid: effectivePaid, status,
           note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
           cash_session_id: sessionId,
