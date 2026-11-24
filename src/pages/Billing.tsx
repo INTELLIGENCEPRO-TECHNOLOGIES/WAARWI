@@ -1906,21 +1906,21 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   // ── Apply credit ─────────────────────────────────────────────
   const [availableCredits, setAvailableCredits] = useState<SaleReturn[]>([]);
-  const openCreditApply = async () => {
-    if (!invoiceDetail || !tenant || !currentSite) return;
-    const { data: creds } = await supabase.from('sale_returns')
+  const openCreditApply = async (invoice: Invoice | null = invoiceDetail) => {
+    if (!invoice?.customer_id || !tenant || !currentSite || !can('edit_invoices')) return;
+    const { data: creds, error: creditError } = await supabase.from('sale_returns')
       .select('*, customers(name, phone, address), sales(sale_number)')
       .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
       .eq('refund_method', 'avoir').eq('status', 'approved')
+      .eq('customer_id', invoice.customer_id)
       .order('created_at', { ascending: false });
-    const filtered = (creds || []).filter((r: any) =>
-      Number(r.credit_used || 0) < Number(r.total) &&
-      (!invoiceDetail.customer_id || r.customer_id === invoiceDetail.customer_id)
-    );
+    if (creditError) { error(creditError.message); return; }
+    const filtered = (creds || []).filter(r => Number(r.credit_used || 0) < Number(r.total));
+    setInvoiceDetail(invoice);
     setAvailableCredits(filtered as SaleReturn[]);
     const c = filtered[0] as SaleReturn | undefined;
     setCreditSelected(c?.id || '');
-    const due = Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid));
+    const due = Math.max(0, Number(invoice.total) - Number(invoice.paid));
     const avail = c ? Number(c.total) - Number(c.credit_used || 0) : 0;
     setCreditAmount(String(Math.min(due, avail)));
     setCreditOpen(true);
@@ -1931,13 +1931,16 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     const amt = Number(creditAmount);
     if (!amt || amt <= 0) { error('Montant invalide'); return; }
     setApplyingCredit(true);
-    const { error: e } = await supabase.rpc('apply_credit_to_sale', {
+    const { data: result, error: e } = await supabase.rpc('apply_credit_to_sale', {
       p_credit_id: creditSelected,
       p_sale_id: invoiceDetail.id,
       p_amount: amt,
     });
     setApplyingCredit(false);
-    if (e) { error(e.message); return; }
+    if (e || result?.success !== true) {
+      error(e?.message || result?.error || 'L’avoir n’a pas été imputé.');
+      return;
+    }
     success('Avoir appliqué');
     setCreditOpen(false);
     await reloadInvoice(invoiceDetail.id);
@@ -2801,6 +2804,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             onInvoiceCreated={handleInvoiceCreated}
             onOpenNew={() => openInvoiceEditor()}
             onOpenPay={(inv) => openPay(inv)}
+            onOpenCredit={can('edit_invoices') ? (inv) => openCreditApply(inv) : undefined}
             onCancelInvoice={(inv) => cancelInvoice(inv)}
             onComptabiliser={(inv) => comptabiliserFromEditor(inv)}
             onCopyLink={(inv) => copyInvoiceLink(inv)}
@@ -2908,6 +2912,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             }}
             onClose={closeInvoiceEditor}
             onEdit={!isCancelled && !isAccounted ? () => openInvoiceForEdit(viewInv) : undefined}
+            onApplyCredit={can('edit_invoices') && viewInv.customer_id && invDue > 0 && !isCancelled ? () => openCreditApply(viewInv) : undefined}
             onPay={invDue > 0 && !isCancelled ? () => openPay(viewInv) : undefined}
             onPrint={() => {
               const pitems = invoiceEditorItems.filter(i => i.name.trim()).map(i => ({
@@ -3343,7 +3348,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               <button onClick={() => openInvoiceForEdit(invoiceDetail)} className="btn-icon text-brand-700 hover:bg-brand-50" title="Modifier"><Pencil className="w-4 h-4" /></button>
             )}
             {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Coins className="w-4 h-4" /></button>}
-            {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
+            {invoiceDetail && invoiceDue > 0 && invoiceDetail.customer_id && invoiceDetail.status !== 'cancelled' && <button onClick={() => openCreditApply()} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDetail.accounting_status !== 'accounted' && invoiceDetail.status !== 'cancelled' && can('manage_accounting') && (
               <button onClick={comptabiliserFacture} disabled={accountingBusy} className="btn-icon text-teal-500 hover:bg-[var(--w-hover)]" title="Comptabiliser">
                 {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
@@ -3563,10 +3568,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       )}
 
       {/* ── Apply credit modal ──────────────────────────────── */}
-      <Modal open={creditOpen} onClose={() => !applyingCredit && setCreditOpen(false)} title="Appliquer un avoir" size="sm"
+      <Modal open={creditOpen} onClose={() => !applyingCredit && setCreditOpen(false)} title="Appliquer un avoir" size="sm" layer="top" focusOnOpen
         footer={<>
           <button onClick={() => setCreditOpen(false)} className="btn-icon" title="Annuler" disabled={applyingCredit}><X className="w-4 h-4" /></button>
-          <button onClick={applyCredit} disabled={applyingCredit} className="btn-icon-primary" title="Appliquer">{applyingCredit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}</button>
+          <button onClick={applyCredit} disabled={applyingCredit || !creditSelected} className="btn-icon-primary" title="Appliquer">{applyingCredit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}</button>
         </>}>
         {invoiceDetail && (
           <div className="space-y-3">

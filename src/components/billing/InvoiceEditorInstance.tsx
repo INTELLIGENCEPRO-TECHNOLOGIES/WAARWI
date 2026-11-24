@@ -64,6 +64,7 @@ export type InvoiceEditorInstanceProps = {
   onOpenNew: () => void;
   onInvoiceCreated?: (windowId: string, invoiceId: string, saleNumber: string) => void;
   onOpenPay: (inv: Invoice) => void;
+  onOpenCredit?: (inv: Invoice) => void;
   onCancelInvoice: (inv: Invoice) => void;
   onComptabiliser: (inv: Invoice) => void;
   onCopyLink: (inv: Invoice) => void;
@@ -85,7 +86,7 @@ export function InvoiceEditorInstance({
   paymentMethods, docSettings, autoMode, isPharmacy,
   activeReps, salesReps, repSettings, profileNames,
   billSourceSiteId,
-  onClose, onSaved, onOpenNew, onInvoiceCreated, onOpenPay,
+  onClose, onSaved, onOpenNew, onInvoiceCreated, onOpenPay, onOpenCredit,
   onCancelInvoice, onComptabiliser, onCopyLink, onWhatsApp,
   onReturnTransform, onSearchOpen, onVehiclePicker,
   onCreateArticle, onCreateCustomer, onTierPicker,
@@ -604,6 +605,24 @@ export function InvoiceEditorInstance({
   // ── Render ────────────────────────────────────────────────────
   const invForLookup = editingInvoiceId ? invoices.find(i => i.id === editingInvoiceId) : null;
 
+  const listedPaid = invForLookup?.paid;
+  useEffect(() => {
+    if (mode !== 'view' || !editingInvoiceId || listedPaid == null) return;
+    const controller = new AbortController();
+    void supabase.from('sale_payments').select('*').eq('sale_id', editingInvoiceId)
+      .abortSignal(controller.signal).then(({ data }) => {
+        if (!data || controller.signal.aborted) return;
+        setPayList(data.map(payment => ({
+          method_id: payment.payment_method_id || '',
+          method_name: payment.method_name,
+          amount: Number(payment.amount),
+          reference: '',
+        })));
+      });
+    return () => controller.abort();
+  }, [editingInvoiceId, listedPaid, mode]);
+
+
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (descriptor.mode === 'create') {
@@ -726,6 +745,7 @@ export function InvoiceEditorInstance({
           setIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
         })();
       } : undefined}
+      onApplyCredit={mode === 'view' && invForLookup?.customer_id && onOpenCredit ? () => onOpenCredit(invForLookup) : undefined}
       onPay={editingInvoiceId && invForLookup ? () => onOpenPay(invForLookup) : undefined}
       onCopyLink={editingInvoiceId && invForLookup ? () => onCopyLink(invForLookup) : undefined}
       onWhatsApp={editingInvoiceId && invForLookup?.customers ? () => onWhatsApp(invForLookup) : undefined}

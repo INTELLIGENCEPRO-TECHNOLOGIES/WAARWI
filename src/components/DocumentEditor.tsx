@@ -5,7 +5,7 @@ import {
   X, Check, Loader2, Lock, Trash2, Search, Package, Car,
   Printer, Link2, MessageCircle, Pencil, ArrowRight, CreditCard,
   Plus, Minus, ShieldCheck, Columns3, ChevronDown, RotateCcw,
-  CheckCircle, RefreshCw, Coins, BookOpen, Ban, ChevronLeft, ChevronRight,
+  CheckCircle, RefreshCw, Coins, BookOpen, Ban, ChevronLeft, ChevronRight, Wallet,
 } from 'lucide-react';
 import { useTopLayer } from './modalStack';
 import { QtyInput } from './QtyInput';
@@ -104,6 +104,7 @@ export type DocumentEditorProps = {
   // View-mode actions
   onEdit?: () => void;
   onPay?: () => void;
+  onApplyCredit?: () => void;
   onCopyLink?: () => void;
   onWhatsApp?: () => void;
   onCancel?: () => void;
@@ -246,7 +247,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     onTransformToReturn, onTransformToAvoir,
     transformReturnLines, loadReturnLines,
     onRefundCash, onApproveAvoir,
-    onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser,
+    onEdit, onPay, onApplyCredit, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser,
     accountingStatus, invoiceDue = 0,
   } = props;
   const { onPrev, onNext, hasPrev, hasNext, onSearchOpen, postCreation, onNewInvoice, docCreatedInfo, inactive } = props;
@@ -445,6 +446,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           articles={articles}
           onEdit={onEdit}
           onPay={onPay}
+          onApplyCredit={onApplyCredit}
           onCopyLink={onCopyLink}
           onWhatsApp={onWhatsApp}
           onCancel={onCancel}
@@ -762,7 +764,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
 // ─── Toolbar ─────────────────────────────────────────────────────
 
-function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
+function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onApplyCredit, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
   tier: WidthTier;
   docType: DocType;
   mode: DocMode;
@@ -783,6 +785,7 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
   articles?: any[];
   onEdit?: () => void;
   onPay?: () => void;
+  onApplyCredit?: () => void;
   onCopyLink?: () => void;
   onWhatsApp?: () => void;
   onCancel?: () => void;
@@ -839,6 +842,9 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
         <>
           {onEdit && notCancelled && notAccounted && (
             <button onClick={onEdit} className={btnLight} title="Modifier"><Pencil className="w-3 h-3" />{!compact && ' Modifier'}</button>
+          )}
+          {onApplyCredit && docType === 'invoice' && (invoiceDue ?? 0) > 0 && notCancelled && (
+            <button onClick={onApplyCredit} className={btnCls} title="Appliquer un avoir"><Wallet className="w-3 h-3" />{compact ? ' Avoir' : ' Appliquer un avoir'}</button>
           )}
           {onPay && docType === 'invoice' && (invoiceDue ?? 0) > 0 && notCancelled && (
             <button onClick={onPay} className={`${btnCls} text-emerald-500 hover:bg-[var(--w-hover)]`} title="Régler"><Coins className="w-3 h-3" />{!compact && ' Régler'}</button>

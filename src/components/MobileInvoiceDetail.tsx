@@ -1,7 +1,7 @@
 import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import {
   X, Printer, Link2, MessageCircle, Pencil,
-  Coins, BookOpen, Loader2, Ban, Trash2, User, Calendar,
+  Coins, BookOpen, Loader2, Ban, Trash2, User, Calendar, Wallet,
 } from 'lucide-react';
 import { formatFCFA, formatDate } from '../lib/format';
 
@@ -53,6 +53,7 @@ type Props = {
   onClose: () => void;
   onEdit?: () => void;
   onPay?: () => void;
+  onApplyCredit?: () => void;
   onPrint?: () => void;
   onCopyLink?: () => void;
   onWhatsApp?: () => void;
@@ -70,6 +71,7 @@ export function MobileInvoiceDetail({
   onClose,
   onEdit,
   onPay,
+  onApplyCredit,
   onPrint,
   onCopyLink,
   onWhatsApp,
@@ -206,6 +208,9 @@ export function MobileInvoiceDetail({
         <div className="flex items-center gap-1.5 flex-wrap">
           {onEdit && !isCancelled && !isAccounted && (
             <button onClick={onEdit} className="btn-icon" title="Modifier"><Pencil className="w-4 h-4" /></button>
+          )}
+          {onApplyCredit && (
+            <button onClick={onApplyCredit} className="btn-icon" title="Appliquer un avoir" aria-label="Appliquer un avoir"><Wallet className="w-4 h-4" /></button>
           )}
           {onPay && due > 0 && !isCancelled && (
             <button onClick={onPay} className="btn-icon" title="Encaisser"><Coins className="w-4 h-4" /></button>
