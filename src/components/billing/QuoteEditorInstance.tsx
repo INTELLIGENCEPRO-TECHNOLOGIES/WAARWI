@@ -47,6 +47,7 @@ export type QuoteEditorInstanceProps = {
   profileNames: Record<string, string>;
   onClose: () => void;
   onSaved: () => void;
+  onCreated: (quoteId: string, quoteNumber: string) => void;
   onConvert: (q: Quote) => void;
   onVehiclePicker: (idx: number | null) => void;
   onCreateArticle: (name: string) => void;
@@ -60,7 +61,7 @@ const EMPTY_ITEM: QuoteItem = { article_id: null, name: '', quantity: 1, unit_pr
 export function QuoteEditorInstance({
   descriptor, articles, customers, articleTiers,
   docSettings, autoMode, isPharmacy, activeReps, profileNames,
-  onClose, onSaved, onConvert,
+  onClose, onSaved, onCreated, onConvert,
   onVehiclePicker, onCreateArticle, onCreateCustomer, onTierPicker,
 }: QuoteEditorInstanceProps) {
   const { tenant, currentSite, profile, user } = useApp();
@@ -329,7 +330,12 @@ export function QuoteEditorInstance({
       setSaving(false);
       opInProgressRef.current = null;
       clearFormDraft(scope, descriptor.windowId);
-      if (!opts?.silent) { success('Devis créé'); onSaved(); onClose(); }
+      if (!opts?.silent) {
+        success('Devis créé');
+        setMode('view');
+        onCreated(q.id, qNum);
+        onSaved();
+      }
     }
   };
 

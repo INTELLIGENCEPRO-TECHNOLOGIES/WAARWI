@@ -957,7 +957,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
       setEditingQuoteId(q.id);
       setSaving(false);
-      if (!opts?.silent) { success('Devis créé'); closeQuotePanel(); loadTab(billPage, true); }
+      if (!opts?.silent) {
+        success('Devis créé');
+        closeQuotePanel();
+        const customer = customers.find(item => item.id === q.customer_id);
+        void openQuoteDetail({ ...q, customers: customer ? { name: customer.name } : null });
+        void loadTab(billPage, true);
+      }
     }
   };
 
@@ -1032,6 +1038,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (isDesktop) {
       openDesktopQuoteWindow(q.id, q.status === 'draft' || q.status === 'sent' ? 'edit' : 'view');
     } else {
+      setQuoteItemsDetail([]);
       setQuoteDetail(q);
       const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref)').eq('quote_id', q.id);
       setQuoteItemsDetail(data || []);
@@ -2240,6 +2247,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     { key: 'credit', label: 'Nouvel avoir', icon: CreditCard, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } startReturn('avoir'); } },
   ];
 
+  const quotePreviewAction = 'clay-action inline-flex h-9 w-9 shrink-0 items-center justify-center';
   const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
 
   const pageContent = (
@@ -3058,6 +3066,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             onClose={() => closeQuoteWindow(desc.windowId)}
             onSaved={() => loadTab(billPage, true)}
             onConvert={(q) => openConvert(q)}
+            onCreated={(quoteId, quoteNumber) => {
+              setQuoteWindows(prev => {
+                const next = new Map(prev);
+                const current = next.get(desc.windowId);
+                if (current) next.set(desc.windowId, { ...current, quoteId, mode: 'view' });
+                return next;
+              });
+              updateWindowTitle(desc.windowId, `Devis ${quoteNumber}`);
+            }}
             onVehiclePicker={(idx) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
             onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
             onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
@@ -3173,15 +3190,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       )}
 
       {/* ── Quote detail ─────────────────────────────────────── */}
-      <Modal open={!!quoteDetail} onClose={() => setQuoteDetail(null)} title={quoteDetail ? `Devis ${quoteDetail.quote_number}` : ''} size="lg"
+      <Modal open={visible && !!quoteDetail} onClose={() => setQuoteDetail(null)} title={quoteDetail ? `Devis ${quoteDetail.quote_number}` : ''} size="lg" clayPreviewActions
         footer={<>
           <div className="flex gap-1.5 mr-auto">
-            {quoteDetail?.status === 'draft' && <button onClick={() => changeQuoteStatus(quoteDetail, 'sent')} className="btn-icon" title="Marquer envoyé"><CheckCircle className="w-4 h-4 text-neutral-600" /></button>}
-            {quoteDetail && ['draft', 'sent'].includes(quoteDetail.status) && <button onClick={() => changeQuoteStatus(quoteDetail, 'accepted')} className="btn-icon-success" title="Accepter"><CheckCircle className="w-4 h-4" /></button>}
-            {quoteDetail?.status === 'accepted' && <button onClick={() => openConvert(quoteDetail)} className="btn-icon-primary" title="Convertir en facture"><ArrowRight className="w-4 h-4" /></button>}
+            {quoteDetail?.status === 'draft' && <button onClick={() => changeQuoteStatus(quoteDetail, 'sent')} className={quotePreviewAction} title="Marquer envoyé"><CheckCircle className="w-4 h-4" /></button>}
+            {quoteDetail && ['draft', 'sent'].includes(quoteDetail.status) && <button onClick={() => changeQuoteStatus(quoteDetail, 'accepted')} className={quotePreviewAction} title="Accepter"><CheckCircle className="w-4 h-4" /></button>}
+            {quoteDetail?.status === 'accepted' && <button onClick={() => openConvert(quoteDetail)} className={quotePreviewAction} title="Convertir en facture"><ArrowRight className="w-4 h-4" /></button>}
           </div>
-          <button onClick={() => setQuoteDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          <button onClick={printQuote} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
+          <button onClick={() => setQuoteDetail(null)} className={quotePreviewAction} title="Fermer"><X className="w-4 h-4" /></button>
+          <button onClick={printQuote} className={quotePreviewAction} title="Imprimer"><Printer className="w-4 h-4" /></button>
         </>}>
         {quoteDetail && (() => {
           const st = QUOTE_STATUS[quoteDetail.status] || QUOTE_STATUS.draft;

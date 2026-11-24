@@ -1,3 +1,4 @@
+import { clayTouchHandlers } from '../lib/clayTouch';
 import { ReactNode, useEffect, useId, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, GripVertical, Check, Trash2 } from 'lucide-react';
@@ -16,9 +17,10 @@ type Props = {
   variant?: 'default' | 'flat';
   panelClassName?: string;
   focusOnOpen?: boolean;
+  clayPreviewActions?: boolean;
 };
 
-export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false, variant = 'default', panelClassName = '', focusOnOpen = false }: Props) {
+export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false, variant = 'default', panelClassName = '', focusOnOpen = false, clayPreviewActions = false }: Props) {
   const isTopLayer = layer === 'top';
   const { isTop, zIndex } = useTopLayer(open && isTopLayer);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -74,11 +76,13 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
   const node = (
     <div data-app-overlay className={`fixed inset-0 ${zCls} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`} style={zStyle}>
       <div className="scrim" onClick={handleScrim} />
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`relative w-full ${w} bg-[var(--w-surface)] ${variant === 'flat' ? 'flat-modal' : ''} ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col ${panelClassName}`}>
+      <div ref={panelRef} {...(clayPreviewActions ? clayTouchHandlers : {})} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`relative w-full ${w} bg-[var(--w-surface)] ${variant === 'flat' ? 'flat-modal' : ''} ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col ${panelClassName}`}>
         {!fullMobile && !fullscreenMobile && <div className="sm:hidden sheet-handle" />}
         <div className={`flex items-center justify-between border-b border-[var(--w-separator)] bg-[var(--w-surface-el)] ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : 'px-4 py-3 sm:px-5 sm:py-4 rounded-t-xl'}`}>
           <h3 id={titleId} className={`font-bold text-[var(--w-text)] tracking-tight ${fullscreenMobile ? 'text-base sm:text-lg' : fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>
-          <button ref={closeButtonRef} type="button" aria-label="Fermer" onClick={onClose} className="p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors">
+          <button ref={closeButtonRef} type="button" aria-label="Fermer" onClick={onClose} className={clayPreviewActions
+            ? 'clay-action grid h-9 w-9 shrink-0 place-items-center'
+            : 'p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors'}>
             <X className="w-5 h-5" />
           </button>
         </div>

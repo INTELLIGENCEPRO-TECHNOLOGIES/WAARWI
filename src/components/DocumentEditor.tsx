@@ -1,3 +1,4 @@
+import { clayTouchHandlers } from '../lib/clayTouch';
 import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -400,6 +401,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
       ? `${labels.view}${documentNumber ? ` ${documentNumber}` : ''}`
       : editingId ? labels.edit : labels.create;
 
+  const clayPreview = (isView || !!postCreation) && (docType === 'invoice' || docType === 'quote');
+  const navigationButton = clayPreview
+    ? 'clay-action grid h-7 w-7 place-items-center disabled:opacity-25 disabled:pointer-events-none'
+    : 'p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors';
+
   const inputCls = 'w-full text-xs h-7 px-2 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded focus:border-[var(--w-text-muted)] focus:ring-1 focus:ring-[var(--w-separator)] outline-none transition-all text-[var(--w-text)]';
   const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-colors text-[var(--w-text)]';
 
@@ -407,15 +413,16 @@ export function DocumentEditor(props: DocumentEditorProps) {
     <div ref={containerRef} className={props.embedded ? 'flex flex-col h-full bg-[var(--w-bg)]' : 'fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in'}>
 
       {/* ═══ Title bar ═══ */}
-      <div className={`flex items-center justify-between px-4 border-b border-[var(--w-separator)] flex-shrink-0 ${tier === 'compact' ? 'flex-wrap gap-y-1 py-1.5' : 'h-11'}`}>
+      <div className={`flex items-center justify-between px-4 border-b border-[var(--w-separator)] flex-shrink-0 ${clayPreview ? 'min-h-11 flex-wrap gap-1.5 bg-[var(--w-surface)] py-1.5' : tier === 'compact' ? 'flex-wrap gap-y-1 py-1.5' : 'h-11'}`}
+        {...(clayPreview ? clayTouchHandlers : {})}>
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Navigation arrows */}
           {(onPrev || onNext) && (
             <div className="flex items-center gap-0.5 mr-1">
-              <button onClick={onPrev} disabled={!hasPrev} className="p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Précédent">
+              <button onClick={onPrev} disabled={!hasPrev} className={navigationButton} title="Précédent">
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button onClick={onNext} disabled={!hasNext} className="p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Suivant">
+              <button onClick={onNext} disabled={!hasNext} className={navigationButton} title="Suivant">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -809,7 +816,11 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
 }) {
   const canEdit = mode === 'create' || mode === 'edit';
   const compact = tier === 'compact' || tier === 'narrow';
-  const btnCls = 'flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded transition-colors';
+  const isView = mode === 'view';
+  const clayPreview = isView && (docType === 'invoice' || docType === 'quote');
+  const btnCls = clayPreview
+    ? 'clay-action flex min-h-7 items-center gap-1 whitespace-nowrap px-1.5 py-1 text-[11px] font-medium'
+    : 'flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded transition-colors';
   const btnLight = `${btnCls} text-[var(--w-text-sec)] hover:text-[var(--w-text)] hover:bg-[var(--w-hover)]`;
 
   const [transformOpen, setTransformOpen] = useState(false);
@@ -840,12 +851,11 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
   }
 
   const hasTransformations = transformations.length > 0;
-  const isView = mode === 'view';
   const notCancelled = documentStatus !== 'cancelled';
   const notAccounted = accountingStatus !== 'accounted';
 
   return (
-    <div className={`flex items-center gap-0.5 shrink-0 ${compact ? 'flex-wrap justify-end' : ''}`}>
+    <div className={`flex items-center ${clayPreview ? 'ml-auto min-w-0 flex-wrap justify-end gap-1' : `gap-0.5 shrink-0 ${compact ? 'flex-wrap justify-end' : ''}`}`}>
       {/* View-mode actions */}
       {isView && editingId && (
         <>
@@ -911,7 +921,7 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
       {/* Transformer dropdown */}
       {hasTransformations && (
         <div className="relative" ref={transformRef}>
-          <button onClick={() => setTransformOpen(!transformOpen)} className={btnLight} title="Transformer">
+          <button onClick={() => setTransformOpen(!transformOpen)} aria-expanded={transformOpen} className={clayPreview && transformOpen ? `${btnLight} clay-selected` : btnLight} title="Transformer">
             <RefreshCw className="w-3 h-3" />{!compact && ' Transformer'} <ChevronDown className="w-2.5 h-2.5" />
           </button>
           {transformOpen && (
@@ -937,7 +947,7 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
 
       {/* Nouveau (post-creation) */}
       {onNewInvoice && (
-        <button onClick={onNewInvoice} className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-[var(--w-accent-text)] bg-[var(--w-accent)] hover:bg-[var(--w-accent-hover)] rounded transition-colors"><Plus className="w-3 h-3" />{!compact && 'Nouveau'}</button>
+        <button onClick={onNewInvoice} title="Nouvelle facture" className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-[var(--w-accent-text)] bg-[var(--w-accent)] hover:bg-[var(--w-accent-hover)] rounded transition-colors"><Plus className="w-3 h-3" />{!compact && 'Nouveau'}</button>
       )}
 
       {/* Close */}

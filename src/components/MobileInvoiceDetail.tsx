@@ -1,3 +1,4 @@
+import { clayTouchHandlers } from '../lib/clayTouch';
 import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import {
   X, Printer, Link2, MessageCircle, Pencil,
@@ -91,12 +92,13 @@ export function MobileInvoiceDetail({
   const hasVat = invoice.vat_net_amount != null;
   const isAccounted = invoice.accounting_status === 'accounted';
   const isCancelled = invoice.status === 'cancelled';
+  const iconAction = 'clay-action inline-flex h-9 w-9 shrink-0 items-center justify-center';
 
   return (
-    <div className="fixed inset-0 z-[55] bg-white flex flex-col">
+    <div className="fixed inset-0 z-[55] bg-white flex flex-col" {...clayTouchHandlers}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 border-b border-neutral-200 shrink-0">
-        <button onClick={onClose} aria-label="Fermer" className="p-1"><X className="w-5 h-5 text-neutral-700" /></button>
+        <button onClick={onClose} aria-label="Fermer" className={iconAction}><X className="w-5 h-5" /></button>
         <div className="text-center flex-1 min-w-0">
           <div className="text-sm font-bold text-neutral-900 truncate">{invoice.sale_number}</div>
         </div>
@@ -208,7 +210,7 @@ export function MobileInvoiceDetail({
       <div className="border-t border-neutral-200 px-4 py-3 shrink-0 bg-white">
         <div className="flex items-center justify-between mb-2">
           {onComptabiliser && !isAccounted && !isCancelled && (
-            <button onClick={onComptabiliser} disabled={accountingBusy} className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-neutral-800 disabled:opacity-60" title="Comptabiliser">
+            <button onClick={onComptabiliser} disabled={accountingBusy} className="clay-action inline-flex min-h-9 items-center gap-1.5 px-2.5 text-sm font-semibold disabled:opacity-60" title="Comptabiliser">
               {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
               Comptabiliser
             </button>
@@ -219,32 +221,32 @@ export function MobileInvoiceDetail({
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {onEdit && !isCancelled && !isAccounted && (
-            <button onClick={onEdit} className="btn-icon" title="Modifier"><Pencil className="w-4 h-4" /></button>
+            <button onClick={onEdit} className={iconAction} title="Modifier"><Pencil className="w-4 h-4" /></button>
           )}
           {onApplyCredit && (
-            <button onClick={onApplyCredit} className="btn-icon" title="Appliquer un avoir" aria-label="Appliquer un avoir"><Wallet className="w-4 h-4" /></button>
+            <button onClick={onApplyCredit} className={iconAction} title="Appliquer un avoir" aria-label="Appliquer un avoir"><Wallet className="w-4 h-4" /></button>
           )}
           {onPay && due > 0 && !isCancelled && (
-            <button onClick={onPay} className="btn-icon" title="Encaisser"><Coins className="w-4 h-4" /></button>
+            <button onClick={onPay} className={iconAction} title="Encaisser"><Coins className="w-4 h-4" /></button>
           )}
           {onReturn && (
-            <button type="button" onClick={onReturn} className="btn-icon" title="Retourner des articles" aria-label="Retourner des articles"><RotateCcw className="w-4 h-4" /></button>
+            <button type="button" onClick={onReturn} className={iconAction} title="Retourner des articles" aria-label="Retourner des articles"><RotateCcw className="w-4 h-4" /></button>
           )}
           {onCopyLink && (
-            <button onClick={onCopyLink} className="btn-icon" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
+            <button onClick={onCopyLink} className={iconAction} title="Copier le lien"><Link2 className="w-4 h-4" /></button>
           )}
           {onWhatsApp && (
-            <button onClick={onWhatsApp} className="btn-icon" title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>
+            <button onClick={onWhatsApp} className={iconAction} title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>
           )}
           {onCancel && !isCancelled && !isAccounted && (
-            <button onClick={onCancel} className="btn-icon-danger" title="Annuler"><Ban className="w-4 h-4" /></button>
+            <button onClick={onCancel} className={iconAction} title="Annuler"><Ban className="w-4 h-4" /></button>
           )}
           {onDelete && !isAccounted && (
-            <button onClick={onDelete} className="btn-icon-danger" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
+            <button onClick={onDelete} className={iconAction} title="Supprimer"><Trash2 className="w-4 h-4" /></button>
           )}
           <span className="flex-1" />
           {onPrint && (
-            <button onClick={onPrint} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
+            <button onClick={onPrint} className={iconAction} title="Imprimer"><Printer className="w-4 h-4" /></button>
           )}
         </div>
       </div>
