@@ -1374,7 +1374,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const hasCatalog = catalog.key !== '' && !catalog.failed;
   useEffect(() => {
-    if (!tenantId || !hasCatalog || screen !== 'pos') return;
+    if (!tenantId || !hasCatalog || screen !== 'pos' || sortMode !== 'top') return;
     const controller = new AbortController();
     // Popular items enhance the catalogue after its first results are available.
     const timer = setTimeout(async () => {
@@ -1389,10 +1389,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       for (const row of data) {
         if (row.article_id) scores[row.article_id] = (scores[row.article_id] || 0) + Number(row.quantity || 0);
       }
-      if (Object.keys(scores).length) setTopScores(scores);
+      setTopScores(scores);
     }, 800);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [tenantId, catalogSiteId, hasCatalog, screen]);
+  }, [tenantId, catalogSiteId, hasCatalog, screen, sortMode]);
 
   const searchTerm = search.trim();
   const categoryIds = useMemo(() => categoryId
