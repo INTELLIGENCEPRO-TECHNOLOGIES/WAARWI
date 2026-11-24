@@ -1378,6 +1378,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const controller = new AbortController();
     // Popular items enhance the catalogue after its first results are available.
     const timer = setTimeout(async () => {
+      const { data: aggregated, error: aggregationError } = await supabase
+        .rpc('rpc_pos_popularity_scores', { p_tenant_id: tenantId, p_site_id: catalogSiteId || null })
+        .abortSignal(controller.signal);
+      if (controller.signal.aborted) return;
+      if (!aggregationError && aggregated && typeof aggregated === 'object' && !Array.isArray(aggregated)) {
+        const scores: Record<string, number> = {};
+        for (const [articleId, quantity] of Object.entries(aggregated)) {
+          const score = Number(quantity);
+          if (Number.isFinite(score)) scores[articleId] = score;
+        }
+        setTopScores(scores);
+        return;
+      }
+      // Compatibility during staged rollout, before the RPC is installed.
+      if (aggregationError?.code !== 'PGRST202' && aggregationError?.code !== '42883') return;
       const since = new Date(Date.now() - 90 * 86400000).toISOString();
       const query = supabase.from('sale_items')
         .select('article_id, quantity, sales!inner(tenant_id, site_id, created_at, status)')
