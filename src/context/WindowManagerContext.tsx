@@ -4,6 +4,7 @@ export type WinState = {
   id: string;
   title: string;
   minimized: boolean;
+  maximized: boolean;
   zIndex: number;
   rect: { x: number; y: number; w: number; h: number };
   icon?: ReactNode;
@@ -14,13 +15,14 @@ export type WinState = {
 
 type Ctx = {
   windows: WinState[];
-  register: (id: string, title: string, rect?: Partial<WinState['rect']>, icon?: ReactNode, siteId?: string, background?: boolean, groupId?: string) => void;
+  register: (id: string, title: string, rect?: Partial<WinState['rect']>, icon?: ReactNode, siteId?: string, background?: boolean, groupId?: string, maximized?: boolean) => void;
   unregister: (id: string) => void;
   focus: (id: string) => void;
   minimize: (id: string) => void;
   minimizeAll: () => void;
   minimizeGroup: (groupId: string) => void;
   restore: (id: string) => void;
+  setMaximized: (id: string, maximized: boolean) => void;
   updateRect: (id: string, rect: Partial<WinState['rect']>) => void;
   updateTitle: (id: string, title: string) => void;
   tileVisibleWindows: () => void;
@@ -51,7 +53,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
   const [windows, setWindows] = useState<WinState[]>([]);
   const [topZ, setTopZ] = useState(100);
 
-  const register = useCallback((id: string, title: string, rect?: Partial<WinState['rect']>, icon?: ReactNode, siteId?: string, background?: boolean, groupId?: string) => {
+  const register = useCallback((id: string, title: string, rect?: Partial<WinState['rect']>, icon?: ReactNode, siteId?: string, background?: boolean, groupId?: string, maximized = false) => {
     setWindows(prev => {
       if (prev.find(w => w.id === id)) return prev;
       const nextZ = Math.max(100, ...prev.map(w => w.zIndex)) + 1;
@@ -63,6 +65,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
         id,
         title,
         minimized: false,
+        maximized,
         zIndex: nextZ,
         rect: {
           x: rect?.x ?? Math.max(wa.x + 20, wa.x + (wa.w - defaultW) / 2),
@@ -110,6 +113,10 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
     setWindows(prev => prev.map(w => w.id === id ? { ...w, minimized: false } : w));
   }, [focus]);
 
+  const setMaximized = useCallback((id: string, maximized: boolean) => {
+    setWindows(prev => prev.map(w => w.id === id && w.maximized !== maximized ? { ...w, maximized } : w));
+  }, []);
+
   const updateRect = useCallback((id: string, rect: Partial<WinState['rect']>) => {
     setWindows(prev => prev.map(w => w.id === id ? { ...w, rect: { ...w.rect, ...rect } } : w));
   }, []);
@@ -152,7 +159,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <WindowManagerContext.Provider value={{ windows, register, unregister, focus, minimize, minimizeAll, minimizeGroup, restore, updateRect, updateTitle, tileVisibleWindows, topZ }}>
+    <WindowManagerContext.Provider value={{ windows, register, unregister, focus, minimize, minimizeAll, minimizeGroup, restore, setMaximized, updateRect, updateTitle, tileVisibleWindows, topZ }}>
       {children}
     </WindowManagerContext.Provider>
   );

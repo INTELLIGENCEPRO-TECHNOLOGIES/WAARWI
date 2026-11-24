@@ -1,0 +1,17 @@
+.billing-workspace {
+  container: billing / inline-size;
+}
+
+@container billing (min-width: 55rem) {
+  .billing-extra {
+    display: inline;
+  }
+}
+
+.billing-return-header {
+  padding-top: max(.5rem, env(safe-area-inset-top));
+}
+
+.billing-return-footer {
+  padding-bottom: max(.75rem, env(safe-area-inset-bottom));
+}

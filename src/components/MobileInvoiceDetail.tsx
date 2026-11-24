@@ -1,7 +1,7 @@
 import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import {
   X, Printer, Link2, MessageCircle, Pencil,
-  Coins, BookOpen, Loader2, Ban, Trash2, User, Calendar, Wallet,
+  Coins, BookOpen, Loader2, Ban, Trash2, User, Calendar, Wallet, RotateCcw,
 } from 'lucide-react';
 import { formatFCFA, formatDate } from '../lib/format';
 
@@ -54,6 +54,7 @@ type Props = {
   onEdit?: () => void;
   onPay?: () => void;
   onApplyCredit?: () => void;
+  onReturn?: () => void;
   onPrint?: () => void;
   onCopyLink?: () => void;
   onWhatsApp?: () => void;
@@ -72,6 +73,7 @@ export function MobileInvoiceDetail({
   onEdit,
   onPay,
   onApplyCredit,
+  onReturn,
   onPrint,
   onCopyLink,
   onWhatsApp,
@@ -86,6 +88,7 @@ export function MobileInvoiceDetail({
   const due = Math.max(0, Number(invoice.total) - Number(invoice.paid));
   const validItems = items.filter(i => i.name.trim());
   const subtotal = validItems.reduce((s, i) => s + Number(i.total), 0);
+  const hasVat = invoice.vat_net_amount != null;
   const isAccounted = invoice.accounting_status === 'accounted';
   const isCancelled = invoice.status === 'cancelled';
 
@@ -93,7 +96,7 @@ export function MobileInvoiceDetail({
     <div className="fixed inset-0 z-[55] bg-white flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 border-b border-neutral-200 shrink-0">
-        <button onClick={onClose} className="p-1"><X className="w-5 h-5 text-neutral-700" /></button>
+        <button onClick={onClose} aria-label="Fermer" className="p-1"><X className="w-5 h-5 text-neutral-700" /></button>
         <div className="text-center flex-1 min-w-0">
           <div className="text-sm font-bold text-neutral-900 truncate">{invoice.sale_number}</div>
         </div>
@@ -153,11 +156,13 @@ export function MobileInvoiceDetail({
 
         {/* Totals */}
         <div className="px-4 py-3 border-t border-neutral-100 space-y-1.5">
-          <div className="flex items-center justify-between text-xs text-neutral-500">
-            <span>Sous-total</span>
-            <span className="num font-semibold">{formatFCFA(subtotal)}</span>
-          </div>
-          {invoice.vat_net_amount != null && <>
+          {(!hasVat || Math.abs(subtotal - Number(invoice.vat_net_amount)) >= 0.01) && (
+            <div className="flex items-center justify-between text-xs text-neutral-500">
+              <span>Sous-total</span>
+              <span className="num font-semibold">{formatFCFA(subtotal)}</span>
+            </div>
+          )}
+          {hasVat && <>
             <div className="flex justify-between text-xs">
               <span>Total HT</span><span className="num">{formatVatAmount(invoice.vat_net_amount)}</span>
             </div>
@@ -166,7 +171,7 @@ export function MobileInvoiceDetail({
             </div>
           </>}
           <div className="flex items-center justify-between text-sm font-bold text-neutral-900">
-            <span>Total</span>
+            <span>{hasVat ? 'Total TTC' : 'Total'}</span>
             <span className="num">{formatFCFA(invoice.total)}</span>
           </div>
           {Number(invoice.paid) > 0 && (
@@ -202,7 +207,14 @@ export function MobileInvoiceDetail({
       {/* Footer actions */}
       <div className="border-t border-neutral-200 px-4 py-3 shrink-0 bg-white">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-neutral-500">{validItems.length} article{validItems.length > 1 ? 's' : ''}</span>
+          {onComptabiliser && !isAccounted && !isCancelled && (
+            <button onClick={onComptabiliser} disabled={accountingBusy} className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-neutral-800 disabled:opacity-60" title="Comptabiliser">
+              {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+              Comptabiliser
+            </button>
+          )}
+          {isAccounted && <span className="inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-neutral-700"><BookOpen className="w-4 h-4" />Comptabilisé</span>}
+          {!isAccounted && !onComptabiliser && <span className="text-xs text-neutral-500">{validItems.length} article{validItems.length > 1 ? 's' : ''}</span>}
           <span className="text-base font-extrabold text-neutral-900 num">{formatFCFA(invoice.total)}</span>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -215,10 +227,8 @@ export function MobileInvoiceDetail({
           {onPay && due > 0 && !isCancelled && (
             <button onClick={onPay} className="btn-icon" title="Encaisser"><Coins className="w-4 h-4" /></button>
           )}
-          {onComptabiliser && !isAccounted && !isCancelled && (
-            <button onClick={onComptabiliser} disabled={accountingBusy} className="btn-icon" title="Comptabiliser">
-              {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-            </button>
+          {onReturn && (
+            <button type="button" onClick={onReturn} className="btn-icon" title="Retourner des articles" aria-label="Retourner des articles"><RotateCcw className="w-4 h-4" /></button>
           )}
           {onCopyLink && (
             <button onClick={onCopyLink} className="btn-icon" title="Copier le lien"><Link2 className="w-4 h-4" /></button>

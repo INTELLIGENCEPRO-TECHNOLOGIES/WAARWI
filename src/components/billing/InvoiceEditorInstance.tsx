@@ -66,7 +66,8 @@ export type InvoiceEditorInstanceProps = {
   onOpenPay: (inv: Invoice) => void;
   onOpenCredit?: (inv: Invoice) => void;
   onCancelInvoice: (inv: Invoice) => void;
-  onComptabiliser: (inv: Invoice) => void;
+  onComptabiliser?: (inv: Invoice) => void;
+  accountingBusy?: boolean;
   onCopyLink: (inv: Invoice) => void;
   onWhatsApp: (inv: Invoice) => void;
   onReturnTransform: (config: any, editingInvoiceId: string) => Promise<void>;
@@ -87,7 +88,7 @@ export function InvoiceEditorInstance({
   activeReps, salesReps, repSettings, profileNames,
   billSourceSiteId,
   onClose, onSaved, onOpenNew, onInvoiceCreated, onOpenPay, onOpenCredit,
-  onCancelInvoice, onComptabiliser, onCopyLink, onWhatsApp,
+  onCancelInvoice, onComptabiliser, accountingBusy, onCopyLink, onWhatsApp,
   onReturnTransform, onSearchOpen, onVehiclePicker,
   onCreateArticle, onCreateCustomer, onTierPicker,
   onNavigateInvoice,
@@ -750,7 +751,8 @@ export function InvoiceEditorInstance({
       onCopyLink={editingInvoiceId && invForLookup ? () => onCopyLink(invForLookup) : undefined}
       onWhatsApp={editingInvoiceId && invForLookup?.customers ? () => onWhatsApp(invForLookup) : undefined}
       onCancel={editingInvoiceId && invForLookup ? () => onCancelInvoice(invForLookup) : undefined}
-      onComptabiliser={editingInvoiceId && invForLookup ? () => onComptabiliser(invForLookup) : undefined}
+      onComptabiliser={editingInvoiceId && invForLookup && onComptabiliser ? () => onComptabiliser(invForLookup) : undefined}
+      accountingBusy={accountingBusy}
       onPrint={editingInvoiceId ? handlePrint : undefined}
       inactive={siteMismatch}
       transformReturnLines={returnLines}

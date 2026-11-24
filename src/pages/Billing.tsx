@@ -1,3 +1,4 @@
+import './Billing.css';
 import { useSalePrice, type PriceLine } from '../lib/useSalePrice';
 import { formatVatAmount } from '../lib/salesVat';
 import { loadInvoiceReturnLines } from '../lib/saleReturnLines';
@@ -9,16 +10,16 @@ import { useStickyOffset } from '../lib/useStickyOffset';
 import { createPortal } from 'react-dom';
 import {
   Plus, FileText, Loader2, Printer, CheckCircle, X, Trash2, Car,
-  Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, CalendarDays, User,
-  CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen, FilePlus,
-  Tag, ShieldCheck, Smartphone, Pencil, ChevronLeft, ChevronRight, RefreshCw, Ban, ClipboardList,
+  Receipt, RotateCcw, Wallet, Package, Filter, Check, Calendar, CalendarDays, User,
+  CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, FilePlus,
+  Tag, ShieldCheck, Smartphone, ChevronLeft, ChevronRight, RefreshCw, Ban, ClipboardList,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
-import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
+import { Modal, ConfirmDialog } from '../components/Modal';
 import { useTopLayer } from '../components/modalStack';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -28,11 +29,12 @@ import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate, formatDateTime } from '../lib/format';
 import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
-import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
+import { DocItems, DocTotals, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments as IpmDocsType } from '../lib/ipm';
-import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
+import type { DocItem, DocStatusConfig } from '../components/DocLayout';
 import { MobileBillingWizard, type WizardHeaderField } from '../components/MobileBillingWizard';
 import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
+import { BillingReturnFields, MobileReturnScreen, MobileReturnDetail, type ReturnLine } from '../components/billing/BillingReturnFlow';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
@@ -72,10 +74,11 @@ type Invoice = VatAmounts & {
   user_id?: string | null;
   representative_id?: string | null;
   rep_commission?: any;
-  customers: { name: string } | null;
+  customers: { name: string; phone?: string; address?: string } | null;
 };
 type SaleReturn = VatAmounts & {
   vat_entry_id?: string | null;
+  sale_id?: string;
   id: string; return_number: string; total: number; status: string;
   refund_method: string; reason: string; restock: boolean;
   credit_used?: number; customer_id: string | null;
@@ -102,7 +105,7 @@ function invoiceStatus(s: Invoice) {
 }
 
 const RETURN_STATUS: Record<string, { label: string; pill: string; dot: string }> = {
-  pending:  { label: 'Brouillon', pill: 'text-amber-600', dot: '' },
+  pending:  { label: 'À traiter', pill: 'text-amber-600', dot: '' },
   approved: { label: 'Approuvé',  pill: 'text-emerald-600', dot: '' },
   rejected: { label: 'Rejeté',    pill: 'text-red-600', dot: '' },
 };
@@ -234,9 +237,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   // Invoice detail + payment
   const [invoiceDetail, setInvoiceDetail] = useState<Invoice | null>(null);
-  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
-  const [invoicePays, setInvoicePays] = useState<any[]>([]);
-  const [invoiceIpmVente, setInvoiceIpmVente] = useState<any>(null);
   const [accountingBusy, setAccountingBusy] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const payLayer = useTopLayer(payOpen);
@@ -256,6 +256,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [creditSelected, setCreditSelected] = useState<string>('');
   const [creditAmount, setCreditAmount] = useState('');
   const [applyingCredit, setApplyingCredit] = useState(false);
+  const [applyCreditError, setApplyCreditError] = useState<string | null>(null);
 
   // Return modals
   const [returnOpen, setReturnOpen] = useState(false);
@@ -264,12 +265,17 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [returnItemsDetail, setReturnItemsDetail] = useState<any[]>([]);
   const [returnEditorOpen, setReturnEditorOpen] = useState(false);
   const vatReturnAttempt = useRef<{ payload: string; key: string } | null>(null);
-  const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', refund_method: 'cash' as string, restock: true });
-  const [returnLines, setReturnLines] = useState<{ item_id: string; article_id: string; name: string; max_qty: number; quantity: number; unit_price: number; purchase_cost: number; selected: boolean }[]>([]);
+  const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', restock: true });
+  const [returnOrigin, setReturnOrigin] = useState<Invoice | null>(null);
+  const [returnLoad, setReturnLoad] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const [returnDetailLoad, setReturnDetailLoad] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const [returnError, setReturnError] = useState<string | null>(null);
+  const [returnDetailError, setReturnDetailError] = useState<string | null>(null);
+  const returnLinesRequest = useRef(0);
+  const returnDetailRequest = useRef(0);
+  const [returnLines, setReturnLines] = useState<ReturnLine[]>([]);
   const [returnWorkflowBusy, setReturnWorkflowBusy] = useState(false);
   const [returnCashConfirmOpen, setReturnCashConfirmOpen] = useState(false);
-  const [returnedQtys, setReturnedQtys] = useState<Record<string, number>>({});
-  // returnedQtys no longer filters invoices — kept for compat but always empty
 
   // Multi-instance invoice windows (desktop)
   const [invoiceWindows, setInvoiceWindows] = useState<Map<string, InvoiceWindowDescriptor>>(new Map());
@@ -655,16 +661,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     });
   }, [tenant?.id]);
 
-  const [flashTab, setFlashTab] = useState<Tab | null>(null);
   const pendingNavRef = useRef<string | null>(null);
   useEffect(() => {
     const ctx = consumeNavContext();
     if (!ctx?.target) return;
     pendingNavRef.current = ctx.target;
-    if (ctx.target === 'quotes') { setTabRaw('quotes'); setFlashTab('quotes'); }
-    else if (ctx.target === 'returns') { setTabRaw('returns'); setFlashTab('returns'); }
-    const t = setTimeout(() => setFlashTab(null), 6800);
-    return () => clearTimeout(t);
+    if (ctx.target === 'quotes') setTabRaw('quotes');
+    else if (ctx.target === 'returns') setTabRaw('returns');
   }, []);
 
   useEffect(() => {
@@ -693,7 +696,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     Promise.all([
       custQuery,
       fetchAllArticles(),
-      supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, user_id, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(200),
+      supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, user_id, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).neq('status', 'cancelled').is('deleted_at', null).order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
       supabase.from('sales_representatives').select('*').eq('tenant_id', tenant.id).order('code'),
@@ -977,7 +980,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const openDesktopQuoteWindow = (quoteId: string | null, mode: 'create' | 'edit' | 'view') => {
     if (quoteId) {
       const existing = Array.from(quoteWindows.values()).find(d => d.quoteId === quoteId);
-      if (existing) { focusWindow(existing.windowId); return; }
+      if (existing) { restoreWindow(existing.windowId); return; }
     }
     const wid = `quote-${++quoteWindowCounter.current}`;
     const desc: QuoteWindowDescriptor = { windowId: wid, quoteId, mode, siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
@@ -1043,7 +1046,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   const printQuote = () => {
     if (!quoteDetail || !tenant) return;
-    const items = quoteItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
+    const items = quoteItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     printDocumentA4({
       tenant: tenantForPrint(tenant, currentSite),
@@ -1118,7 +1121,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       const wid = `inv-new-${++invoiceWindowCounter.current}`;
       const desc: InvoiceWindowDescriptor = { windowId: wid, invoiceId: null, mode: 'create', siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
       setInvoiceWindows(prev => { const next = new Map(prev); next.set(wid, desc); return next; });
-      if (invoiceWindows.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
     } else {
       setMobileInvoiceOpen(true);
       setMobileInvoiceMode('create');
@@ -1179,12 +1181,44 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       setInvoicePostCreation(null);
     }
   };
+  const handleSaleChange = async (saleId: string) => {
+    const request = ++returnLinesRequest.current;
+    setReturnForm(f => ({ ...f, sale_id: saleId }));
+    setReturnLines([]);
+    setReturnError(null);
+    setReturnLoad({ busy: !!saleId, error: null });
+    if (!saleId) return;
+    try {
+      const lines = await loadInvoiceReturnLines(saleId);
+      if (request !== returnLinesRequest.current) return;
+      setReturnLines(lines);
+      setReturnLoad({ busy: false, error: null });
+    } catch (failure) {
+      if (request === returnLinesRequest.current) {
+        setReturnLoad({ busy: false, error: (failure as { message?: string }).message || 'Impossible de charger les articles.' });
+      }
+    }
+  };
+
+  const startReturn = (mode: 'return' | 'avoir', origin: Invoice | null = null) => {
+    setReturnMode(mode);
+    setReturnOrigin(origin);
+    setReturnForm({ sale_id: '', reason: '', restock: true });
+    void handleSaleChange(origin?.id || '');
+    setReturnOpen(true);
+  };
+
+  const closeReturnForm = () => {
+    returnLinesRequest.current++;
+    setReturnOpen(false);
+  };
+
   const handleNavTarget = useCallback((target: string) => {
     switch (target) {
       case 'newInvoice': setTabRaw('invoices'); openInvoiceEditor(); break;
       case 'newQuote': setTabRaw('quotes'); if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); } break;
-      case 'newReturn': setTabRaw('returns'); setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); break;
-      case 'newAvoir': setTabRaw('credits'); setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); break;
+      case 'newReturn': setTabRaw('returns'); startReturn('return'); break;
+      case 'newAvoir': setTabRaw('credits'); startReturn('avoir'); break;
     }
   }, []);
 
@@ -1208,11 +1242,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const openInvoiceForEdit = async (inv: Invoice) => {
     if (isDesktop) {
       const existing = Array.from(invoiceWindows.values()).find(w => w.invoiceId === inv.id);
-      if (existing) { focusWindow(existing.windowId); return; }
+      if (existing) { restoreWindow(existing.windowId); return; }
       const wid = `inv-edit-${inv.id}`;
       const desc: InvoiceWindowDescriptor = { windowId: wid, invoiceId: inv.id, mode: 'edit', siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
       setInvoiceWindows(prev => { const next = new Map(prev); next.set(wid, desc); return next; });
-      if (invoiceWindows.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
     } else {
       const [{ data: items }, { data: full }] = await Promise.all([
         supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
@@ -1245,11 +1278,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const openInvoiceForView = async (inv: Invoice) => {
     if (isDesktop) {
       const existing = Array.from(invoiceWindows.values()).find(w => w.invoiceId === inv.id);
-      if (existing) { focusWindow(existing.windowId); return; }
+      if (existing) { restoreWindow(existing.windowId); return; }
       const wid = `inv-view-${inv.id}`;
       const desc: InvoiceWindowDescriptor = { windowId: wid, invoiceId: inv.id, mode: 'view', siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
       setInvoiceWindows(prev => { const next = new Map(prev); next.set(wid, desc); return next; });
-      if (invoiceWindows.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
     } else {
       const [{ data: items }, { data: full }] = await Promise.all([
         supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
@@ -1478,8 +1510,16 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       setInvoicePostCreation({ saleNumber: invNum, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
       setMobileEditingInvoiceId(sale.id);
       setMobileInvoiceMode('view');
-      const { data: newFull } = await supabase.from('sales').select('*, customers(name, phone, address)').eq('id', sale.id).maybeSingle();
-      if (newFull) setInvoiceDetail(newFull as any);
+      const [{ data: newFull }, { data: payments }] = await Promise.all([
+        supabase.from('sales').select('*, customers(name, phone, address)').eq('id', sale.id).maybeSingle(),
+        supabase.from('sale_payments').select('*').eq('sale_id', sale.id),
+      ]);
+      if (newFull) setInvoiceDetail(newFull as Invoice);
+      if (payments) {
+        setInvoicePayList(payments.map(p => ({
+          method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: p.reference || '',
+        })));
+      }
       loadTab(billPage, true);
     } catch (err: any) {
       error(err.message || 'Erreur');
@@ -1682,66 +1722,16 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     setTabRaw('invoices'); loadTab(billPage, true);
   };
 
-  // ── Invoice detail ───────────────────────────────────────────
-  const openInvoiceDetail = async (s: Invoice) => {
-    setInvoiceDetail(s);
-    setInvoiceIpmVente(null);
-    const [{ data: it }, { data: pp }, { data: ipmV }, { data: full }] = await Promise.all([
-      supabase.from('sale_items').select('*, articles(internal_ref, oem_ref)').eq('sale_id', s.id),
-      supabase.from('sale_payments').select('*').eq('sale_id', s.id),
-      supabase.from('ipm_ventes').select('*, ipm_organismes(nom)').eq('sale_id', s.id).limit(1).maybeSingle(),
-      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, discount, vat_net_amount, vat_amount, doc_header, user_id, customers(name, phone, address)').eq('id', s.id).maybeSingle(),
-    ]);
-    setInvoiceItems(it || []); setInvoicePays(pp || []);
-    setInvoiceIpmVente(ipmV || null);
-    if (full) setInvoiceDetail(full as any);
-  };
-
   const reloadInvoice = async (id: string) => {
-    const { data } = await supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, discount, vat_net_amount, vat_amount, doc_header, customers(name, phone, address)').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('sales').select('*, customers(name, phone, address)').eq('id', id).maybeSingle();
     if (data) {
-      setInvoiceDetail(data as any);
-      const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', id);
-      setInvoicePays(pp || []);
+      setInvoiceDetail(prev => prev?.id === id ? data as Invoice : prev);
       if (mobileInvoiceOpen && mobileEditingInvoiceId === id) {
+        const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', id);
         setInvoicePayList((pp || []).map((p: any) => ({ method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: '' })));
       }
     }
     loadTab(billPage, true);
-  };
-
-  const printInvoice = () => {
-    if (!invoiceDetail || !tenant) return;
-    const items = invoiceItems.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
-    const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-    printDocumentA4({
-      tenant: tenantForPrint(tenant, currentSite),
-      docLabel: 'FACTURE',
-      docNumber: invoiceDetail.sale_number,
-      docDate: new Date(invoiceDetail.created_at).toLocaleDateString('fr-FR'),
-      docCreatedAt: invoiceDetail.created_at,
-      customer: invoiceDetail.customers ? { name: invoiceDetail.customers.name, phone: (invoiceDetail.customers as any).phone || undefined, address: (invoiceDetail.customers as any).address || undefined } : null,
-      items, subtotal, discount: Number(invoiceDetail.discount ?? 0), vat: invoiceDetail, total: Number(invoiceDetail.total),
-      payments: invoicePays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
-      paid: Number(invoiceDetail.paid),
-      issuedBy: creatorName((invoiceDetail as any).user_id),
-      docHeader: (invoiceDetail as any).doc_header ?? null,
-    });
-  };
-
-  const comptabiliserFacture = async () => {
-    if (!invoiceDetail || accountingBusy) return;
-    if (!can('manage_accounting')) { error('Vous n\'avez pas la permission de comptabiliser les factures'); return; }
-    setAccountingBusy(true);
-    try {
-      const { data, error } = await supabase.rpc('comptabiliser_vente', { p_sale_id: invoiceDetail.id });
-      if (error) throw error;
-      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur inconnue');
-      success(`Comptabilisé : ${(data as any).piece_number}`);
-      setInvoiceDetail({ ...invoiceDetail, accounting_status: 'accounted' });
-      setInvoices(prev => prev.map(i => i.id === invoiceDetail.id ? { ...i, accounting_status: 'accounted' } : i));
-    } catch (e: any) { error(e.message); }
-    finally { setAccountingBusy(false); }
   };
 
   const invoiceUrl = (inv: Invoice | null) => {
@@ -1850,7 +1840,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       const { data, error: rpcErr } = await supabase.rpc('comptabiliser_vente', { p_sale_id: inv.id });
       if (rpcErr) throw rpcErr;
       if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur inconnue');
-      success(`Comptabilisé : ${(data as any).piece_number}`);
+      success((data as any).piece_number ? `Comptabilisé · ${(data as any).piece_number}` : 'Facture comptabilisée');
+      setInvoiceDetail(prev => prev?.id === inv.id ? { ...prev, accounting_status: 'accounted' } : prev);
       setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, accounting_status: 'accounted' } : i));
     } catch (e: any) { error(e.message); }
     finally { setAccountingBusy(false); }
@@ -1923,13 +1914,21 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     const due = Math.max(0, Number(invoice.total) - Number(invoice.paid));
     const avail = c ? Number(c.total) - Number(c.credit_used || 0) : 0;
     setCreditAmount(String(Math.min(due, avail)));
+    setApplyCreditError(null);
     setCreditOpen(true);
   };
   const applyCredit = async () => {
-    if (!invoiceDetail || !creditSelected) { error('Sélectionnez un avoir'); return; }
-    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'appliquer des avoirs'); return; }
+    if (!invoiceDetail || !creditSelected || applyingCredit) return;
+    if (!can('edit_invoices')) { setApplyCreditError('Vous n’avez pas la permission d’appliquer des avoirs.'); return; }
     const amt = Number(creditAmount);
-    if (!amt || amt <= 0) { error('Montant invalide'); return; }
+    const credit = availableCredits.find(item => item.id === creditSelected);
+    const due = Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid));
+    const available = credit ? Number(credit.total) - Number(credit.credit_used ?? 0) : 0;
+    if (!Number.isFinite(amt) || amt <= 0 || amt > Math.min(due, available)) {
+      setApplyCreditError('Saisissez un montant positif dans la limite de l’avoir disponible et du solde dû.');
+      return;
+    }
+    setApplyCreditError(null);
     setApplyingCredit(true);
     const { data: result, error: e } = await supabase.rpc('apply_credit_to_sale', {
       p_credit_id: creditSelected,
@@ -1938,7 +1937,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     });
     setApplyingCredit(false);
     if (e || result?.success !== true) {
-      error(e?.message || result?.error || 'L’avoir n’a pas été imputé.');
+      setApplyCreditError(e?.message || result?.error || 'L’avoir n’a pas été imputé.');
       return;
     }
     success('Avoir appliqué');
@@ -1947,28 +1946,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   };
 
   // ── Returns ──────────────────────────────────────────────────
-  const loadSaleItems = async (saleId: string) => {
-    setReturnLines([]);
-    try {
-      setReturnLines(await loadInvoiceReturnLines(saleId));
-    } catch (failure) {
-      error((failure as { message?: string }).message || 'Impossible de charger les lignes retournables.');
-    }
-  };
-
-  const handleSaleChange = async (saleId: string) => {
-    setReturnForm(f => ({ ...f, sale_id: saleId }));
-    if (saleId) await loadSaleItems(saleId);
-    else setReturnLines([]);
-  };
   const returnTotal = returnLines.filter(i => i.selected).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
 
-  // For IPM returns: calculate client-only refund
-  const returnSale = sales.find(s => s.id === returnForm.sale_id);
-  const returnIsFullReturn = returnForm.sale_id && returnLines.length > 0 && returnLines.every(i => i.selected && i.quantity === i.max_qty);
-
   const prepareVatReturn = async (saleId: string, siteId: string, lines: { item_id: string; quantity: number }[],
-    reason: string, restock: boolean, issueCredit: boolean) => {
+    reason: string, restock: boolean, issueCredit: boolean, showError: (message: string) => void = error) => {
     const items = lines.map(line => ({ sale_item_id: line.item_id, quantity: line.quantity }));
     const payload = JSON.stringify({ saleId, siteId, items, reason, restock, issueCredit });
     if (vatReturnAttempt.current?.payload !== payload) {
@@ -1978,32 +1959,40 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       p_sale_id: saleId, p_site_id: siteId, p_items: items,
       p_reason: reason, p_restock: restock, p_request_id: vatReturnAttempt.current.key, p_issue_credit: issueCredit,
     });
-    if (failure) { error(failure.message); return null; }
+    if (failure) { showError(failure.message); return null; }
     vatReturnAttempt.current = null;
     return data as SaleReturn;
   };
 
   const saveReturn = async () => {
-    if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
-    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
-    if (!returnForm.sale_id) { error('Sélectionnez une vente'); return; }
+    if (saving || returnLoad.busy) return;
+    if (!tenant || !currentSite) { setReturnError('Magasin introuvable.'); return; }
+    if (!can('edit_invoices')) { setReturnError('Vous n’avez pas la permission d’effectuer des retours.'); return; }
+    if (!returnForm.sale_id) { setReturnError('Sélectionnez une vente.'); return; }
     const sel = returnLines.filter(i => i.selected && i.quantity > 0);
-    if (sel.length === 0) { error('Sélectionnez au moins un article'); return; }
+    if (sel.length === 0) { setReturnError('Sélectionnez au moins un article.'); return; }
+    setReturnError(null);
     setSaving(true);
 
     const { data: sale } = await supabase.from('sales')
       .select('id, customer_id, sale_number, site_id, vat_net_amount, customers(name, phone, address)')
       .eq('id', returnForm.sale_id).maybeSingle();
-    if (!sale) { error('Facture introuvable'); setSaving(false); return; }
+    if (!sale) { setReturnError('Facture introuvable.'); setSaving(false); return; }
+    if (returnMode === 'avoir' && !sale.customer_id) {
+      setReturnError('Sélectionnez une vente associée à un client pour créer un avoir.');
+      setSaving(false);
+      return;
+    }
 
     if (sale.vat_net_amount != null) {
-      const ret = await prepareVatReturn(sale.id, sale.site_id, sel, returnForm.reason, returnForm.restock, returnMode === 'avoir');
+      const ret = await prepareVatReturn(sale.id, sale.site_id, sel, returnForm.reason, returnForm.restock, returnMode === 'avoir', setReturnError);
       setSaving(false);
       if (!ret) return;
       setReturnOpen(false);
-      setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true });
+      setReturnForm({ sale_id: '', reason: '', restock: true });
       setReturnLines([]);
-      await loadTab(billPage, true);
+      if (mobileInvoiceOpen && mobileEditingInvoiceId === sale.id && returnMode === 'avoir') void reloadInvoice(sale.id);
+      else void loadTab(billPage, true);
       await openReturnDetail({ ...ret, customers: Array.isArray(sale.customers) ? sale.customers[0] ?? null : sale.customers, sales: { sale_number: sale.sale_number } });
       success(ret.status === 'approved' ? 'Avoir fiscal émis.' : 'Retour enregistré. Choisissez le mode de remboursement.');
       return;
@@ -2034,7 +2023,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       refund_method: 'pending', reason: returnForm.reason,
       restock: returnForm.restock, status: 'pending',
     }).select().single();
-    if (e || !ret) { error(e?.message || 'Erreur'); setSaving(false); return; }
+    if (e || !ret) { setReturnError(e?.message || 'Le document n’a pas été enregistré.'); setSaving(false); return; }
     await supabase.from('sale_return_items').insert(sel.map(i => ({
       tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, sale_item_id: i.item_id, name: i.name,
       quantity: i.quantity, unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, total: i.quantity * i.unit_price,
@@ -2075,81 +2064,128 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     }
 
     setSaving(false);
-    success(returnMode === 'avoir' ? 'Avoir enregistré — disponible sur le compte client' : 'Retour enregistré — choisissez le mode de remboursement');
     setReturnOpen(false);
-    setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true });
+    setReturnForm({ sale_id: '', reason: '', restock: true });
     setReturnLines([]);
     await loadTab(billPage, true);
     if (returnMode === 'avoir') {
       const { error: avErr } = await supabase.rpc('approve_return_as_avoir', { p_return_id: ret.id });
-      if (avErr) { error(avErr.message); return; }
-      success('Avoir créé — disponible sur le compte client');
-      await loadTab(billPage, true);
+      if (!avErr) success('Avoir créé.');
+      await openReturnDetail({ ...ret, customers: Array.isArray(sale.customers) ? sale.customers[0] ?? null : sale.customers, sales: { sale_number: sale.sale_number } });
+      if (avErr) setReturnDetailError(avErr.message);
+      void loadTab(billPage, true);
+      return;
     }
-    openReturnDetail({ ...ret, customers: sale?.customers || null, sales: { sale_number: sale.sale_number } } as SaleReturn);
+    success('Retour enregistré. Choisissez le mode de remboursement.');
+    void openReturnDetail({ ...ret, customers: Array.isArray(sale.customers) ? sale.customers[0] ?? null : sale.customers, sales: { sale_number: sale.sale_number } });
+  };
+
+  const refreshReturnStatus = async (id: string) => {
+    const { data, error: failure } = await supabase.from('sale_returns')
+      .select('status, refund_method, credit_used, refunded_at, vat_net_amount, vat_amount, vat_entry_id').eq('id', id).maybeSingle();
+    if (data) setReturnDetail(previous => previous?.id === id ? { ...previous, ...data } : previous);
+    return failure?.message ?? null;
   };
 
   const openReturnDetail = async (r: SaleReturn) => {
+    const request = ++returnDetailRequest.current;
     setReturnDetail(r);
-    if (isDesktop) setReturnEditorOpen(true);
-    const [{ data: items }, { data: fiscal }] = await Promise.all([
+    setReturnEditorOpen(isDesktop);
+    setReturnItemsDetail([]);
+    setReturnCashConfirmOpen(false);
+    setReturnDetailError(null);
+    setReturnDetailLoad({ busy: true, error: null });
+    const [{ data: items, error: itemsError }, statusError] = await Promise.all([
       supabase.from('sale_return_items').select('*, articles(internal_ref, oem_ref)').eq('return_id', r.id),
-      supabase.from('sale_returns').select('vat_net_amount, vat_amount, vat_entry_id').eq('id', r.id).maybeSingle(),
+      refreshReturnStatus(r.id),
     ]);
+    if (request !== returnDetailRequest.current) return;
     setReturnItemsDetail(items || []);
-    if (fiscal) setReturnDetail(previous => previous?.id === r.id ? { ...previous, ...fiscal } : previous);
+    setReturnDetailLoad({ busy: false, error: itemsError?.message ?? statusError });
   };
+
+  const closeReturnDetail = () => {
+    returnDetailRequest.current++;
+    setReturnEditorOpen(false);
+    setReturnCashConfirmOpen(false);
+    setReturnDetail(null);
+  };
+
+  const showReturnError = (message: string) => {
+    setReturnDetailError(message);
+    if (isDesktop) error(message);
+  };
+
   const approveAsAvoir = async (r: SaleReturn) => {
-    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'approuver les retours'); return; }
+    if (returnWorkflowBusy || !can('edit_invoices')) return;
+    setReturnDetailError(null);
     setReturnWorkflowBusy(true);
-    const { error: e } = await supabase.rpc('approve_return_as_avoir', { p_return_id: r.id });
+    const { data, error: failure } = await supabase.rpc('approve_return_as_avoir', { p_return_id: r.id });
+    if (failure || data?.success !== true) {
+      setReturnWorkflowBusy(false);
+      showReturnError(failure?.message ?? data?.error ?? 'L’avoir n’a pas été créé.');
+      return;
+    }
+    const refreshError = await refreshReturnStatus(r.id);
     setReturnWorkflowBusy(false);
-    if (e) { error(e.message); return; }
-    success('Avoir créé — disponible sur le compte client');
-    loadTab(billPage, true);
-    setReturnDetail(prev => prev?.id === r.id ? { ...prev, status: 'approved', refund_method: 'avoir' } : prev);
+    if (refreshError) showReturnError(refreshError);
+    success('Avoir créé.');
+    if (r.sale_id && mobileInvoiceOpen && mobileEditingInvoiceId === r.sale_id) void reloadInvoice(r.sale_id);
+    else void loadTab(billPage, true);
   };
 
   const approveAsCash = async (r: SaleReturn) => {
-    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'approuver les retours'); return; }
-    setReturnCashConfirmOpen(false);
+    if (returnWorkflowBusy || !can('edit_invoices')) return;
+    setReturnDetailError(null);
     setReturnWorkflowBusy(true);
     const cashCtx = currentSite ? await getOperationalCashContext(currentSite.id) : null;
     if (cashCtx?.multiEnabled && !cashCtx.session) {
       setReturnWorkflowBusy(false);
-      error(missingSessionMessage(cashCtx, ''));
+      showReturnError(missingSessionMessage(cashCtx, ''));
       return;
     }
-    const { error: e } = await supabase.rpc('process_return_as_cash', cashCtx?.multiEnabled && cashCtx.session
+    const { data, error: failure } = await supabase.rpc('process_return_as_cash', cashCtx?.multiEnabled && cashCtx.session
       ? { p_return_id: r.id, p_session_id: cashCtx.session.id }
       : { p_return_id: r.id });
-    setReturnWorkflowBusy(false);
-    if (e) { error(e.message); return; }
-    success('Remboursement enregistré en caisse');
-    loadTab(billPage, true);
+    if (failure || data?.success !== true) {
+      setReturnWorkflowBusy(false);
+      showReturnError(failure?.message ?? data?.error ?? 'Le remboursement n’a pas été enregistré.');
+      return;
+    }
+    setReturnCashConfirmOpen(false);
     setReturnDetail(prev => prev?.id === r.id ? { ...prev, status: 'approved', refund_method: 'cash' } : prev);
+    const refreshError = await refreshReturnStatus(r.id);
+    setReturnWorkflowBusy(false);
+    if (refreshError) showReturnError(refreshError);
+    success('Remboursement enregistré en caisse.');
+    void loadTab(billPage, true);
   };
 
   const postVatReturn = async (r: SaleReturn) => {
+    if (returnWorkflowBusy || !can('manage_accounting')) return;
+    setReturnDetailError(null);
     setReturnWorkflowBusy(true);
     const { data, error: failure } = await supabase.rpc('post_vat_sale_return', { p_return_id: r.id });
     setReturnWorkflowBusy(false);
-    if (failure) { error(failure.message); return; }
+    if (failure || !data?.entry_id) {
+      showReturnError(failure?.message ?? 'La comptabilisation n’a pas été enregistrée.');
+      return;
+    }
     setReturnDetail(previous => previous?.id === r.id ? { ...previous, vat_entry_id: data.entry_id } : previous);
-    success('Avoir comptabilisé.');
+    success('Document comptabilisé.');
   };
 
   const vatReturnAction = returnDetail?.vat_net_amount != null && returnDetail.status === 'approved'
     ? returnDetail.vat_entry_id
-      ? <span className="text-xs text-neutral-600">Avoir comptabilisé</span>
+      ? <span className="text-xs font-medium">Comptabilisé</span>
       : can('manage_accounting') && <button type="button" className="btn-secondary" disabled={returnWorkflowBusy}
-          onClick={() => void postVatReturn(returnDetail)}>Comptabiliser l’avoir</button>
+          onClick={() => void postVatReturn(returnDetail)}>Comptabiliser</button>
     : null;
 
   const printReturn = () => {
     if (!returnDetail || !tenant) return;
     const isCredit = returnDetail.refund_method === 'avoir' || (returnDetail.vat_net_amount != null && returnDetail.status === 'approved');
-    const items = returnItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price),
+    const items = returnItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price),
       discount: returnDetail.vat_net_amount != null ? Number(i.quantity) * Number(i.unit_price) - Number(i.total) : 0 }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - i.discount, 0);
     const extra: { label: string; value: string }[] = [];
@@ -2197,42 +2233,17 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     return Object.entries(RETURN_STATUS).map(([v, s]) => ({ value: v, label: s.label }));
   }, [tab]);
 
-  const primaryAction = () => {
-    if (tab === 'quotes') {
-      if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; }
-      if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); }
-    } else if (tab === 'invoices') {
-      if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; }
-      openInvoiceEditor();
-    } else if (tab === 'returns') {
-      setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true);
-    } else {
-      setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true);
-    }
-  };
-  const primaryLabel = tab === 'quotes' ? 'Nouveau devis' : tab === 'invoices' ? 'Nouvelle facture' : tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir';
-
-  const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const newMenuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!newMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) setNewMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [newMenuOpen]);
   const newMenuItems = [
     { key: 'invoice', label: 'Nouvelle facture', icon: FilePlus, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; } openInvoiceEditor(); } },
     { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); } } },
-    { key: 'return', label: 'Nouveau retour', icon: RotateCcw, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; } setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); } },
-    { key: 'credit', label: 'Nouvel avoir', icon: CreditCard, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); } },
+    { key: 'return', label: 'Nouveau retour', icon: RotateCcw, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; } startReturn('return'); } },
+    { key: 'credit', label: 'Nouvel avoir', icon: CreditCard, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } startReturn('avoir'); } },
   ];
 
   const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
 
   const pageContent = (
-    <div className={isDesktop ? "h-full overflow-y-auto px-4 sm:px-5 lg:px-6 pb-6 space-y-3" : "space-y-3 pb-6"}>
+    <div className={isDesktop ? "billing-workspace h-full overflow-y-auto px-4 lg:px-5 pb-6 space-y-3" : "space-y-3 pb-6"}>
       {isDesktop && pendingRecovery && pendingRecovery.length > 0 && (
         <div className="mt-3 mb-1 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-900">
           <RotateCcw className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -2249,7 +2260,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         </div>
       )}
       {/* ── Header ───────────────────────────────────────────── */}
-      <div ref={stickyTopRef} className={`sticky top-0 z-20 pb-3 pt-4 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)] ${isDesktop ? '-mx-4 sm:-mx-5 lg:-mx-6 px-4 sm:px-5 lg:px-6' : '-mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
+      <div ref={stickyTopRef} className={`sticky top-0 z-20 pb-3 pt-4 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)] ${isDesktop ? '-mx-4 lg:-mx-5 px-4 lg:px-5' : '-mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
       <div className="md:hidden flex items-start justify-between">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Facturation</h1>
         <div className="shrink-0">
@@ -2263,8 +2274,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             if (!item) return null;
             const Icon = item.icon;
             return (
-              <button onClick={item.action} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors">
-                <Icon className="w-4 h-4" /><span className="hidden sm:inline">{item.label}</span>
+              <button onClick={item.action} className="inline-flex min-h-8 items-center gap-1.5 text-sm font-semibold text-[var(--w-text)] hover:underline">
+                <Icon className="w-4 h-4" /><span>{item.label}</span>
               </button>
             );
           })()}
@@ -2294,7 +2305,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           }`}
         >
           <Filter className="w-3.5 h-3.5" />
-          <span className="hidden md:inline">Filtres</span>
+          <span>Filtres</span>
         </button>
       </div>
 
@@ -2338,7 +2349,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         const ActionIcon = actionItem?.icon;
         const filtersActive = !!(statusFilter || customerFilter || dateFrom || dateTo || minAmount || maxAmount);
         return (
-          <div className="hidden md:flex items-end gap-6">
+          <div className="hidden md:flex items-end gap-4">
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
               <input
@@ -2355,7 +2366,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             </div>
             <button
               onClick={() => setFiltersOpen(true)}
-              className={`shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-xs font-semibold transition-colors ${
+              className={`shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-sm font-semibold transition-colors ${
                 filtersActive
                   ? 'text-brand-700 hover:text-brand-800'
                   : 'text-neutral-500 hover:text-neutral-800'
@@ -2382,7 +2393,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             {actionItem && ActionIcon && (
               <button
                 onClick={actionItem.action}
-                className="shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-sm font-semibold text-neutral-700 hover:text-brand-700 transition-colors"
               >
                 <ActionIcon className="w-4 h-4" /><span>{actionItem.label}</span>
               </button>
@@ -2393,18 +2404,18 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
       {/* ── Tabs ─────────────────────────────────────────────── */}
       {/* Mobile: centered, dividers, active top border + bg */}
-      <div className="md:hidden flex items-stretch text-[13px] font-bold overflow-x-auto no-scrollbar">
-          {TABS.map((t, i) => {
+      <div className="md:hidden grid grid-cols-4 items-stretch text-sm -mb-3">
+          {TABS.map(t => {
             const active = tab === t.key;
             return (
-              <div key={t.key} className="flex items-stretch shrink-0 min-w-[80px]">
-                {i > 0 && <div className="w-px bg-neutral-200 shrink-0" />}
+              <div key={t.key} className="flex min-w-0 items-stretch">
                 <button
+                  aria-pressed={active}
                   onClick={() => switchTab(t.key)}
-                  className={`flex-1 flex items-center justify-center py-2 px-3 transition-all ${
+                  className={`flex-1 flex items-center justify-center py-2.5 px-1 transition-colors ${
                     active
-                      ? 'text-neutral-900 bg-neutral-100/80 border-b-2 border-neutral-900 font-bold'
-                      : 'text-neutral-400 hover:text-neutral-600 border-b-2 border-transparent'
+                      ? 'text-[var(--w-text)] border-b-2 border-[var(--w-text)] font-semibold'
+                      : 'text-[var(--w-text-secondary)] border-b-2 border-transparent'
                   }`}
                 >
                   {t.label}
@@ -2414,33 +2425,34 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           })}
         </div>
       {/* Desktop: bigger, more impactful tab bar */}
-      <div className="hidden md:flex items-center gap-1 border-b border-neutral-200 -mb-3 overflow-x-auto no-scrollbar whitespace-nowrap">
+      <div className="hidden md:flex items-center gap-1 -mb-3">
           {TABS.map(t => {
             const active = tab === t.key;
             const count = counts[t.key];
             return (
               <button
                 key={t.key}
-                onClick={() => switchTab(t.key)}
-                className={`group shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+                aria-pressed={active}
+                  onClick={() => switchTab(t.key)}
+                className={`shrink-0 inline-flex items-center gap-2 px-3 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
                   active
-                    ? 'text-neutral-900 border-neutral-900'
+                    ? 'text-[var(--w-text)] border-[var(--w-text)]'
                     : 'text-neutral-500 border-transparent hover:text-neutral-800 hover:border-neutral-200'
                 }`}
               >
                 <span>{t.label}</span>
-                <span className={`num text-[11px] px-1.5 py-0.5 rounded-full min-w-[22px] text-center ${active ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-neutral-200'}`}>{count}</span>
+                <span className="num text-xs font-medium text-[var(--w-text-secondary)]">{count}</span>
               </button>
             );
           })}
         </div>
 
       {hasFilters && (
-        <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold uppercase tracking-wider">
-          {statusFilter && <span className="px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200">{statusOptions.find(o => o.value === statusFilter)?.label}</span>}
-          {customerFilter && <span className="px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 inline-flex items-center gap-1"><User className="w-3 h-3" />{customers.find(c => c.id === customerFilter)?.name}</span>}
-          {(dateFrom || dateTo) && <span className="px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 inline-flex items-center gap-1"><Calendar className="w-3 h-3" />{dateFrom || '…'} → {dateTo || '…'}</span>}
-          {(minAmount || maxAmount) && <span className="px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200">{minAmount || '0'} – {maxAmount || '∞'}</span>}
+        <div className="flex items-center gap-x-2 flex-wrap text-xs font-medium">
+          {statusFilter && <span className="pr-3 py-1 text-[var(--w-text-secondary)]">{statusOptions.find(o => o.value === statusFilter)?.label}</span>}
+          {customerFilter && <span className="pr-3 py-1 text-[var(--w-text-secondary)] inline-flex items-center gap-1"><User className="w-3 h-3" />{customers.find(c => c.id === customerFilter)?.name}</span>}
+          {(dateFrom || dateTo) && <span className="pr-3 py-1 text-[var(--w-text-secondary)] inline-flex items-center gap-1"><Calendar className="w-3 h-3" />{dateFrom || '…'} → {dateTo || '…'}</span>}
+          {(minAmount || maxAmount) && <span className="pr-3 py-1 text-[var(--w-text-secondary)]">{minAmount || '0'} – {maxAmount || '∞'}</span>}
           <button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
         </div>
       )}
@@ -2466,28 +2478,29 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             filteredQuotes.length === 0 ? (
               <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => { if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); } }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />Nouveau devis</button>} />
             ) : (
-              <div className={flashTab === 'quotes' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
-                <div className="md:hidden count-up">
+              <div>
+                <div className="md:hidden">
                   {filteredQuotes.map(q => {
                     const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
                     return (
-                      <button
+                      <div
                         key={q.id}
-                        onClick={() => openQuoteDetail(q)}
-                        className="w-full text-left px-1 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                        className="px-1 py-2.5 border-b border-[var(--w-separator-l)]"
                       >
+                        <button type="button" onClick={() => openQuoteDetail(q)} className="block w-full text-left hover:bg-[var(--w-hover)]">
                         {/* Line 1: customer only */}
-                        <div className="text-xs font-medium text-neutral-700 truncate">{q.customers?.name || 'Client comptoir'}</div>
+                        <div className="text-xs font-medium text-[var(--w-text)] truncate">{q.customers?.name || 'Client comptoir'}</div>
                         {/* Line 2: quote#, status, date */}
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                           <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{q.quote_number}</span>
-                          <span className={`text-[10px] font-semibold ${st.pill} shrink-0`}>{st.label}</span>
-                          <span className="text-xs text-neutral-400 shrink-0 num">{formatDate(q.created_at)}{q.valid_until ? ` · Valide ${formatDate(q.valid_until)}` : ''}</span>
+                          <span className={`text-xs font-semibold ${st.pill} shrink-0`}>{st.label}</span>
+                          <span className="text-xs text-[var(--w-text-secondary)] shrink-0 num">{formatDate(q.created_at)}{q.valid_until ? ` · Valide ${formatDate(q.valid_until)}` : ''}</span>
                         </div>
+                        </button>
                         {/* Line 3: actions + amount */}
                         <div className="flex items-center gap-1 mt-1.5">
                           {q.status === 'accepted' && (
-                            <button onClick={e => { e.stopPropagation(); openConvert(q); }} className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-brand-600 text-white text-[10px] font-bold hover:bg-brand-700"><ArrowRight className="w-3 h-3" />Facturer</button>
+                            <button onClick={() => openConvert(q)} className="shrink-0 inline-flex items-center gap-1 py-1 text-xs font-semibold text-[var(--w-text)] hover:underline"><ArrowRight className="w-3 h-3" />Facturer</button>
                           )}
                           {q.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeQuoteStatus(q, 'sent'); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Marquer envoyé"><CheckCircle className="w-4 h-4" /></button>}
                           {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={e => { e.stopPropagation(); setQuoteToCancel(q); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-red-500 transition" title="Refuser"><X className="w-4 h-4" /></button>}
@@ -2495,30 +2508,30 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                           <div className="w-px h-5 bg-neutral-200 mx-1" />
                           <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(q.total)}</span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
                 <div className="hidden md:block">
-                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                    <span className="shrink-0 w-28">N° Devis</span>
-                    <span className="shrink-0 hidden lg:inline w-24">Date</span>
+                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-xs font-semibold text-[var(--w-text-secondary)]">
+                    <span className="shrink-0 w-[6.5rem]">N° Devis</span>
+                    <span className="shrink-0 hidden billing-extra w-24">Date</span>
                     <span className="flex-1 min-w-0">Client</span>
                     <span className="shrink-0 w-20 text-right">Statut</span>
-                    <span className="shrink-0 w-28 text-right">Montant</span>
+                    <span className="shrink-0 w-[6.5rem] text-right">Montant</span>
                     <span className="shrink-0 w-16 text-center">Actions</span>
                   </div>
                   {filteredQuotes.map(q => {
                     const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
                     return (
-                      <div key={q.id} onClick={() => openQuoteDetail(q)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-[var(--w-surface-el)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
-                        <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{q.quote_number}</span>
-                        <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-24">{formatDate(q.created_at)}</span>
-                        <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{q.customers?.name || <span className="text-slate-400">—</span>}</span>
-                        <span className={`text-[9px] font-bold uppercase ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
-                        <span className="text-[12px] font-bold text-slate-900 tabular-nums shrink-0 w-28 text-right">{formatFCFA(q.total)}</span>
-                        <div className="flex items-center gap-0.5 shrink-0 w-16 justify-center" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => openQuoteDetail(q)} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
+                      <div key={q.id} onClick={() => openQuoteDetail(q)} className="flex items-center gap-3 px-2 py-2.5 hover:bg-[var(--w-hover)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
+                        <span className="doc-number text-sm font-semibold text-[var(--w-text)] shrink-0 w-[6.5rem] truncate">{q.quote_number}</span>
+                        <span className="text-xs text-[var(--w-text-secondary)] shrink-0 tabular-nums hidden billing-extra w-24">{formatDate(q.created_at)}</span>
+                        <span className="text-sm text-[var(--w-text)] truncate flex-1 min-w-0">{q.customers?.name || <span className="text-slate-400">—</span>}</span>
+                        <span className={`text-xs leading-tight font-semibold ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
+                        <span className="text-sm font-semibold text-[var(--w-text)] tabular-nums shrink-0 w-[6.5rem] text-right">{formatFCFA(q.total)}</span>
+                        <div className="flex items-center gap-0.5 shrink-0 w-[4.5rem] justify-center" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => openQuoteDetail(q)} className="text-xs font-medium text-[var(--w-text-secondary)] hover:underline" title="Voir">Voir</button>
                           {q.status === 'accepted' && <button onClick={() => openConvert(q)} className="p-1 rounded hover:bg-brand-50 text-brand-700 transition" title="Convertir"><ArrowRight className="w-3.5 h-3.5" /></button>}
                           {q.status === 'draft' && <button onClick={() => changeQuoteStatus(q, 'sent')} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Envoyé"><CheckCircle className="w-3.5 h-3.5" /></button>}
                           {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={() => setQuoteToCancel(q)} className="p-1 rounded hover:bg-[var(--w-hover)] text-red-500 transition" title="Refuser"><X className="w-3.5 h-3.5" /></button>}
@@ -2536,25 +2549,26 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               <EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />Nouvelle facture</button>} />
             ) : (
               <>
-                <div className="md:hidden count-up">
+                <div className="md:hidden">
                   {filteredInvoices.map(inv => {
                     const st = invoiceStatus(inv);
                     const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
                     return (
-                      <button
+                      <div
                         key={inv.id}
-                        onClick={() => openInvoiceForView(inv)}
-                        className="w-full text-left px-1 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                        className="px-1 py-2.5 border-b border-[var(--w-separator-l)]"
                       >
+                        <button type="button" onClick={() => openInvoiceForView(inv)} className="block w-full text-left hover:bg-[var(--w-hover)]">
                         {/* Line 1: customer only */}
-                        <div className="text-xs font-medium text-neutral-700 truncate">{inv.customers?.name || 'Client comptoir'}</div>
+                        <div className="text-xs font-medium text-[var(--w-text)] truncate">{inv.customers?.name || 'Client comptoir'}</div>
                         {/* Line 2: invoice#, status, date */}
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                           <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{inv.sale_number}</span>
-                          <span className={`text-[10px] font-semibold ${st.pill} shrink-0`}>{st.label}</span>
-                          {inv.accounting_status === 'accounted' && <span className="text-[9px] font-bold text-neutral-500 shrink-0">C</span>}
-                          <span className="text-xs text-neutral-400 shrink-0 num">{formatDateTime(inv.created_at)}</span>
+                          <span className={`text-xs font-semibold ${st.pill} shrink-0`}>{st.label}</span>
+                          {inv.accounting_status === 'accounted' && <span className="text-xs text-[var(--w-text-secondary)]">Comptabilisée</span>}
+                          <span className="text-xs text-[var(--w-text-secondary)] shrink-0 num">{formatDateTime(inv.created_at)}</span>
                         </div>
+                        </button>
                         {/* Line 3: icons + paid + amount */}
                         <div className="flex items-center gap-1 mt-1.5">
                           {inv.customers && <button onClick={e => { e.stopPropagation(); quickWhatsApp(inv); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>}
@@ -2564,38 +2578,40 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                           <div className="w-px h-5 bg-neutral-200 mx-1" />
                           <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(inv.total)}</span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
                 <div className="hidden md:block">
-                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                    <span className="shrink-0 w-28">N° Facture</span>
-                    <span className="shrink-0 hidden lg:inline w-32">Date</span>
+                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-xs font-semibold text-[var(--w-text-secondary)]">
+                    <span className="shrink-0 w-[6.5rem]">N° Facture</span>
+                    <span className="shrink-0 hidden billing-extra w-[7.5rem]">Date</span>
                     <span className="flex-1 min-w-0">Client</span>
-                    <span className="shrink-0 w-28 text-right">Total</span>
-                    <span className="shrink-0 w-24 text-right hidden lg:inline">Payé</span>
-                    <span className="shrink-0 w-24 text-right hidden lg:inline">Solde</span>
-                    <span className="shrink-0 w-20 text-right">Statut</span>
-                    <span className="shrink-0 w-16 text-center">Actions</span>
+                    <span className="shrink-0 w-[6.5rem] text-right">Total</span>
+                    <span className="shrink-0 w-[5.5rem] text-right hidden billing-extra">Payé</span>
+                    <span className="shrink-0 w-[5.5rem] text-right hidden billing-extra">Solde</span>
+                    <span className="shrink-0 w-24 text-right">Statut</span>
+                    <span className="shrink-0 w-[4.5rem] text-center">Actions</span>
                   </div>
                   {filteredInvoices.map(inv => {
                     const st = invoiceStatus(inv);
                     const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
                     return (
-                      <div key={inv.id} onClick={() => openInvoiceForView(inv)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-[var(--w-surface-el)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
-                        <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{inv.sale_number}</span>
-                        <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-32">{formatDateTime(inv.created_at)}</span>
-                        <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{inv.customers?.name || <span className="text-slate-400">Client comptoir</span>}</span>
-                        <span className="text-[12px] font-bold text-slate-900 tabular-nums shrink-0 w-28 text-right">{formatFCFA(inv.total)}</span>
-                        <span className="text-[11px] text-emerald-700 tabular-nums shrink-0 w-24 text-right hidden lg:inline">{formatFCFA(inv.paid)}</span>
-                        <span className="text-[11px] tabular-nums shrink-0 w-24 text-right hidden lg:inline">{solde > 0 ? <span className="text-amber-700 font-bold">{formatFCFA(solde)}</span> : <span className="text-slate-400">—</span>}</span>
-                        <span className={`text-[9px] font-bold uppercase ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
-                        {inv.accounting_status === 'accounted' && <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200 shrink-0 hidden xl:inline">OK</span>}
-                        <div className="flex items-center gap-0.5 shrink-0 w-16 justify-center" onClick={e => e.stopPropagation()}>
+                      <div key={inv.id} onClick={() => openInvoiceForView(inv)} className="flex items-center gap-3 px-2 py-2.5 hover:bg-[var(--w-hover)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
+                        <span className="doc-number text-sm font-semibold text-[var(--w-text)] shrink-0 w-[6.5rem] truncate">{inv.sale_number}</span>
+                        <span className="text-xs text-[var(--w-text-secondary)] shrink-0 tabular-nums hidden billing-extra w-[7.5rem]">{formatDateTime(inv.created_at)}</span>
+                        <span className="text-sm text-[var(--w-text)] truncate flex-1 min-w-0">{inv.customers?.name || <span className="text-slate-400">Client comptoir</span>}</span>
+                        <span className="text-sm font-semibold text-[var(--w-text)] tabular-nums shrink-0 w-[6.5rem] text-right">{formatFCFA(inv.total)}</span>
+                        <span className="text-[11px] text-emerald-700 tabular-nums shrink-0 w-[5.5rem] text-right hidden billing-extra">{formatFCFA(inv.paid)}</span>
+                        <span className="text-[11px] tabular-nums shrink-0 w-[5.5rem] text-right hidden billing-extra">{solde > 0 ? <span className="text-amber-700 font-bold">{formatFCFA(solde)}</span> : <span className="text-slate-400">—</span>}</span>
+                        <div className="shrink-0 w-24 text-right">
+                          <div className={`text-xs leading-tight font-semibold ${st.pill}`}>{st.label}</div>
+                          {inv.accounting_status === 'accounted' && <div className="text-xs mt-0.5 text-[var(--w-text-secondary)]">Comptabilisée</div>}
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0 w-[4.5rem] justify-center" onClick={e => e.stopPropagation()}>
                           {inv.customers && <button onClick={() => quickWhatsApp(inv)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>}
                           <button onClick={() => quickCopy(inv)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => openInvoiceForView(inv)} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
+                          <button onClick={() => openInvoiceForView(inv)} className="text-xs font-medium text-[var(--w-text-secondary)] hover:underline" title="Voir">Voir</button>
                         </div>
                       </div>
                     );
@@ -2611,11 +2627,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 icon={tab === 'returns' ? RotateCcw : Wallet}
                 title={tab === 'returns' ? 'Aucun retour' : 'Aucun avoir'}
                 description={tab === 'returns' ? 'Les retours clients apparaîtront ici.' : 'Les avoirs clients apparaîtront ici.'}
-                action={<button onClick={() => { if (tab === 'returns') { setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); } else { setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); } setReturnLines([]); setReturnOpen(true); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />{tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}</button>}
+                action={<button onClick={() => startReturn(tab === 'returns' ? 'return' : 'avoir')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />{tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}</button>}
               />
             ) : (
-              <div className={flashTab === 'returns' && tab === 'returns' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
-                <div className="md:hidden count-up">
+              <div>
+                <div className="md:hidden">
                   {(tab === 'returns' ? filteredReturns : filteredCredits).map(r => {
                     const st = tab === 'credits' ? creditStatus(r) : (RETURN_STATUS[r.status] || RETURN_STATUS.pending);
                     const isCredit = tab === 'credits';
@@ -2625,17 +2641,17 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                       <button
                         key={r.id}
                         onClick={() => openReturnDetail(r)}
-                        className="w-full text-left px-1 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                        className="w-full text-left px-1 py-2.5 border-b border-neutral-100 hover:bg-[var(--w-hover)] transition-colors"
                       >
         {/* Line 1: customer only */}
-                        <div className="text-xs font-medium text-neutral-700 truncate">{r.customers?.name || 'Client comptoir'}</div>
+                        <div className="text-xs font-medium text-[var(--w-text)] truncate">{r.customers?.name || 'Client comptoir'}</div>
                         {/* Line 2: doc# + status */}
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{r.return_number}</span>
-                          <span className={`text-[10px] font-semibold ${st.pill} shrink-0`}>{st.label}</span>
+                          <span className={`text-xs font-semibold ${st.pill} shrink-0`}>{st.label}</span>
                         </div>
                         {/* Line 3: date + sale ref */}
-                        <div className="text-xs text-neutral-400 num mt-0.5 truncate">
+                        <div className="text-xs text-[var(--w-text-secondary)] num mt-0.5 truncate">
                           {formatDateTime(r.created_at)}{r.sales?.sale_number && <> · Vente {r.sales.sale_number}</>}
                         </div>
                         {/* Line 4: balance + amount */}
@@ -2650,14 +2666,14 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   })}
                 </div>
                 <div className="hidden md:block">
-                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                    <span className="shrink-0 w-28">N° Document</span>
-                    <span className="shrink-0 hidden lg:inline w-32">Date</span>
+                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-xs font-semibold text-[var(--w-text-secondary)]">
+                    <span className="shrink-0 w-[6.5rem]">N° Document</span>
+                    <span className="shrink-0 hidden billing-extra w-[7.5rem]">Date</span>
                     <span className="flex-1 min-w-0">Client</span>
-                    {tab === 'returns' && <span className="hidden lg:inline shrink-0 w-12 text-center">Stock</span>}
-                    {tab === 'credits' && <span className="hidden lg:inline shrink-0 w-24 text-right">Utilisé</span>}
+                    {tab === 'returns' && <span className="hidden billing-extra shrink-0 w-12 text-center">Stock</span>}
+                    {tab === 'credits' && <span className="hidden billing-extra shrink-0 w-[5.5rem] text-right">Utilisé</span>}
                     <span className="shrink-0 w-20 text-right">Statut</span>
-                    <span className="shrink-0 w-28 text-right">Montant</span>
+                    <span className="shrink-0 w-[6.5rem] text-right">Montant</span>
                     <span className="shrink-0 w-12 text-center">Action</span>
                   </div>
                   {(tab === 'returns' ? filteredReturns : filteredCredits).map(r => {
@@ -2665,16 +2681,16 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                     const isCredit = tab === 'credits';
                     const used = Number(r.credit_used || 0);
                     return (
-                      <div key={r.id} onClick={() => openReturnDetail(r)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-[var(--w-surface-el)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
-                        <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{r.return_number}</span>
-                        <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-32">{formatDateTime(r.created_at)}</span>
-                        <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{r.customers?.name || <span className="text-slate-400">—</span>}</span>
-                        {tab === 'returns' && <span className="hidden lg:inline shrink-0 w-12 text-center">{r.restock ? <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Oui</span> : <span className="text-slate-400 text-[10px]">Non</span>}</span>}
-                        {tab === 'credits' && <span className="hidden lg:inline shrink-0 w-24 text-right text-[11px] text-slate-600 tabular-nums">{formatFCFA(used)}</span>}
-                        <span className={`text-[9px] font-bold uppercase ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
-                        <span className={`text-[12px] font-bold tabular-nums shrink-0 w-28 text-right ${isCredit ? 'text-neutral-800' : 'text-red-700'}`}>{isCredit ? '' : '-'}{formatFCFA(r.total)}</span>
+                      <div key={r.id} onClick={() => openReturnDetail(r)} className="flex items-center gap-3 px-2 py-2.5 hover:bg-[var(--w-hover)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
+                        <span className="doc-number text-sm font-semibold text-[var(--w-text)] shrink-0 w-[6.5rem] truncate">{r.return_number}</span>
+                        <span className="text-xs text-[var(--w-text-secondary)] shrink-0 tabular-nums hidden billing-extra w-[7.5rem]">{formatDateTime(r.created_at)}</span>
+                        <span className="text-sm text-[var(--w-text)] truncate flex-1 min-w-0">{r.customers?.name || <span className="text-slate-400">—</span>}</span>
+                        {tab === 'returns' && <span className="hidden billing-extra shrink-0 w-12 text-center">{r.restock ? <span className="text-xs text-[var(--w-text)]">Oui</span> : <span className="text-slate-400 text-[10px]">Non</span>}</span>}
+                        {tab === 'credits' && <span className="hidden billing-extra shrink-0 w-[5.5rem] text-right text-[11px] text-slate-600 tabular-nums">{formatFCFA(used)}</span>}
+                        <span className={`text-xs leading-tight font-semibold ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
+                        <span className={`text-[12px] font-bold tabular-nums shrink-0 w-[6.5rem] text-right ${isCredit ? 'text-neutral-800' : 'text-red-700'}`}>{isCredit ? '' : '-'}{formatFCFA(r.total)}</span>
                         <div className="flex items-center shrink-0 w-12 justify-center">
-                          <button onClick={e => { e.stopPropagation(); openReturnDetail(r); }} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
+                          <button onClick={e => { e.stopPropagation(); openReturnDetail(r); }} className="text-xs font-medium text-[var(--w-text-secondary)] hover:underline" title="Voir">Voir</button>
                         </div>
                       </div>
                     );
@@ -2694,7 +2710,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 <button onClick={() => setBillPage(p => Math.max(0, p - 1))} disabled={billPage === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)] disabled:opacity-30 disabled:cursor-not-allowed">
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
-                <span className="px-3 py-1 rounded-lg text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200">{billPage + 1} / {Math.max(1, Math.ceil(billTotalCount / PAGE_SIZE))}</span>
+                <span className="px-3 py-1 rounded-lg text-xs font-semibold text-[var(--w-text)]">{billPage + 1} / {Math.max(1, Math.ceil(billTotalCount / PAGE_SIZE))}</span>
                 <button onClick={() => setBillPage(p => p + 1)} disabled={!billHasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)] disabled:opacity-30 disabled:cursor-not-allowed">
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -2742,6 +2758,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           minW={480}
           minH={320}
           background
+          startMaximized
           groupId={BILLING_GROUP}
         >
           <div className="flex flex-col h-full min-h-0">
@@ -2778,7 +2795,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           icon={<FileText className="w-4 h-4" />}
           onClose={() => closeInvoiceWindow(desc.windowId)}
           siteId={desc.siteId || undefined}
-          initialRect={{ x: 60 + (invoiceWindows.size - 1) * 30, y: 20 + (invoiceWindows.size - 1) * 20, w: Math.min(1400, window.innerWidth - 100), h: Math.min(900, window.innerHeight - 60) }}
+          startMaximized
           minW={600}
           minH={400}
           groupId={BILLING_GROUP}
@@ -2806,7 +2823,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             onOpenPay={(inv) => openPay(inv)}
             onOpenCredit={can('edit_invoices') ? (inv) => openCreditApply(inv) : undefined}
             onCancelInvoice={(inv) => cancelInvoice(inv)}
-            onComptabiliser={(inv) => comptabiliserFromEditor(inv)}
+            onComptabiliser={can('manage_accounting') ? comptabiliserFromEditor : undefined}
+            accountingBusy={accountingBusy}
             onCopyLink={(inv) => copyInvoiceLink(inv)}
             onWhatsApp={(inv) => sendInvoiceWhatsApp(inv)}
             onReturnTransform={async (config, saleId) => {
@@ -2890,9 +2908,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           />
         </DesktopWindow>
       ))}
-      {mobileInvoiceOpen && !isDesktop && mobileInvoiceMode === 'view' && (() => {
+      {visible && mobileInvoiceOpen && !isDesktop && mobileInvoiceMode === 'view' && (() => {
         const listedInvoice = invoices[invoiceNavIdx];
-        const viewInv = invoiceDetail?.id === listedInvoice?.id ? invoiceDetail : listedInvoice;
+        const viewInv = invoiceDetail?.id === mobileEditingInvoiceId ? invoiceDetail : listedInvoice?.id === mobileEditingInvoiceId ? listedInvoice : null;
         if (!viewInv) return null;
         const invDue = Math.max(0, Number(viewInv.total) - Number(viewInv.paid));
         const isCancelled = viewInv.status === 'cancelled';
@@ -2913,6 +2931,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             onClose={closeInvoiceEditor}
             onEdit={!isCancelled && !isAccounted ? () => openInvoiceForEdit(viewInv) : undefined}
             onApplyCredit={can('edit_invoices') && viewInv.customer_id && invDue > 0 && !isCancelled ? () => openCreditApply(viewInv) : undefined}
+            onReturn={can('edit_invoices') && !isCancelled ? () => startReturn('return', viewInv) : undefined}
             onPay={invDue > 0 && !isCancelled ? () => openPay(viewInv) : undefined}
             onPrint={() => {
               const pitems = invoiceEditorItems.filter(i => i.name.trim()).map(i => ({
@@ -2925,7 +2944,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 docLabel: 'FACTURE',
                 docNumber: viewInv.sale_number,
                 docDate: invoiceForm.doc_date || new Date(viewInv.created_at).toLocaleDateString('fr-FR'),
-                customer: (invoiceDetail || viewInv).customers ? { name: (invoiceDetail || viewInv).customers.name, phone: ((invoiceDetail || viewInv).customers as any).phone || undefined, address: ((invoiceDetail || viewInv).customers as any).address || undefined } : null,
+                customer: viewInv.customers ? {
+                  name: viewInv.customers.name,
+                  phone: viewInv.customers.phone || undefined,
+                  address: viewInv.customers.address || undefined,
+                } : null,
                 items: pitems, subtotal: psubtotal, discount: Number(viewInv.discount ?? 0), vat: viewInv, total: Number(viewInv.total),
                 payments: invoicePayList.map(p => ({ method_name: p.method_name, amount: p.amount })),
                 paid: Number(viewInv.paid),
@@ -2939,23 +2962,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             }}
             onCopyLink={() => copyInvoiceLink(viewInv)}
             onWhatsApp={viewInv.customers ? () => sendInvoiceWhatsApp(viewInv) : undefined}
-            onComptabiliser={can('manage_accounting') && !isAccounted && !isCancelled ? async () => {
-              if (accountingBusy) return;
-              setAccountingBusy(true);
-              const { error: rpcErr } = await supabase.rpc('comptabiliser_vente', { p_sale_id: viewInv.id });
-              setAccountingBusy(false);
-              if (rpcErr) { error(rpcErr.message); return; }
-              success('Facture comptabilisée');
-              setInvoices(prev => prev.map(inv => inv.id === viewInv.id ? { ...inv, accounting_status: 'accounted' } : inv));
-              closeInvoiceEditor();
-              loadTab(billPage, true);
-            } : undefined}
+            onComptabiliser={can('manage_accounting') && !isAccounted && !isCancelled ? () => comptabiliserFromEditor(viewInv) : undefined}
             accountingBusy={accountingBusy}
             onCancel={!isCancelled && !isAccounted ? () => setCancelTarget(viewInv) : undefined}
           />
         );
       })()}
-      {mobileInvoiceOpen && !isDesktop && mobileInvoiceMode !== 'view' && (
+      {visible && mobileInvoiceOpen && !isDesktop && mobileInvoiceMode !== 'view' && (
         <MobileBillingWizard
           open={true}
           onClose={closeInvoiceEditor}
@@ -3103,12 +3116,12 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       )}
 
       {/* ── Return full-screen viewer ──────────────────────────────── */}
-      {returnEditorOpen && returnDetail && (
+      {visible && isDesktop && returnEditorOpen && returnDetail && (
         <DesktopWindow
           id="billing-return-viewer"
-          title={`Retour ${returnDetail.return_number || ''}`}
+          title={`${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}`}
           icon={<RotateCcw className="w-4 h-4" />}
-          onClose={() => { setReturnEditorOpen(false); setReturnDetail(null); }}
+          onClose={closeReturnDetail}
           initialRect={{ x: 100, y: 50, w: Math.min(1200, window.innerWidth - 140), h: Math.min(800, window.innerHeight - 100) }}
           minW={500}
           minH={350}
@@ -3147,14 +3160,14 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           subtotal={returnItemsDetail.reduce((s: number, i: any) => s + Number(i.quantity) * Number(i.unit_price), 0)}
           saving={false}
           onSave={() => {}}
-          onClose={() => { setReturnEditorOpen(false); setReturnDetail(null); }}
+          onClose={closeReturnDetail}
           editingId={returnDetail.id}
           documentNumber={returnDetail.return_number}
           documentStatus={returnDetail.status}
           docSettings={docSettings}
           onPrint={printReturn}
-          onRefundCash={returnDetail.status === 'pending' ? () => setReturnCashConfirmOpen(true) : undefined}
-          onApproveAvoir={returnDetail.status === 'pending' ? () => approveAsAvoir(returnDetail) : undefined}
+          onRefundCash={returnDetail.status === 'pending' && can('edit_invoices') ? () => { setReturnDetailError(null); setReturnCashConfirmOpen(true); } : undefined}
+          onApproveAvoir={returnDetail.status === 'pending' && returnDetail.customer_id && can('edit_invoices') ? () => approveAsAvoir(returnDetail) : undefined}
         />
         </DesktopWindow>
       )}
@@ -3191,7 +3204,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   id: i.id,
                   name: i.name,
                   internal_ref: i.articles?.internal_ref || null,
-                  oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null,
+                  oem_ref: i.articles?.oem_ref || null,
                   quantity: Number(i.quantity),
                   unit_price: Number(i.unit_price),
                   discount: Number(i.discount ?? 0),
@@ -3340,187 +3353,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         );
       })()}
 
-      {/* ── Invoice detail ───────────────────────────────────── */}
-      <DocPanel open={!!invoiceDetail && !mobileInvoiceOpen && invoiceWindows.size === 0} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
-        footer={<>
-          <div className="flex gap-1.5 mr-auto">
-            {invoiceDetail && invoiceDetail.status !== 'cancelled' && invoiceDetail.accounting_status !== 'accounted' && (
-              <button onClick={() => openInvoiceForEdit(invoiceDetail)} className="btn-icon text-brand-700 hover:bg-brand-50" title="Modifier"><Pencil className="w-4 h-4" /></button>
-            )}
-            {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Coins className="w-4 h-4" /></button>}
-            {invoiceDetail && invoiceDue > 0 && invoiceDetail.customer_id && invoiceDetail.status !== 'cancelled' && <button onClick={() => openCreditApply()} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
-            {invoiceDetail && invoiceDetail.accounting_status !== 'accounted' && invoiceDetail.status !== 'cancelled' && can('manage_accounting') && (
-              <button onClick={comptabiliserFacture} disabled={accountingBusy} className="btn-icon text-teal-500 hover:bg-[var(--w-hover)]" title="Comptabiliser">
-                {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-              </button>
-            )}
-            {invoiceDetail && invoiceDetail.accounting_status === 'accounted' && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />Comptabilisé</span>
-            )}
-          </div>
-          <button onClick={() => copyInvoiceLink()} className="btn-icon" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
-          {invoiceDetail?.customers && (
-            <button onClick={() => sendInvoiceWhatsApp()} className="btn-icon" title="WhatsApp" style={{ color: '#25D366' }}><MessageCircle className="w-4 h-4" /></button>
-          )}
-          <button onClick={() => setInvoiceDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          <button onClick={printInvoice} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
-        </>}>
-        {invoiceDetail && (() => {
-          const st = invoiceStatus(invoiceDetail);
-          const slimStatus: DocStatusConfig = {
-            label: st.label,
-            color: invoiceDetail.status === 'cancelled' ? 'rose' : invoiceDetail.paid >= invoiceDetail.total ? 'emerald' : Number(invoiceDetail.paid) > 0 ? 'amber' : 'slate',
-          };
-          return (
-            <div className="space-y-4">
-              <DocSlimHeader
-                status={slimStatus}
-                customerName={invoiceDetail.customers?.name ?? null}
-                date={(invoiceDetail as any).doc_header?.doc_date || formatDateTime(invoiceDetail.created_at)}
-                docHeader={(invoiceDetail as any).doc_header ? { ...(invoiceDetail as any).doc_header, created_at: invoiceDetail.created_at } : null}
-              />
-              <div className="space-y-3">
-                <DocSectionTitle title="Articles" count={invoiceItems.length} />
-                <DocItems items={invoiceItems.map(i => ({
-                  id: i.id,
-                  name: i.name,
-                  internal_ref: i.articles?.internal_ref || null,
-                  oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null,
-                  quantity: Number(i.quantity),
-                  unit_price: Number(i.unit_price),
-                  discount: Number(i.discount ?? 0),
-                  total: Number(i.total),
-                }) satisfies DocItem)} />
-                {(() => {
-                  const subtotal = invoiceItems.reduce((s, i) => s + Number(i.total), 0);
-                  const paidTotal = invoicePays.reduce((s, p) => s + Number(p.amount), 0);
-                  const due = Math.max(0, Number(invoiceDetail.total) - paidTotal);
-                  return (
-                    <DocTotals
-                      subtotal={subtotal}
-                      discount={Number(invoiceDetail.discount ?? 0)}
-                      vat={invoiceDetail}
-                      total={Number(invoiceDetail.total)}
-                      paid={paidTotal > 0 ? paidTotal : undefined}
-                      remaining={due > 0 ? due : undefined}
-                    />
-                  );
-                })()}
-                {invoicePays.length > 0 && (
-                  <div className="space-y-2">
-                    <DocSectionTitle title="Paiements" count={invoicePays.length} />
-                    <DocPayments
-                      payments={invoicePays.map(p => ({ method_name: p.method_name, amount: Number(p.amount), paid_at: p.created_at }) satisfies DocPayment)}
-                      formatDate={formatDateTime}
-                    />
-                  </div>
-                )}
-                {invoiceIpmVente && (
-                  <div className="space-y-2 mt-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-teal-700 flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5" />Suivi IPM</h4>
-                    <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Organisme</span>
-                        <span className="font-semibold text-slate-900">{invoiceIpmVente.ipm_organismes?.nom || '—'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Taux de prise en charge</span>
-                        <span className="font-semibold text-slate-900">{invoiceIpmVente.taux_prise_en_charge ? `${invoiceIpmVente.taux_prise_en_charge}%` : '—'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Part bénéficiaire</span>
-                        <span className="font-mono font-bold text-slate-900">{formatFCFA(Number(invoiceIpmVente.part_client))}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Part bénéficiaire payée</span>
-                        <span className="font-mono font-bold text-emerald-700">{invoiceIpmVente.part_beneficiaire_payee != null ? formatFCFA(Number(invoiceIpmVente.part_beneficiaire_payee)) : '—'}</span>
-                      </div>
-                      <hr className="border-teal-200" />
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Part IPM attendue</span>
-                        <span className="font-mono font-bold text-teal-700">{formatFCFA(Number(invoiceIpmVente.part_ipm))}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Montant accepté IPM</span>
-                        <span className="font-mono font-bold text-teal-700">{invoiceIpmVente.montant_ipm_accepte != null ? formatFCFA(Number(invoiceIpmVente.montant_ipm_accepte)) : '—'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Montant payé IPM</span>
-                        <span className="font-mono font-bold text-emerald-700">{invoiceIpmVente.montant_ipm_paye != null ? formatFCFA(Number(invoiceIpmVente.montant_ipm_paye)) : '—'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Montant rejeté</span>
-                        <span className={`font-mono font-bold ${Number(invoiceIpmVente.montant_rejete) > 0 ? 'text-red-600' : 'text-slate-500'}`}>{invoiceIpmVente.montant_rejete != null ? formatFCFA(Number(invoiceIpmVente.montant_rejete)) : '—'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Écart IPM</span>
-                        <span className={`font-mono font-bold ${Number(invoiceIpmVente.ecart_ipm) !== 0 ? 'text-amber-600' : 'text-slate-500'}`}>{invoiceIpmVente.ecart_ipm != null ? formatFCFA(Number(invoiceIpmVente.ecart_ipm)) : '—'}</span>
-                      </div>
-                      {invoiceIpmVente.motif_rejet && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">Motif du rejet</span>
-                          <span className="font-semibold text-red-600">{invoiceIpmVente.motif_rejet}</span>
-                        </div>
-                      )}
-                      <hr className="border-teal-200" />
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Statut IPM</span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          invoiceIpmVente.statut === 'payee' ? 'bg-emerald-100 text-emerald-700' :
-                          invoiceIpmVente.statut === 'validee' ? 'bg-neutral-100 text-neutral-800' :
-                          invoiceIpmVente.statut === 'rejet_partiel' || invoiceIpmVente.statut === 'rejet_total' ? 'bg-red-100 text-red-700' :
-                          invoiceIpmVente.statut === 'ecart_a_regulariser' ? 'bg-amber-100 text-amber-700' :
-                          invoiceIpmVente.statut === 'contestee' ? 'bg-neutral-100 text-neutral-800' :
-                          invoiceIpmVente.statut === 'regularisee' ? 'bg-emerald-100 text-emerald-700' :
-                          'bg-slate-100 text-slate-600'
-                        }`}>{
-                          invoiceIpmVente.statut === 'en_attente' ? 'En attente' :
-                          invoiceIpmVente.statut === 'bordereau' ? 'Bordereau' :
-                          invoiceIpmVente.statut === 'validee' ? 'Validée' :
-                          invoiceIpmVente.statut === 'payee' ? 'Payée' :
-                          invoiceIpmVente.statut === 'rejet_partiel' ? 'Rejet partiel' :
-                          invoiceIpmVente.statut === 'rejet_total' ? 'Rejet total' :
-                          invoiceIpmVente.statut === 'ecart_a_regulariser' ? 'Écart à régulariser' :
-                          invoiceIpmVente.statut === 'contestee' ? 'Contestée' :
-                          invoiceIpmVente.statut === 'regularisee' ? 'Régularisée' :
-                          invoiceIpmVente.statut || '—'
-                        }</span>
-                      </div>
-                      {invoiceIpmVente.action_regularisation && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">Action de régularisation</span>
-                          <span className="font-semibold text-amber-700">{
-                            invoiceIpmVente.action_regularisation === 'refacturer_beneficiaire' ? 'Refacturer au bénéficiaire' :
-                            invoiceIpmVente.action_regularisation === 'perte_pharmacie' ? 'Perte / remise pharmacie' :
-                            invoiceIpmVente.action_regularisation === 'contester_ipm' ? 'Contester auprès de l\'IPM' :
-                            invoiceIpmVente.action_regularisation === 'corriger_renvoyer' ? 'Corriger et renvoyer' :
-                            invoiceIpmVente.action_regularisation === 'avoir_ajustement' ? 'Avoir / ajustement' :
-                            invoiceIpmVente.action_regularisation === 'regularise' ? 'Régularisé' :
-                            invoiceIpmVente.action_regularisation
-                          }</span>
-                        </div>
-                      )}
-                      {invoiceIpmVente.date_retour_ipm && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">Date retour IPM</span>
-                          <span className="font-semibold text-slate-900">{formatDate(invoiceIpmVente.date_retour_ipm)}</span>
-                        </div>
-                      )}
-                      {invoiceIpmVente.reference_reglement && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">Réf. règlement</span>
-                          <span className="font-semibold text-slate-900">{invoiceIpmVente.reference_reglement}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-      </DocPanel>
-
       {/* ── Register payment modal ───────────────────────────── */}
       {payOpen && invoiceDetail && createPortal(
         <div className="fixed inset-0 flex items-center justify-center bg-black/20" style={{ zIndex: payLayer.zIndex }} onClick={e => { if (e.target === e.currentTarget && !paying && payLayer.isTop) setPayOpen(false); }}>
@@ -3567,262 +3399,118 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         document.body
       )}
 
-      {/* ── Apply credit modal ──────────────────────────────── */}
-      <Modal open={creditOpen} onClose={() => !applyingCredit && setCreditOpen(false)} title="Appliquer un avoir" size="sm" layer="top" focusOnOpen
-        footer={<>
-          <button onClick={() => setCreditOpen(false)} className="btn-icon" title="Annuler" disabled={applyingCredit}><X className="w-4 h-4" /></button>
-          <button onClick={applyCredit} disabled={applyingCredit || !creditSelected} className="btn-icon-primary" title="Appliquer">{applyingCredit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}</button>
-        </>}>
-        {invoiceDetail && (
-          <div className="space-y-3">
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700/70">Solde dû</div>
-              <div className="text-base font-bold text-amber-700 num">{formatFCFA(invoiceDue)}</div>
-            </div>
-            <div>
-              <label className="label">Avoir disponible</label>
-              <select value={creditSelected} onChange={e => {
-                setCreditSelected(e.target.value);
-                const c = availableCredits.find(x => x.id === e.target.value);
-                if (c) {
-                  const avail = Number(c.total) - Number(c.credit_used || 0);
-                  setCreditAmount(String(Math.min(invoiceDue, avail)));
-                }
-              }} className="input">
-                <option value="">— Sélectionnez —</option>
-                {availableCredits.map(c => {
-                  const avail = Number(c.total) - Number(c.credit_used || 0);
-                  return <option key={c.id} value={c.id}>{c.return_number} · Solde {formatFCFA(avail)}</option>;
-                })}
-              </select>
-              {availableCredits.length === 0 && <div className="text-[11px] text-slate-500 mt-1">Aucun avoir disponible pour ce client.</div>}
-            </div>
-            <div>
-              <label className="label">Montant à appliquer</label>
-              <input type="number" value={creditAmount} onChange={e => setCreditAmount(e.target.value)} className="input num text-lg font-bold" />
-            </div>
+      {visible && creditOpen && invoiceDetail && (() => {
+        const close = () => { if (!applyingCredit) setCreditOpen(false); };
+        const selectedCredit = availableCredits.find(credit => credit.id === creditSelected);
+        const available = selectedCredit ? Number(selectedCredit.total) - Number(selectedCredit.credit_used ?? 0) : 0;
+        const content = (
+          <fieldset disabled={applyingCredit} className="min-w-0 space-y-4">
+            <p className="flex items-center justify-between gap-2 border-b border-[var(--w-separator)] pb-3 text-sm">
+              <span>Solde à payer</span><strong className="whitespace-nowrap tabular-nums">{formatVatAmount(invoiceDue)}</strong>
+            </p>
+            {availableCredits.length > 0 ? <>
+              <label className="block text-sm font-semibold">
+                Avoir disponible
+                <select value={creditSelected} onChange={event => {
+                  const credit = availableCredits.find(item => item.id === event.target.value);
+                  setCreditSelected(event.target.value);
+                  setApplyCreditError(null);
+                  setCreditAmount(credit ? String(Math.min(invoiceDue, Number(credit.total) - Number(credit.credit_used ?? 0))) : '');
+                }} className="mt-1 block min-h-11 w-full border-b border-[var(--w-separator)] bg-transparent text-base font-normal">
+                  <option value="">Choisir un avoir</option>
+                  {availableCredits.map(credit => <option key={credit.id} value={credit.id}>
+                    {credit.return_number} · {formatVatAmount(Number(credit.total) - Number(credit.credit_used ?? 0))}
+                  </option>)}
+                </select>
+              </label>
+              <label className="block text-sm font-semibold">
+                Montant à appliquer
+                <input type="number" inputMode="decimal" min="0.01" step="0.01" max={Math.min(invoiceDue, available)}
+                  value={creditAmount} onChange={event => { setCreditAmount(event.target.value); setApplyCreditError(null); }}
+                  className="mt-1 block min-h-11 w-full border-b border-[var(--w-separator)] bg-transparent text-base font-normal tabular-nums" />
+              </label>
+            </> : <p className="text-sm text-[var(--w-text-secondary)]">Aucun avoir disponible pour ce client dans ce magasin.</p>}
+          </fieldset>
+        );
+        const footer = <>
+          {applyCreditError && <p role="alert" className="w-full text-sm text-red-700">{applyCreditError}</p>}
+          <div className="flex w-full items-center gap-2">
+            {isDesktop && <button type="button" disabled={applyingCredit} onClick={close} className="min-h-11 px-3 text-sm font-medium">Annuler</button>}
+            <button type="button" disabled={applyingCredit || !creditSelected} onClick={() => void applyCredit()}
+              className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-neutral-900 px-3 text-sm font-semibold text-white disabled:opacity-40">
+              {applyingCredit && <Loader2 size={16} className="animate-spin" />} Appliquer l’avoir
+            </button>
           </div>
-        )}
-      </Modal>
+        </>;
+        return isDesktop
+          ? <Modal open title="Appliquer un avoir" onClose={close} size="sm" layer="top" focusOnOpen footer={footer}>{content}</Modal>
+          : <MobileReturnScreen title="Appliquer un avoir" subtitle={invoiceDetail.sale_number} busy={applyingCredit} onClose={close} footer={footer}>{content}</MobileReturnScreen>;
+      })()}
 
-      {/* ── Return create modal ─────────────────────────────── */}
-      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title={returnMode === 'avoir' ? 'Nouvel avoir client' : 'Nouveau retour client'} size="lg" fullMobile
-        footer={<>
-          <button onClick={() => setReturnOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={() => saveReturn()} disabled={saving || returnLines.filter(i => i.selected && i.quantity > 0).length === 0} className="btn-icon-primary" title="Enregistrer">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (returnMode === 'avoir' ? <Wallet className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />)}
-          </button>
-        </>}>
-        <div className="space-y-2 sm:space-y-4">
-          <div>
-            <label className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Vente d'origine *</label>
-            <div className="relative">
-              <select value={returnForm.sale_id} onChange={e => handleSaleChange(e.target.value)} className="bare-input w-full text-xs sm:text-sm py-1.5 pr-6">
-                <option value="">-- Sélectionnez une vente --</option>
-                {sales.map(s => <option key={s.id} value={s.id}>{s.sale_number}{s.customers ? ` - ${s.customers.name}` : ''} ({formatFCFA(s.total || 0)})</option>)}
-              </select>
-              <div className="h-px bg-neutral-300 mt-0.5" />
-            </div>
+      {visible && returnOpen && (() => {
+        const title = returnMode === 'avoir' ? 'Nouvel avoir client' : 'Nouveau retour client';
+        const label = returnMode === 'avoir' ? 'Créer l’avoir' : 'Enregistrer le retour';
+        const saleOptions = returnOrigin && !sales.some(sale => sale.id === returnOrigin.id) ? [returnOrigin, ...sales] : sales;
+        const origins = saleOptions
+          .filter(sale => returnMode === 'return' || !!sale.customer_id)
+          .map(sale => ({
+            id: sale.id,
+            reference: sale.sale_number,
+            customer: sale.customers?.name || 'Client comptoir',
+            total: Number(sale.total),
+          }));
+        const hasLines = returnLines.some(line => line.selected && line.quantity > 0);
+        const fields = <BillingReturnFields
+          origins={origins} saleId={returnForm.sale_id} lines={returnLines} loading={returnLoad.busy} loadError={returnLoad.error}
+          reason={returnForm.reason} restock={returnForm.restock} busy={saving}
+          onSale={handleSaleChange} onRetry={() => void handleSaleChange(returnForm.sale_id)}
+          onLine={(id, values) => setReturnLines(previous => previous.map(line => line.item_id === id ? { ...line, ...values } : line))}
+          onReason={reason => setReturnForm(f => ({ ...f, reason }))}
+          onRestock={restock => setReturnForm(f => ({ ...f, restock }))}
+        />;
+        const footer = <>
+          {returnError && <p role="alert" className="w-full text-sm text-red-700">{returnError}</p>}
+          {hasLines && <div className="flex w-full items-center justify-between gap-2 text-sm" aria-live="polite">
+            <span className="text-[var(--w-text-secondary)]">Montant estimé</span>
+            <strong className="whitespace-nowrap tabular-nums">{formatVatAmount(returnTotal)}</strong>
+          </div>}
+          <div className="flex w-full items-center gap-2">
+            {isDesktop && <button type="button" onClick={closeReturnForm} disabled={saving} className="min-h-11 px-3 text-sm font-medium">Annuler</button>}
+            <button type="button" onClick={() => void saveReturn()} disabled={saving || returnLoad.busy || !hasLines}
+              className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-neutral-900 px-4 text-sm font-semibold text-white disabled:opacity-40">
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />} {label}
+            </button>
           </div>
+        </>;
+        return isDesktop
+          ? <Modal open title={title} onClose={() => !saving && closeReturnForm()} size="lg" layer="top" focusOnOpen footer={footer}>{fields}</Modal>
+          : <MobileReturnScreen title={title} onClose={closeReturnForm} busy={saving} footer={footer}>{fields}</MobileReturnScreen>;
+      })()}
 
-          {returnLines.length === 0 && returnForm.sale_id && (
-            <div className="py-4 text-center text-xs text-slate-500">Tous les articles de cette vente ont déjà été retournés.</div>
-          )}
+      {visible && !isDesktop && returnDetail && (
+        <MobileReturnDetail
+          document={returnDetail}
+          status={(returnDetail.refund_method === 'avoir' ? creditStatus(returnDetail) : RETURN_STATUS[returnDetail.status] || RETURN_STATUS.pending).label}
+          items={returnItemsDetail} loading={returnDetailLoad.busy} loadError={returnDetailLoad.error}
+          busy={returnWorkflowBusy} error={returnDetailError} confirmingCash={returnCashConfirmOpen}
+          canProcess={can('edit_invoices') && !returnDetailLoad.busy && !returnDetailLoad.error}
+          canPost={can('manage_accounting') && !returnDetailLoad.busy && !returnDetailLoad.error}
+          onClose={closeReturnDetail} onPrint={printReturn} onRetry={() => void openReturnDetail(returnDetail)}
+          onCash={() => { setReturnDetailError(null); setReturnCashConfirmOpen(true); }}
+          onCancelCash={() => { setReturnDetailError(null); setReturnCashConfirmOpen(false); }}
+          onConfirmCash={() => void approveAsCash(returnDetail)}
+          onCredit={() => void approveAsAvoir(returnDetail)} onPost={() => void postVatReturn(returnDetail)}
+        />
+      )}
 
-          {returnLines.length > 0 && (
-            <div>
-              <label className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">Articles à retourner</label>
-              <div className="space-y-0 overflow-y-auto -mx-0.5 px-0.5" style={{ maxHeight: 'calc(100vh - 350px)' }}>
-                {returnLines.map((it, idx) => {
-                  const toggle = (v: boolean) => setReturnLines(p => p.map((x, i) => i === idx ? { ...x, selected: v } : x));
-                  const setQty = (q: number) => setReturnLines(p => p.map((x, i) => i === idx ? { ...x, quantity: Math.min(it.max_qty, Math.max(1, q)) } : x));
-                  return (
-                    <div key={idx} className={`py-2.5 transition-all border-b border-neutral-100 ${it.selected ? 'opacity-100' : 'opacity-60'}`}>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => toggle(!it.selected)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${it.selected ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300'}`}>
-                          {it.selected && <CheckCircle className="w-3 h-3 text-white" />}
-                        </button>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[11px] font-semibold text-slate-900 leading-tight truncate">{it.name}</div>
-                          <div className="text-[9px] text-slate-500 num">{formatFCFA(it.unit_price)} x max {it.max_qty}</div>
-                        </div>
-                        {it.selected && (
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button type="button" onClick={() => setQty(it.quantity - 1)} className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-900"><Minus className="w-3 h-3" /></button>
-                            <input type="number" value={it.quantity} onChange={e => setQty(Number(e.target.value))} min="1" max={it.max_qty} className="w-8 text-center text-[11px] font-bold num bg-transparent outline-none border-b border-neutral-300" />
-                            <button type="button" onClick={() => setQty(it.quantity + 1)} className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-900"><Plus className="w-3 h-3" /></button>
-                          </div>
-                        )}
-                        <span className="num text-[11px] font-bold text-slate-800 shrink-0 w-16 text-right">
-                          {it.selected ? formatFCFA(it.quantity * it.unit_price) : '--'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {returnLines.filter(i => i.selected).length > 0 && (
-                <div className="mt-2 flex items-center justify-between py-2 border-b-2 border-neutral-900">
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total {returnMode === 'avoir' ? 'avoir' : 'retour'}</div>
-                    <div className="text-[10px] text-slate-500">{returnLines.filter(i => i.selected).length} article{returnLines.filter(i => i.selected).length > 1 ? 's' : ''}</div>
-                  </div>
-                  <div className="num text-lg font-bold text-neutral-900">{formatFCFA(returnTotal)}</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div>
-            <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Motif</label>
-            <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="bare-input w-full text-xs py-1.5" placeholder="Motif du retour..." />
-            <div className="h-px bg-neutral-300 mt-0.5" />
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer py-1.5">
-            <input type="checkbox" checked={returnForm.restock} onChange={e => setReturnForm(f => ({ ...f, restock: e.target.checked }))} className="w-3.5 h-3.5 rounded" />
-            <span className="text-[11px] font-medium text-slate-700">Remettre en stock automatiquement</span>
-          </label>
-        </div>
-      </Modal>
-
-      {/* ── Return detail ─────────────────────────────────────── */}
-      <DocPanel open={!!returnDetail && !returnEditorOpen} onClose={() => setReturnDetail(null)} title={returnDetail ? `${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}` : ''}
-        footer={<>
-          {vatReturnAction}
-          <button onClick={() => setReturnDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          <button onClick={printReturn} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
-        </>}>
-        {returnDetail && (() => {
-          const isCredit = returnDetail.refund_method === 'avoir';
-          const st = isCredit ? creditStatus(returnDetail) : (RETURN_STATUS[returnDetail.status] || RETURN_STATUS.pending);
-          const used = Number(returnDetail.credit_used || 0);
-          const balance = Number(returnDetail.total) - used;
-          return (
-            <div className="space-y-4">
-              <DocSlimHeader
-                status={{ label: st.label, color: 'slate' as any }}
-                customerName={returnDetail.customers?.name ?? null}
-                date={formatDateTime(returnDetail.created_at)}
-                extra={returnDetail.sales?.sale_number ? `Vente ${returnDetail.sales.sale_number}` : undefined}
-              />
-
-              {/* Workflow: pending return → choose action */}
-              {returnDetail.status === 'pending' && (
-                <div className="py-3 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <RotateCcw className="w-4 h-4 text-amber-600 shrink-0" />
-                    <div>
-                      <div className="text-xs font-bold text-neutral-900">Traitement du retour</div>
-                      <div className="text-[10px] text-slate-500">Choisissez comment rembourser le client</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setReturnCashConfirmOpen(true)}
-                      disabled={returnWorkflowBusy}
-                      className="flex flex-col items-center gap-1.5 px-3 py-3 transition-all active:scale-[0.97] disabled:opacity-50"
-                    >
-                      <Coins className="w-5 h-5 text-emerald-600" />
-                      <div className="text-[11px] font-bold text-slate-800">Rembourser en caisse</div>
-                      <div className="text-[9px] text-slate-500 text-center">Sortie caisse immédiate</div>
-                    </button>
-                    <button
-                      onClick={() => approveAsAvoir(returnDetail)}
-                      disabled={returnWorkflowBusy}
-                      className="flex flex-col items-center gap-1.5 px-3 py-3 transition-all active:scale-[0.97] disabled:opacity-50"
-                    >
-                      <Wallet className="w-5 h-5 text-neutral-700" />
-                      <div className="text-[11px] font-bold text-slate-800">Créer un avoir</div>
-                      <div className="text-[9px] text-slate-500 text-center">Imputer sur prochaine facture</div>
-                    </button>
-                  </div>
-                  {returnWorkflowBusy && (
-                    <div className="flex items-center justify-center gap-2 py-1">
-                      <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-                      <span className="text-xs text-amber-600">Traitement...</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Avoir: show credit balance and usage */}
-              {isCredit && returnDetail.status === 'approved' && (
-                <div className="py-2 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Wallet className="w-3.5 h-3.5 text-slate-600" />
-                      <span className="text-[11px] font-bold text-neutral-900">Solde avoir</span>
-                    </div>
-                    <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(balance)}</span>
-                  </div>
-                  {used > 0 && (
-                    <div className="flex items-center justify-between text-[10px] text-slate-600 border-t border-neutral-100 pt-1.5">
-                      <span>Montant initial</span>
-                      <span className="num">{formatFCFA(Number(returnDetail.total))}</span>
-                    </div>
-                  )}
-                  {used > 0 && (
-                    <div className="flex items-center justify-between text-[10px] text-slate-600">
-                      <span>Déjà utilisé</span>
-                      <span className="num">-{formatFCFA(used)}</span>
-                    </div>
-                  )}
-                  {balance <= 0 && (
-                    <div className="text-[10px] font-semibold text-slate-500 text-center pt-0.5">Avoir entièrement utilisé</div>
-                  )}
-                </div>
-              )}
-
-              {/* Cash refund: show approved status */}
-              {!isCredit && returnDetail.status === 'approved' && (
-                <div className="flex items-center gap-2 py-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div>
-                    <div className="text-[11px] font-bold text-emerald-800">Remboursé en caisse</div>
-                    <div className="text-[10px] text-emerald-700 num">{formatFCFA(Number(returnDetail.total))}</div>
-                  </div>
-                </div>
-              )}
-
-              {returnDetail.vat_net_amount != null && <DocTotals
-                subtotal={Number(returnDetail.total)} vat={returnDetail} total={Number(returnDetail.total)} totalLabel="Total TTC" />}
-              {returnDetail.reason && <div className="py-2 text-sm border-b border-neutral-100"><span className="font-semibold">Motif :</span> {returnDetail.reason}</div>}
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Articles retournés</div>
-                <div className="space-y-0">
-                  {returnItemsDetail.map(i => (
-                    <div key={i.id} className="py-2.5 flex items-start gap-3 border-b border-neutral-100">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold text-slate-900 line-clamp-2">{i.name}</div>
-                        {i.articles?.internal_ref && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.articles.internal_ref}</div>}
-                        {i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}
-                        <div className="text-[11px] text-slate-500 num mt-0.5">Qté {i.quantity} · {formatFCFA(i.unit_price)}</div>
-                      </div>
-                      <div className={`num font-bold shrink-0 ${isCredit ? 'text-neutral-900' : 'text-red-700'}`}>{formatFCFA(i.total)}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex items-center justify-between py-2.5 border-b-2 border-neutral-900">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
-                  <span className="text-base font-bold num text-neutral-900">{formatFCFA(Number(returnDetail.total))}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </DocPanel>
-
-      {/* Confirm cash refund */}
-      {returnDetail && (
+      {visible && isDesktop && returnDetail && (
         <ConfirmDialog
           open={returnCashConfirmOpen}
-          onClose={() => setReturnCashConfirmOpen(false)}
-          onConfirm={() => approveAsCash(returnDetail)}
+          onClose={() => !returnWorkflowBusy && setReturnCashConfirmOpen(false)}
+          onConfirm={() => void approveAsCash(returnDetail)}
           title="Rembourser en caisse ?"
-          message={`Le montant de ${formatFCFA(Number(returnDetail.total))} sera enregistré comme sortie caisse. Cette action est irréversible.`}
+          message={returnDetailError || `Le montant de ${formatFCFA(Number(returnDetail.total))} sera enregistré comme sortie de caisse.`}
           confirmLabel="Confirmer le remboursement"
-          danger={false}
           layer="top"
         />
       )}

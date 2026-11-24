@@ -110,6 +110,7 @@ export type DocumentEditorProps = {
   onCancel?: () => void;
   onDelete?: () => void;
   onComptabiliser?: () => void;
+  accountingBusy?: boolean;
   accountingStatus?: string;
   invoiceDue?: number;
   // Quote-specific actions
@@ -247,7 +248,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     onTransformToReturn, onTransformToAvoir,
     transformReturnLines, loadReturnLines,
     onRefundCash, onApproveAvoir,
-    onEdit, onPay, onApplyCredit, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser,
+    onEdit, onPay, onApplyCredit, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingBusy,
     accountingStatus, invoiceDue = 0,
   } = props;
   const { onPrev, onNext, hasPrev, hasNext, onSearchOpen, postCreation, onNewInvoice, docCreatedInfo, inactive } = props;
@@ -421,7 +422,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           )}
           <h2 className="text-sm font-bold text-[var(--w-text)] tracking-tight truncate">{title}</h2>
           {documentStatus && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--w-hover)] text-[var(--w-text-muted)] uppercase tracking-wider">{documentStatus}</span>
+            <span className="text-xs font-medium text-[var(--w-text-secondary)]">{DOCUMENT_STATUS_LABELS[documentStatus] || documentStatus}</span>
           )}
           {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--w-text-disabled)] shrink-0" />}
         </div>
@@ -452,6 +453,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           onCancel={onCancel}
           onDelete={onDelete}
           onComptabiliser={onComptabiliser}
+          accountingBusy={accountingBusy}
           accountingStatus={accountingStatus}
           invoiceDue={invoiceDue}
           onRefundCash={onRefundCash}
@@ -764,7 +766,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
 // ─── Toolbar ─────────────────────────────────────────────────────
 
-function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onApplyCredit, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
+const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  draft: 'Brouillon', validated: 'Validée', paid: 'Payée', partial: 'Partiellement payée',
+  cancelled: 'Annulée', accepted: 'Accepté', rejected: 'Refusé', sent: 'Envoyé',
+  converted: 'Converti', pending: 'En attente', approved: 'Approuvé', expired: 'Expiré',
+};
+
+function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onApplyCredit, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingBusy, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
   tier: WidthTier;
   docType: DocType;
   mode: DocMode;
@@ -791,6 +799,7 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
   onCancel?: () => void;
   onDelete?: () => void;
   onComptabiliser?: () => void;
+  accountingBusy?: boolean;
   accountingStatus?: string;
   invoiceDue?: number;
   onRefundCash?: () => void;
@@ -849,11 +858,11 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
           {onPay && docType === 'invoice' && (invoiceDue ?? 0) > 0 && notCancelled && (
             <button onClick={onPay} className={`${btnCls} text-emerald-500 hover:bg-[var(--w-hover)]`} title="Régler"><Coins className="w-3 h-3" />{!compact && ' Régler'}</button>
           )}
-          {false && onComptabiliser && docType === 'invoice' && notAccounted && notCancelled && (
-            <button onClick={onComptabiliser} className={`${btnCls} text-teal-500 hover:bg-[var(--w-hover)]`} title="Comptabiliser"><BookOpen className="w-3 h-3" />{!compact && ' Comptabiliser'}</button>
+          {onComptabiliser && docType === 'invoice' && notAccounted && notCancelled && (
+            <button onClick={onComptabiliser} disabled={accountingBusy} className={`${btnLight} disabled:opacity-60`} title="Comptabiliser">{accountingBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <BookOpen className="w-3 h-3" />}Comptabiliser</button>
           )}
           {accountingStatus === 'accounted' && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />{!compact && 'Comptabilisé'}</span>
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-[var(--w-text-secondary)]"><BookOpen className="w-3 h-3" />Comptabilisé</span>
           )}
           {onCopyLink && (
             <button onClick={onCopyLink} className={btnLight} title="Lien"><Link2 className="w-3 h-3" />{!compact && ' Lien'}</button>

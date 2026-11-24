@@ -280,7 +280,10 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
   const handleRoute = useCallback((r: Route) => {
     if (r === 'billing') {
       const hasPage = wm.windows.some(w => w.id === 'billing-page');
-      if (hasPage) wm.restore('billing-page');
+      if (hasPage) {
+        wm.setMaximized('billing-page', true);
+        wm.restore('billing-page');
+      }
       if (route === 'billing') return;
     }
     if (r === 'supplier_orders') {

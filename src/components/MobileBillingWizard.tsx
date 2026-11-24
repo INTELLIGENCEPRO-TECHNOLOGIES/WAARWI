@@ -115,7 +115,7 @@ export function MobileBillingWizard({
     <div className="fixed inset-0 z-50 flex flex-col animate-fade-in bg-white">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-neutral-200 flex-shrink-0">
-        <button onClick={onClose} className="p-2 -ml-2 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] active:scale-95 transition-all">
+        <button onClick={onClose} aria-label="Fermer" className="p-2 -ml-2 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] active:scale-95 transition-all">
           <X className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">

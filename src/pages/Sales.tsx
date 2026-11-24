@@ -521,14 +521,14 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   }, [selected, tenant, deleting, can, deleteReason]);
 
   const comptabiliserVente = async () => {
-    if (!selected || accounting) return;
+    if (!selected || accounting || !can('manage_accounting')) return;
     setAccounting(true);
     try {
       const { data, error } = await supabase.rpc('comptabiliser_vente', { p_sale_id: selected.id });
       if (error) throw error;
       if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur inconnue');
-      toastSuccess(`Comptabilisé : ${(data as any).piece_number}`);
-      setSelected({ ...selected, accounting_status: 'accounted' });
+      toastSuccess((data as any).piece_number ? `Comptabilisé · ${(data as any).piece_number}` : 'Vente comptabilisée');
+      setSelected(prev => prev?.id === selected.id ? { ...prev, accounting_status: 'accounted' } : prev);
       setSales(prev => prev.map(s => s.id === selected.id ? { ...s, accounting_status: 'accounted' } : s));
     } catch (e: any) { toastError(e.message); }
     finally { setAccounting(false); }
@@ -826,6 +826,9 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           documentNumber={selected.sale_number}
           documentStatus={selected.status}
           accountingStatus={selected.accounting_status}
+          accountingBusy={accounting}
+          vat={editing ? undefined : selected}
+          documentTotal={editing ? undefined : Number(selected.total)}
           invoiceDue={Math.max(0, Number(selected.total) - pays.reduce((s, p) => s + Number(p.amount), 0))}
           docSettings={docSettings}
           paymentMethods={paymentMethods}

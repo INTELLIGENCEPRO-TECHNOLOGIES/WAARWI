@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useCallback, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useCallback, useReducer } from 'react';
 import { Minus, Maximize2, Minimize2, X, LayoutGrid } from 'lucide-react';
 import { useWindowManager, getWorkArea } from '../context/WindowManagerContext';
 
@@ -14,14 +14,15 @@ type Props = {
   siteId?: string;
   background?: boolean;
   groupId?: string;
+  startMaximized?: boolean;
 };
 
 const HEADER_H = 38;
 const MIN_W_DEFAULT = 480;
 const MIN_H_DEFAULT = 320;
 
-export function DesktopWindow({ id, title, icon, children, onClose, initialRect, minW = MIN_W_DEFAULT, minH = MIN_H_DEFAULT, siteId, background, groupId }: Props) {
-  const { windows, register, unregister, focus, minimize, updateRect, tileVisibleWindows } = useWindowManager();
+export function DesktopWindow({ id, title, icon, children, onClose, initialRect, minW = MIN_W_DEFAULT, minH = MIN_H_DEFAULT, siteId, background, groupId, startMaximized }: Props) {
+  const { windows, register, unregister, focus, minimize, setMaximized, updateRect, tileVisibleWindows } = useWindowManager();
   const win = windows.find(w => w.id === id);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,11 +30,11 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
   const resizing = useRef<string | null>(null);
   const dragStart = useRef({ mx: 0, my: 0, wx: 0, wy: 0, ww: 0, wh: 0 });
 
-  const [maximized, setMaximized] = useState(false);
-  const preMaxRect = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const maximized = win?.maximized ?? false;
+  const [, recalculateWorkArea] = useReducer(n => n + 1, 0);
 
   useEffect(() => {
-    register(id, title, initialRect, icon, siteId, background, groupId);
+    register(id, title, initialRect, icon, siteId, background, groupId, startMaximized);
     return () => unregister(id);
   }, [id]);
 
@@ -52,7 +53,7 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
   useEffect(() => {
     const recalc = () => {
       if (!win) return;
-      if (maximized) { updateRect(id, maxRect()); return; }
+      if (maximized) { recalculateWorkArea(); return; }
       updateRect(id, clamp(win.rect));
     };
     window.addEventListener('resize', recalc);
@@ -60,11 +61,6 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
     return () => { window.removeEventListener('resize', recalc); mo.disconnect(); };
   }, [id, win, maximized, clamp, updateRect]);
-
-  const maxRect = () => {
-    const wa = getWorkArea();
-    return { x: wa.x, y: wa.y, w: wa.w, h: wa.h };
-  };
 
   const onPointerDownHeader = useCallback((e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -120,22 +116,14 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
 
   const onResizePointerUp = useCallback(() => { resizing.current = null; }, []);
 
-  const toggleMaximize = useCallback(() => {
-    if (maximized) {
-      if (preMaxRect.current) updateRect(id, clamp(preMaxRect.current));
-      setMaximized(false);
-    } else {
-      preMaxRect.current = win?.rect || null;
-      updateRect(id, maxRect());
-      setMaximized(true);
-    }
-  }, [maximized, id, updateRect, win, clamp]);
-
-  const onDoubleClickHeader = useCallback(() => toggleMaximize(), [toggleMaximize]);
+  const toggleMaximize = () => {
+    if (maximized && win) updateRect(id, clamp(win.rect));
+    setMaximized(id, !maximized);
+  };
 
   if (!win) return null;
 
-  const { x, y, w, h } = maximized ? maxRect() : win.rect;
+  const { x, y, w, h } = maximized ? getWorkArea() : win.rect;
 
   const edgeCls = 'absolute z-10';
   const cornerSize = 12;
@@ -144,6 +132,8 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
   return (
     <div
       ref={containerRef}
+      role="region"
+      aria-label={title}
       className="fixed flex flex-col shadow-2xl bg-[var(--w-surface)] border border-[var(--w-separator)] overflow-hidden"
       style={{
         left: x, top: y, width: w, height: h,
@@ -160,7 +150,7 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
         onPointerDown={onPointerDownHeader}
         onPointerMove={onPointerMoveHeader}
         onPointerUp={onPointerUpHeader}
-        onDoubleClick={onDoubleClickHeader}
+        onDoubleClick={e => { if (!(e.target as HTMLElement).closest('button')) toggleMaximize(); }}
       >
         {icon && <span className="text-[var(--w-text-muted)] flex-shrink-0 [&>svg]:w-4 [&>svg]:h-4">{icon}</span>}
         <span className="text-sm font-semibold text-[var(--w-text)] truncate flex-1">{title}</span>
