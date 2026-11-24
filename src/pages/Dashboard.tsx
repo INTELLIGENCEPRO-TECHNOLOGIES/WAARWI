@@ -135,7 +135,7 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
         refreshTimer.current = setTimeout(() => {
           refreshTimer.current = null;
           setRefreshTick(t => t + 1);
-        }, 600);
+        }, 1500); // Coalesce related Realtime events from a single business operation.
       }
     );
     return () => {
