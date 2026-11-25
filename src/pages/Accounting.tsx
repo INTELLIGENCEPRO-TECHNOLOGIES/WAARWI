@@ -350,29 +350,31 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     });
   };
 
+  const savingLock=useRef(false);
   const save = async () => {
-    if (!tenant) return;
+    if (!tenant || savingLock.current || !canManage) return;
     if (!form.description.trim()) { error('Description obligatoire'); return; }
     if (!isBalanced) { error("L'écriture n'est pas équilibrée (débit ≠ crédit)"); return; }
-    const validLines = entryLines.filter(l => l.account_code && (l.debit > 0 || l.credit > 0));
-    if (validLines.length < 2) { error('Au moins 2 lignes sont nécessaires'); return; }
+    const validLines=entryLines.filter(l=>l.account_code||l.label.trim()||l.debit!==0||l.credit!==0);
+    if(validLines.length<2){error('Au moins 2 lignes sont nécessaires');return;}
+    if(validLines.some(l=>!l.account_code||!Number.isFinite(l.debit)||!Number.isFinite(l.credit)||l.debit<0||l.credit<0||(l.debit>0)===(l.credit>0))){error('Chaque ligne renseignée doit comporter un compte et un seul montant positif au débit ou au crédit.');return;}
+    savingLock.current=true;
     setSaving(true);
-    const { data, error: e } = await supabase.rpc('create_manual_journal_entry', {
-      p_tenant_id: tenant.id,
-      p_journal_type: form.journal_type,
-      p_entry_date: form.entry_date,
-      p_description: form.description,
-      p_reference: form.reference || '',
-      p_lines: validLines.map(l => ({ account_code: l.account_code, debit: l.debit, credit: l.credit, label: l.label })),
-    });
-    setSaving(false);
-    if (e) { error(e.message); return; }
-    if (!(data as any)?.success) { error((data as any)?.error || 'Erreur'); return; }
-    success(`Écriture ${(data as any).piece_number} enregistrée`);
-    setOpen(false);
-    setEntryLines([{ account_code: '', account_name: '', debit: 0, credit: 0, label: '' }, { account_code: '', account_name: '', debit: 0, credit: 0, label: '' }]);
-    setForm({ journal_type: 'OD', entry_date: new Date().toISOString().slice(0, 10), description: '', reference: '' });
-    load();
+    try{
+      const { data, error: e } = await supabase.rpc('create_manual_journal_entry', {
+        p_tenant_id: tenant.id, p_journal_type: form.journal_type, p_entry_date: form.entry_date,
+        p_description: form.description, p_reference: form.reference || '',
+        p_lines: validLines.map(l=>({account_code:l.account_code,debit:l.debit,credit:l.credit,label:l.label})),
+      });
+      if(e){error(e.message);return;}
+      if(!(data as any)?.success){error((data as any)?.error||'Erreur');return;}
+      success('Écriture '+(data as any).piece_number+' enregistrée');
+      setOpen(false);
+      setEntryLines([{account_code:'',account_name:'',debit:0,credit:0,label:''},{account_code:'',account_name:'',debit:0,credit:0,label:''}]);
+      setForm({journal_type:'OD',entry_date:new Date().toISOString().slice(0,10),description:'',reference:''});
+      void load();
+    }catch(e){error(e instanceof Error?e.message:'Impossible d’enregistrer l’écriture.');}
+    finally{savingLock.current=false;setSaving(false);}
   };
 
   const openDetail = async (e: any) => {
@@ -383,7 +385,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   };
 
   const closeEntry=()=>{if(saving)return;const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));if(dirty&&!window.confirm('Abandonner la saisie en cours ?'))return;if(entryOnly)onExit?.();else setOpen(false);};
-  const entryForm=( <div className="acc-entry-body space-y-4">
+  const entryForm=( <fieldset disabled={saving} className="acc-entry-body space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="label">Journal *</label>
@@ -439,7 +441,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
             </div>
 
           </div>
-        </div> );
+        </fieldset> );
   const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={save} className="btn-primary" disabled={saving||!isBalanced}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
   if(entryOnly)return <section className="acc-entry-page">{entryForm}{entryFooter}</section>;
 
