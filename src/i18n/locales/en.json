@@ -45,6 +45,7 @@
     "supplierOrders": "Purchases",
     "accounting": "Accounting",
     "accountingPlan": "Chart of accounts",
+    "vatReport": "VAT statement",
     "journals": "Journals",
     "balance": "Balance",
     "generalLedger": "General ledger",
