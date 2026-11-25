@@ -48,14 +48,17 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
  const minimize=(r:WorkRoute)=>{wm.minimize(r);if(active===r||route===r){const next=wm.windows.filter(w=>w.id!==r&&!w.minimized&&isWork(w.id)&&canAccess(w.id)).sort((a,b)=>b.zIndex-a.zIndex)[0];if(next&&isWork(next.id))activate(next.id);else{setActive(null);onNavigate('acc_overview');}}};
  const visible=wm.windows.filter(w=>!w.minimized);
  const selected=active&&visible.some(w=>w.id===active)?active:(visible.slice().sort((a,b)=>b.zIndex-a.zIndex)[0]?.id??null);
- const tile=()=>{wm.tileVisibleWindows();};
+ const tilePossible=visible.length>=2&&visible.length<=4&&wm.getArea().w>=680&&wm.getArea().h>=(visible.length>2?380:190);
+ const tile=()=>{if(tilePossible)wm.tileVisibleWindows();};
+ const cascade=()=>{const a=wm.getArea();visible.slice().sort((x,y)=>x.zIndex-y.zIndex).forEach((w,i)=>{const offset=16+(i%6)*22;wm.setMaximized(w.id,false);wm.updateRect(w.id,{x:Math.min(offset,Math.max(0,a.w-320)),y:Math.min(offset,Math.max(0,a.h-170)),w:Math.min(1100,Math.max(1,a.w-offset-18)),h:Math.min(730,Math.max(1,a.h-offset-18))});});};
  const closeAll=()=>{if(!window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{}})))return;setOpen([]);setActive(null);onNavigate('acc_overview');};
+ useEffect(()=>{const h=(e:Event)=>{switch((e as CustomEvent<{action:string}>).detail?.action){case 'home':navigate('acc_overview');break;case 'tile':tile();break;case 'cascade':cascade();break;case 'closeAll':closeAll();break;}};window.addEventListener('waarwi:accounting-window-action',h);return()=>window.removeEventListener('waarwi:accounting-window-action',h);});
  return <section className="acc-desktop" aria-label="Bureau comptable">
   <div className="acc-desktop-area" ref={area}>
    <div className="acc-desktop-home"><Accounting section="overview" onNavigate={navigate}/></div>
    {open.filter(canAccess).map((r,index)=>{
     const [section,title]=sections[r];const a=wm.getArea();const offset=18+(index%5)*22;
-    return <DesktopWindow key={r} id={r} title={title} icon={<BookOpen size={16}/>} contained active={selected===r} onActivate={()=>{setActive(r);if(route!==r)onNavigate(r);}} minW={400} minH={270} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(r)} onMinimize={()=>minimize(r)}>
+    return <DesktopWindow key={r} id={r} title={title} icon={<BookOpen size={16}/>} contained active={selected===r} onActivate={()=>{setActive(r);if(route!==r)onNavigate(r);}} minW={320} minH={170} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(r)} onMinimize={()=>minimize(r)}>
       <WindowId.Provider value={r}><div className="acc-window-content"><Accounting section={section} inWindow onNavigate={navigate} onExit={()=>close(r)}/></div></WindowId.Provider>
     </DesktopWindow>;
    })}
@@ -63,7 +66,7 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
   <div className="acc-desktop-taskbar" aria-label="Fenêtres ouvertes">
    <button type="button" className="acc-task-action" title="Afficher le bureau comptable" onClick={()=>navigate('acc_overview')}><BookOpen size={16}/><span>Bureau</span></button>
    <div className="acc-desktop-tasks">{open.filter(canAccess).map(r=>{const w=wm.windows.find(w=>w.id===r);return <div className="acc-task" key={r} data-active={selected===r&&!w?.minimized}><button type="button" title={sections[r][1]} onClick={()=>activate(r)}>{w?.minimized?<Minus size={14}/>:selected===r?<Check size={14}/>:<BookOpen size={14}/>}<span>{sections[r][1]}</span></button><button type="button" aria-label={'Fermer '+sections[r][1]} onClick={()=>close(r)}><X size={13}/></button></div>;})}</div>
-   {open.length>0&&<><button type="button" className="acc-task-action acc-tile-control" disabled={visible.length<2} title="Répartir les fenêtres" aria-label="Répartir les fenêtres" onClick={tile}><LayoutGrid size={16}/></button><button type="button" className="acc-task-action" title="Fermer toutes les fenêtres" aria-label="Fermer toutes les fenêtres" onClick={closeAll}><X size={16}/></button></>}
+   {open.length>0&&<><button type="button" className="acc-task-action acc-tile-control" disabled={!tilePossible} title="Répartir les fenêtres" aria-label="Répartir les fenêtres" onClick={tile}><LayoutGrid size={16}/></button><button type="button" className="acc-task-action" title="Fermer toutes les fenêtres" aria-label="Fermer toutes les fenêtres" onClick={closeAll}><X size={16}/></button></>}
   </div>
  </section>;
 }
