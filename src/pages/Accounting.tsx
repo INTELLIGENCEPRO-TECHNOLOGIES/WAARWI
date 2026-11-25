@@ -7,6 +7,7 @@ import { AccountingCashReview } from '../components/AccountingCashReview';
 import { AccountingPurchaseInvoice } from '../components/AccountingPurchaseInvoice';
 import { AccountingVatReport } from '../components/AccountingVatReport';
 import { AccountingAccountStatement } from '../components/AccountingAccountStatement';
+import { AccountingEntryReversal } from '../components/AccountingEntryReversal';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -607,7 +608,7 @@ function JournalsTab() {
             {selected.source_type && (
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <FileText className="w-3.5 h-3.5" />
-                <span>Source : {selected.source_type} ({selected.reference})</span>
+                <span>Source : {selected.source_type === 'reversal' ? 'Extourne' : selected.source_type === 'manual' ? 'Saisie manuelle' : selected.source_type} ({selected.reference})</span>
               </div>
             )}
             <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -623,6 +624,7 @@ function JournalsTab() {
                 </tfoot>
               </table>
             </div>
+            {tenant && <AccountingEntryReversal key={selected.id} tenantId={tenant.id} entryId={selected.id} canManage={canManage} onPosted={()=>void load(true)} />}
           </div>
         )}
       </Modal>
@@ -1161,7 +1163,8 @@ function SearchTab() {
 }
 
 /* ===================== SEARCH DETAIL MODAL ===================== */
-function SearchDetailModal({ entry, tenant, onClose }: { entry: any; tenant: { id: string }; onClose: () => void }) {
+function SearchDetailModal({ entry, tenant, onClose, onReversed }: { entry: any; tenant: { id: string }; onClose: () => void; onReversed?: () => void }) {
+  const { can } = usePermissions();
   const [lines, setLines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -1261,6 +1264,7 @@ function SearchDetailModal({ entry, tenant, onClose }: { entry: any; tenant: { i
             </table>
           </div>
         )}
+        <AccountingEntryReversal key={entry.entry_id} tenantId={tenant.id} entryId={entry.entry_id} canManage={can('manage_accounting')} onPosted={onReversed} />
       </div>
     </Modal>
   );
@@ -1282,6 +1286,7 @@ function AccountStatementTab() {
   const { tenant } = useApp();
   const { can } = usePermissions();
   const [detail,setDetail]=useState<any>(null);
+  const [statementRevision,setStatementRevision]=useState(0);
   useEffect(()=>setDetail(null),[tenant?.id]);
-  return tenant ? <><AccountingAccountStatement key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} onView={setDetail} />{detail&&<SearchDetailModal entry={detail} tenant={tenant} onClose={()=>setDetail(null)} />}</> : null;
+  return tenant ? <><AccountingAccountStatement key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} onView={setDetail} refreshRevision={statementRevision} />{detail&&<SearchDetailModal entry={detail} tenant={tenant} onClose={()=>setDetail(null)} onReversed={()=>setStatementRevision(v=>v+1)} />}</> : null;
 }
