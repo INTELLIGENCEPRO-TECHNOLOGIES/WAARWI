@@ -45,6 +45,7 @@
     "supplierOrders": "Achats",
     "accounting": "Comptabilité",
     "accountingPlan": "Plan comptable",
+    "vatReport": "Situation de TVA",
     "journals": "Journaux",
     "balance": "Balance",
     "generalLedger": "Grand Livre",
