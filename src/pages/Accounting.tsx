@@ -7,6 +7,7 @@ import { AccountingCashReview } from '../components/AccountingCashReview';
 import { AccountingPurchaseInvoice } from '../components/AccountingPurchaseInvoice';
 import { AccountingVatReport } from '../components/AccountingVatReport';
 import { AccountingAccountStatement } from '../components/AccountingAccountStatement';
+import { AccountingBankReconciliation } from '../components/AccountingBankReconciliation';
 import { AccountingEntryReversal } from '../components/AccountingEntryReversal';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
@@ -18,7 +19,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement';
+type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank';
 
 const JOURNAL_TYPES: Record<string, string> = {
   VE: 'Journal des ventes', AC: 'Journal des achats',
@@ -37,6 +38,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
     cloture: { t: 'Clôtures', s: 'Contrôles et clôture mensuelle' },
     vat: { t: 'Situation de TVA', s: 'TVA collectée, récupérable et contrôles par période.' },
     statement: { t: 'Interrogation des comptes', s: 'Mouvements, soldes et pièces des comptes généraux et auxiliaires.' },
+    bank: { t: 'Rapprochement bancaire', s: 'Relevés, pointage des écritures et contrôle des soldes.' },
   };
   const meta = titles[section];
   return (
@@ -54,6 +56,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
       {section === 'cloture' && <ClotureTab />}
       {section === 'vat' && <VatTab />}
       {section === 'statement' && <AccountStatementTab />}
+      {section === 'bank' && <BankReconciliationTab />}
     </div>
   );
 }
@@ -1289,4 +1292,10 @@ function AccountStatementTab() {
   const [statementRevision,setStatementRevision]=useState(0);
   useEffect(()=>setDetail(null),[tenant?.id]);
   return tenant ? <><AccountingAccountStatement key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} onView={setDetail} refreshRevision={statementRevision} />{detail&&<SearchDetailModal entry={detail} tenant={tenant} onClose={()=>setDetail(null)} onReversed={()=>setStatementRevision(v=>v+1)} />}</> : null;
+}
+
+function BankReconciliationTab() {
+ const {tenant}=useApp();
+ const {can}=usePermissions();
+ return tenant?<AccountingBankReconciliation key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')}/>:null;
 }
