@@ -1314,5 +1314,6 @@ function FiscalYearTab() {
 
 function FinancialReportsTab() {
  const {tenant}=useApp();
- return tenant?<AccountingFinancialReports key={tenant.id} tenantId={tenant.id} tenantName={tenant.name}/>:null;
+ const {can}=usePermissions();
+ return tenant?<AccountingFinancialReports key={tenant.id} tenantId={tenant.id} tenantName={tenant.name} canManage={can('manage_accounting')}/>:null;
 }
