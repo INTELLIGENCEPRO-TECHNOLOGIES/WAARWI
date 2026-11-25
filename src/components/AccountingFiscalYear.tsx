@@ -30,6 +30,7 @@ export function AccountingFiscalYear({tenantId,canManage}:{tenantId:string;canMa
  const [tab,setTab]=useState<'carry'|'balance'>('carry');
  const [search,setSearch]=useState('');
  const lock=useRef(false);
+ useEffect(()=>{const guard=(event:Event)=>{if(lock.current||(!!note.trim()||confirm)&&!window.confirm("Une clôture est en préparation. Quitter cet écran ?"))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[note,confirm]);
  useEffect(()=>{let live=true;void(async()=>{const {data,error:err}=await supabase.from('accounts').select('code,name,class,is_active').eq('tenant_id',tenantId).eq('class',1).or('code.like.131%,code.like.139%').order('code');if(live){if(err)setError(errorText(err));else setAccounts((data??[]) as Account[]);}})();return()=>{live=false;};},[tenantId]);
  useEffect(()=>{let live=true;setLoading(true);setPreview(null);setError('');setConfirm(false);
  void(async()=>{try{
