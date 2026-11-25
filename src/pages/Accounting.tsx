@@ -1,7 +1,9 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, X, Check, Trash2, Download } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus, Loader2, Save, Pencil as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
+import { AccountingPagination, AccountingTable, AccountingRowActions, useAccountingPagination } from '../components/AccountingWorkspace';
+import './accounting-graphite.css';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { AccountingCashReview } from '../components/AccountingCashReview';
 import { AccountingPurchaseInvoice } from '../components/AccountingPurchaseInvoice';
@@ -46,11 +48,9 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
   };
   const meta = titles[section];
   return (
-    <div className="space-y-5">
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white border-b border-neutral-100">
-        <h1 className="text-lg font-bold text-neutral-900 leading-tight">{meta.t}</h1>
-        <p className="text-[11px] text-neutral-500 mt-0.5">{meta.s}</p>
-      </div>
+    <div className="accounting-workspace">
+      <header className="acc-titlebar"><div><h1>{meta.t}</h1><p>{meta.s}</p></div><span className="acc-module">Comptabilité</span></header>
+      <div className="acc-body" key={section}>
       {section === 'plan' && <PlanTab />}
       {section === 'journals' && <JournalsTab />}
       {section === 'balance' && <BalanceTab />}
@@ -63,6 +63,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
       {section === 'bank' && <BankReconciliationTab />}
       {section === 'fiscal' && <FiscalYearTab />}
       {section === 'financial' && <FinancialReportsTab />}
+      </div>
     </div>
   );
 }
@@ -110,51 +111,24 @@ function PlanTab() {
     success(editing ? 'Modifié' : 'Créé'); setOpen(false); load();
   };
 
-  const byClass = [1, 2, 3, 4, 5, 6, 7, 8].map(cl => ({
-    cl, label: { 1: 'Ressources durables', 2: 'Actif immobilisé', 3: 'Stocks', 4: 'Tiers', 5: 'Trésorerie', 6: 'Charges', 7: 'Produits', 8: 'Autres' }[cl] || '',
-    items: filtered.filter(a => a.class === cl),
-  })).filter(g => g.items.length > 0);
+  const [classFilter,setClassFilter]=useState('');
+  const visible=useMemo(()=>filtered.filter(a=>!classFilter||String(a.class)===classFilter),[filtered,classFilter]);
+  const paging=useAccountingPagination(visible,search+'|'+classFilter);
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un compte…" className="input pl-9" />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <AccountingPlanIO accounts={list} onImportDone={load} />
-          {canManage && <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-icon-primary" title="Nouveau compte"><Plus className="w-4 h-4" /></button>}
-        </div>
+      <div className="acc-toolbar acc-fixed">
+        <input aria-label="Rechercher un compte" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Code ou intitulé…" className="input flex-1 min-w-0 sm:max-w-xs"/>
+        <select aria-label="Classe" value={classFilter} onChange={e=>setClassFilter(e.target.value)} className="input w-auto"><option value="">Toutes les classes</option>{[1,2,3,4,5,6,7,8].map(c=><option key={c} value={c}>Classe {c}</option>)}</select>
+        <span className="acc-spacer"/><AccountingPlanIO accounts={list} onImportDone={load}/>
+        {canManage&&<button type="button" onClick={()=>{setEditing(null);setForm({});setOpen(true);}} className="btn-primary"><Plus size={16}/>Nouveau compte</button>}
       </div>
-
-      <div className="space-y-3">
-        {byClass.map(({ cl, label, items }) => (
-          <div key={cl} className="card overflow-hidden">
-            <div className="px-1 md:px-4 py-2.5 bg-neutral-50 border-b border-neutral-100 flex items-center gap-2">
-              <span className="w-6 h-6 rounded bg-brand-100 text-brand-800 text-xs font-bold flex items-center justify-center">{cl}</span>
-              <span className="text-sm font-semibold text-neutral-800">Classe {cl} — {label}</span>
-              <span className="ml-auto text-xs text-neutral-400">{items.length} compte{items.length > 1 ? 's' : ''}</span>
-            </div>
-            <table className="w-full text-sm">
-              <tbody className="divide-y divide-neutral-100">
-                {items.map(a => (
-                  <tr key={a.id} className="hover:bg-neutral-50/60">
-                    <td className="px-1 md:px-4 py-2.5 font-mono text-xs w-24 text-brand-700">{a.code}</td>
-                    <td className="px-1 md:px-4 py-2.5 font-medium">{a.name}</td>
-                    <td className="px-1 md:px-4 py-2.5 text-right">
-                      {canManage && <button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1 rounded hover:bg-slate-100">
-                        <Edit2 className="w-3.5 h-3.5 text-slate-400" />
-                      </button>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-        {byClass.length === 0 && <div className="card py-10 text-center text-sm text-neutral-500">Aucun compte correspondant.</div>}
-      </div>
+      <AccountingTable footer={<AccountingPagination {...paging}/>}>
+        <table><thead><tr><th className="text-left">Compte</th><th className="text-left">Intitulé</th><th className="text-left hidden sm:table-cell">Classe</th><th className="text-right">Actions</th></tr></thead>
+          <tbody>{paging.rows.map(a=><tr key={a.id}><td className="font-medium whitespace-nowrap">{a.code}</td><td>{a.name}</td><td className="hidden sm:table-cell">{a.class}</td><td className="text-right">{canManage&&<button type="button" className="acc-icon" aria-label={'Modifier '+a.code} onClick={()=>{setEditing(a);setForm({...a});setOpen(true);}}><Edit2 size={16}/></button>}</td></tr>)}
+          {!visible.length&&<tr><td colSpan={4} className="text-center text-neutral-500">Aucun compte correspondant.</td></tr>}</tbody>
+        </table>
+      </AccountingTable>
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le compte' : 'Nouveau compte'} size="sm"
         footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}</button></>}>
@@ -178,6 +152,14 @@ function JournalsTab() {
   const { can } = usePermissions();
   const canManage = can('manage_accounting');
   const [entries, setEntries] = useState<any[]>([]);
+  const [journalPage,setJournalPage]=useState(0);
+  const [journalSize,setJournalSize]=useState(20);
+  const [journalTotal,setJournalTotal]=useState(0);
+  const [journalError,setJournalError]=useState('');
+  const [fromDate,setFromDate]=useState('');
+  const [toDate,setToDate]=useState('');
+  const [contextRow,setContextRow]=useState<{id:string;x:number;y:number}|null>(null);
+  const loadSequence=useRef(0);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -207,13 +189,19 @@ function JournalsTab() {
   const load = async (silent = false) => {
     if (!tenant) return;
     if (!silent) setLoading(true);
-    let q = supabase.from('journal_entries').select('*').eq('tenant_id', tenant.id).order('entry_date', { ascending: false }).limit(200);
-    if (journalType) q = q.eq('journal_type', journalType);
-    const { data } = await q;
-    setEntries(data || []);
+    const seq=++loadSequence.current;
+    setJournalError('');
+    let q = supabase.from('journal_entries').select('*',{count:'exact'}).eq('tenant_id',tenant.id).order('entry_date',{ascending:false}).order('entry_number',{ascending:false}).order('id',{ascending:false});
+    if(journalType)q=q.eq('journal_type',journalType);
+    if(fromDate)q=q.gte('entry_date',fromDate);
+    if(toDate)q=q.lte('entry_date',toDate);
+    const {data,count,error:queryError}=await q.range(journalPage*journalSize,(journalPage+1)*journalSize-1);
+    if(seq!==loadSequence.current)return;
+    if(queryError){setJournalError(queryError.message);setEntries([]);setJournalTotal(0);}
+    else{setJournalTotal(count??0);setEntries(data??[]);const max=Math.max(0,Math.ceil((count??0)/journalSize)-1);if(journalPage>max)setJournalPage(max);}
     setLoading(false);
   };
-  useEffect(() => { load(); }, [tenant?.id, journalType]);
+  useEffect(()=>{void load();return()=>{loadSequence.current++;};},[tenant?.id,journalType,journalPage,journalSize,fromDate,toDate]);
   useRealtimeRefresh(['journal_entries', 'journal_lines'], () => load(true));
   useEffect(() => {
     if (!tenant) return;
@@ -381,71 +369,35 @@ function JournalsTab() {
   };
 
   const openDetail = async (e: any) => {
-    setSelected(e); setDetailOpen(true);
-    const { data } = await supabase.from('journal_lines').select('*').eq('entry_id', e.id).order('created_at');
+    if(!tenant)return;
+    setLines([]);setSelected(e); setDetailOpen(true);
+    const { data } = await supabase.from('journal_lines').select('*').eq('tenant_id',tenant.id).eq('entry_id', e.id).order('created_at');
     setLines(data || []);
   };
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <select value={journalType} onChange={e => setJournalType(e.target.value)} className="input sm:w-56">
-          <option value="">Tous les journaux</option>
-          {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <div className="flex items-center gap-2">
-          {canView && <button onClick={openExportModal} className="btn-icon" title="Exporter les écritures"><Download className="w-4 h-4" /></button>}
-          {canManage && <button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouvelle écriture"><Plus className="w-4 h-4" /></button>}
-        </div>
+      <div className="acc-toolbar acc-fixed">
+        <select aria-label="Journal" value={journalType} onChange={e=>{setJournalPage(0);setJournalType(e.target.value);}} className="input w-auto"><option value="">Tous les journaux</option>{Object.entries(JOURNAL_TYPES).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
+        <label>Du <input aria-label="Date de début" type="date" className="input w-auto" value={fromDate} onChange={e=>{setJournalPage(0);setFromDate(e.target.value);}}/></label>
+        <label>Au <input aria-label="Date de fin" type="date" className="input w-auto" value={toDate} onChange={e=>{setJournalPage(0);setToDate(e.target.value);}}/></label>
+        <span className="acc-spacer"/>
+        {canView&&<button onClick={openExportModal} className="btn-secondary"><Download size={16}/>Exporter</button>}
+        {canManage&&<button onClick={()=>setOpen(true)} className="btn-primary"><Plus size={16}/>Nouvelle écriture</button>}
       </div>
-
-      <div className="card overflow-hidden">
-        {loading ? <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-          : entries.length === 0 ? (
-            <div className="py-12 text-center text-sm text-neutral-500">Aucune écriture comptable pour le moment.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 text-xs uppercase text-neutral-600">
-                  <tr>
-                    <th className="px-1 md:px-4 py-3 text-left">N° Pièce</th>
-                    <th className="px-1 md:px-4 py-3 text-left hidden sm:table-cell">Date</th>
-                    <th className="px-1 md:px-4 py-3 text-left hidden sm:table-cell">Journal</th>
-                    <th className="px-1 md:px-4 py-3 text-left">Description</th>
-                    <th className="px-1 md:px-4 py-3 text-center hidden md:table-cell">Statut</th>
-                    <th className="px-1 md:px-4 py-3 text-right hidden md:table-cell">Débit</th>
-                    <th className="px-1 md:px-4 py-3 text-right hidden md:table-cell">Crédit</th>
-                    <th className="px-1 md:px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {entries.map(e => (
-                    <tr key={e.id} className="hover:bg-neutral-50/60">
-                      <td className="px-1 md:px-4 py-3 font-mono text-xs text-neutral-600">{e.entry_number}</td>
-                      <td className="px-1 md:px-4 py-3 text-xs hidden sm:table-cell text-neutral-600">{formatDate(e.entry_date)}</td>
-                      <td className="px-1 md:px-4 py-3 hidden sm:table-cell"><span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-brand-50 text-brand-700">{e.journal_type}</span></td>
-                      <td className="px-1 md:px-4 py-3 text-neutral-700 max-w-xs truncate">{e.description}</td>
-                      <td className="px-1 md:px-4 py-3 text-center hidden md:table-cell">
-                        {e.status === 'posted' ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><CheckCircle className="w-3 h-3" />Validé</span>
-                        ) : e.status === 'cancelled' ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-700 border border-red-200">Annulé</span>
-                        ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Brouillon</span>
-                        )}
-                      </td>
-                      <td className="px-1 md:px-4 py-3 text-right hidden md:table-cell font-mono text-xs">{Number(e.total_debit).toLocaleString('fr-FR')}</td>
-                      <td className="px-1 md:px-4 py-3 text-right hidden md:table-cell font-mono text-xs">{Number(e.total_credit).toLocaleString('fr-FR')}</td>
-                      <td className="px-1 md:px-4 py-3 text-right">
-                        <button onClick={() => openDetail(e)} className="p-1.5 rounded hover:bg-neutral-100 text-neutral-600"><Eye className="w-4 h-4" /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-      </div>
+      {journalError&&<p role="alert" className="text-sm text-red-700">{journalError}</p>}
+      <AccountingTable footer={<AccountingPagination page={journalPage} size={journalSize} total={journalTotal} setPage={n=>{setContextRow(null);setJournalPage(n);}} setSize={n=>{setJournalPage(0);setJournalSize(n);}} disabled={loading}/>}>
+        <table><thead><tr><th className="text-left">Pièce</th><th className="text-left hidden md:table-cell">Date</th><th className="text-left hidden md:table-cell">Journal</th><th className="text-left">Libellé</th><th className="text-left hidden lg:table-cell">Statut</th><th className="text-right">Débit</th><th className="text-right hidden sm:table-cell">Crédit</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
+        <tbody>{loading?<tr><td colSpan={8} className="text-center"><Loader2 className="mx-auto animate-spin" size={20}/></td></tr>:entries.length===0?<tr><td colSpan={8} className="text-center text-neutral-500">Aucune écriture sur cette période.</td></tr>:entries.map(e=><tr key={e.id} onContextMenu={event=>{event.preventDefault();setContextRow({id:e.id,x:event.clientX,y:event.clientY});}}>
+          <td><button type="button" className="text-left font-medium underline-offset-2 hover:underline" onClick={()=>void openDetail(e)}>{e.entry_number}</button><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(e.entry_date)} · {e.journal_type}</span></td>
+          <td className="hidden md:table-cell whitespace-nowrap">{formatDate(e.entry_date)}</td><td className="hidden md:table-cell">{e.journal_type}</td>
+          <td className="break-words">{e.description}<span className="block lg:hidden text-[11px] text-neutral-500">{e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
+          <td className="hidden lg:table-cell"><span className={'acc-status '+(e.status==='posted'?'valid':e.status==='cancelled'?'cancelled':'draft')}>{e.status==='posted'&&<Check size={13}/>} {e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
+          <td className="text-right">{Number(e.total_debit).toLocaleString('fr-FR')}<span className="block sm:hidden text-[10px] text-neutral-500">C : {Number(e.total_credit).toLocaleString('fr-FR')}</span></td>
+          <td className="text-right hidden sm:table-cell">{Number(e.total_credit).toLocaleString('fr-FR')}</td>
+          <td className="text-right"><AccountingRowActions piece={e.entry_number} onView={()=>void openDetail(e)} anchor={contextRow?.id===e.id?contextRow:undefined} onDismiss={()=>setContextRow(null)}/></td>
+        </tr>)}</tbody></table>
+      </AccountingTable>
 
       {/* Create modal */}
       <Modal open={open} onClose={() => setOpen(false)} title="Nouvelle écriture comptable" size="lg"
@@ -681,6 +633,7 @@ function BalanceTab() {
   const totalCredit = data.reduce((s: number, r: any) => s + Number(r.total_credit), 0);
   const totalSoldeDebiteur = data.reduce((s: number, r: any) => s + Number(r.solde_debiteur), 0);
   const totalSoldeCrediteur = data.reduce((s: number, r: any) => s + Number(r.solde_crediteur), 0);
+  const balancePaging=useAccountingPagination(data,period);
 
   const comptabiliserTout = async () => {
     if (!tenant || bulkBusy) return;
@@ -728,25 +681,25 @@ function BalanceTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="acc-toolbar acc-fixed">
         <select value={period} onChange={e => setPeriod(e.target.value as any)} className="input w-48">
           <option value="month">Mois en cours</option>
           <option value="year">Exercice en cours</option>
           <option value="all">Tout</option>
         </select>
         {canManage && <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={comptabiliserTout} disabled={bulkBusy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition disabled:opacity-50">
+          <button onClick={comptabiliserTout} disabled={bulkBusy} className="btn-secondary">
             {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Ventes
           </button>
-          <button onClick={comptabiliserReglements} disabled={bulkPayBusy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-neutral-50 text-neutral-800 border border-neutral-200 hover:bg-neutral-100 transition disabled:opacity-50">
+          <button onClick={comptabiliserReglements} disabled={bulkPayBusy} className="btn-secondary">
             {bulkPayBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Rglts clients
           </button>
           <button type="button" className="btn btn-secondary" aria-expanded={showPurchaseInvoice} onClick={() => setShowPurchaseInvoice(show => !show)}>
             Factures fournisseurs
           </button>
-          <button onClick={comptabiliserReglFourn} disabled={bulkPayFournBusy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 transition disabled:opacity-50">
+          <button onClick={comptabiliserReglFourn} disabled={bulkPayFournBusy} className="btn-secondary">
             {bulkPayFournBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Rglts fournisseurs
           </button>
@@ -768,8 +721,7 @@ function BalanceTab() {
         : data.length === 0 ? (
           <div className="card py-12 text-center text-sm text-neutral-500">Aucune écriture pour la période sélectionnée.</div>
         ) : (
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
+          <AccountingTable footer={<AccountingPagination {...balancePaging}/>}>
               <table className="w-full text-sm">
                 <thead className="bg-neutral-50 text-xs uppercase text-neutral-600">
                   <tr>
@@ -782,14 +734,14 @@ function BalanceTab() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {data.map((r: any) => (
+                  {balancePaging.rows.map((r: any) => (
                     <tr key={r.account_code} className="hover:bg-[var(--w-surface-el)]/60">
                       <td className="px-1 md:px-4 py-2.5 font-mono text-xs text-brand-700">{r.account_code}</td>
                       <td className="px-1 md:px-4 py-2.5 text-neutral-700">{r.account_name}</td>
                       <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs">{Number(r.total_debit) > 0 ? Number(r.total_debit).toLocaleString('fr-FR') : '—'}</td>
                       <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs">{Number(r.total_credit) > 0 ? Number(r.total_credit).toLocaleString('fr-FR') : '—'}</td>
-                      <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs font-semibold text-emerald-700">{Number(r.solde_debiteur) > 0 ? Number(r.solde_debiteur).toLocaleString('fr-FR') : '—'}</td>
-                      <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs font-semibold text-red-600">{Number(r.solde_crediteur) > 0 ? Number(r.solde_crediteur).toLocaleString('fr-FR') : '—'}</td>
+                      <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs font-semibold text-neutral-900">{Number(r.solde_debiteur) > 0 ? Number(r.solde_debiteur).toLocaleString('fr-FR') : '—'}</td>
+                      <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs font-semibold text-neutral-900">{Number(r.solde_crediteur) > 0 ? Number(r.solde_crediteur).toLocaleString('fr-FR') : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -798,13 +750,12 @@ function BalanceTab() {
                     <td className="px-1 md:px-4 py-3" colSpan={2}>TOTAL</td>
                     <td className="px-1 md:px-4 py-3 text-right font-mono">{totalDebit.toLocaleString('fr-FR')}</td>
                     <td className="px-1 md:px-4 py-3 text-right font-mono">{totalCredit.toLocaleString('fr-FR')}</td>
-                    <td className="px-1 md:px-4 py-3 text-right font-mono text-emerald-700">{totalSoldeDebiteur.toLocaleString('fr-FR')}</td>
-                    <td className="px-1 md:px-4 py-3 text-right font-mono text-red-600">{totalSoldeCrediteur.toLocaleString('fr-FR')}</td>
+                    <td className="px-1 md:px-4 py-3 text-right font-mono text-neutral-900">{totalSoldeDebiteur.toLocaleString('fr-FR')}</td>
+                    <td className="px-1 md:px-4 py-3 text-right font-mono text-neutral-900">{totalSoldeCrediteur.toLocaleString('fr-FR')}</td>
                   </tr>
                 </tfoot>
               </table>
-            </div>
-          </div>
+          </AccountingTable>
         )}
     </div>
   );
@@ -1083,6 +1034,7 @@ function SearchTab() {
   const [filters, setFilters] = useState({ text: '', journal: '', dateFrom: '', dateTo: '', amountMin: '', amountMax: '' });
   const [detail, setDetail] = useState<any | null>(null);
 
+  const resultPaging=useAccountingPagination(results,JSON.stringify(filters));
   function doSearch() {
     if (!tenant) return;
     setLoading(true);
@@ -1104,7 +1056,7 @@ function SearchTab() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-xl border border-neutral-200 shadow-sm p-4">
+      <div className="acc-toolbar">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <input type="text" placeholder="Texte libre (libellé, pièce...)" value={filters.text} onChange={e => setFilters(f => ({ ...f, text: e.target.value }))} className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" />
           <select value={filters.journal} onChange={e => setFilters(f => ({ ...f, journal: e.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none">
@@ -1125,11 +1077,11 @@ function SearchTab() {
       </div>
 
       {results.length > 0 && (
-        <div className="bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
+        <div className="min-w-0">
           <div className="px-1 md:px-4 py-3 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700">{results.length} résultat{results.length > 1 ? 's' : ''}</span>
           </div>
-          <div className="max-h-[50vh] overflow-auto">
+          <AccountingTable footer={<AccountingPagination {...resultPaging}/>}>
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 sticky top-0">
                 <tr className="text-xs text-slate-500 uppercase">
@@ -1144,7 +1096,7 @@ function SearchTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--w-separator-l)]">
-                {results.map((r: any) => (
+                {resultPaging.rows.map((r: any) => (
                   <tr key={r.entry_id} onClick={() => setDetail(r)} className="hover:bg-neutral-50/60 cursor-pointer">
                     <td className="px-1 md:px-4 py-2 text-xs text-neutral-600">{formatDate(r.entry_date)}</td>
                     <td className="px-1 md:px-4 py-2 font-mono text-xs text-neutral-500">{r.entry_number}</td>
@@ -1154,7 +1106,7 @@ function SearchTab() {
                     <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(r.total_debit) > 0 ? Number(r.total_debit).toLocaleString('fr-FR') : ''}</td>
                     <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(r.total_credit) > 0 ? Number(r.total_credit).toLocaleString('fr-FR') : ''}</td>
                     <td className="px-1 md:px-4 py-2 text-center">
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${r.status === 'posted' ? 'bg-emerald-100 text-emerald-700' : r.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <span className={'acc-status '+(r.status==='posted'?'valid':r.status==='cancelled'?'cancelled':'draft')}>
                         {r.status === 'posted' ? 'Validée' : r.status === 'cancelled' ? 'Annulée' : 'Brouillon'}
                       </span>
                     </td>
@@ -1162,7 +1114,7 @@ function SearchTab() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </AccountingTable>
         </div>
       )}
 
