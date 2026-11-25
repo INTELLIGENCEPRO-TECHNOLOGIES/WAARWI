@@ -46,6 +46,7 @@
     "accounting": "Accounting",
     "accountingPlan": "Chart of accounts",
     "vatReport": "VAT statement",
+    "accountStatement": "Account inquiry",
     "journals": "Journals",
     "balance": "Balance",
     "generalLedger": "General ledger",
