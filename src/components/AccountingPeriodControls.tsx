@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
+import { useEffect, useRef, useState } from 'react';
 import {AccountingTable,AccountingPagination,useAccountingPagination} from './AccountingWorkspace';
 import {Check,Lock,Search} from './Icons';
 import { formatDate, formatDateTime, formatNumber } from '../lib/format';
@@ -98,6 +99,8 @@ function MonthClosing({ tenantId, report, canClose, onClosed, onPendingChange }:
   const [error, setError] = useState('');
   const month = report.month_closure;
   const lock=useRef(false);
+ const windowId=useAccountingWindowId();
+ useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(lock.current||(confirming)&&!window.confirm("Une clôture mensuelle est en préparation. Fermer ?"))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[windowId,confirming]);
 
   const close = async () => {
     if (month?.status !== 'open' || !canClose || month.blocked
