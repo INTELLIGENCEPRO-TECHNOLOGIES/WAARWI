@@ -384,6 +384,16 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     setLines(data || []);
   };
 
+  useEffect(()=>{
+    if(!entryOnly&&!open)return;
+    const beforeNavigate=(event:Event)=>{
+      if(savingLock.current){event.preventDefault();return;}
+      const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));
+      if(dirty&&!window.confirm('Une écriture est en cours de saisie. Quitter sans enregistrer ?'))event.preventDefault();
+    };
+    window.addEventListener('waarwi:accounting-before-navigate',beforeNavigate);
+    return()=>window.removeEventListener('waarwi:accounting-before-navigate',beforeNavigate);
+  },[entryOnly,open,form,entryLines]);
   const closeEntry=()=>{if(saving)return;const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));if(dirty&&!window.confirm('Abandonner la saisie en cours ?'))return;if(entryOnly)onExit?.();else setOpen(false);};
   const entryForm=( <fieldset disabled={saving} className="acc-entry-body space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
