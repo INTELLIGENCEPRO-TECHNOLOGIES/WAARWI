@@ -82,7 +82,7 @@ const Stock = lazyWithRetry(() => import('./pages/Stock').then(m => ({ default: 
 const POS = lazyWithRetry(() => import('./pages/POS').then(m => ({ default: m.POS })));
 const Sales = lazyWithRetry(() => import('./pages/Sales').then(m => ({ default: m.Sales })));
 const Tiers = lazyWithRetry(() => import('./pages/Tiers').then(m => ({ default: m.Tiers })));
-const Accounting = lazyWithRetry(() => import('./pages/Accounting').then(m => ({ default: m.Accounting })));
+const AccountingDesktop = lazyWithRetry(() => import('./components/AccountingDesktop').then(m => ({ default: m.AccountingDesktop })));
 const Settings = lazyWithRetry(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 const Billing = lazyWithRetry(() => import('./pages/Billing').then(m => ({ default: m.Billing })));
 const SupplierOrders = lazyWithRetry(() => import('./pages/SupplierOrders').then(m => ({ default: m.SupplierOrders })));
@@ -409,20 +409,7 @@ function Inner() {
         {route === 'online_orders' && <OnlineOrders />}
         {route === 'cash_history' && <CashHistory />}
         {route === 'coffre' && <Coffre />}
-        {route === 'acc_overview' && <Accounting section="overview" onNavigate={r=>setRoute(r as Route)}/>}
-        {route === 'acc_entry' && <Accounting section="entry" onNavigate={r=>setRoute(r as Route)}/>}
-        {route === 'acc_plan' && <Accounting section="plan" />}
-        {route === 'acc_journals' && <Accounting section="journals" onNavigate={r=>setRoute(r as Route)}/>}
-        {route === 'acc_balance' && <Accounting section="balance" />}
-        {route === 'acc_grandlivre' && <Accounting section="grandlivre" />}
-        {route === 'acc_tiers' && <Accounting section="tiers" />}
-        {route === 'acc_search' && <Accounting section="search" />}
-        {route === 'acc_cloture' && <Accounting section="cloture" />}
-        {route === 'acc_vat' && <Accounting section="vat" />}
-        {route === 'acc_statement' && <Accounting section="statement" />}
-        {route === 'acc_bank' && <Accounting section="bank" />}
-        {route === 'acc_fiscal' && <Accounting section="fiscal" />}
-        {route === 'acc_financial' && <Accounting section="financial" />}
+        {ROUTE_MODULE[route]==='accounting' && tenant && !permsLoading && can('view_accounting') && enabled.includes('accounting') && <AccountingDesktop key={tenant.id+':'+user.id} route={route} onNavigate={setRoute} canAccess={r=>ROUTE_MODULE[r]==='accounting'&&enabled.includes('accounting')&&(!ROUTE_PERMISSION[r]||can(ROUTE_PERMISSION[r]))}/>}
         {route === 'settings' && <Settings key={settingsEntry.n} initialTab={settingsEntry.tab} />}
         {route === 'reports' && <Reports />}
         {route === 'ipm' && <IPM />}
