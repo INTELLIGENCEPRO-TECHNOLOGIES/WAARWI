@@ -171,6 +171,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [reverseOnOpen,setReverseOnOpen]=useState(false);
   const [selected, setSelected] = useState<any>(null);
   const [lines, setLines] = useState<any[]>([]);
   const [journalType, setJournalType] = useState('');
@@ -379,9 +380,9 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     finally{savingLock.current=false;setSaving(false);}
   };
 
-  const openDetail = async (e: any) => {
+  const openDetail = async (e: any,reverse=false) => {
     if(!tenant)return;
-    setLines([]);setSelected(e); setDetailOpen(true);
+    setLines([]);setSelected(e);setReverseOnOpen(reverse);setDetailOpen(true);
     const { data } = await supabase.from('journal_lines').select('*').eq('tenant_id',tenant.id).eq('entry_id', e.id).order('created_at');
     setLines(data || []);
   };
@@ -478,7 +479,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
           <td className="hidden lg:table-cell"><span className={'acc-status '+(e.status==='posted'?'valid':e.status==='cancelled'?'cancelled':'draft')}>{e.status==='posted'&&<Check size={13}/>} {e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
           <td className="text-right">{Number(e.total_debit).toLocaleString('fr-FR')}<span className="block sm:hidden text-[10px] text-neutral-500">C : {Number(e.total_credit).toLocaleString('fr-FR')}</span></td>
           <td className="text-right hidden sm:table-cell">{Number(e.total_credit).toLocaleString('fr-FR')}</td>
-          <td className="text-right"><AccountingRowActions piece={e.entry_number} onView={()=>void openDetail(e)} anchor={contextRow?.id===e.id?contextRow:undefined} onDismiss={()=>setContextRow(null)}/></td>
+          <td className="text-right"><AccountingRowActions piece={e.entry_number} onView={()=>void openDetail(e)} onReverse={canManage&&e.source_type==='manual'&&e.status==='posted'?()=>void openDetail(e,true):undefined} reverseDisabledReason={canManage?(e.source_type==='reversal'?'Pièce d’extourne':e.source_type!=='manual'?'Corriger la pièce d’origine':e.status!=='posted'?'Écriture non validée':undefined):'Droit de gestion requis'} anchor={contextRow?.id===e.id?contextRow:undefined} onDismiss={()=>setContextRow(null)}/></td>
         </tr>)}</tbody></table>
       </AccountingTable>
 
@@ -581,6 +582,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
         footer={<button onClick={() => setDetailOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
         {selected && (
           <div className="space-y-4">
+            {tenant && <AccountingEntryReversal key={selected.id} tenantId={tenant.id} entryId={selected.id} canManage={canManage} initialOpen={reverseOnOpen} onPosted={()=>void load(true)} />}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div className="card p-3"><div className="text-xs text-slate-500">Journal</div><div className="font-semibold mt-0.5">{JOURNAL_TYPES[selected.journal_type] || selected.journal_type}</div></div>
               <div className="card p-3"><div className="text-xs text-slate-500">Date</div><div className="font-semibold mt-0.5">{formatDate(selected.entry_date)}</div></div>
@@ -606,7 +608,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
                 </tfoot>
               </table>
             </div>
-            {tenant && <AccountingEntryReversal key={selected.id} tenantId={tenant.id} entryId={selected.id} canManage={canManage} onPosted={()=>void load(true)} />}
+            
           </div>
         )}
       </Modal>
@@ -1107,6 +1109,7 @@ function SearchDetailModal({ entry, tenant, onClose, onReversed }: { entry: any;
     <Modal open onClose={onClose} title={`Écriture ${entry.entry_number}`} size="lg"
       footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
       <div className="space-y-4 text-sm">
+        <AccountingEntryReversal key={entry.entry_id} tenantId={tenant.id} entryId={entry.entry_id} canManage={can('manage_accounting')} onPosted={onReversed} />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div><span className="text-slate-500">Pièce :</span> <span className="font-mono font-semibold">{entry.entry_number}</span></div>
           <div><span className="text-slate-500">Journal :</span> <span className="font-semibold">{entry.journal_type}</span></div>
@@ -1175,7 +1178,7 @@ function SearchDetailModal({ entry, tenant, onClose, onReversed }: { entry: any;
             </table>
           </div>
         )}
-        <AccountingEntryReversal key={entry.entry_id} tenantId={tenant.id} entryId={entry.entry_id} canManage={can('manage_accounting')} onPosted={onReversed} />
+        
       </div>
     </Modal>
   );
