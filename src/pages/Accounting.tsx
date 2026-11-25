@@ -8,6 +8,7 @@ import { AccountingPurchaseInvoice } from '../components/AccountingPurchaseInvoi
 import { AccountingVatReport } from '../components/AccountingVatReport';
 import { AccountingAccountStatement } from '../components/AccountingAccountStatement';
 import { AccountingBankReconciliation } from '../components/AccountingBankReconciliation';
+import { AccountingFiscalYear } from '../components/AccountingFiscalYear';
 import { AccountingEntryReversal } from '../components/AccountingEntryReversal';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
@@ -19,7 +20,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank';
+type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal';
 
 const JOURNAL_TYPES: Record<string, string> = {
   VE: 'Journal des ventes', AC: 'Journal des achats',
@@ -39,6 +40,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
     vat: { t: 'Situation de TVA', s: 'TVA collectée, récupérable et contrôles par période.' },
     statement: { t: 'Interrogation des comptes', s: 'Mouvements, soldes et pièces des comptes généraux et auxiliaires.' },
     bank: { t: 'Rapprochement bancaire', s: 'Relevés, pointage des écritures et contrôle des soldes.' },
+    fiscal: { t: 'Exercices et reports à nouveau', s: 'Arrêtés annuels, balance et ouverture du prochain exercice.' },
   };
   const meta = titles[section];
   return (
@@ -57,6 +59,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
       {section === 'vat' && <VatTab />}
       {section === 'statement' && <AccountStatementTab />}
       {section === 'bank' && <BankReconciliationTab />}
+      {section === 'fiscal' && <FiscalYearTab />}
     </div>
   );
 }
@@ -1298,4 +1301,10 @@ function BankReconciliationTab() {
  const {tenant}=useApp();
  const {can}=usePermissions();
  return tenant?<AccountingBankReconciliation key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')}/>:null;
+}
+
+function FiscalYearTab() {
+ const {tenant}=useApp();
+ const {can}=usePermissions();
+ return tenant?<AccountingFiscalYear key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')}/>:null;
 }
