@@ -58,8 +58,9 @@ REVOKE ALL ON FUNCTION public.reverse_manual_accounting_entry(uuid,uuid,date,tex
 GRANT EXECUTE ON FUNCTION public.reverse_manual_accounting_entry(uuid,uuid,date,text) TO authenticated;
 
 -- Protection des écritures manuelles extournées et des contrepassations.
--- Bloque les corrections financières ordinaires ; les procédures de restauration
--- doivent gérer explicitement ces liens (à vérifier lors de la recette).
+-- Bloque les modifications ordinaires. Aucun droit DELETE n'est accordé aux
+-- utilisateurs applicatifs sur les journaux ; conserver les procédures de purge/restauration
+-- administratives existantes sans introduire un contournement par paramètre de session.
 CREATE OR REPLACE FUNCTION public._guard_manual_reversal_entry() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $fn$
@@ -68,28 +69,26 @@ BEGIN
  protected:=OLD.source_type='reversal' OR EXISTS(
  SELECT 1 FROM public.journal_entries r WHERE r.tenant_id=OLD.tenant_id AND r.source_type='reversal' AND r.source_id=OLD.id);
  IF protected THEN
-  IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Écriture extournée : suppression interdite.'; END IF;
   IF NEW IS DISTINCT FROM OLD THEN RAISE EXCEPTION 'Écriture extournée : modification interdite.'; END IF;
  END IF;
- IF TG_OP='DELETE' THEN RETURN OLD; END IF; RETURN NEW;
+ RETURN NEW;
 END;
 $fn$;
 REVOKE ALL ON FUNCTION public._guard_manual_reversal_entry() FROM PUBLIC,anon,authenticated;
-CREATE TRIGGER guard_manual_reversal_entry BEFORE UPDATE OR DELETE ON public.journal_entries FOR EACH ROW EXECUTE FUNCTION public._guard_manual_reversal_entry();
+CREATE TRIGGER guard_manual_reversal_entry BEFORE UPDATE ON public.journal_entries FOR EACH ROW EXECUTE FUNCTION public._guard_manual_reversal_entry();
 
 -- La contrepassation est créée dans la même transaction que ses lignes.
--- Les lignes d'une extourne ne peuvent ensuite être mises à jour ni supprimées.
+-- Les lignes d'une extourne ne peuvent ensuite être modifiées par UPDATE.
 CREATE OR REPLACE FUNCTION public._guard_manual_reversal_line() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $fn$
 BEGIN
  IF EXISTS(SELECT 1 FROM public.journal_entries e WHERE e.tenant_id=OLD.tenant_id AND e.id=OLD.entry_id AND
  (e.source_type='reversal' OR EXISTS(SELECT 1 FROM public.journal_entries r WHERE r.tenant_id=e.tenant_id AND r.source_type='reversal' AND r.source_id=e.id))) THEN
-  IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Ligne d’une écriture extournée : suppression interdite.'; END IF;
   IF NEW IS DISTINCT FROM OLD THEN RAISE EXCEPTION 'Ligne d’une écriture extournée : modification interdite.'; END IF;
  END IF;
  IF TG_OP='DELETE' THEN RETURN OLD; END IF; RETURN NEW;
 END;
 $fn$;
 REVOKE ALL ON FUNCTION public._guard_manual_reversal_line() FROM PUBLIC,anon,authenticated;
-CREATE TRIGGER guard_manual_reversal_line BEFORE UPDATE OR DELETE ON public.journal_lines FOR EACH ROW EXECUTE FUNCTION public._guard_manual_reversal_line();
+CREATE TRIGGER guard_manual_reversal_line BEFORE UPDATE ON public.journal_lines FOR EACH ROW EXECUTE FUNCTION public._guard_manual_reversal_line();
