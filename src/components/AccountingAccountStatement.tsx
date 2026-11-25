@@ -13,7 +13,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 const msg=(e:unknown)=>e&&typeof e==='object'&&'message' in e?String(e.message):'Chargement impossible.';
 function csv(v:unknown){if(typeof v==='number'&&Number.isFinite(v))return String(v).replace('.',',');let s=String(v??'');if(/^[\s\u0000-\u001f]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
 
-export function AccountingAccountStatement({tenantId,onView,initialAccount='',canManage=false}:{tenantId:string;onView:(entry:Line)=>void;initialAccount?:string;canManage?:boolean}) {
+export function AccountingAccountStatement({tenantId,onView,initialAccount='',canManage=false,refreshRevision=0}:{tenantId:string;onView:(entry:Line)=>void;initialAccount?:string;canManage?:boolean;refreshRevision?:number}) {
  const [search,setSearch]=useState(initialAccount);
  const [searchQuery,setSearchQuery]=useState({term:initialAccount,offset:0});
  const [accounts,setAccounts]=useState<Account[]>([]);
@@ -59,9 +59,10 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
    if(live)setResult(data as Statement);
   }catch(e){if(live)setError(msg(e));}finally{if(live)setBusy(false);}})();
   return()=>{live=false;};
- },[tenantId,request]);
+ },[tenantId,request,refreshRevision]);
  const valid=!!code&&!!from&&!!to&&from<=to&&(Date.parse(to)-Date.parse(from))/86400000<=366;
  const changed=!!request&&(code!==request.code||from!==request.from||to!==request.to);
+ useEffect(()=>{setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);},[refreshRevision]);
  const canMatch=canManage&&result?.account.account_type==='auxiliary'&&/^(401|411)/.test(result.account.code);
  const selected=Object.values(chosen);
  const sumDebit=selected.reduce((n,l)=>n+Math.round(Number(l.debit)*100),0);
