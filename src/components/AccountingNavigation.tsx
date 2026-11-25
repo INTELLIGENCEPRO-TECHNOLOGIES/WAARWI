@@ -36,6 +36,8 @@ export function AccountingNavigation({route,onNavigate,canAccess}:{route:Route;o
  const close=()=>{setOpened(null);setSub(null);setMobile(false);};
  useEffect(()=>{close();},[route]);
  useEffect(()=>{const outside=(e:PointerEvent)=>{if(!root.current?.contains(e.target as Node))close();};document.addEventListener('pointerdown',outside);return()=>document.removeEventListener('pointerdown',outside);},[]);
+ const windowAction=(action:string)=>{close();window.dispatchEvent(new CustomEvent('waarwi:accounting-window-action',{detail:{action}}));};
+ const windowEntries=(small=false)=><div className={small?'acc-nav-mobile-items':'acc-nav-dropdown'} data-acc-level>{[{action:'home',label:'Afficher le bureau / réduire tout'},{action:'cascade',label:'Cascade'},{action:'tile',label:'Mosaïque'},{action:'closeAll',label:'Fermer toutes les fenêtres'}].filter(i=>!small||i.action==='home'||i.action==='closeAll').map(i=><button type="button" key={i.action} className="acc-nav-leaf" onClick={()=>windowAction(i.action)}><span>{i.label}</span></button>)}</div>;
  const select=(r:Route)=>{if(canAccess(r)){close();onNavigate(r);}};
  const activate=(label:string,button:HTMLButtonElement)=>{previousTrigger.current=button;setOpened(p=>p===label?null:label);setSub(null);};
  const keyboard=(e:KeyboardEvent<HTMLElement>)=>{
@@ -53,7 +55,7 @@ export function AccountingNavigation({route,onNavigate,canAccess}:{route:Route;o
  return <nav ref={root} className="acc-navigation" aria-label="Menu de la comptabilité" onKeyDown={keyboard}>
   <div className="acc-nav-desktop">
    <button type="button" className="acc-nav-home" title="Accueil comptable" aria-label="Accueil comptable" onClick={()=>select('acc_overview')}><BookOpen size={18}/><strong>Comptabilité</strong></button>
-   <div className="acc-nav-groups" data-acc-level>{allowed.map(g=><div className="acc-nav-group" key={g.label} onMouseEnter={()=>{if(opened&&opened!==g.label){setOpened(g.label);setSub(null);}}}><button type="button" className="acc-nav-trigger" data-current={g.items.some(i=>'children' in i?i.children.some(l=>l.route===route):i.route===route)} aria-expanded={opened===g.label} onClick={e=>activate(g.label,e.currentTarget)}>{g.label}</button>{opened===g.label&&entries(g)}</div>)}</div>
+   <div className="acc-nav-groups" data-acc-level>{allowed.map(g=><div className="acc-nav-group" key={g.label} onMouseEnter={()=>{if(opened&&opened!==g.label){setOpened(g.label);setSub(null);}}}><button type="button" className="acc-nav-trigger" data-current={g.items.some(i=>'children' in i?i.children.some(l=>l.route===route):i.route===route)} aria-expanded={opened===g.label} onClick={e=>activate(g.label,e.currentTarget)}>{g.label}</button>{opened===g.label&&entries(g)}</div>)}<div className="acc-nav-group" onMouseEnter={()=>{if(opened&&opened!=='Fenêtre'){setOpened('Fenêtre');setSub(null);}}}><button type="button" className="acc-nav-trigger" aria-expanded={opened==='Fenêtre'} onClick={e=>activate('Fenêtre',e.currentTarget)}>Fenêtre</button>{opened==='Fenêtre'&&windowEntries()}</div></div>
    <span className="acc-nav-current">{title}</span>
    <button type="button" className="acc-nav-exit" onClick={exit} title="Retour à Waarwi"><ArrowLeft size={16}/>Retour à Waarwi</button>
   </div>
@@ -61,7 +63,7 @@ export function AccountingNavigation({route,onNavigate,canAccess}:{route:Route;o
    <button type="button" className="acc-nav-trigger" aria-expanded={mobile} onClick={e=>{previousTrigger.current=e.currentTarget;setMobile(v=>!v);setOpened(null);setSub(null);}}><Menu size={17}/>Comptabilité<ChevronDown size={14}/></button>
    <span className="acc-nav-current">{title}</span>
    <button type="button" className="acc-nav-exit" aria-label="Retour à Waarwi" title="Retour à Waarwi" onClick={exit}><ArrowLeft size={17}/></button>
-   {mobile&&<div className="acc-nav-mobile-panel" data-acc-level>{allowed.map(g=><div key={g.label}><button type="button" className="acc-nav-leaf" aria-expanded={opened===g.label} onClick={()=>{setOpened(p=>p===g.label?null:g.label);setSub(null);}}><strong>{g.label}</strong><ChevronRight size={15} className={opened===g.label?'acc-nav-rotate':''}/></button>{opened===g.label&&entries(g,true)}</div>)}</div>}
+   {mobile&&<div className="acc-nav-mobile-panel" data-acc-level>{allowed.map(g=><div key={g.label}><button type="button" className="acc-nav-leaf" aria-expanded={opened===g.label} onClick={()=>{setOpened(p=>p===g.label?null:g.label);setSub(null);}}><strong>{g.label}</strong><ChevronRight size={15} className={opened===g.label?'acc-nav-rotate':''}/></button>{opened===g.label&&entries(g,true)}</div>)}<div><button type="button" className="acc-nav-leaf" aria-expanded={opened==='Fenêtre'} onClick={()=>{setOpened(p=>p==='Fenêtre'?null:'Fenêtre');setSub(null);}}><strong>Fenêtre</strong><ChevronRight size={15}/></button>{opened==='Fenêtre'&&windowEntries(true)}</div></div>}
   </div>
  </nav>;
 }
