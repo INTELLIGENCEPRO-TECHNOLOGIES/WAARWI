@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import {AccountingTable} from './AccountingWorkspace';
 import { formatDate } from '../lib/format';
 
 type TaxLine={id:string;entry_date:string;entry_number:string;journal_type:string;reference:string;description:string;source_type:string;account_code:string;account_name:string;debit:number;credit:number;category:string;nature:string};
@@ -69,8 +70,8 @@ export function AccountingVatReport({tenantId}:{tenantId:string}) {
   {error&&<p role="alert" className="text-sm text-red-700 break-words">{error}</p>}
   {report&&<div className="space-y-4">
    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-neutral-600">Situation du {formatDate(query.from)} au {formatDate(query.to)} · Écritures validées uniquement.</p><button type="button" className="btn btn-secondary print:hidden" onClick={exportSummary}>Exporter la synthèse (CSV)</button></div>
-   <div className="grid gap-3 sm:grid-cols-3">
-    {[['TVA collectée nette (ventes et avoirs)',report.output_sales],['TVA récupérable sur achats',report.input_purchases],['Différence sur opérations commerciales',report.net_trade]].map(([label,amount])=><div key={String(label)} className="card p-4 min-w-0"><p className="text-xs text-neutral-600">{label}</p><p className="mt-2 text-lg font-bold tabular-nums break-words">{money(Number(amount))}</p></div>)}
+   <div className="acc-summary">
+    {[['TVA collectée nette (ventes et avoirs)',report.output_sales],['TVA récupérable sur achats',report.input_purchases],['Différence sur opérations commerciales',report.net_trade]].map(([label,amount])=><div key={String(label)}><span>{label}</span><strong>{money(Number(amount))}</strong></div>)}
    </div>
    <div className="card p-4 space-y-2"><h2 className="text-sm font-semibold">Autres mouvements comptables</h2>
     <div className="flex flex-wrap justify-between gap-2 text-sm"><span>TVA collectée · autres mouvements</span><strong className="tabular-nums">{money(report.output_adjustments)}</strong></div>
@@ -89,14 +90,8 @@ export function AccountingVatReport({tenantId}:{tenantId:string}) {
     <p className="text-xs text-neutral-500">Les achats historiques sans détail fiscal ne permettent pas de reconstituer automatiquement la TVA récupérable.</p>
    </div>
    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Détail des écritures de TVA ({report.row_count})</h2><button type="button" className="btn btn-secondary print:hidden" disabled={!report.rows.length} onClick={exportPage}>Exporter cette page (CSV)</button></div>
-   {report.rows.length===0?<p className="text-sm text-neutral-500">Aucun mouvement de TVA sur cette page.</p>:<ul className="divide-y divide-neutral-200 border-y border-neutral-200">
-    {report.rows.map(r=><li key={r.id} className="py-3 grid gap-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
-     <div className="min-w-0"><p className="text-sm font-medium break-words">{r.entry_number} · {formatDate(r.entry_date)}</p><p className="text-xs text-neutral-600 break-words">{r.reference||r.description}</p></div>
-     <div className="min-w-0"><p className="text-sm break-words">{r.account_code} · {category(r.category)}</p><p className="text-xs text-neutral-500 break-words">{nature(r.nature)}</p></div>
-     <div className="grid grid-cols-2 gap-2 sm:text-right"><div><p className="text-xs text-neutral-500">Débit</p><p className="text-sm font-medium tabular-nums break-words">{money(r.debit)}</p></div><div><p className="text-xs text-neutral-500">Crédit</p><p className="text-sm font-medium tabular-nums break-words">{money(r.credit)}</p></div></div>
-    </li>)}
-   </ul>}
-   <nav className="flex flex-wrap items-center justify-between gap-2 print:hidden" aria-label="Pages des écritures de TVA"><button type="button" className="btn btn-secondary" disabled={query.offset===0||changed} onClick={()=>setQuery(p=>({...p,offset:Math.max(0,p.offset-50)}))}>Précédente</button><span className="text-xs text-neutral-500">Page {query.offset/50+1} / {Math.max(1,Math.ceil(report.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={query.offset+50>=report.row_count||changed} onClick={()=>setQuery(p=>({...p,offset:p.offset+50}))}>Suivante</button></nav>
+   <AccountingTable><table><thead><tr><th className="text-left">Pièce</th><th className="text-left">Compte / nature</th><th className="text-right">Débit</th><th className="text-right">Crédit</th></tr></thead><tbody>{report.rows.map(r=><tr key={r.id}><td><span className="font-medium">{r.entry_number}</span><span className="block text-[11px] text-neutral-500">{formatDate(r.entry_date)} · {r.reference||r.description}</span></td><td><span>{r.account_code}</span><span className="block text-[11px]">{category(r.category)} · {nature(r.nature)}</span></td><td className="text-right">{Number(r.debit).toLocaleString('fr-FR')}</td><td className="text-right">{Number(r.credit).toLocaleString('fr-FR')}</td></tr>)}{!report.rows.length&&<tr><td colSpan={4} className="text-center text-neutral-500">Aucun mouvement de TVA sur cette page.</td></tr>}</tbody></table></AccountingTable>
+   <nav className="acc-pagination print:hidden" aria-label="Pages des écritures de TVA"><button type="button" className="btn btn-secondary" disabled={query.offset===0||changed} onClick={()=>setQuery(p=>({...p,offset:Math.max(0,p.offset-50)}))}>Précédente</button><span className="text-xs text-neutral-500">Page {query.offset/50+1} / {Math.max(1,Math.ceil(report.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={query.offset+50>=report.row_count||changed} onClick={()=>setQuery(p=>({...p,offset:p.offset+50}))}>Suivante</button></nav>
   </div>}
  </section>;
 }
