@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, X, Check, Trash2, Download } from 'lucide-react';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { AccountingCashReview } from '../components/AccountingCashReview';
+import { AccountingPurchaseInvoice } from '../components/AccountingPurchaseInvoice';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -634,7 +635,7 @@ function BalanceTab() {
   const [period, setPeriod] = useState<'month' | 'year' | 'all'>('year');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkPayBusy, setBulkPayBusy] = useState(false);
-  const [bulkAchatBusy, setBulkAchatBusy] = useState(false);
+  const [showPurchaseInvoice, setShowPurchaseInvoice] = useState(false);
   const [bulkPayFournBusy, setBulkPayFournBusy] = useState(false);
   const [showCashReview, setShowCashReview] = useState(false);
 
@@ -688,19 +689,6 @@ function BalanceTab() {
     finally { setBulkPayBusy(false); }
   };
 
-  const comptabiliserAchats = async () => {
-    if (!tenant || bulkAchatBusy) return;
-    setBulkAchatBusy(true);
-    try {
-      const { data: result, error } = await supabase.rpc('comptabiliser_achats_en_masse', { p_tenant_id: tenant.id });
-      if (error) throw error;
-      const r = result as any;
-      success(`${r.accounted} achat${r.accounted > 1 ? 's' : ''} comptabilisé${r.accounted > 1 ? 's' : ''} ${r.errors > 0 ? `(${r.errors} erreur${r.errors > 1 ? 's' : ''})` : ''}`);
-      load();
-    } catch (e: any) { toastError(e.message); }
-    finally { setBulkAchatBusy(false); }
-  };
-
   const comptabiliserReglFourn = async () => {
     if (!tenant || bulkPayFournBusy) return;
     setBulkPayFournBusy(true);
@@ -736,9 +724,8 @@ function BalanceTab() {
             {bulkPayBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Rglts clients
           </button>
-          <button onClick={comptabiliserAchats} disabled={bulkAchatBusy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition disabled:opacity-50">
-            {bulkAchatBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
-            Achats
+          <button type="button" className="btn btn-secondary" aria-expanded={showPurchaseInvoice} onClick={() => setShowPurchaseInvoice(show => !show)}>
+            Factures fournisseurs
           </button>
           <button onClick={comptabiliserReglFourn} disabled={bulkPayFournBusy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 transition disabled:opacity-50">
             {bulkPayFournBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
@@ -751,6 +738,9 @@ function BalanceTab() {
         </div>}
       </div>
 
+      {canManage && tenant && showPurchaseInvoice && (
+        <AccountingPurchaseInvoice key={tenant.id} tenantId={tenant.id} onPosted={() => void load(true)} />
+      )}
       {canManage && tenant && showCashReview && (
         <AccountingCashReview key={tenant.id} tenantId={tenant.id} onPosted={() => void load(true)} />
       )}
