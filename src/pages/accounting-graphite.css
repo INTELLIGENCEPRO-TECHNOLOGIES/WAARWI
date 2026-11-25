@@ -69,3 +69,15 @@
 .accounting-workspace .acc-entry-totals strong{margin-left:4px;font-weight:650}
 .accounting-workspace .acc-entry-dialog .acc-entry-footer{position:static;border:0;padding:0;background:transparent}
 @media(max-width:767px){.accounting-workspace .acc-overview-links{grid-template-columns:1fr}.accounting-workspace .acc-entry-page{min-height:calc(100dvh - 200px)}.accounting-workspace .acc-entry-footer{padding:9px 0 max(9px,env(safe-area-inset-bottom))}.accounting-workspace .acc-entry-footer>div:last-child{width:100%}.accounting-workspace .acc-entry-footer>div:last-child>button{flex:1}}
+
+.accounting-workspace .acc-account-picker{max-height:210px;overflow:auto;border-top:1px solid var(--w-separator);border-bottom:1px solid var(--w-separator)}
+.accounting-workspace .acc-account-picker button{display:grid;grid-template-columns:100px minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;padding:7px 6px;border-bottom:1px solid var(--w-separator-l);text-align:left;font-size:12px}
+.accounting-workspace .acc-account-picker button[aria-pressed=true],.accounting-workspace .acc-account-picker button:hover{background:var(--w-hover)}
+.accounting-workspace .acc-account-picker small{font-size:10px;color:var(--w-text-muted)}
+.accounting-workspace .acc-account-picker span{overflow-wrap:anywhere}
+.accounting-workspace .acc-toolbar label input[type=date]{max-width:100%}
+.accounting-workspace .acc-table-scroll table{min-width:0}
+.accounting-workspace .acc-table-scroll td{overflow-wrap:anywhere}
+.accounting-workspace .acc-entry-body input[type=number]::-webkit-inner-spin-button,.accounting-workspace .acc-entry-body input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.accounting-workspace .acc-entry-body input[type=number]{appearance:textfield}
+@media(max-width:639px){.accounting-workspace .acc-account-picker button{grid-template-columns:78px minmax(0,1fr)}.accounting-workspace .acc-account-picker small{grid-column:2}.accounting-workspace .acc-toolbar label{flex:1 1 130px;min-width:0}.accounting-workspace .acc-toolbar label input[type=date]{width:100%}}
