@@ -211,7 +211,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
   coffre: 'vault',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting', acc_financial: 'accounting',
+  acc_overview: 'accounting', acc_entry: 'accounting', acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting', acc_financial: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer', settings: 'settings', reports: 'reports',
   representatives: 'billing',
 };
@@ -230,6 +230,8 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
   stock: 'view_stock_levels',
   supplier_orders: 'manage_supplier_orders',
   online_orders: 'manage_online_orders',
+  acc_overview: 'view_accounting',
+  acc_entry: 'manage_accounting',
   acc_plan: 'view_accounting',
   acc_journals: 'view_accounting',
   acc_balance: 'view_accounting',
@@ -407,8 +409,10 @@ function Inner() {
         {route === 'online_orders' && <OnlineOrders />}
         {route === 'cash_history' && <CashHistory />}
         {route === 'coffre' && <Coffre />}
+        {route === 'acc_overview' && <Accounting section="overview" onNavigate={r=>setRoute(r as Route)}/>}
+        {route === 'acc_entry' && <Accounting section="entry" onNavigate={r=>setRoute(r as Route)}/>}
         {route === 'acc_plan' && <Accounting section="plan" />}
-        {route === 'acc_journals' && <Accounting section="journals" />}
+        {route === 'acc_journals' && <Accounting section="journals" onNavigate={r=>setRoute(r as Route)}/>}
         {route === 'acc_balance' && <Accounting section="balance" />}
         {route === 'acc_grandlivre' && <Accounting section="grandlivre" />}
         {route === 'acc_tiers' && <Accounting section="tiers" />}
