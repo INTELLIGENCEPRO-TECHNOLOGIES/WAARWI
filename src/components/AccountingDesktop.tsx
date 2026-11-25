@@ -1,8 +1,9 @@
-import {createContext,useContext,useEffect,useRef,useState,useCallback} from 'react';
+import {useEffect,useRef,useState,useCallback,type RefObject} from 'react';
 import {WindowManagerProvider,useWindowManager} from '../context/WindowManagerContext';
 import {DesktopWindow} from './DesktopWindow';
 import {BookOpen,LayoutGrid,Minus,Check,X} from './Icons';
 import {Accounting} from '../pages/Accounting';
+import {AccountingWindowId as WindowId} from '../context/AccountingWindowContext';
 import type {Route} from './Shell';
 import './accounting-desktop.css';
 const sections={
@@ -13,19 +14,13 @@ const sections={
 } as const;
 type WorkRoute=keyof typeof sections;
 const isWork=(r:string):r is WorkRoute=>Object.prototype.hasOwnProperty.call(sections,r);
-const WindowId=createContext<string|null>(null);
-export const useAccountingWindowId=()=>useContext(WindowId);
-export const mayCloseAccountingWindow=(event:Event,id:string|null)=>{
- const scope=(event as CustomEvent<{windowId?:string}>).detail?.windowId;
- return !scope||scope===id;
-};
 type Props={route:Route;onNavigate:(r:Route)=>void;canAccess:(r:Route)=>boolean};
 export function AccountingDesktop(props:Props){
  const area=useRef<HTMLDivElement>(null);
  const getArea=useCallback(()=>({x:0,y:0,w:Math.max(1,area.current?.clientWidth??900),h:Math.max(1,area.current?.clientHeight??600)}),[]);
  return <WindowManagerProvider getArea={getArea}><Workspace {...props} area={area}/></WindowManagerProvider>;
 }
-function Workspace({route,onNavigate,canAccess,area}:Props&{area:React.RefObject<HTMLDivElement>}){
+function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLDivElement>}){
  const wm=useWindowManager();
  const [open,setOpen]=useState<WorkRoute[]>([]);
  const [active,setActive]=useState<WorkRoute|null>(null);
@@ -50,6 +45,7 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:React.RefObject
   setOpen(p=>p.filter(x=>x!==r));
   if(active===r||route===r){const next=wm.windows.filter(w=>w.id!==r&&!w.minimized&&isWork(w.id)&&canAccess(w.id)).sort((a,b)=>b.zIndex-a.zIndex)[0];if(next&&isWork(next.id))activate(next.id);else{setActive(null);onNavigate('acc_overview');}}
  };
+ const minimize=(r:WorkRoute)=>{wm.minimize(r);if(active===r||route===r){const next=wm.windows.filter(w=>w.id!==r&&!w.minimized&&isWork(w.id)&&canAccess(w.id)).sort((a,b)=>b.zIndex-a.zIndex)[0];if(next&&isWork(next.id))activate(next.id);else{setActive(null);onNavigate('acc_overview');}}};
  const visible=wm.windows.filter(w=>!w.minimized);
  const selected=active&&visible.some(w=>w.id===active)?active:(visible.slice().sort((a,b)=>b.zIndex-a.zIndex)[0]?.id??null);
  const tile=()=>{wm.tileVisibleWindows();};
@@ -59,7 +55,7 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:React.RefObject
    <div className="acc-desktop-home"><Accounting section="overview" onNavigate={navigate}/></div>
    {open.filter(canAccess).map((r,index)=>{
     const [section,title]=sections[r];const a=wm.getArea();const offset=18+(index%5)*22;
-    return <DesktopWindow key={r} id={r} title={title} icon={<BookOpen size={16}/>} contained active={selected===r} onActivate={()=>{setActive(r);if(route!==r)onNavigate(r);}} minW={400} minH={270} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(r)}>
+    return <DesktopWindow key={r} id={r} title={title} icon={<BookOpen size={16}/>} contained active={selected===r} onActivate={()=>{setActive(r);if(route!==r)onNavigate(r);}} minW={400} minH={270} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(r)} onMinimize={()=>minimize(r)}>
       <WindowId.Provider value={r}><div className="acc-window-content"><Accounting section={section} inWindow onNavigate={navigate} onExit={()=>close(r)}/></div></WindowId.Provider>
     </DesktopWindow>;
    })}
