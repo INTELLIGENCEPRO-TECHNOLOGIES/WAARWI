@@ -45,6 +45,8 @@
     "supplierOrders": "المشتريات",
     "accounting": "المحاسبة",
     "accountingPlan": "الخطة المحاسبية",
+    "accountingOverview": "نظرة عامة محاسبية",
+    "accountingEntry": "إدخال القيود",
     "vatReport": "بيان ضريبة القيمة المضافة",
     "accountStatement": "استعلام الحسابات",
     "bankReconciliation": "التسوية المصرفية",
