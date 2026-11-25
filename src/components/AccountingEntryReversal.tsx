@@ -1,3 +1,4 @@
+import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
 import {useEffect,useRef,useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {formatDate} from '../lib/format';
@@ -17,6 +18,8 @@ export function AccountingEntryReversal({tenantId,entryId,canManage,onPosted}:{t
  const [revision,setRevision]=useState(0);
  const [notice,setNotice]=useState('');
  const lock=useRef(false);
+ const windowId=useAccountingWindowId();
+ useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(lock.current||(open&&!!reason.trim())&&!window.confirm("Un motif d’extourne est en cours de saisie. Fermer ?"))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[windowId,open,reason]);
  useEffect(()=>{
   let active=true;setLoading(true);setEntry(null);setLinked(null);setError('');setOpen(false);
   void(async()=>{try{
