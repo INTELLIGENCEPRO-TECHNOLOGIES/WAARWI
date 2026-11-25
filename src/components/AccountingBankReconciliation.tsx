@@ -1,3 +1,4 @@
+import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
 import {useEffect,useRef,useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {AccountingTable,AccountingPagination,useAccountingPagination} from './AccountingWorkspace';
@@ -40,7 +41,8 @@ export function AccountingBankReconciliation({tenantId,canManage}:{tenantId:stri
  const [confirm,setConfirm]=useState<'final'|'cancel'|null>(null);
  const [reason,setReason]=useState('');
  const lock=useRef(false);
- useEffect(()=>{const guard=(event:Event)=>{if(lock.current||(open||!!confirm)&&!window.confirm("Un relevé ou une validation est en cours. Quitter cet écran ?"))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[open,confirm]);
+ const windowId=useAccountingWindowId();
+ useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(lock.current||(open||!!confirm)&&!window.confirm("Un relevé ou une validation est en cours. Quitter cet écran ?"))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[open,confirm,windowId]);
  useEffect(()=>{let live=true;void(async()=>{try{
   const {data,error:err}=await supabase.from('accounts').select('code,name,is_active').eq('tenant_id',tenantId).eq('class',5).or('code.like.52%,code.like.53%,code.like.55%').order('code').limit(500);
   if(err)throw err;if(live){setAccounts((data??[]) as Account[]);setAccount(data?.[0]?.code??'');}
