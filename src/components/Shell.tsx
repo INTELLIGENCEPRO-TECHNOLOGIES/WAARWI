@@ -327,7 +327,10 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
       if (hasPage) wm.restore('tiers-page');
       if (route === 'tiers') return;
     }
-    if (r!==route && ROUTE_MODULE[route]==='accounting' && !window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{route:r}}))) return;
+    if (ROUTE_MODULE[route]==='accounting') {
+      if(ROUTE_MODULE[r]==='accounting')window.dispatchEvent(new CustomEvent('waarwi:accounting-open-window',{detail:{route:r}}));
+      else if(!window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{route:r}})))return;
+    }
     onRoute(r);
   }, [onRoute, route, wm]);
 
@@ -1184,9 +1187,11 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           </div>
         )}
 
-        <main className={`flex-1 w-full min-h-0 ${isPOS || isTiers || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`} style={{ paddingBottom: isPlatformAdmin ? 0 : 'var(--w-taskbar-h, 0px)' }}>
+        <main className={`flex-1 w-full min-h-0 ${isPOS || isTiers || isPlatformAdmin || isAccounting ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`} style={{ paddingBottom: isPlatformAdmin ? 0 : 'var(--w-taskbar-h, 0px)' }}>
           {isPOS || isTiers ? (
             <div className={`flex-1 flex flex-col min-h-0 ${isPOS && posCartOpen ? 'pb-0' : 'pb-[60px]'} lg:pb-0`}>{children}</div>
+          ) : isAccounting ? (
+            <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">{children}</div>
           ) : isPlatformAdmin ? (
             <div className="flex-1 min-h-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
