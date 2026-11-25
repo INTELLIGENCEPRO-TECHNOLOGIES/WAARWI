@@ -10,6 +10,7 @@ import {
   X, Monitor, Check, Activity,
 } from 'lucide-react';
 import { AddressBook, CashRegister } from './Icons';
+import { AccountingNavigation } from './AccountingNavigation';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
@@ -241,10 +242,12 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
     return true;
   };
 
+  const isAccounting = ROUTE_MODULE[route] === 'accounting';
+  const navItemActive = (key: Route) => key === 'acc_overview' ? isAccounting : route === key;
   const visibleNav = NAV_GROUPS
     .map(g => ({
       ...g,
-      items: g.items.filter(i => routeVisible(i.key)),
+      items: g.items.filter(i => routeVisible(i.key) && (g.titleKey !== ACCOUNTING_SECTION || i.key === 'acc_overview')).map(i => g.titleKey === ACCOUNTING_SECTION ? {...i, labelKey: 'nav.accounting', icon: BookOpen} : i),
     }))
     .filter(g => g.items.length > 0);
   const visibleMobileTabs = (route === 'pos' ? POS_MOBILE_TABS : DEFAULT_MOBILE_TABS).filter(t => routeVisible(t.key));
@@ -324,6 +327,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
       if (hasPage) wm.restore('tiers-page');
       if (route === 'tiers') return;
     }
+    if (r!==route && ROUTE_MODULE[route]==='accounting' && !window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{route:r}}))) return;
     onRoute(r);
   }, [onRoute, route, wm]);
 
@@ -616,7 +620,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           {!sidebarVisualCollapsed && <div className={`px-2 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.searchResults')}</div>}
           {searchResults.map(item => {
             const Icon = item.icon;
-            const active = route === item.key;
+            const active = navItemActive(item.key);
             return (
               <button
                 key={item.key}
@@ -636,6 +640,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
       {!navSearch.trim() && sortedNav.map(group => {
         const CompactIcon = group.compactIcon;
         const sectionOpen = sidebarVisualCollapsed ? !CompactIcon : isSectionOpen(group.titleKey);
+        if(group.titleKey===ACCOUNTING_SECTION){const active=isAccounting;return <div key={group.titleKey}><button type="button" onClick={()=>{handleRoute('acc_overview');setMobileOpen(false);}} className={`nav-item clay-action ${active?'nav-item-active':'nav-item-idle'} ${sidebarVisualCollapsed?'justify-center px-0':''}`} title={t('nav.accounting')} aria-current={active?'page':undefined}><BookOpen className="w-[17px] h-[17px] shrink-0"/>{!sidebarVisualCollapsed&&<span>{t('nav.accounting')}</span>}</button></div>;}
         const sectionId = `nav-section-${group.titleKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
         return (
         <div key={group.titleKey}>
@@ -671,7 +676,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           <div id={sectionId} className="space-y-0.5" style={{ display: sectionOpen ? undefined : 'none' }}>
             {group.items.map(item => {
               const Icon = item.icon;
-              const active = route === item.key;
+              const active = navItemActive(item.key);
               const badge = badgeFor(item.key);
               return (
                 <button
@@ -956,7 +961,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.searchResults')}</div>
                     {searchResults.map(item => {
                       const Icon = item.icon;
-                      const active = route === item.key;
+                      const active = navItemActive(item.key);
                       return (
                         <button
                           key={item.key}
@@ -975,6 +980,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                 )}
                 {!isSuperAdmin && !navSearch.trim() && sortedNav.map(group => {
                   const sectionOpen = isSectionOpen(group.titleKey);
+                  if(group.titleKey===ACCOUNTING_SECTION)return <div key={group.titleKey}><button type="button" onClick={()=>{handleRoute('acc_overview');closeDrawer();}} className={`float-nav-item-compact clay-action ${isAccounting?'float-nav-item-active':''}`} aria-current={isAccounting?'page':undefined}><BookOpen className="w-4 h-4 shrink-0"/><span>{t('nav.accounting')}</span></button></div>;
                   const sectionId = `mnav-section-${group.titleKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
                   return (
                   <div key={group.titleKey}>
@@ -993,7 +999,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
                     <div id={sectionId} style={{ display: sectionOpen ? undefined : 'none' }}>
                       {group.items.map(item => {
                         const Icon = item.icon;
-                        const active = route === item.key;
+                        const active = navItemActive(item.key);
                         const badge = badgeFor(item.key);
                         return (
                           <button
@@ -1167,8 +1173,10 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           </div>
         </header>
 
+        {isAccounting&&<AccountingNavigation route={route} canAccess={routeVisible} onNavigate={handleRoute}/>}
+
         {/* Desktop breadcrumb bar */}
-        {!isDashboard && !isPOS && !isTiers && !isPlatformAdmin && !isSuperAdmin && BREADCRUMB_MAP[route] && (
+        {!isAccounting && !isDashboard && !isPOS && !isTiers && !isPlatformAdmin && !isSuperAdmin && BREADCRUMB_MAP[route] && (
           <div className="hidden lg:flex items-center gap-1.5 px-8 pt-3 pb-0 text-[12px] text-neutral-500">
             <span>{t(BREADCRUMB_MAP[route].group)}</span>
             <ChevronRight className="w-3 h-3 text-neutral-300" />
@@ -1184,7 +1192,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           ) : (isDashboard && !dashMenuOpen) ? (
             <div className="flex-1 min-h-0 px-1 sm:px-2 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0 [--dashboard-toolbar-start:3.5rem]">{children}</div>
           ) : (
-            <div className={`w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[72px] lg:pb-8 ${isDashboard ? 'dashboard-with-shell-header' : ''}`}>{children}</div>
+            <div className={`w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 ${isAccounting?'pt-1 lg:pt-1':'pt-3 sm:pt-4 lg:pt-6'} pb-[72px] lg:pb-8 ${isDashboard ? 'dashboard-with-shell-header' : ''}`}>{children}</div>
           )}
         </main>
 
