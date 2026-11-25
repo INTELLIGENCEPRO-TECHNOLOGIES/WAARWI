@@ -329,7 +329,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
     }
     if (ROUTE_MODULE[route]==='accounting') {
       if(ROUTE_MODULE[r]==='accounting')window.dispatchEvent(new CustomEvent('waarwi:accounting-open-window',{detail:{route:r}}));
-      else if(!window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{route:r}})))return;
+
     }
     onRoute(r);
   }, [onRoute, route, wm]);
