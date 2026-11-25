@@ -26,7 +26,7 @@ import { useWindowManager } from '../context/WindowManagerContext';
 export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'coffre' | 'articles' | 'stock' | 'tiers'
   | 'sales' | 'billing' | 'supplier_orders' | 'online_orders' | 'master_catalog'
-  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture' | 'acc_vat' | 'acc_statement' | 'acc_bank'
+  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture' | 'acc_vat' | 'acc_statement' | 'acc_bank' | 'acc_fiscal'
   | 'ipm' | 'warranties' | 'money_transfer' | 'representatives'
   | 'settings' | 'platform_admin' | 'reports';
 
@@ -55,6 +55,7 @@ const NAV_ALIASES: Partial<Record<Route, string[]>> = {
   acc_vat: ['tva', 'taxe', 'fiscalite'],
   acc_statement: ['interrogation','releve','extrait','compte'],
   acc_bank: ['banque','rapprochement','pointage','releve'],
+  acc_fiscal: ['exercice','cloture annuelle','ran','report a nouveau'],
 };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -91,6 +92,7 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'acc_bank', labelKey: 'nav.bankReconciliation', icon: ArrowRightLeft },
     { key: 'acc_vat', labelKey: 'nav.vatReport', icon: FileText },
     { key: 'acc_cloture', labelKey: 'nav.closings', icon: Lock },
+    { key: 'acc_fiscal', labelKey: 'nav.fiscalYears', icon: Lock },
   ]},
   { titleKey: 'nav.tools', items: [
     { key: 'money_transfer', labelKey: 'nav.moneyTransfer', icon: ArrowRightLeft },
@@ -107,7 +109,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock',
   billing: 'billing', online_orders: 'online_orders', warranties: 'billing', representatives: 'billing',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting',
+  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer',
   settings: 'settings', reports: 'reports',
 };
@@ -136,6 +138,7 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
   acc_vat: 'view_accounting',
   acc_statement: 'view_accounting',
   acc_bank: 'view_accounting',
+  acc_fiscal: 'view_accounting',
   money_transfer: 'access_money_transfer',
   representatives: 'rep_view',
   settings: 'manage_settings',
@@ -166,6 +169,7 @@ const BREADCRUMB_MAP: Record<string, { group: string; labelKey: string }> = {
   acc_vat: { group: 'nav.accounting', labelKey: 'nav.vatReport' },
   acc_statement: { group: 'nav.accounting', labelKey: 'nav.accountStatement' },
   acc_bank: { group: 'nav.accounting', labelKey: 'nav.bankReconciliation' },
+  acc_fiscal: { group: 'nav.accounting', labelKey: 'nav.fiscalYears' },
   money_transfer: { group: 'nav.tools', labelKey: 'nav.moneyTransfer' },
   reports: { group: 'nav.tools', labelKey: 'nav.reports' },
   ipm: { group: 'nav.tools', labelKey: 'nav.ipm' },
