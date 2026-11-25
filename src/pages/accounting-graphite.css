@@ -1,5 +1,5 @@
 /* Graphite V2 — uniquement le module comptabilité. Tokens natifs Waarwi. */
-.accounting-workspace{--acc-head:48px;min-width:0;min-height:0;color:var(--w-text);font-variant-numeric:tabular-nums}
+.accounting-workspace{--acc-head:54px;min-width:0;min-height:0;color:var(--w-text);font-variant-numeric:tabular-nums}
 .accounting-workspace .acc-titlebar{position:sticky;top:0;z-index:12;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:var(--acc-head);padding:8px 0;background:var(--w-bg);border-bottom:1px solid var(--w-separator)}
 .accounting-workspace .acc-titlebar h1{font-size:17px;line-height:1.25;font-weight:650;margin:0}
 .accounting-workspace .acc-titlebar p{font-size:11px;color:var(--w-text-muted);margin:2px 0 0;line-height:1.3}
@@ -54,3 +54,18 @@
  .accounting-workspace .acc-summary{gap:10px}
 }
 @media print{.accounting-workspace .acc-toolbar,.accounting-workspace .acc-pagination,.accounting-workspace .acc-context{display:none!important}.accounting-workspace .acc-table-scroll{max-height:none;overflow:visible}.accounting-workspace table thead th,.accounting-workspace table tfoot td,.accounting-workspace .acc-titlebar{position:static}}
+
+.accounting-workspace .acc-overview-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;padding:6px 0}
+.accounting-workspace .acc-overview-links h2{grid-column:1/-1;padding-bottom:5px}
+.accounting-workspace .acc-overview-links button{display:flex;align-items:center;gap:9px;text-align:left;padding:10px 0;border-bottom:1px solid var(--w-separator-l);font-size:13px;color:var(--w-text)}
+.accounting-workspace .acc-overview-links button span{flex:1}
+.accounting-workspace .acc-overview-links button:hover{background:var(--w-hover)}
+.accounting-workspace .acc-entry-page{display:flex;flex-direction:column;min-height:calc(100dvh - 174px);min-width:0}
+.accounting-workspace .acc-entry-body{flex:1;min-width:0}
+.accounting-workspace .acc-entry-lines{border-top:1px solid var(--w-separator);padding-top:8px}
+.accounting-workspace .acc-entry-lines>div:not(:first-child){border-bottom:1px solid var(--w-separator-l);padding-bottom:8px}
+.accounting-workspace .acc-entry-footer{position:sticky;bottom:0;z-index:9;background:var(--w-bg);border-top:1px solid var(--w-separator);padding:10px 0;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;width:100%}
+.accounting-workspace .acc-entry-totals{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:12px;font-variant-numeric:tabular-nums}
+.accounting-workspace .acc-entry-totals strong{margin-left:4px;font-weight:650}
+.accounting-workspace .acc-entry-dialog .acc-entry-footer{position:static;border:0;padding:0;background:transparent}
+@media(max-width:767px){.accounting-workspace .acc-overview-links{grid-template-columns:1fr}.accounting-workspace .acc-entry-page{min-height:calc(100dvh - 200px)}.accounting-workspace .acc-entry-footer{padding:9px 0 max(9px,env(safe-area-inset-bottom))}.accounting-workspace .acc-entry-footer>div:last-child{width:100%}.accounting-workspace .acc-entry-footer>div:last-child>button{flex:1}}
