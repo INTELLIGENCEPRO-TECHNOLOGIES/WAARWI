@@ -1,3 +1,4 @@
+import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
 import {useEffect,useRef,useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {AccountingTable} from './AccountingWorkspace';
@@ -23,7 +24,8 @@ export function AccountingStatutoryWorking({tenantId,year,snapshot,report,previo
  const [error,setError]=useState('');
  const [notice,setNotice]=useState('');
  const lock=useRef(false);
- useEffect(()=>{const guard=(event:Event)=>{if(lock.current||(dirty)&&!window.confirm("Le dossier financier contient des modifications non enregistrées. Quitter ?"))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[dirty]);
+ const windowId=useAccountingWindowId();
+ useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(lock.current||(dirty)&&!window.confirm("Le dossier financier contient des modifications non enregistrées. Quitter ?"))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[dirty,windowId]);
  useEffect(()=>{let live=true;setLoading(true);setLoaded(false);setError('');setNotice('');setDirty(false);
  void(async()=>{try{const {data,error:err}=await supabase.from('accounting_financial_workpapers').select('revision,flow_inputs,flow_justifications,annexes').eq('tenant_id',tenantId).eq('fiscal_year',year).maybeSingle();
  if(err)throw err;const w=data as Workpaper|null;
