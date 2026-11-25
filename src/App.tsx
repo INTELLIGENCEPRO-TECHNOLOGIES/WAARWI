@@ -211,7 +211,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
   coffre: 'vault',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting',
+  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer', settings: 'settings', reports: 'reports',
   representatives: 'billing',
 };
@@ -240,6 +240,7 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
   acc_vat: 'view_accounting',
   acc_statement: 'view_accounting',
   acc_bank: 'view_accounting',
+  acc_fiscal: 'view_accounting',
   money_transfer: 'access_money_transfer',
   representatives: 'rep_view',
   settings: 'manage_settings',
@@ -415,6 +416,7 @@ function Inner() {
         {route === 'acc_vat' && <Accounting section="vat" />}
         {route === 'acc_statement' && <Accounting section="statement" />}
         {route === 'acc_bank' && <Accounting section="bank" />}
+        {route === 'acc_fiscal' && <Accounting section="fiscal" />}
         {route === 'settings' && <Settings key={settingsEntry.n} initialTab={settingsEntry.tab} />}
         {route === 'reports' && <Reports />}
         {route === 'ipm' && <IPM />}
