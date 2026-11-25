@@ -14,7 +14,6 @@ function hundredths(value:string):number {
   return n;
 }
 const fcfa=(minor:number)=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(minor/100)+' FCFA';
-const asText=(n:number)=>String(n/100);
 const errorText=(e:unknown)=>e && typeof e==='object' && 'message' in e ? String(e.message) : 'Opération impossible.';
 
 export function AccountingPurchaseInvoice({tenantId,onPosted}:{tenantId:string;onPosted:()=>void}) {
