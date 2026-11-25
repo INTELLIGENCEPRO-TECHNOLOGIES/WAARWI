@@ -46,3 +46,9 @@ test('invariant comptable sur une série de montants et taux', () => {
     assert.equal(x.expenseMinor+x.deductibleVatMinor,x.grossMinor);
   }
 });
+
+test('limite serveur de 500 lignes et rejet des lignes manquantes', () => {
+  assert.equal(calc(Array.from({length:500}, () => line(100))).netMinor, 50000);
+  assert.throws(() => calc(Array.from({length:501}, () => line(100))));
+  assert.throws(() => calc([line(100), , line(100)]));
+});
