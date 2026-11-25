@@ -45,6 +45,8 @@
     "supplierOrders": "Achats",
     "accounting": "Comptabilité",
     "accountingPlan": "Plan comptable",
+    "accountingOverview": "Accueil comptable",
+    "accountingEntry": "Saisie des écritures",
     "vatReport": "Situation de TVA",
     "accountStatement": "Interrogation des comptes",
     "bankReconciliation": "Rapprochement bancaire",
