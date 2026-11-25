@@ -32,7 +32,7 @@ BEGIN
   SELECT c.closed_at INTO v_closed_at FROM public.accounting_month_closures c WHERE c.tenant_id=p_tenant_id AND c.month_start=p_month_start FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'La période a changé pendant la transaction. Réessayez.' USING ERRCODE='40001'; END IF;
  END IF;
- IF v_closed_at IS NOT NULL OR EXISTS(SELECT 1 FROM public.accounting_fiscal_years f WHERE f.tenant_id=p_tenant_id AND f.fiscal_year=extract(year FROM p_month_start)) THEN
+ IF v_closed_at IS NOT NULL OR EXISTS(SELECT 1 FROM public.accounting_fiscal_years f WHERE f.tenant_id=p_tenant_id AND f.fiscal_year>=extract(year FROM p_month_start)) THEN
   RAISE EXCEPTION 'La période comptable de % est clôturée.',to_char(p_month_start,'MM/YYYY') USING ERRCODE='55000';
  END IF;
 END;$f$;
@@ -46,7 +46,7 @@ BEGIN
  IF p_year IS NULL OR p_year NOT BETWEEN 2000 AND 2099 THEN RAISE EXCEPTION 'Exercice invalide.' USING ERRCODE='22023'; END IF;
  start_date:=make_date(p_year,1,1);end_date:=make_date(p_year,12,31);
  SELECT snapshot INTO prior FROM public.accounting_fiscal_years WHERE tenant_id=p_tenant_id AND fiscal_year=p_year-1;
- prior_missing:=prior IS NULL AND (EXISTS(SELECT 1 FROM public.journal_entries e WHERE e.tenant_id=p_tenant_id AND e.entry_date<start_date) OR EXISTS(SELECT 1 FROM public.accounting_fiscal_years f WHERE f.tenant_id=p_tenant_id AND f.fiscal_year<p_year));
+ prior_missing:=EXISTS(SELECT 1 FROM public.accounting_fiscal_years f WHERE f.tenant_id=p_tenant_id AND f.fiscal_year>p_year) OR (prior IS NULL AND (EXISTS(SELECT 1 FROM public.journal_entries e WHERE e.tenant_id=p_tenant_id AND e.entry_date<start_date) OR EXISTS(SELECT 1 FROM public.accounting_fiscal_years f WHERE f.tenant_id=p_tenant_id AND f.fiscal_year<p_year)));
  SELECT count(*) FILTER(WHERE closed_at IS NOT NULL) INTO v_closed FROM public.accounting_month_closures WHERE tenant_id=p_tenant_id AND month_start BETWEEN start_date AND end_date;
  SELECT jsonb_agg(jsonb_build_object('month',m.d::date,'closed',c.closed_at IS NOT NULL,'closed_at',c.closed_at) ORDER BY m.d) INTO v_months
  FROM generate_series(start_date::timestamp,end_date::timestamp,interval '1 month') m(d) LEFT JOIN public.accounting_month_closures c ON c.tenant_id=p_tenant_id AND c.month_start=m.d::date;
