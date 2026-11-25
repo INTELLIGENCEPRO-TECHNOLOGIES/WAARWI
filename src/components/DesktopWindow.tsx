@@ -18,13 +18,14 @@ type Props = {
   contained?: boolean;
   active?: boolean;
   onActivate?: () => void;
+  onMinimize?: () => void;
 };
 
 const HEADER_H = 38;
 const MIN_W_DEFAULT = 480;
 const MIN_H_DEFAULT = 320;
 
-export function DesktopWindow({ id, title, icon, children, onClose, initialRect, minW = MIN_W_DEFAULT, minH = MIN_H_DEFAULT, siteId, background, groupId, startMaximized, contained = false, active = true, onActivate }: Props) {
+export function DesktopWindow({ id, title, icon, children, onClose, initialRect, minW = MIN_W_DEFAULT, minH = MIN_H_DEFAULT, siteId, background, groupId, startMaximized, contained = false, active = true, onActivate, onMinimize }: Props) {
   const { windows, register, unregister, focus, minimize, setMaximized, updateRect, tileVisibleWindows, getArea } = useWindowManager();
   const win = windows.find(w => w.id === id);
 
@@ -148,7 +149,7 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
         borderRadius: contained||maximized ? 0 : 10,
         display: win.minimized ? 'none' : undefined,
       }}
-      onPointerDown={() => {focus(id);onActivate?.();}}
+      onPointerDown={e => {if(contained&&(e.target as HTMLElement).closest('[data-acc-window-control]'))return;focus(id);onActivate?.();}}
     >
       {/* Title bar */}
       <div
@@ -162,17 +163,17 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
         {icon && <span className="text-[var(--w-text-muted)] flex-shrink-0 [&>svg]:w-4 [&>svg]:h-4">{icon}</span>}
         <span className="text-sm font-semibold text-[var(--w-text)] truncate flex-1">{title}</span>
         {windows.filter(w => !w.minimized).length >= 2 && (
-          <button onClick={tileVisibleWindows} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors acc-tile-control" title="Répartir les fenêtres">
+          <button data-acc-window-control={contained?true:undefined} onClick={tileVisibleWindows} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors acc-tile-control" title="Répartir les fenêtres">
             <LayoutGrid className="w-3.5 h-3.5" />
           </button>
         )}
-        <button onClick={() => minimize(id)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" aria-label="Réduire" title="Réduire">
+        <button data-acc-window-control={contained?true:undefined} onClick={() => onMinimize?onMinimize():minimize(id)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" aria-label="Réduire" title="Réduire">
           <Minus className="w-3.5 h-3.5" />
         </button>
-        <button onClick={toggleMaximize} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" aria-label={maximized ? 'Restaurer' : 'Agrandir'} title={maximized ? 'Restaurer' : 'Agrandir'}>
+        <button data-acc-window-control={contained?true:undefined} onClick={toggleMaximize} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" aria-label={maximized ? 'Restaurer' : 'Agrandir'} title={maximized ? 'Restaurer' : 'Agrandir'}>
           {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
         </button>
-        <button onClick={onClose} className="p-1 rounded hover:bg-red-500/20 text-[var(--w-text-muted)] hover:text-red-500 transition-colors" aria-label="Fermer" title="Fermer">
+        <button data-acc-window-control={contained?true:undefined} onClick={onClose} className="p-1 rounded hover:bg-red-500/20 text-[var(--w-text-muted)] hover:text-red-500 transition-colors" aria-label="Fermer" title="Fermer">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
