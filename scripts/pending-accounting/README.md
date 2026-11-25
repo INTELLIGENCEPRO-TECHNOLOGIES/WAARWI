@@ -5,7 +5,7 @@ Les fichiers de ce dossier sont des candidats, hors du répertoire des migration
 
 ## Ordre de publication
 1. Vérifier l'état du dépôt, les migrations déjà appliquées et les sauvegardes.
-2. Appliquer 01-alphabetical-matching.sql puis 02-manual-entry-reversal.sql puis 04-bank-reconciliation.sql et 06-fiscal-year-close.sql dans un environnement autorisé ; enregistrer les versions réelles dans supabase/migrations.
+2. Appliquer 01-alphabetical-matching.sql puis 02-manual-entry-reversal.sql puis 04-bank-reconciliation.sql puis 06-fiscal-year-close.sql et 08-financial-cash-flow-working.sql dans un environnement autorisé ; enregistrer les versions réelles dans supabase/migrations.
 3. Exécuter la recette transactionnelle 03-recipe.sql puis 05-bank-reconciliation-recipe.sql et 07-fiscal-year-recipe.sql puis contrôler la restauration (ancienne et nouvelle sauvegardes, groupes de lettrage, clôtures).
 4. Vérifier les tests supplémentaires : groupes délettrés non réutilisés, groupes concurrents, refus des écritures commerciales, refus période clôturée, droits inter-tenant, affichage/exports.
 5. Compiler l'interface, intégrer les commits à main en une seule publication Netlify après autorisation.
@@ -29,3 +29,8 @@ Les fichiers de ce dossier sont des candidats, hors du répertoire des migration
 - Interrogation par exercice : reprend le snapshot précédent lorsqu’il existe. Les anciennes éditions de mouvements restent distinctes ; les futurs états financiers doivent utiliser le même modèle d’ouverture.
 - L’ancienne numérotation utilise l’année courante : son remplacement transversal par une numérotation datée doit être traité avant la gestion complète des saisies d’exercices antérieurs.
 - L’intégrité des restaurations avec clôtures mensuelles/annuelles et les nouveaux rapprochements reste un prérequis de publication ; aucune restauration réelle n’a été exécutée.
+
+## États financiers de travail
+- Bilan agrégé, compte de résultat en cascade (XA à XI), comparatifs N/N-1, export XLSX et impression de l'onglet courant. Six scénarios de calcul exécutés sur le code GitHub via un harnais d’assertions JS ; requêtes de vérification sur les écritures existantes effectuées en lecture seule.
+- La ventilation directe de trésorerie isole les écritures ambiguës ; elle n'est pas le tableau réglementaire SYSCOHADA par méthode indirecte. Les correspondances détaillées du bilan (brut, amortissements/dépréciations, net), le tableau réglementaire des flux, les notes annexes et la validation de l'inventaire restent nécessaires avant de qualifier une liasse de conforme.
+- Aucun état ne doit être présenté comme certifié. Tester les RPC, l'export XLSX, l'impression PDF, les comparatifs et l'isolation après migrations autorisées. Exécuter node --test tests/accountingFinancialStatements.test.mjs.
