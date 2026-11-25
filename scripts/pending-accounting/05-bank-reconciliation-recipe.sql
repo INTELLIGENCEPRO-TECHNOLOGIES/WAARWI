@@ -1,0 +1,43 @@
+-- Recette transactionnelle à exécuter après les migrations du lot.
+BEGIN;
+DO $test$
+DECLARE t uuid;u uuid;other uuid;bank text;contra text;dt date:=(now() AT TIME ZONE 'Africa/Dakar')::date;
+ e1 uuid;e2 uuid;l1 uuid;l2 uuid;b1 uuid;sid uuid;r jsonb;initial numeric;blocked boolean;
+BEGIN
+ SELECT id INTO STRICT t FROM public.tenants WHERE name='TEST COMPTA';
+ SELECT id INTO u FROM public.profiles WHERE tenant_id=t AND role='admin' ORDER BY id LIMIT 1;
+ SELECT id INTO STRICT other FROM public.tenants WHERE name='INTELLIGENCEPRO';
+ SELECT code INTO bank FROM public.accounts WHERE tenant_id=t AND code='5210000' AND is_active;
+ SELECT code INTO contra FROM public.accounts WHERE tenant_id=t AND code='5710000' AND is_active;
+ IF bank IS NULL OR contra IS NULL OR u IS NULL THEN RAISE EXCEPTION 'Préconditions de recette manquantes.'; END IF;
+ IF EXISTS(SELECT 1 FROM public.accounting_bank_statements WHERE tenant_id=t AND account_code=bank AND status<>'cancelled') THEN RAISE EXCEPTION 'Compte de recette déjà utilisé : choisir un compte de test vierge.'; END IF;
+ SELECT coalesce(sum(l.debit-l.credit),0) INTO initial FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id WHERE l.tenant_id=t AND l.account_code=bank AND e.status='posted' AND e.entry_date<dt;
+ PERFORM set_config('request.jwt.claim.sub',u::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ r:=public.create_manual_journal_entry(t,'BQ',dt,'RECETTE BANQUE 1','TEST',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',100000,'credit',0),jsonb_build_object('account_code',contra,'debit',0,'credit',100000)));
+ e1:=(r->>'entry_id')::uuid;
+ r:=public.create_manual_journal_entry(t,'BQ',dt,'RECETTE BANQUE 2','TEST',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',0,'credit',25000),jsonb_build_object('account_code',contra,'debit',25000,'credit',0)));
+ e2:=(r->>'entry_id')::uuid;
+ SELECT id INTO STRICT l1 FROM public.journal_lines WHERE tenant_id=t AND entry_id=e1 AND account_code=bank;
+ SELECT id INTO STRICT l2 FROM public.journal_lines WHERE tenant_id=t AND entry_id=e2 AND account_code=bank;
+ r:=public.create_bank_statement(t,bank,'RECETTE BANQUE',dt,dt,initial,initial+100000,jsonb_build_array(jsonb_build_object('date',dt,'label','Versement','reference','TEST','amount',100000)));
+ sid:=(r->>'id')::uuid;
+ SELECT id INTO STRICT b1 FROM public.accounting_bank_statement_lines WHERE tenant_id=t AND statement_id=sid;
+ blocked:=false;BEGIN PERFORM public.finish_bank_statement(t,sid,NULL);EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'Rapprochement incomplet%' THEN blocked:=true;ELSE RAISE;END IF;END;
+ IF NOT blocked THEN RAISE EXCEPTION 'Validation prématurée.';END IF;
+ blocked:=false;BEGIN PERFORM public.point_bank_statement_line(t,sid,b1,l2);EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'Compte, date, sens%' THEN blocked:=true;ELSE RAISE;END IF;END;
+ IF NOT blocked THEN RAISE EXCEPTION 'Pointage de sens incorrect accepté.';END IF;
+ PERFORM public.point_bank_statement_line(t,sid,b1,l1);
+ PERFORM public.point_bank_statement_line(t,sid,b1,NULL);
+ PERFORM public.point_bank_statement_line(t,sid,b1,l1);
+ r:=public.bank_statement_report(t,sid,0);
+ IF (r->>'difference')::numeric IS DISTINCT FROM 0 OR (r->>'bank_pending_count')::int<>0 OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(r->'book_rows') x WHERE x->>'id'=l2::text) THEN RAISE EXCEPTION 'Rapprochement incorrect : %',r;END IF;
+ blocked:=false;BEGIN PERFORM public.bank_statement_report(other,sid,0);EXCEPTION WHEN insufficient_privilege THEN blocked:=true;END;
+ IF NOT blocked THEN RAISE EXCEPTION 'Accès inter-tenant accepté.';END IF;
+ PERFORM public.finish_bank_statement(t,sid,NULL);
+ blocked:=false;BEGIN PERFORM public.point_bank_statement_line(t,sid,b1,NULL);EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'Seul un relevé%' THEN blocked:=true;ELSE RAISE;END IF;END;
+ IF NOT blocked THEN RAISE EXCEPTION 'Relevé validé modifiable.';END IF;
+ EXECUTE 'RESET ROLE';
+END;$test$;
+ROLLBACK;
