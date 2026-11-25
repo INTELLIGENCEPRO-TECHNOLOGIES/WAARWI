@@ -65,7 +65,7 @@ BEGIN
  IF FOUND THEN
   IF p_from<>prev.date_to+1 OR p_opening IS DISTINCT FROM prev.closing_balance THEN RAISE EXCEPTION 'Le relevé doit suivre le précédent sans interruption et reprendre son solde final.'; END IF;
  ELSE
-  IF p_opening IS DISTINCT FROM (SELECT coalesce(sum(l.debit-l.credit),0) FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id WHERE l.tenant_id=p_tenant_id AND l.account_code=p_account_code AND e.status='posted' AND e.entry_date<p_from) THEN RAISE EXCEPTION 'Premier relevé : le solde initial bancaire doit correspondre au solde comptable antérieur. Choisissez une date de départ déjà rapprochée.'; END IF;
+  IF p_opening IS DISTINCT FROM (SELECT coalesce(sum(coalesce(l.debit,0)-coalesce(l.credit,0)),0) FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id WHERE l.tenant_id=p_tenant_id AND l.account_code=p_account_code AND e.status='posted' AND e.entry_date<p_from) THEN RAISE EXCEPTION 'Premier relevé : le solde initial bancaire doit correspondre au solde comptable antérieur. Choisissez une date de départ déjà rapprochée.'; END IF;
  END IF;
  INSERT INTO public.accounting_bank_statements(tenant_id,account_code,reference,date_from,date_to,opening_balance,closing_balance,created_by)
  VALUES(p_tenant_id,p_account_code,btrim(p_reference),p_from,p_to,p_opening,p_closing,auth.uid()) RETURNING id INTO v_id;
@@ -73,7 +73,7 @@ BEGIN
   idx:=idx+1;
   IF jsonb_typeof(r->'amount') IS DISTINCT FROM 'number' OR nullif(btrim(r->>'label'),'') IS NULL OR length(r->>'label')>500 OR length(coalesce(r->>'reference',''))>120 THEN RAISE EXCEPTION 'Ligne % invalide.',idx; END IF;
   v_amount:=(r->>'amount')::numeric;v_date:=(r->>'date')::date;
-  IF v_date IS NULL OR v_date NOT BETWEEN p_from AND p_to OR v_amount=0 OR v_amount<>round(v_amount,2) THEN RAISE EXCEPTION 'Date ou montant invalide à la ligne %.',idx; END IF;
+  IF v_date IS NULL OR NOT isfinite(v_date) OR v_date NOT BETWEEN p_from AND p_to OR v_amount=0 OR v_amount<>round(v_amount,2) THEN RAISE EXCEPTION 'Date ou montant invalide à la ligne %.',idx; END IF;
   v_sum:=v_sum+v_amount;
   INSERT INTO public.accounting_bank_statement_lines(tenant_id,statement_id,position,operation_date,reference,label,amount)
   VALUES(p_tenant_id,v_id,idx,v_date,coalesce(r->>'reference',''),btrim(r->>'label'),v_amount);
@@ -95,11 +95,11 @@ BEGIN
  IF NOT FOUND THEN RAISE EXCEPTION 'Relevé introuvable.'; END IF;
  SELECT date_from,opening_balance INTO anchor,initial FROM public.accounting_bank_statements WHERE tenant_id=p_tenant_id AND account_code=s.account_code AND status<>'cancelled' AND date_from<=s.date_from ORDER BY date_from LIMIT 1;
  anchor:=coalesce(anchor,s.date_from);initial:=coalesce(initial,s.opening_balance);
- SELECT coalesce(sum(l.debit-l.credit),0),coalesce(sum(l.debit-l.credit) FILTER(WHERE e.entry_date<anchor),0) INTO book,first_book
+ SELECT coalesce(sum(coalesce(l.debit,0)-coalesce(l.credit,0)),0),coalesce(sum(coalesce(l.debit,0)-coalesce(l.credit,0)) FILTER(WHERE e.entry_date<anchor),0) INTO book,first_book
  FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id
  WHERE l.tenant_id=p_tenant_id AND l.account_code=s.account_code AND e.status='posted' AND e.entry_date<=s.date_to;
  WITH unpointed AS MATERIALIZED (
- SELECT l.id,e.entry_date,e.entry_number,l.label,e.reference,l.debit,l.credit,l.debit-l.credit AS amount
+ SELECT l.id,e.entry_date,e.entry_number,l.label,e.reference,l.debit,l.credit,coalesce(l.debit,0)-coalesce(l.credit,0) AS amount
  FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id
  WHERE l.tenant_id=p_tenant_id AND l.account_code=s.account_code AND e.status='posted' AND e.entry_date BETWEEN anchor AND s.date_to
  AND NOT EXISTS(SELECT 1 FROM public.accounting_bank_statement_lines b JOIN public.accounting_bank_statements h ON h.tenant_id=b.tenant_id AND h.id=b.statement_id
@@ -111,7 +111,7 @@ BEGIN
  RETURN jsonb_build_object('statement',to_jsonb(s),'book_balance',book,'unpointed_amount',pending,'adjusted_book',book-pending,
  'difference',book-pending-s.closing_balance,'opening_drift',first_book-initial,'bank_pending_count',bank_pending,'bank_pending_amount',bank_pending_amount,
  'book_pending_count',v_count,'book_rows',v_rows,
- 'bank_rows',(SELECT coalesce(jsonb_agg(to_jsonb(b) ORDER BY b.position),'[]'::jsonb) FROM public.accounting_bank_statement_lines b WHERE b.tenant_id=p_tenant_id AND b.statement_id=s.id));
+ 'bank_rows',(SELECT coalesce(jsonb_agg(to_jsonb(b) || jsonb_build_object('matched_piece',e.entry_number,'matched_date',e.entry_date) ORDER BY b.position),'[]'::jsonb) FROM public.accounting_bank_statement_lines b LEFT JOIN public.journal_lines l ON l.tenant_id=b.tenant_id AND l.id=b.journal_line_id LEFT JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id WHERE b.tenant_id=p_tenant_id AND b.statement_id=s.id));
 END;$f$;
 REVOKE ALL ON FUNCTION public.bank_statement_report(uuid,uuid,integer) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.bank_statement_report(uuid,uuid,integer) TO authenticated;
@@ -138,7 +138,7 @@ BEGIN
   SELECT * INTO e FROM public.journal_entries WHERE tenant_id=p_tenant_id AND id=l.entry_id FOR UPDATE;
   SELECT * INTO l FROM public.journal_lines WHERE tenant_id=p_tenant_id AND id=p_journal_line_id FOR UPDATE;
   SELECT min(date_from) INTO anchor FROM public.accounting_bank_statements WHERE tenant_id=p_tenant_id AND account_code=s.account_code AND status<>'cancelled';
-  IF l.id IS NULL OR e.id IS NULL OR l.entry_id<>e.id OR l.account_code<>s.account_code OR e.status<>'posted' OR e.entry_date NOT BETWEEN anchor AND s.date_to OR l.debit-l.credit IS DISTINCT FROM b.amount THEN RAISE EXCEPTION 'Compte, date, sens ou montant non concordant.'; END IF;
+  IF l.id IS NULL OR e.id IS NULL OR l.entry_id IS DISTINCT FROM e.id OR l.account_code IS DISTINCT FROM s.account_code OR e.status IS DISTINCT FROM 'posted' OR e.entry_date IS NULL OR anchor IS NULL OR e.entry_date NOT BETWEEN anchor AND s.date_to OR coalesce(l.debit,0)-coalesce(l.credit,0) IS DISTINCT FROM b.amount THEN RAISE EXCEPTION 'Compte, date, sens ou montant non concordant.'; END IF;
   IF EXISTS(SELECT 1 FROM public.accounting_bank_statement_lines WHERE tenant_id=p_tenant_id AND journal_line_id=l.id) THEN RAISE EXCEPTION 'Écriture déjà pointée.'; END IF;
  END IF;
  UPDATE public.accounting_bank_statement_lines SET journal_line_id=p_journal_line_id,matched_at=CASE WHEN p_journal_line_id IS NULL THEN NULL ELSE now() END,matched_by=CASE WHEN p_journal_line_id IS NULL THEN NULL ELSE auth.uid() END,
