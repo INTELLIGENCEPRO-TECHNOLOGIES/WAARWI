@@ -6,7 +6,7 @@ type Account={code:string;name:string;account_type:string;is_active:boolean};
 type Line={line_id:string;entry_id:string;entry_date:string;entry_number:string;journal_type:string;reference:string|null;description:string;source_type:string|null;source_id:string|null;status:string;label:string|null;debit:number;credit:number;running_balance:number;match_group_id:string|null;match_code:string|null};
 type Suggestion={root:string;root_piece:string;first_date:string;last_date:string;amount:number;line_ids:string[];entries:string[]};
 type Suggestions={total:number;rows:Suggestion[]};
-type Statement={account:Account;opening_balance:number;total_debit:number;total_credit:number;closing_balance:number;row_count:number;rows:Line[]};
+type Statement={opening_mode?:'fiscal'|'continuous';account:Account;opening_balance:number;total_debit:number;total_credit:number;closing_balance:number;row_count:number;rows:Line[]};
 const money=(n:number)=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(Number(n))+' FCFA';
 const balance=(n:number)=>Number(n)===0?'0 FCFA':money(Math.abs(Number(n)))+(Number(n)>0?' D':' C');
 const today=()=>new Date().toISOString().slice(0,10);
@@ -123,7 +123,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   {result&&request&&<div className="space-y-4">
    <div className="flex flex-wrap justify-between gap-2 items-center"><div><h2 className="text-sm font-semibold break-words">{result.account.code} · {result.account.name}</h2><p className="text-xs text-neutral-500">{formatDate(request.from)} au {formatDate(request.to)} · Écritures validées</p></div><button className="btn btn-secondary" onClick={download}>Exporter cette page (CSV)</button></div>
    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{[['Solde initial',balance(result.opening_balance)],['Débit période',money(result.total_debit)],['Crédit période',money(result.total_credit)],['Solde final',balance(result.closing_balance)]].map(([label,value])=><div className="card p-3 min-w-0" key={label}><p className="text-xs text-neutral-500">{label}</p><p className="mt-1 font-semibold text-sm tabular-nums break-words">{value}</p></div>)}</div>
-   <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. Soldes calculés sur les écritures enregistrées, hors écritures annulées et brouillons.</p>
+   <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. {result.opening_mode==='fiscal'?'Solde d’ouverture certifié de l’exercice, puis mouvements validés.':'Historique continu des écritures validées, sans arrêté précédent.'}</p>
    {canMatch&&<div className="card p-3 space-y-3">
     <h3 className="text-sm font-semibold">Lettrage manuel</h3>
     <p className="text-xs text-neutral-600">Cochez les factures et règlements correspondants. Vous pouvez sélectionner des lignes sur plusieurs pages ; seuls les groupes exactement équilibrés sont acceptés.</p>
