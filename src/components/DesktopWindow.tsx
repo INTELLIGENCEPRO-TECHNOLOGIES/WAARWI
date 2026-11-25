@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useCallback, useReducer } from 'react';
 import { Minus, Maximize2, Minimize2, X, LayoutGrid } from 'lucide-react';
-import { useWindowManager, getWorkArea } from '../context/WindowManagerContext';
+import { useWindowManager } from '../context/WindowManagerContext';
 
 type Props = {
   id: string;
@@ -15,14 +15,16 @@ type Props = {
   background?: boolean;
   groupId?: string;
   startMaximized?: boolean;
+  contained?: boolean;
+  active?: boolean;
 };
 
 const HEADER_H = 38;
 const MIN_W_DEFAULT = 480;
 const MIN_H_DEFAULT = 320;
 
-export function DesktopWindow({ id, title, icon, children, onClose, initialRect, minW = MIN_W_DEFAULT, minH = MIN_H_DEFAULT, siteId, background, groupId, startMaximized }: Props) {
-  const { windows, register, unregister, focus, minimize, setMaximized, updateRect, tileVisibleWindows } = useWindowManager();
+export function DesktopWindow({ id, title, icon, children, onClose, initialRect, minW = MIN_W_DEFAULT, minH = MIN_H_DEFAULT, siteId, background, groupId, startMaximized, contained = false, active = true }: Props) {
+  const { windows, register, unregister, focus, minimize, setMaximized, updateRect, tileVisibleWindows, getArea } = useWindowManager();
   const win = windows.find(w => w.id === id);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,28 +41,31 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
   }, [id]);
 
   const clamp = useCallback((rect: { x: number; y: number; w: number; h: number }) => {
-    const wa = getWorkArea();
+    const wa = getArea();
     const maxW = wa.w - 8;
     const maxH = wa.h - 8;
-    const w = Math.max(minW, Math.min(rect.w, maxW));
-    const h = Math.max(minH, Math.min(rect.h, maxH));
-    const x = Math.max(wa.x, Math.min(rect.x, wa.x + wa.w - Math.min(120, w)));
-    const y = Math.max(wa.y, Math.min(rect.y, wa.y + wa.h - 60));
+    const w = contained ? Math.min(wa.w,Math.max(Math.min(minW,wa.w),rect.w)) : Math.max(minW, Math.min(rect.w, maxW));
+    const h = contained ? Math.min(wa.h,Math.max(Math.min(minH,wa.h),rect.h)) : Math.max(minH, Math.min(rect.h, maxH));
+    const x = Math.max(wa.x, Math.min(rect.x, wa.x + wa.w - (contained?w:Math.min(120,w))));
+    const y = Math.max(wa.y, Math.min(rect.y, wa.y + wa.h - (contained?h:60)));
     return { w, h, x, y };
-  }, [minW, minH]);
+  }, [minW, minH, contained, getArea]);
 
   // Recalculate bounds on viewport / sidebar changes
   useEffect(() => {
     const recalc = () => {
       if (!win) return;
       if (maximized) { recalculateWorkArea(); return; }
-      updateRect(id, clamp(win.rect));
+      const next=clamp(win.rect);
+      if(next.x!==win.rect.x||next.y!==win.rect.y||next.w!==win.rect.w||next.h!==win.rect.h)updateRect(id,next);
     };
     window.addEventListener('resize', recalc);
     const mo = new MutationObserver(recalc);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
-    return () => { window.removeEventListener('resize', recalc); mo.disconnect(); };
-  }, [id, win, maximized, clamp, updateRect]);
+    const ro=contained&&containerRef.current?.parentElement?new ResizeObserver(recalc):null;
+    if(ro&&containerRef.current?.parentElement)ro.observe(containerRef.current.parentElement);
+    return () => { window.removeEventListener('resize', recalc); mo.disconnect(); ro?.disconnect(); };
+  }, [id, win, maximized, clamp, updateRect, contained]);
 
   const onPointerDownHeader = useCallback((e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -123,7 +128,7 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
 
   if (!win) return null;
 
-  const { x, y, w, h } = maximized ? getWorkArea() : win.rect;
+  const { x, y, w, h } = maximized ? getArea() : win.rect;
 
   const edgeCls = 'absolute z-10';
   const cornerSize = 12;
@@ -134,11 +139,12 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
       ref={containerRef}
       role="region"
       aria-label={title}
-      className="fixed flex flex-col shadow-2xl bg-[var(--w-surface)] border border-[var(--w-separator)] overflow-hidden"
+      data-active={contained?active:undefined}
+      className={`${contained?'absolute acc-work-window':'fixed shadow-2xl'} flex flex-col bg-[var(--w-surface)] border border-[var(--w-separator)] overflow-hidden`}
       style={{
         left: x, top: y, width: w, height: h,
         zIndex: win.zIndex,
-        borderRadius: maximized ? 0 : 10,
+        borderRadius: contained||maximized ? 0 : 10,
         display: win.minimized ? 'none' : undefined,
       }}
       onPointerDown={() => focus(id)}
@@ -146,26 +152,26 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
       {/* Title bar */}
       <div
         className="flex items-center gap-2 px-3 bg-[var(--w-surface-el)] border-b border-[var(--w-separator)] select-none shrink-0 cursor-grab active:cursor-grabbing"
-        style={{ height: HEADER_H }}
+        style={{ height: contained?32:HEADER_H }}
         onPointerDown={onPointerDownHeader}
         onPointerMove={onPointerMoveHeader}
-        onPointerUp={onPointerUpHeader}
+        onPointerUp={onPointerUpHeader} onPointerCancel={onPointerUpHeader}
         onDoubleClick={e => { if (!(e.target as HTMLElement).closest('button')) toggleMaximize(); }}
       >
         {icon && <span className="text-[var(--w-text-muted)] flex-shrink-0 [&>svg]:w-4 [&>svg]:h-4">{icon}</span>}
         <span className="text-sm font-semibold text-[var(--w-text)] truncate flex-1">{title}</span>
         {windows.filter(w => !w.minimized).length >= 2 && (
-          <button onClick={tileVisibleWindows} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" title="Répartir les fenêtres">
+          <button onClick={tileVisibleWindows} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors acc-tile-control" title="Répartir les fenêtres">
             <LayoutGrid className="w-3.5 h-3.5" />
           </button>
         )}
-        <button onClick={() => minimize(id)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" title="Réduire">
+        <button onClick={() => minimize(id)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" aria-label="Réduire" title="Réduire">
           <Minus className="w-3.5 h-3.5" />
         </button>
-        <button onClick={toggleMaximize} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" title={maximized ? 'Restaurer' : 'Agrandir'}>
+        <button onClick={toggleMaximize} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" aria-label={maximized ? 'Restaurer' : 'Agrandir'} title={maximized ? 'Restaurer' : 'Agrandir'}>
           {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
         </button>
-        <button onClick={onClose} className="p-1 rounded hover:bg-red-500/20 text-[var(--w-text-muted)] hover:text-red-500 transition-colors" title="Fermer">
+        <button onClick={onClose} className="p-1 rounded hover:bg-red-500/20 text-[var(--w-text-muted)] hover:text-red-500 transition-colors" aria-label="Fermer" title="Fermer">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -176,22 +182,22 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
       {/* Resize edges (hidden when maximized) */}
       {!maximized && <>
         <div className={`${edgeCls} top-0 left-[${cornerSize}px] right-[${cornerSize}px] cursor-n-resize`} style={{ height: edgeThick, left: cornerSize, right: cornerSize }}
-          onPointerDown={e => onResizePointerDown('n', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('n', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
         <div className={`${edgeCls} bottom-0 cursor-s-resize`} style={{ height: edgeThick, left: cornerSize, right: cornerSize }}
-          onPointerDown={e => onResizePointerDown('s', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('s', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
         <div className={`${edgeCls} left-0 top-[${cornerSize}px] bottom-[${cornerSize}px] cursor-w-resize`} style={{ width: edgeThick, top: cornerSize, bottom: cornerSize }}
-          onPointerDown={e => onResizePointerDown('w', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('w', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
         <div className={`${edgeCls} right-0 cursor-e-resize`} style={{ width: edgeThick, top: cornerSize, bottom: cornerSize }}
-          onPointerDown={e => onResizePointerDown('e', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('e', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
         {/* Corners */}
         <div className={`${edgeCls} top-0 left-0 cursor-nw-resize`} style={{ width: cornerSize, height: cornerSize }}
-          onPointerDown={e => onResizePointerDown('nw', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('nw', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
         <div className={`${edgeCls} top-0 right-0 cursor-ne-resize`} style={{ width: cornerSize, height: cornerSize }}
-          onPointerDown={e => onResizePointerDown('ne', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('ne', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
         <div className={`${edgeCls} bottom-0 left-0 cursor-sw-resize`} style={{ width: cornerSize, height: cornerSize }}
-          onPointerDown={e => onResizePointerDown('sw', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('sw', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
         <div className={`${edgeCls} bottom-0 right-0 cursor-se-resize`} style={{ width: cornerSize, height: cornerSize }}
-          onPointerDown={e => onResizePointerDown('se', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('se', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
       </>}
     </div>
   );
