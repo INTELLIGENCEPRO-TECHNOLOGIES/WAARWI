@@ -5,6 +5,7 @@ import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckC
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { AccountingCashReview } from '../components/AccountingCashReview';
 import { AccountingPurchaseInvoice } from '../components/AccountingPurchaseInvoice';
+import { AccountingVatReport } from '../components/AccountingVatReport';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -15,7 +16,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture';
+type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat';
 
 const JOURNAL_TYPES: Record<string, string> = {
   VE: 'Journal des ventes', AC: 'Journal des achats',
@@ -32,6 +33,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
     tiers: { t: 'Tiers', s: 'Balance et interrogation des comptes clients/fournisseurs.' },
     search: { t: 'Recherche', s: "Recherche avancée d'écritures comptables." },
     cloture: { t: 'Clôtures', s: 'Contrôles et clôture mensuelle' },
+    vat: { t: 'Situation de TVA', s: 'TVA collectée, récupérable et contrôles par période.' },
   };
   const meta = titles[section];
   return (
@@ -47,6 +49,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
       {section === 'tiers' && <TiersTab />}
       {section === 'search' && <SearchTab />}
       {section === 'cloture' && <ClotureTab />}
+      {section === 'vat' && <VatTab />}
     </div>
   );
 }
