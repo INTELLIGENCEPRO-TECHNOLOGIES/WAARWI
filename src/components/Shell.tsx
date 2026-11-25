@@ -26,7 +26,7 @@ import { useWindowManager } from '../context/WindowManagerContext';
 export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'coffre' | 'articles' | 'stock' | 'tiers'
   | 'sales' | 'billing' | 'supplier_orders' | 'online_orders' | 'master_catalog'
-  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture' | 'acc_vat' | 'acc_statement' | 'acc_bank' | 'acc_fiscal' | 'acc_financial'
+  | 'acc_overview' | 'acc_entry' | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture' | 'acc_vat' | 'acc_statement' | 'acc_bank' | 'acc_fiscal' | 'acc_financial'
   | 'ipm' | 'warranties' | 'money_transfer' | 'representatives'
   | 'settings' | 'platform_admin' | 'reports';
 
@@ -50,6 +50,8 @@ const NAV_ALIASES: Partial<Record<Route, string[]>> = {
   reports: ['rapport', 'rapports', 'statistique', 'statistiques', 'report', 'statistics'],
   money_transfer: ['transfert', 'transfert d argent', 'money', 'transfer', 'western union', 'ria', 'moneygram'],
   ipm: ['ipm', 'bordereau', 'bordereaux'],
+  acc_overview: ['accueil comptable','situation comptable'],
+  acc_entry: ['saisie','nouvelle ecriture','od'],
   acc_plan: ['compte', 'comptes'],
   acc_cloture: ['cloture'],
   acc_vat: ['tva', 'taxe', 'fiscalite'],
@@ -83,6 +85,8 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'supplier_orders', labelKey: 'nav.supplierOrders', icon: Truck },
   ]},
   { titleKey: ACCOUNTING_SECTION, compactIcon: BookOpen, items: [
+    { key: 'acc_overview', labelKey: 'nav.accountingOverview', icon: LayoutDashboard },
+    { key: 'acc_entry', labelKey: 'nav.accountingEntry', icon: Plus },
     { key: 'acc_plan', labelKey: 'nav.accountingPlan', icon: BookOpen },
     { key: 'acc_journals', labelKey: 'nav.journals', icon: FileText },
     { key: 'acc_balance', labelKey: 'nav.balance', icon: TrendingUp },
@@ -111,7 +115,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock',
   billing: 'billing', online_orders: 'online_orders', warranties: 'billing', representatives: 'billing',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting', acc_financial: 'accounting',
+  acc_overview: 'accounting', acc_entry: 'accounting', acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting', acc_financial: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer',
   settings: 'settings', reports: 'reports',
 };
@@ -130,6 +134,8 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
   stock: 'view_stock_levels',
   supplier_orders: 'manage_supplier_orders',
   online_orders: 'manage_online_orders',
+  acc_overview: 'view_accounting',
+  acc_entry: 'manage_accounting',
   acc_plan: 'view_accounting',
   acc_journals: 'view_accounting',
   acc_balance: 'view_accounting',
@@ -162,6 +168,8 @@ const BREADCRUMB_MAP: Record<string, { group: string; labelKey: string }> = {
   representatives: { group: 'nav.commercial', labelKey: 'nav.representatives' },
   tiers: { group: 'nav.commercial', labelKey: 'nav.tiers' },
   supplier_orders: { group: 'nav.commercial', labelKey: 'nav.supplierOrders' },
+  acc_overview: { group: 'nav.accounting', labelKey: 'nav.accountingOverview' },
+  acc_entry: { group: 'nav.accounting', labelKey: 'nav.accountingEntry' },
   acc_plan: { group: 'nav.accounting', labelKey: 'nav.accountingPlan' },
   acc_journals: { group: 'nav.accounting', labelKey: 'nav.journals' },
   acc_balance: { group: 'nav.accounting', labelKey: 'nav.balance' },
