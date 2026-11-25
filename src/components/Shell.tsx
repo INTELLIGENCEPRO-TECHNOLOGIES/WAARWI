@@ -26,7 +26,7 @@ import { useWindowManager } from '../context/WindowManagerContext';
 export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'coffre' | 'articles' | 'stock' | 'tiers'
   | 'sales' | 'billing' | 'supplier_orders' | 'online_orders' | 'master_catalog'
-  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture'
+  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture' | 'acc_vat'
   | 'ipm' | 'warranties' | 'money_transfer' | 'representatives'
   | 'settings' | 'platform_admin' | 'reports';
 
@@ -52,6 +52,7 @@ const NAV_ALIASES: Partial<Record<Route, string[]>> = {
   ipm: ['ipm', 'bordereau', 'bordereaux'],
   acc_plan: ['compte', 'comptes'],
   acc_cloture: ['cloture'],
+  acc_vat: ['tva', 'taxe', 'fiscalite'],
 };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -84,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'acc_grandlivre', labelKey: 'nav.generalLedger', icon: BookOpen },
     { key: 'acc_tiers', labelKey: 'nav.tiers', icon: Users },
     { key: 'acc_search', labelKey: 'nav.journal', icon: Search },
+    { key: 'acc_vat', labelKey: 'nav.vatReport', icon: FileText },
     { key: 'acc_cloture', labelKey: 'nav.closings', icon: Lock },
   ]},
   { titleKey: 'nav.tools', items: [
@@ -101,7 +103,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock',
   billing: 'billing', online_orders: 'online_orders', warranties: 'billing', representatives: 'billing',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting',
+  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer',
   settings: 'settings', reports: 'reports',
 };
@@ -127,6 +129,7 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
   acc_tiers: 'view_accounting',
   acc_search: 'view_accounting',
   acc_cloture: 'view_accounting',
+  acc_vat: 'view_accounting',
   money_transfer: 'access_money_transfer',
   representatives: 'rep_view',
   settings: 'manage_settings',
@@ -154,6 +157,7 @@ const BREADCRUMB_MAP: Record<string, { group: string; labelKey: string }> = {
   acc_tiers: { group: 'nav.accounting', labelKey: 'nav.tiers' },
   acc_search: { group: 'nav.accounting', labelKey: 'nav.journal' },
   acc_cloture: { group: 'nav.accounting', labelKey: 'nav.closings' },
+  acc_vat: { group: 'nav.accounting', labelKey: 'nav.vatReport' },
   money_transfer: { group: 'nav.tools', labelKey: 'nav.moneyTransfer' },
   reports: { group: 'nav.tools', labelKey: 'nav.reports' },
   ipm: { group: 'nav.tools', labelKey: 'nav.ipm' },
