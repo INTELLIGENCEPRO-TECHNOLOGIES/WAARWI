@@ -1267,3 +1267,8 @@ function ClotureTab() {
   const { can } = usePermissions();
   return tenant ? <AccountingPeriodControls key={tenant.id} tenantId={tenant.id} canClose={can('manage_accounting')} /> : null;
 }
+
+function VatTab() {
+  const { tenant } = useApp();
+  return tenant ? <AccountingVatReport key={tenant.id} tenantId={tenant.id} /> : null;
+}
