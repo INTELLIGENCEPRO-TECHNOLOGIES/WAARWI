@@ -281,6 +281,10 @@ function Inner() {
     return reference && /^[0-9a-f-]{36}$/i.test(reference) ? reference : null;
   });
   const [route, setRoute] = useState<Route>('dashboard');
+  const navigateFromShell=(r:Route)=>{
+    if(r!==route&&ROUTE_MODULE[route]==='accounting'&&ROUTE_MODULE[r]!=='accounting'&&!window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{route:r}})))return;
+    setRoute(r);
+  };
   const [billingMounted, setBillingMounted] = useState(false);
   useEffect(() => { if (route === 'billing') setBillingMounted(true); }, [route]);
   const [supplierOrdersMounted, setSupplierOrdersMounted] = useState(false);
@@ -395,7 +399,7 @@ function Inner() {
 
   return (
     <>
-    <Shell route={route} onRoute={setRoute} onOpenSubscription={onOpenSubscription}>
+    <Shell route={route} onRoute={navigateFromShell} onOpenSubscription={onOpenSubscription}>
       <Suspense fallback={<div className="p-6 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>}>
         {route === 'dashboard' && <Dashboard onNavigate={(r: string) => setRoute(r as Route)} onOpenSubscription={onOpenSubscription} />}
         {route === 'pos' && <POS key={[profile?.id, tenant?.id, currentSite?.id].join(":")} onLeave={() => setRoute('dashboard')} onNavigate={(r: string) => setRoute(r as any)} />}
@@ -409,7 +413,7 @@ function Inner() {
         {route === 'online_orders' && <OnlineOrders />}
         {route === 'cash_history' && <CashHistory />}
         {route === 'coffre' && <Coffre />}
-        {ROUTE_MODULE[route]==='accounting' && tenant && !permsLoading && can('view_accounting') && enabled.includes('accounting') && <AccountingDesktop key={tenant.id+':'+user.id} route={route} onNavigate={setRoute} canAccess={r=>ROUTE_MODULE[r]==='accounting'&&enabled.includes('accounting')&&(!ROUTE_PERMISSION[r]||can(ROUTE_PERMISSION[r]))}/>}
+        {ROUTE_MODULE[route]==='accounting' && tenant && !permsLoading && can('view_accounting') && enabled.includes('accounting') && <AccountingDesktop key={tenant.id+':'+user.id} route={route} onNavigate={setRoute} canAccess={r=>{const permission=ROUTE_PERMISSION[r];return ROUTE_MODULE[r]==='accounting'&&enabled.includes('accounting')&&(!permission||can(permission));}}/>}
         {route === 'settings' && <Settings key={settingsEntry.n} initialTab={settingsEntry.tab} />}
         {route === 'reports' && <Reports />}
         {route === 'ipm' && <IPM />}
