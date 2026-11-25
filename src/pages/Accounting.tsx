@@ -9,6 +9,7 @@ import { AccountingVatReport } from '../components/AccountingVatReport';
 import { AccountingAccountStatement } from '../components/AccountingAccountStatement';
 import { AccountingBankReconciliation } from '../components/AccountingBankReconciliation';
 import { AccountingFiscalYear } from '../components/AccountingFiscalYear';
+import { AccountingFinancialReports } from '../components/AccountingFinancialReports';
 import { AccountingEntryReversal } from '../components/AccountingEntryReversal';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
@@ -20,7 +21,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal';
+type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
 
 const JOURNAL_TYPES: Record<string, string> = {
   VE: 'Journal des ventes', AC: 'Journal des achats',
@@ -41,6 +42,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
     statement: { t: 'Interrogation des comptes', s: 'Mouvements, soldes et pièces des comptes généraux et auxiliaires.' },
     bank: { t: 'Rapprochement bancaire', s: 'Relevés, pointage des écritures et contrôle des soldes.' },
     fiscal: { t: 'Exercices et reports à nouveau', s: 'Arrêtés annuels, balance et ouverture du prochain exercice.' },
+    financial: { t: 'États financiers', s: 'Bilan, compte de résultat, comparatifs et contrôles.' },
   };
   const meta = titles[section];
   return (
@@ -60,6 +62,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
       {section === 'statement' && <AccountStatementTab />}
       {section === 'bank' && <BankReconciliationTab />}
       {section === 'fiscal' && <FiscalYearTab />}
+      {section === 'financial' && <FinancialReportsTab />}
     </div>
   );
 }
@@ -1307,4 +1310,9 @@ function FiscalYearTab() {
  const {tenant}=useApp();
  const {can}=usePermissions();
  return tenant?<AccountingFiscalYear key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')}/>:null;
+}
+
+function FinancialReportsTab() {
+ const {tenant}=useApp();
+ return tenant?<AccountingFinancialReports key={tenant.id} tenantId={tenant.id} tenantName={tenant.name}/>:null;
 }
