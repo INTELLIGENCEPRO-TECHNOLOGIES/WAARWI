@@ -45,6 +45,28 @@ ALTER TABLE public.accounting_match_lines ADD CONSTRAINT fk_accounting_match_gro
 INSERT INTO public._br_table_registry(schema_name,table_name,tenant_link,tenant_id_column,category,restore_order,reset_behavior,is_mandatory)
 VALUES ('public','accounting_match_groups','direct','tenant_id','operation',69,'delete',false);
 -- Les groupes restent stockés même après délettrage pour éviter la réutilisation des codes.
+-- Compatibilité des sauvegardes prises avant cette migration : lorsque les
+-- lignes de lettrage sont restaurées sans table de groupes, recréer le groupe.
+-- Les sauvegardes récentes restaurent les groupes (ordre 69) avant les lignes (71).
+CREATE OR REPLACE FUNCTION public._ensure_accounting_match_group() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $fn$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.accounting_match_groups g WHERE g.tenant_id=NEW.tenant_id AND g.account_code=NEW.account_code AND g.group_id=NEW.group_id) THEN
+  PERFORM 1 FROM public.accounts a WHERE a.tenant_id=NEW.tenant_id AND a.code=NEW.account_code FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Compte de lettrage introuvable.'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.accounting_match_groups g WHERE g.tenant_id=NEW.tenant_id AND g.account_code=NEW.account_code AND g.group_id=NEW.group_id) THEN
+   INSERT INTO public.accounting_match_groups(tenant_id,account_code,group_id,sequence_no,code)
+   SELECT NEW.tenant_id,NEW.account_code,NEW.group_id,coalesce(max(sequence_no),0)+1,public._accounting_alpha_code(coalesce(max(sequence_no),0)+1)
+   FROM public.accounting_match_groups WHERE tenant_id=NEW.tenant_id AND account_code=NEW.account_code;
+  END IF;
+ END IF;
+ RETURN NEW;
+END;
+$fn$;
+REVOKE ALL ON FUNCTION public._ensure_accounting_match_group() FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER ensure_accounting_match_group BEFORE INSERT ON public.accounting_match_lines FOR EACH ROW EXECUTE FUNCTION public._ensure_accounting_match_group();
+
 ),
  UNIQUE(tenant_id,account_code,sequence_no),
  UNIQUE(tenant_id,account_code,group_id)
