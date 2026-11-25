@@ -47,6 +47,7 @@
     "accountingPlan": "Chart of accounts",
     "vatReport": "VAT statement",
     "accountStatement": "Account inquiry",
+    "bankReconciliation": "Bank reconciliation",
     "journals": "Journals",
     "balance": "Balance",
     "generalLedger": "General ledger",
