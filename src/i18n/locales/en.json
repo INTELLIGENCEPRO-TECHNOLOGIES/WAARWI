@@ -48,6 +48,7 @@
     "vatReport": "VAT statement",
     "accountStatement": "Account inquiry",
     "bankReconciliation": "Bank reconciliation",
+    "fiscalYears": "Fiscal years and opening balances",
     "journals": "Journals",
     "balance": "Balance",
     "generalLedger": "General ledger",
