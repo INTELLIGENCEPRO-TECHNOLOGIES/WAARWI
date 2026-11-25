@@ -1,9 +1,9 @@
-import { useEffect,useState } from 'react';
+import { useEffect,useRef,useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/format';
 
 type Account={code:string;name:string;account_type:string;is_active:boolean};
-type Line={line_id:string;entry_id:string;entry_date:string;entry_number:string;journal_type:string;reference:string|null;description:string;source_type:string|null;source_id:string|null;status:string;label:string|null;debit:number;credit:number;running_balance:number};
+type Line={line_id:string;entry_id:string;entry_date:string;entry_number:string;journal_type:string;reference:string|null;description:string;source_type:string|null;source_id:string|null;status:string;label:string|null;debit:number;credit:number;running_balance:number;match_group_id:string|null};
 type Statement={account:Account;opening_balance:number;total_debit:number;total_credit:number;closing_balance:number;row_count:number;rows:Line[]};
 const money=(n:number)=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(Number(n))+' FCFA';
 const balance=(n:number)=>Number(n)===0?'0 FCFA':money(Math.abs(Number(n)))+(Number(n)>0?' D':' C');
@@ -11,7 +11,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 const msg=(e:unknown)=>e&&typeof e==='object'&&'message' in e?String(e.message):'Chargement impossible.';
 function csv(v:unknown){if(typeof v==='number'&&Number.isFinite(v))return String(v).replace('.',',');let s=String(v??'');if(/^[\s\u0000-\u001f]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
 
-export function AccountingAccountStatement({tenantId,onView,initialAccount=''}:{tenantId:string;onView:(entry:Line)=>void;initialAccount?:string}) {
+export function AccountingAccountStatement({tenantId,onView,initialAccount='',canManage=false}:{tenantId:string;onView:(entry:Line)=>void;initialAccount?:string;canManage?:boolean}) {
  const [search,setSearch]=useState(initialAccount);
  const [searchQuery,setSearchQuery]=useState({term:initialAccount,offset:0});
  const [accounts,setAccounts]=useState<Account[]>([]);
@@ -25,6 +25,12 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount=''}:{
  const [result,setResult]=useState<Statement|null>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
+ const [chosen,setChosen]=useState<Record<string,Line>>({});
+ const [saving,setSaving]=useState(false);
+ const writeLock=useRef(false);
+ const [writeError,setWriteError]=useState('');
+ const [notice,setNotice]=useState('');
+ const [release,setRelease]=useState<{group:string;reason:string}|null>(null);
  useEffect(()=>{
   let live=true;setAccountBusy(true);setAccountError('');
   void (async()=>{try{
@@ -51,10 +57,33 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount=''}:{
  },[tenantId,request]);
  const valid=!!code&&!!from&&!!to&&from<=to&&(Date.parse(to)-Date.parse(from))/86400000<=366;
  const changed=!!request&&(code!==request.code||from!==request.from||to!==request.to);
- const run=()=>{if(valid)setRequest({code,from,to,offset:0,revision:(request?.revision??0)+1});};
+ const canMatch=canManage&&result?.account.account_type==='auxiliary'&&/^(401|411)/.test(result.account.code);
+ const selected=Object.values(chosen);
+ const sumDebit=selected.reduce((n,l)=>n+Math.round(Number(l.debit)*100),0);
+ const sumCredit=selected.reduce((n,l)=>n+Math.round(Number(l.credit)*100),0);
+ const equal=selected.length>=2&&sumDebit>0&&sumDebit===sumCredit;
+ const run=()=>{if(valid&&!saving){setChosen({});setRelease(null);setWriteError('');setNotice('');setRequest({code,from,to,offset:0,revision:(request?.revision??0)+1});}};
+ const toggle=(line:Line)=>{
+  setChosen(old=>{const next={...old};if(next[line.line_id])delete next[line.line_id];else if(Object.keys(next).length<100)next[line.line_id]=line;return next;});
+ };
+ const apply=async(unmatch=false)=>{
+  if(!request||!canMatch||changed||writeLock.current||busy||(!unmatch&&!equal)||(unmatch&&!release?.reason.trim()))return;
+  writeLock.current=true;setSaving(true);setWriteError('');setNotice('');
+  try{
+   const response=unmatch&&release
+    ?await supabase.rpc('unmatch_accounting_lines',{p_tenant_id:tenantId,p_account_code:request.code,p_group_id:release.group,p_reason:release.reason.trim()})
+    :await supabase.rpc('match_accounting_lines',{p_tenant_id:tenantId,p_account_code:request.code,p_line_ids:selected.map(l=>l.line_id)});
+   if(response.error)throw response.error;
+   if(!response.data?.success)throw new Error('Opération non confirmée.');
+   setChosen({});setRelease(null);
+   setNotice(unmatch?'Lettrage annulé et motif enregistré.':'Lignes lettrées avec succès.');
+   setRequest(p=>p&&({...p,revision:p.revision+1}));
+  }catch(e){setWriteError(msg(e));}
+  finally{setSaving(false);writeLock.current=false;}
+ };
  const download=()=>{
   if(!result||!request)return;
-  const rows:unknown[][]=[['Interrogation du compte',result.account.code,result.account.name],['Période',request.from,request.to],['Solde initial (D positif/C négatif)',Number(result.opening_balance)],['Débit période',Number(result.total_debit)],['Crédit période',Number(result.total_credit)],['Solde final (D positif/C négatif)',Number(result.closing_balance)],['Date','Pièce','Journal','Référence','Libellé','Débit','Crédit','Solde cumulé'],...result.rows.map(r=>[r.entry_date,r.entry_number,r.journal_type,r.reference,r.label||r.description,Number(r.debit),Number(r.credit),Number(r.running_balance)])];
+  const rows:unknown[][]=[['Interrogation du compte',result.account.code,result.account.name],['Période',request.from,request.to],['Solde initial (D positif/C négatif)',Number(result.opening_balance)],['Débit période',Number(result.total_debit)],['Crédit période',Number(result.total_credit)],['Solde final (D positif/C négatif)',Number(result.closing_balance)],['Date','Pièce','Journal','Référence','Libellé','Débit','Crédit','Solde cumulé','Groupe de lettrage'],...result.rows.map(r=>[r.entry_date,r.entry_number,r.journal_type,r.reference,r.label||r.description,Number(r.debit),Number(r.credit),Number(r.running_balance),r.match_group_id])];
   const blob=new Blob(['\uFEFF'+rows.map(r=>r.map(csv).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='Compte-'+request.code+'-'+request.from+'-'+request.to+'-page-'+(request.offset/50+1)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  };
@@ -71,7 +100,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount=''}:{
     <label className="text-xs font-medium min-w-0">Compte sélectionné<input className="input mt-1 w-full" value={code} onChange={e=>setCode(e.target.value.trim())} required placeholder="Numéro exact"/></label>
     <label className="text-xs font-medium min-w-0">Du<input className="input mt-1 w-full" type="date" value={from} onChange={e=>setFrom(e.target.value)} required/></label>
     <label className="text-xs font-medium min-w-0">Au<input className="input mt-1 w-full" type="date" value={to} onChange={e=>setTo(e.target.value)} required/></label>
-    <button className="btn btn-primary" disabled={!valid||busy}>Interroger</button>
+    <button className="btn btn-primary" disabled={!valid||busy||saving}>Interroger</button>
    </form>
    {changed&&<p className="text-xs text-neutral-600">Interrogez le compte pour appliquer les nouveaux critères.</p>}
   </div>
@@ -81,15 +110,29 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount=''}:{
    <div className="flex flex-wrap justify-between gap-2 items-center"><div><h2 className="text-sm font-semibold break-words">{result.account.code} · {result.account.name}</h2><p className="text-xs text-neutral-500">{formatDate(request.from)} au {formatDate(request.to)} · Écritures validées</p></div><button className="btn btn-secondary" onClick={download}>Exporter cette page (CSV)</button></div>
    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{[['Solde initial',balance(result.opening_balance)],['Débit période',money(result.total_debit)],['Crédit période',money(result.total_credit)],['Solde final',balance(result.closing_balance)]].map(([label,value])=><div className="card p-3 min-w-0" key={label}><p className="text-xs text-neutral-500">{label}</p><p className="mt-1 font-semibold text-sm tabular-nums break-words">{value}</p></div>)}</div>
    <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. Soldes calculés sur les écritures enregistrées, hors écritures annulées et brouillons.</p>
+   {canMatch&&<div className="card p-3 space-y-3">
+    <h3 className="text-sm font-semibold">Lettrage manuel</h3>
+    <p className="text-xs text-neutral-600">Cochez les factures et règlements correspondants. Vous pouvez sélectionner des lignes sur plusieurs pages ; seuls les groupes exactement équilibrés sont acceptés.</p>
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+     <div>Lignes sélectionnées <strong className="block text-sm">{selected.length}</strong></div>
+     <div>Débit <strong className="block text-sm break-words">{money(sumDebit/100)}</strong></div>
+     <div>Crédit <strong className="block text-sm break-words">{money(sumCredit/100)}</strong></div>
+     <div>Écart <strong className="block text-sm break-words">{money((sumDebit-sumCredit)/100)}</strong></div>
+    </div>
+    <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-primary" disabled={!equal||saving||changed||!!release} onClick={()=>void apply()}>Lettrer la sélection</button><button type="button" className="btn btn-secondary" disabled={!selected.length||saving} onClick={()=>setChosen({})}>Vider la sélection</button></div>
+    {release&&<div className="space-y-2 border-t border-neutral-200 pt-3"><p className="text-sm font-medium">Délettrer le groupe {release.group.slice(0,8)} dans son intégralité</p><label className="block text-xs font-medium">Motif obligatoire<textarea className="input mt-1 w-full" maxLength={500} value={release.reason} disabled={saving} onChange={e=>setRelease(p=>p&&({...p,reason:e.target.value}))}/></label><div className="flex gap-2"><button type="button" className="btn btn-primary" disabled={saving||changed||!release.reason.trim()} onClick={()=>void apply(true)}>Confirmer le délettrage</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={()=>setRelease(null)}>Annuler</button></div></div>}
+    {writeError&&<p role="alert" className="text-xs text-red-700 break-words">{writeError}</p>}
+    {notice&&<p role="status" className="text-xs text-neutral-700">{notice}</p>}
+   </div>}
    <div className="divide-y divide-neutral-200 border-y border-neutral-200">
     {!result.rows.length&&<p className="py-5 text-sm text-neutral-500">Aucun mouvement dans cette période.</p>}
     {result.rows.map(r=><div key={r.line_id} className="py-3 grid gap-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_auto] items-start">
-     <div className="min-w-0"><button type="button" className="text-sm font-semibold underline text-left break-words" onClick={()=>onView(r)}>{r.entry_number} · {formatDate(r.entry_date)}</button><p className="text-xs text-neutral-600 break-words">{r.journal_type} · {r.label||r.description}</p>{r.reference&&<p className="text-xs text-neutral-500 break-words">Réf. : {r.reference}</p>}</div>
+     <div className="min-w-0"><button type="button" className="text-sm font-semibold underline text-left break-words" onClick={()=>onView(r)}>{r.entry_number} · {formatDate(r.entry_date)}</button><p className="text-xs text-neutral-600 break-words">{r.journal_type} · {r.label||r.description}</p>{r.reference&&<p className="text-xs text-neutral-500 break-words">Réf. : {r.reference}</p>}{r.match_group_id?<div className="mt-1 flex flex-wrap items-center gap-2 text-xs"><span title={r.match_group_id}>Lettré · {r.match_group_id.slice(0,8)}</span>{canMatch&&<button type="button" className="underline" disabled={saving||changed} onClick={()=>setRelease({group:r.match_group_id!,reason:''})}>Délettrer</button>}</div>:canMatch?<label className="mt-1 flex items-center gap-2 text-xs"><input type="checkbox" checked={!!chosen[r.line_id]} disabled={saving||changed||(!chosen[r.line_id]&&selected.length>=100)} onChange={()=>toggle(r)}/> Sélectionner</label>:null}</div>
      <div className="grid grid-cols-2 gap-2"><div><p className="text-xs text-neutral-500">Débit</p><p className="text-sm tabular-nums break-words">{money(r.debit)}</p></div><div><p className="text-xs text-neutral-500">Crédit</p><p className="text-sm tabular-nums break-words">{money(r.credit)}</p></div></div>
      <div><p className="text-xs text-neutral-500">Solde cumulé</p><p className="font-semibold text-sm tabular-nums break-words">{balance(r.running_balance)}</p></div>
     </div>)}
    </div>
-   <nav aria-label="Pages du compte" className="flex flex-wrap justify-between items-center gap-2"><button type="button" className="btn btn-secondary" disabled={changed||request.offset===0} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset-50}))}>Précédente</button><span className="text-xs text-neutral-500">{result.row_count} mouvements · Page {request.offset/50+1}/{Math.max(1,Math.ceil(result.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={changed||request.offset+50>=result.row_count} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset+50}))}>Suivante</button></nav>
+   <nav aria-label="Pages du compte" className="flex flex-wrap justify-between items-center gap-2"><button type="button" className="btn btn-secondary" disabled={saving||changed||request.offset===0} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset-50}))}>Précédente</button><span className="text-xs text-neutral-500">{result.row_count} mouvements · Page {request.offset/50+1}/{Math.max(1,Math.ceil(result.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={saving||changed||request.offset+50>=result.row_count} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset+50}))}>Suivante</button></nav>
   </div>}
  </section>;
 }
