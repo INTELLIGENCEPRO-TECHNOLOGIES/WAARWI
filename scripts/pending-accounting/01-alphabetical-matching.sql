@@ -21,7 +21,7 @@ CREATE TABLE public.accounting_match_groups(
  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
  account_code text NOT NULL,
  sequence_no bigint NOT NULL CHECK(sequence_no>0),
- code text NOT NULL CHECK(code ~ '^[A-Z]+
+ code text NOT NULL CHECK(code ~ '^[A-Z]+$'),
  UNIQUE(tenant_id,account_code,sequence_no),
  UNIQUE(tenant_id,account_code,group_id)
 );
@@ -67,30 +67,6 @@ $fn$;
 REVOKE ALL ON FUNCTION public._ensure_accounting_match_group() FROM PUBLIC,anon,authenticated;
 CREATE TRIGGER ensure_accounting_match_group BEFORE INSERT ON public.accounting_match_lines FOR EACH ROW EXECUTE FUNCTION public._ensure_accounting_match_group();
 
-),
- UNIQUE(tenant_id,account_code,sequence_no),
- UNIQUE(tenant_id,account_code,group_id)
-);
-ALTER TABLE public.accounting_match_groups ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.accounting_match_groups FROM PUBLIC,anon,authenticated;
-GRANT SELECT ON public.accounting_match_groups TO authenticated;
-CREATE POLICY accounting_match_groups_read ON public.accounting_match_groups FOR SELECT TO authenticated
- USING(tenant_id=(SELECT public.current_tenant_id()) AND (SELECT public.current_user_can_view_accounting()));
--- Verrouiller les écritures de lettrage pendant l'attribution historique.
-LOCK TABLE public.accounting_match_lines IN SHARE ROW EXCLUSIVE MODE;
-WITH groups AS (
- SELECT tenant_id,account_code,group_id,min(matched_at) AS first_at
- FROM public.accounting_match_lines GROUP BY tenant_id,account_code,group_id
-), numbered AS (
- SELECT *,row_number() OVER(PARTITION BY tenant_id,account_code ORDER BY first_at,group_id) AS seq FROM groups
-)
-INSERT INTO public.accounting_match_groups(tenant_id,account_code,group_id,sequence_no)
-SELECT tenant_id,account_code,group_id,seq FROM numbered;
-ALTER TABLE public.accounting_match_lines ADD CONSTRAINT fk_accounting_match_group
- FOREIGN KEY(tenant_id,account_code,group_id) REFERENCES public.accounting_match_groups(tenant_id,account_code,group_id);
-INSERT INTO public._br_table_registry(schema_name,table_name,tenant_link,tenant_id_column,category,restore_order,reset_behavior,is_mandatory)
-VALUES ('public','accounting_match_groups','direct','tenant_id','operation',69,'delete',false);
--- Le code est calculé à la lecture pour faciliter la restauration des anciens exports.
 
 CREATE OR REPLACE FUNCTION public.match_accounting_lines(p_tenant_id uuid,p_account_code text,p_line_ids uuid[])
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
