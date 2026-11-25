@@ -1,5 +1,6 @@
 import {useState,useEffect,useRef,type ReactNode} from 'react';
-import {ChevronLeft,ChevronRight,MoreHorizontal,Eye,Copy} from './Icons';
+import {createPortal} from 'react-dom';
+import {ChevronLeft,ChevronRight,MoreHorizontal,Eye,Copy,ArrowRightLeft} from './Icons';
 
 export function useAccountingPagination<T>(rows:T[],resetKey:string){
  const [size,setSize]=useState(20);
@@ -20,7 +21,7 @@ export function AccountingPagination({page,size,total,setPage,setSize,disabled=f
 export function AccountingTable({children,footer}:{children:ReactNode;footer?:ReactNode}){
  return <div className="acc-table-frame"><div className="acc-table-scroll" tabIndex={0} aria-label="Tableau comptable">{children}</div>{footer}</div>;
 }
-export function AccountingRowActions({piece,onView,anchor,onDismiss}:{piece:string;onView:()=>void;anchor?:{x:number;y:number};onDismiss?:()=>void}){
+export function AccountingRowActions({piece,onView,onReverse,reverseDisabledReason,anchor,onDismiss}:{piece:string;onView:()=>void;onReverse?:()=>void;reverseDisabledReason?:string;anchor?:{x:number;y:number};onDismiss?:()=>void}){
  const [local,setLocal]=useState(false);
  const [copied,setCopied]=useState(false);
  const ref=useRef<HTMLDivElement>(null);
@@ -31,12 +32,13 @@ export function AccountingRowActions({piece,onView,anchor,onDismiss}:{piece:stri
   if(!active)return;
   const down=(e:MouseEvent)=>{if(!ref.current?.contains(e.target as Node)&&!buttonRef.current?.contains(e.target as Node))dismiss();};
   const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){dismiss();buttonRef.current?.focus();}};
-  document.addEventListener('mousedown',down);document.addEventListener('keydown',key);
-  return()=>{document.removeEventListener('mousedown',down);document.removeEventListener('keydown',key);};
+  const scroll=()=>dismiss();
+  document.addEventListener('mousedown',down);document.addEventListener('keydown',key);window.addEventListener('scroll',scroll,true);window.addEventListener('resize',scroll);
+  return()=>{document.removeEventListener('mousedown',down);document.removeEventListener('keydown',key);window.removeEventListener('scroll',scroll,true);window.removeEventListener('resize',scroll);};
  },[active,anchor,onDismiss]);
  const copy=async()=>{try{await navigator.clipboard.writeText(piece);setCopied(true);}catch{setCopied(false);}};
  const bounds=buttonRef.current?.getBoundingClientRect();
  const x=anchor?.x??bounds?.right??0,y=anchor?.y??bounds?.bottom??0;
- return <><button ref={buttonRef} type="button" className="acc-icon" aria-label={'Actions '+piece} aria-expanded={active} onClick={()=>{if(active)dismiss();else{setCopied(false);setLocal(true);}}}><MoreHorizontal size={18}/></button>{active&&<div ref={ref} className="acc-context" style={{left:Math.max(8,Math.min(x-190,window.innerWidth-224)),top:Math.max(8,Math.min(y,window.innerHeight-124))}} onClick={e=>e.stopPropagation()}>
- <span className="acc-context-label">{piece}</span><button type="button" onClick={()=>{dismiss();onView();}}><Eye size={16}/>Consulter la pièce</button><button type="button" onClick={()=>void copy()}><Copy size={16}/>{copied?'Numéro copié':'Copier le numéro'}</button></div>}</>;
+ return <><button ref={buttonRef} type="button" className="acc-icon" aria-label={'Actions '+piece} aria-expanded={active} onClick={()=>{if(active)dismiss();else{setCopied(false);setLocal(true);}}}><MoreHorizontal size={18}/></button>{active&&createPortal(<div className="accounting-workspace"><div ref={ref} className="acc-context" style={{left:Math.max(8,Math.min(x-190,window.innerWidth-224)),top:Math.max(8,Math.min(y,window.innerHeight-190)),zIndex:10000}} onClick={e=>e.stopPropagation()}>
+ <span className="acc-context-label">{piece}</span><button type="button" onClick={()=>{dismiss();onView();}}><Eye size={16}/>Consulter la pièce</button><button type="button" onClick={()=>void copy()}><Copy size={16}/>{copied?'Numéro copié':'Copier le numéro'}</button>{(onReverse||reverseDisabledReason)&&<><div style={{borderTop:'1px solid var(--w-separator)',margin:'3px 0'}}/><button type="button" disabled={!onReverse} title={reverseDisabledReason} onClick={()=>{dismiss();onReverse?.();}}><ArrowRightLeft size={16}/><span>Extourner l’écriture{reverseDisabledReason&&<small style={{display:'block',fontSize:10}}>{reverseDisabledReason}</small>}</span></button></>}</div></div>,document.body)}</>;
 }
