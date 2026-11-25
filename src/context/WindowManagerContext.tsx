@@ -27,6 +27,7 @@ type Ctx = {
   updateTitle: (id: string, title: string) => void;
   tileVisibleWindows: () => void;
   topZ: number;
+  getArea: typeof getWorkArea;
 };
 
 const WindowManagerContext = createContext<Ctx | null>(null);
@@ -49,7 +50,7 @@ export function getWorkArea() {
   return { x, y, w, h };
 }
 
-export function WindowManagerProvider({ children }: { children: ReactNode }) {
+export function WindowManagerProvider({ children, getArea = getWorkArea }: { children: ReactNode; getArea?: typeof getWorkArea }) {
   const [windows, setWindows] = useState<WinState[]>([]);
   const [topZ, setTopZ] = useState(100);
 
@@ -58,7 +59,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
       if (prev.find(w => w.id === id)) return prev;
       const nextZ = Math.max(100, ...prev.map(w => w.zIndex)) + 1;
       setTopZ(nextZ);
-      const wa = getWorkArea();
+      const wa = getArea();
       const defaultW = Math.min(1200, wa.w - 40);
       const defaultH = Math.min(800, wa.h - 40);
       return [...prev, {
@@ -79,7 +80,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
         groupId,
       }];
     });
-  }, []);
+  }, [getArea]);
 
   const unregister = useCallback((id: string) => {
     setWindows(prev => prev.filter(w => w.id !== id));
@@ -131,7 +132,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
       const visible = prev.filter(w => !w.minimized && !w.background);
       if (visible.length < 2 && bg.length === 0) return prev;
       if (visible.length < 2) return prev.map(w => bg.includes(w.id) ? { ...w, minimized: true } : w);
-      const wa = getWorkArea();
+      const wa = getArea();
       const gap = 8;
       let cols: number, rows: number;
       if (visible.length === 2) { cols = 2; rows = 1; }
@@ -153,13 +154,13 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
       return prev.map(w => {
         if (bg.includes(w.id)) return { ...w, minimized: true };
         const t = idToRect.get(w.id);
-        return t ? { ...w, rect: t.rect, zIndex: t.zIndex, minimized: false } : w;
+        return t ? { ...w, rect: t.rect, zIndex: t.zIndex, minimized: false, ...(getArea!==getWorkArea?{maximized:false}:{}) } : w;
       });
     });
-  }, []);
+  }, [getArea]);
 
   return (
-    <WindowManagerContext.Provider value={{ windows, register, unregister, focus, minimize, minimizeAll, minimizeGroup, restore, setMaximized, updateRect, updateTitle, tileVisibleWindows, topZ }}>
+    <WindowManagerContext.Provider value={{ windows, register, unregister, focus, minimize, minimizeAll, minimizeGroup, restore, setMaximized, updateRect, updateTitle, tileVisibleWindows, topZ, getArea }}>
       {children}
     </WindowManagerContext.Provider>
   );
