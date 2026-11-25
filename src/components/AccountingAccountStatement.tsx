@@ -4,6 +4,8 @@ import { formatDate } from '../lib/format';
 
 type Account={code:string;name:string;account_type:string;is_active:boolean};
 type Line={line_id:string;entry_id:string;entry_date:string;entry_number:string;journal_type:string;reference:string|null;description:string;source_type:string|null;source_id:string|null;status:string;label:string|null;debit:number;credit:number;running_balance:number;match_group_id:string|null};
+type Suggestion={root:string;root_piece:string;first_date:string;last_date:string;amount:number;line_ids:string[];entries:string[]};
+type Suggestions={total:number;rows:Suggestion[]};
 type Statement={account:Account;opening_balance:number;total_debit:number;total_credit:number;closing_balance:number;row_count:number;rows:Line[]};
 const money=(n:number)=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(Number(n))+' FCFA';
 const balance=(n:number)=>Number(n)===0?'0 FCFA':money(Math.abs(Number(n)))+(Number(n)>0?' D':' C');
@@ -31,6 +33,9 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
  const [writeError,setWriteError]=useState('');
  const [notice,setNotice]=useState('');
  const [release,setRelease]=useState<{group:string;reason:string}|null>(null);
+ const [suggestions,setSuggestions]=useState<Suggestions|null>(null);
+ const [suggestionBusy,setSuggestionBusy]=useState(false);
+ const [confirmSuggestion,setConfirmSuggestion]=useState<string|null>(null);
  useEffect(()=>{
   let live=true;setAccountBusy(true);setAccountError('');
   void (async()=>{try{
@@ -62,20 +67,28 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
  const sumDebit=selected.reduce((n,l)=>n+Math.round(Number(l.debit)*100),0);
  const sumCredit=selected.reduce((n,l)=>n+Math.round(Number(l.credit)*100),0);
  const equal=selected.length>=2&&sumDebit>0&&sumDebit===sumCredit;
- const run=()=>{if(valid&&!saving){setChosen({});setRelease(null);setWriteError('');setNotice('');setRequest({code,from,to,offset:0,revision:(request?.revision??0)+1});}};
+ const run=()=>{if(valid&&!saving&&!suggestionBusy){setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);setWriteError('');setNotice('');setRequest({code,from,to,offset:0,revision:(request?.revision??0)+1});}};
  const toggle=(line:Line)=>{
   setChosen(old=>{const next={...old};if(next[line.line_id])delete next[line.line_id];else if(Object.keys(next).length<100)next[line.line_id]=line;return next;});
  };
- const apply=async(unmatch=false)=>{
-  if(!request||!canMatch||changed||writeLock.current||busy||(!unmatch&&!equal)||(unmatch&&!release?.reason.trim()))return;
+ const loadSuggestions=async()=>{
+  if(!request||!canMatch||changed||suggestionBusy||saving)return;
+  setSuggestionBusy(true);setWriteError('');setConfirmSuggestion(null);
+  try{
+   const {data,error:err}=await supabase.rpc('accounting_matching_suggestions',{p_tenant_id:tenantId,p_account_code:request.code,p_date_to:request.to});
+   if(err)throw err;setSuggestions(data as Suggestions);
+  }catch(e){setWriteError(msg(e));setSuggestions(null);}finally{setSuggestionBusy(false);}
+ };
+ const apply=async(unmatch=false,ids?:string[])=>{
+  if(!request||!canMatch||changed||writeLock.current||busy||suggestionBusy||(!unmatch&&!ids&&!equal)||(unmatch&&!release?.reason.trim()))return;
   writeLock.current=true;setSaving(true);setWriteError('');setNotice('');
   try{
    const response=unmatch&&release
     ?await supabase.rpc('unmatch_accounting_lines',{p_tenant_id:tenantId,p_account_code:request.code,p_group_id:release.group,p_reason:release.reason.trim()})
-    :await supabase.rpc('match_accounting_lines',{p_tenant_id:tenantId,p_account_code:request.code,p_line_ids:selected.map(l=>l.line_id)});
+    :await supabase.rpc('match_accounting_lines',{p_tenant_id:tenantId,p_account_code:request.code,p_line_ids:ids??selected.map(l=>l.line_id)});
    if(response.error)throw response.error;
    if(!response.data?.success)throw new Error('Opération non confirmée.');
-   setChosen({});setRelease(null);
+   setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);
    setNotice(unmatch?'Lettrage annulé et motif enregistré.':'Lignes lettrées avec succès.');
    setRequest(p=>p&&({...p,revision:p.revision+1}));
   }catch(e){setWriteError(msg(e));}
@@ -100,7 +113,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
     <label className="text-xs font-medium min-w-0">Compte sélectionné<input className="input mt-1 w-full" value={code} onChange={e=>setCode(e.target.value.trim())} required placeholder="Numéro exact"/></label>
     <label className="text-xs font-medium min-w-0">Du<input className="input mt-1 w-full" type="date" value={from} onChange={e=>setFrom(e.target.value)} required/></label>
     <label className="text-xs font-medium min-w-0">Au<input className="input mt-1 w-full" type="date" value={to} onChange={e=>setTo(e.target.value)} required/></label>
-    <button className="btn btn-primary" disabled={!valid||busy||saving}>Interroger</button>
+    <button className="btn btn-primary" disabled={!valid||busy||saving||suggestionBusy}>Interroger</button>
    </form>
    {changed&&<p className="text-xs text-neutral-600">Interrogez le compte pour appliquer les nouveaux critères.</p>}
   </div>
@@ -119,8 +132,18 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
      <div>Crédit <strong className="block text-sm break-words">{money(sumCredit/100)}</strong></div>
      <div>Écart <strong className="block text-sm break-words">{money((sumDebit-sumCredit)/100)}</strong></div>
     </div>
-    <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-primary" disabled={!equal||saving||changed||!!release} onClick={()=>void apply()}>Lettrer la sélection</button><button type="button" className="btn btn-secondary" disabled={!selected.length||saving} onClick={()=>setChosen({})}>Vider la sélection</button></div>
+    <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-primary" disabled={!equal||saving||suggestionBusy||changed||!!release} onClick={()=>void apply()}>Lettrer la sélection</button><button type="button" className="btn btn-secondary" disabled={!selected.length||saving} onClick={()=>setChosen({})}>Vider la sélection</button></div>
     {release&&<div className="space-y-2 border-t border-neutral-200 pt-3"><p className="text-sm font-medium">Délettrer le groupe {release.group.slice(0,8)} dans son intégralité</p><label className="block text-xs font-medium">Motif obligatoire<textarea className="input mt-1 w-full" maxLength={500} value={release.reason} disabled={saving} onChange={e=>setRelease(p=>p&&({...p,reason:e.target.value}))}/></label><div className="flex gap-2"><button type="button" className="btn btn-primary" disabled={saving||changed||!release.reason.trim()} onClick={()=>void apply(true)}>Confirmer le délettrage</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={()=>setRelease(null)}>Annuler</button></div></div>}
+    <div className="border-t border-neutral-200 pt-3 space-y-2">
+     <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold">Propositions automatiques</h4><button type="button" className="btn btn-secondary" disabled={suggestionBusy||saving||changed} onClick={()=>void loadSuggestions()}>{suggestionBusy?'Analyse…':'Rechercher les correspondances'}</button></div>
+     <p className="text-xs text-neutral-500">Correspondances fondées sur les liens facture-règlement ou avoir existants, jusqu’au {formatDate(request.to)}, y compris les périodes antérieures. Aucune association par montant seul.</p>
+     {suggestions&&<div className="space-y-2"><p className="text-xs text-neutral-600">{suggestions.total} groupe(s) proposé(s){suggestions.total>25?' · 25 premiers affichés':''}.</p>
+      {suggestions.rows.map(x=><div key={x.root} className="border border-neutral-200 rounded-lg p-3 space-y-2">
+       <div className="flex flex-wrap justify-between gap-2"><span className="text-sm font-medium">{x.root_piece} · {x.line_ids.length} lignes</span><strong className="text-sm tabular-nums">{money(x.amount)}</strong></div>
+       <p className="text-xs text-neutral-600 break-words">Pièces : {x.entries.join(' · ')}</p>
+       {confirmSuggestion===x.root?<div className="flex flex-wrap gap-2"><button type="button" className="btn btn-primary" disabled={saving||changed||!!release} onClick={()=>void apply(false,x.line_ids)}>Confirmer le groupe</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={()=>setConfirmSuggestion(null)}>Annuler</button></div>:<button type="button" className="btn btn-secondary" disabled={saving||changed||!!release} onClick={()=>setConfirmSuggestion(x.root)}>Lettrer ce groupe</button>}
+      </div>)}</div>}
+    </div>
     {writeError&&<p role="alert" className="text-xs text-red-700 break-words">{writeError}</p>}
     {notice&&<p role="status" className="text-xs text-neutral-700">{notice}</p>}
    </div>}
@@ -132,7 +155,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
      <div><p className="text-xs text-neutral-500">Solde cumulé</p><p className="font-semibold text-sm tabular-nums break-words">{balance(r.running_balance)}</p></div>
     </div>)}
    </div>
-   <nav aria-label="Pages du compte" className="flex flex-wrap justify-between items-center gap-2"><button type="button" className="btn btn-secondary" disabled={saving||changed||request.offset===0} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset-50}))}>Précédente</button><span className="text-xs text-neutral-500">{result.row_count} mouvements · Page {request.offset/50+1}/{Math.max(1,Math.ceil(result.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={saving||changed||request.offset+50>=result.row_count} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset+50}))}>Suivante</button></nav>
+   <nav aria-label="Pages du compte" className="flex flex-wrap justify-between items-center gap-2"><button type="button" className="btn btn-secondary" disabled={saving||suggestionBusy||changed||request.offset===0} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset-50}))}>Précédente</button><span className="text-xs text-neutral-500">{result.row_count} mouvements · Page {request.offset/50+1}/{Math.max(1,Math.ceil(result.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={saving||suggestionBusy||changed||request.offset+50>=result.row_count} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset+50}))}>Suivante</button></nav>
   </div>}
  </section>;
 }
