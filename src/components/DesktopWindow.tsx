@@ -162,7 +162,7 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
       >
         {icon && <span className="text-[var(--w-text-muted)] flex-shrink-0 [&>svg]:w-4 [&>svg]:h-4">{icon}</span>}
         <span className="text-sm font-semibold text-[var(--w-text)] truncate flex-1">{title}</span>
-        {windows.filter(w => !w.minimized).length >= 2 && (
+        {!contained && windows.filter(w => !w.minimized).length >= 2 && (
           <button data-acc-window-control={contained?true:undefined} onClick={tileVisibleWindows} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors acc-tile-control" title="Répartir les fenêtres">
             <LayoutGrid className="w-3.5 h-3.5" />
           </button>
