@@ -17,13 +17,14 @@ type Props = {
   startMaximized?: boolean;
   contained?: boolean;
   active?: boolean;
+  onActivate?: () => void;
 };
 
 const HEADER_H = 38;
 const MIN_W_DEFAULT = 480;
 const MIN_H_DEFAULT = 320;
 
-export function DesktopWindow({ id, title, icon, children, onClose, initialRect, minW = MIN_W_DEFAULT, minH = MIN_H_DEFAULT, siteId, background, groupId, startMaximized, contained = false, active = true }: Props) {
+export function DesktopWindow({ id, title, icon, children, onClose, initialRect, minW = MIN_W_DEFAULT, minH = MIN_H_DEFAULT, siteId, background, groupId, startMaximized, contained = false, active = true, onActivate }: Props) {
   const { windows, register, unregister, focus, minimize, setMaximized, updateRect, tileVisibleWindows, getArea } = useWindowManager();
   const win = windows.find(w => w.id === id);
 
@@ -147,7 +148,7 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
         borderRadius: contained||maximized ? 0 : 10,
         display: win.minimized ? 'none' : undefined,
       }}
-      onPointerDown={() => focus(id)}
+      onPointerDown={() => {focus(id);onActivate?.();}}
     >
       {/* Title bar */}
       <div
