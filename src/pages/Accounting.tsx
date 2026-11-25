@@ -6,6 +6,7 @@ import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { AccountingCashReview } from '../components/AccountingCashReview';
 import { AccountingPurchaseInvoice } from '../components/AccountingPurchaseInvoice';
 import { AccountingVatReport } from '../components/AccountingVatReport';
+import { AccountingAccountStatement } from '../components/AccountingAccountStatement';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -16,7 +17,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat';
+type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement';
 
 const JOURNAL_TYPES: Record<string, string> = {
   VE: 'Journal des ventes', AC: 'Journal des achats',
@@ -34,6 +35,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
     search: { t: 'Recherche', s: "Recherche avancée d'écritures comptables." },
     cloture: { t: 'Clôtures', s: 'Contrôles et clôture mensuelle' },
     vat: { t: 'Situation de TVA', s: 'TVA collectée, récupérable et contrôles par période.' },
+    statement: { t: 'Interrogation des comptes', s: 'Mouvements, soldes et pièces des comptes généraux et auxiliaires.' },
   };
   const meta = titles[section];
   return (
@@ -50,6 +52,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
       {section === 'search' && <SearchTab />}
       {section === 'cloture' && <ClotureTab />}
       {section === 'vat' && <VatTab />}
+      {section === 'statement' && <AccountStatementTab />}
     </div>
   );
 }
@@ -665,6 +668,8 @@ function BalanceTab() {
 
   const totalDebit = data.reduce((s: number, r: any) => s + Number(r.total_debit), 0);
   const totalCredit = data.reduce((s: number, r: any) => s + Number(r.total_credit), 0);
+  const totalSoldeDebiteur = data.reduce((s: number, r: any) => s + Number(r.solde_debiteur), 0);
+  const totalSoldeCrediteur = data.reduce((s: number, r: any) => s + Number(r.solde_crediteur), 0);
 
   const comptabiliserTout = async () => {
     if (!tenant || bulkBusy) return;
@@ -782,8 +787,8 @@ function BalanceTab() {
                     <td className="px-1 md:px-4 py-3" colSpan={2}>TOTAL</td>
                     <td className="px-1 md:px-4 py-3 text-right font-mono">{totalDebit.toLocaleString('fr-FR')}</td>
                     <td className="px-1 md:px-4 py-3 text-right font-mono">{totalCredit.toLocaleString('fr-FR')}</td>
-                    <td className="px-1 md:px-4 py-3 text-right font-mono text-emerald-700">{Math.max(0, totalDebit - totalCredit).toLocaleString('fr-FR')}</td>
-                    <td className="px-1 md:px-4 py-3 text-right font-mono text-red-600">{Math.max(0, totalCredit - totalDebit).toLocaleString('fr-FR')}</td>
+                    <td className="px-1 md:px-4 py-3 text-right font-mono text-emerald-700">{totalSoldeDebiteur.toLocaleString('fr-FR')}</td>
+                    <td className="px-1 md:px-4 py-3 text-right font-mono text-red-600">{totalSoldeCrediteur.toLocaleString('fr-FR')}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1271,4 +1276,11 @@ function ClotureTab() {
 function VatTab() {
   const { tenant } = useApp();
   return tenant ? <AccountingVatReport key={tenant.id} tenantId={tenant.id} /> : null;
+}
+
+function AccountStatementTab() {
+  const { tenant } = useApp();
+  const [detail,setDetail]=useState<any>(null);
+  useEffect(()=>setDetail(null),[tenant?.id]);
+  return tenant ? <><AccountingAccountStatement key={tenant.id} tenantId={tenant.id} onView={setDetail} />{detail&&<SearchDetailModal entry={detail} tenant={tenant} onClose={()=>setDetail(null)} />}</> : null;
 }
