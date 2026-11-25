@@ -2,13 +2,14 @@ import {useEffect,useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {buildFinancialStatements,balanceLabels,incomeLabels,type FinancialStatements,type FinancialSnapshot} from '../lib/accountingFinancialStatements.mjs';
 type Preview={closed:boolean;snapshot:FinancialSnapshot&{entries:number;opening_debit:number;opening_credit:number;year:number;closed_months:number}};
-type Period={report:FinancialStatements;closed:boolean;available:boolean;year:number;closedMonths:number};
+type CashReport={opening:number;closing:number;variation:number;operating:number;investment:number;financing:number;unknown:number;unknown_count:number;prior_missing:boolean;unknown_rows:{id:string;entry_date:string;entry_number:string;description:string;amount:number}[]};
+type Period={report:FinancialStatements;cashReport:CashReport|null;cashError:string;closed:boolean;available:boolean;year:number;closedMonths:number};
 const money=(n:number|null)=>n===null?'—':new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(n)+' FCFA';
 const dateYear=()=>new Date().getUTCFullYear();
 const active=['immobilisations','stocks','clients','otherReceivables','cash'];
 const passive=['equity','result','financialDebt','suppliers','otherDebt','cashDebt'];
 const incomeOrder=Object.keys(incomeLabels);
-const cashLabels={opening:'Trésorerie nette d’ouverture indicative',variation:'Variation nette constatée',closing:'Trésorerie nette de clôture indicative'};
+const cashLabels={opening:'Trésorerie nette d’ouverture indicative',operating:'Flux opérationnels proposés',investment:'Flux d’investissement proposés',financing:'Flux de financement proposés',unknown:'Flux à classer',variation:'Variation nette constatée',closing:'Trésorerie nette de clôture indicative'};
 type Tab='balance'|'income'|'cash'|'notes';
 type DisplayRow={label:string;key:string;n:number|null;p:number|null;total?:boolean};
 const errorText=(e:unknown)=>e&&typeof e==='object'&&'message' in e?String(e.message):'Impossible de charger les états.';
@@ -21,7 +22,9 @@ export function AccountingFinancialReports({tenantId,tenantName}:{tenantId:strin
  const valid=/^\d{4}$/.test(year)&&Number(year)>=2001&&Number(year)<=Math.min(2099,dateYear());
  useEffect(()=>{let live=true;setLoading(true);setCurrent(null);setPrevious(null);setError('');setPriorError('');
  const load=async(y:number):Promise<Period>=>{const {data,error:err}=await supabase.rpc('preview_fiscal_year',{p_tenant_id:tenantId,p_year:y});if(err)throw err;const p=data as Preview;
- return {report:buildFinancialStatements(p.snapshot),closed:p.closed,available:p.closed||p.snapshot.entries>0||p.snapshot.opening_debit>0||p.snapshot.opening_credit>0,year:y,closedMonths:p.snapshot.closed_months};};
+ const report=buildFinancialStatements(p.snapshot);const flow=await supabase.rpc('accounting_cash_flow_working',{p_tenant_id:tenantId,p_year:y});const cashReport=flow.error?null:flow.data as CashReport;
+ if(cashReport&&(Number(cashReport.variation)!==report.cash.variation||Number(cashReport.closing)!==report.cash.closing||Number(cashReport.opening)!==report.cash.opening))report.issues.push('Les données de trésorerie diffèrent de la balance source : vérifiez l’ouverture et les écritures.');
+ return {report,cashReport,cashError:flow.error?.message??'',closed:p.closed,available:p.closed||p.snapshot.entries>0||p.snapshot.opening_debit>0||p.snapshot.opening_credit>0,year:y,closedMonths:p.snapshot.closed_months};};
  void(async()=>{try{const n=await load(query.year);if(!live)return;setCurrent(n);try{const p=await load(query.year-1);if(live)setPrevious(p);}catch(e){if(live)setPriorError(errorText(e));}}catch(e){if(live)setError(errorText(e));}finally{if(live)setLoading(false);}})();
  return()=>{live=false;};},[tenantId,query]);
  const n=current?.report;const p=previous?.available?previous.report:null;
@@ -30,7 +33,7 @@ export function AccountingFinancialReports({tenantId,tenantName}:{tenantId:strin
  const totalAssets:DisplayRow={key:'totalA',label:'Total actif',n:n?.totalAssets??null,p:p?.totalAssets??null,total:true};
  const totalLiabilities:DisplayRow={key:'totalP',label:'Total passif',n:n?.totalLiabilities??null,p:p?.totalLiabilities??null,total:true};
  const income=mapRows(incomeOrder,incomeLabels,(r,k)=>r.income[k]);
- const cash=mapRows(Object.keys(cashLabels),cashLabels,(r,k)=>r.cash[k as keyof FinancialStatements['cash']]);
+ const cash:DisplayRow[]=Object.entries(cashLabels).map(([key,label])=>({key,label,n:current?.cashReport?Number(current.cashReport[key as keyof CashReport]):null,p:previous?.available&&previous.cashReport?Number(previous.cashReport[key as keyof CashReport]):null,total:key==='variation'||key==='closing'}));
  const table=(rows:DisplayRow[])=><div className="divide-y divide-neutral-200"><div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 py-2 text-xs text-neutral-500"><span>Rubrique</span><span className="text-right">{query.year}</span><span className="text-right">{query.year-1}</span></div>{rows.map(r=><div key={r.key} className={'grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 py-2 text-xs '+(r.total?'font-semibold bg-neutral-50':'')}><span className="break-words">{r.key.startsWith('X')?r.key+' · ':''}{r.label}</span><span className="text-right tabular-nums break-words">{money(r.n)}</span><span className="text-right tabular-nums break-words">{money(r.p)}</span></div>)}</div>;
  const excel=async()=>{if(!current||!n||exporting)return;setExporting(true);setExportError('');try{
  const XLSX=await import('xlsx');const wb=XLSX.utils.book_new();
@@ -38,7 +41,7 @@ export function AccountingFinancialReports({tenantId,tenantName}:{tenantId:strin
  add('Bilan',[...assets,totalAssets,...liabilities,totalLiabilities]);add('Compte de résultat',income);add('Variation de trésorerie',cash);
  const detail=XLSX.utils.aoa_to_sheet([['Compte','Intitulé','Classement','Solde initial','Débit','Crédit','Solde final'],...n.accounts.map(a=>[clean(a.code),clean(a.name),a.section??'À classer',a.opening,a.debit,a.credit,a.balance])]);XLSX.utils.book_append_sheet(wb,detail,'Comptes N');
  if(p){const prior=XLSX.utils.aoa_to_sheet([['Compte','Intitulé','Classement','Solde initial','Débit','Crédit','Solde final'],...p.accounts.map(a=>[clean(a.code),clean(a.name),a.section??'À classer',a.opening,a.debit,a.credit,a.balance])]);XLSX.utils.book_append_sheet(wb,prior,'Comptes N-1');}
- const warnings=XLSX.utils.aoa_to_sheet([['Contrôles et limites'],['Document de travail : ne constitue pas la liasse fiscale.'],['Tableau réglementaire des flux et notes annexes non finalisés.'],...n.issues.map(x=>[x]),...(p?.issues??[]).map(x=>['N-1 : '+x]),...n.unknown.map(x=>[clean(x.code),clean(x.name),x.amount])]);XLSX.utils.book_append_sheet(wb,warnings,'Contrôles');XLSX.writeFile(wb,'Etats-travail-'+query.year+'.xlsx');
+ const warnings=XLSX.utils.aoa_to_sheet([['Contrôles et limites'],['Document de travail : ne constitue pas la liasse fiscale.'],['Tableau réglementaire des flux et notes annexes non finalisés.'],...(current.cashError?[[current.cashError]]:[]),...(current.cashReport?.unknown_rows??[]).map(x=>['Flux à classer',clean(x.entry_number),clean(x.description),Number(x.amount)]),...n.issues.map(x=>[x]),...(p?.issues??[]).map(x=>['N-1 : '+x]),...n.unknown.map(x=>[clean(x.code),clean(x.name),x.amount])]);XLSX.utils.book_append_sheet(wb,warnings,'Contrôles');XLSX.writeFile(wb,'Etats-travail-'+query.year+'.xlsx');
  }catch(e){setExportError(errorText(e));}finally{setExporting(false);}};
  const print=()=>{if(!current)return;window.print();};
  return <section className="min-w-0 space-y-4">
@@ -53,7 +56,7 @@ export function AccountingFinancialReports({tenantId,tenantName}:{tenantId:strin
  <nav className="flex flex-wrap gap-2 print:hidden" aria-label="États financiers">{([['balance','Bilan'],['income','Compte de résultat'],['cash','Trésorerie'],['notes','Contrôles et annexes']] as const).map(([k,label])=><button key={k} className={'btn '+(tab===k?'btn-primary':'btn-secondary')} type="button" onClick={()=>setTab(k)}>{label}</button>)}</nav>
  {tab==='balance'&&<div className="grid gap-3 xl:grid-cols-2"><div className="card p-3 min-w-0"><h3 className="text-sm font-semibold">Actif</h3>{table([...assets,totalAssets])}</div><div className="card p-3 min-w-0"><h3 className="text-sm font-semibold">Passif</h3>{table([...liabilities,totalLiabilities])}</div></div>}
  {tab==='income'&&<div className="card p-3 min-w-0"><h3 className="text-sm font-semibold">Compte de résultat et SIG</h3>{table(income)}<p className="pt-2 text-xs text-neutral-600">Résultat source : {money(n.result)}.</p></div>}
- {tab==='cash'&&<div className="card p-3 space-y-2"><h3 className="text-sm font-semibold">Variation de trésorerie — indicateur préparatoire</h3>{table(cash)}<p className="text-xs text-neutral-600">Ce tableau présente uniquement les soldes et la variation des comptes de trésorerie. Les flux d’exploitation, d’investissement et de financement ne sont pas encore ventilés : ce n’est pas le tableau réglementaire SYSCOHADA.</p></div>}
+ {tab==='cash'&&<div className="card p-3 space-y-2"><h3 className="text-sm font-semibold">Analyse directe des flux — état préparatoire</h3>{current.cashError&&<p role="alert" className="text-xs text-red-700">{current.cashError}</p>}{table(cash)}<p className="text-xs text-neutral-600">Ventilation proposée à partir des contreparties comptables. Une écriture mixte ou ambiguë reste à classer. Ce n’est pas le tableau réglementaire SYSCOHADA par méthode indirecte.</p>{current.cashReport&&<><p className="text-xs font-medium">{current.cashReport.unknown_count} écriture(s) à classer · 100 premières affichées.</p>{current.cashReport.unknown_rows.map(x=><div key={x.id} className="border-t py-2 flex flex-wrap justify-between gap-2 text-xs"><span>{x.entry_number} — {x.description}</span><strong>{money(Number(x.amount))}</strong></div>)}</>}</div>}
  {tab==='notes'&&<div className="card p-3 space-y-2"><h3 className="text-sm font-semibold">Comptes à classer et données annexes</h3><p className="text-xs text-neutral-600">Liste de contrôle, pas les notes annexes réglementaires. Les correspondances doivent être vérifiées selon le plan de comptes détaillé de l’entreprise.</p>{!n.unknown.length&&<p className="text-xs">Aucun compte non classé par le moteur de travail.</p>}{n.unknown.map(a=><div key={a.code} className="border-t py-2 text-xs">{a.code} — {a.name} · {money(a.amount)}</div>)}<h4 className="text-sm font-semibold">Détail des comptes</h4><div className="divide-y divide-neutral-200">{n.accounts.map(a=><div key={a.code} className="py-2 flex flex-wrap justify-between gap-2 text-xs"><span>{a.code} — {a.name}</span><strong>{money(a.balance)}</strong></div>)}</div></div>}
  </div>}
  </section>;
