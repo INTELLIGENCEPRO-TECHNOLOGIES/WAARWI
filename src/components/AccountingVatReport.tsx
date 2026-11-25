@@ -7,7 +7,7 @@ type Report={output_account:string;input_account:string;output_sales:number;inpu
 const money=(v:number)=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(Number(v))+' FCFA';
 const category=(v:string)=>v==='output'?'TVA collectée':v==='input'?'TVA récupérable':'Autre compte de TVA';
 const nature=(v:string)=>v==='sales'?'Ventes et avoirs':v==='purchases'?'Achats':'Autres mouvements';
-const csv=(v:unknown)=>{let s=String(v??'');if(/^[\s\u0000-\u001f]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+const csv=(v:unknown)=>{if(typeof v==='number'&&Number.isFinite(v))return String(v).replace('.',',');let s=String(v??'');if(/^[\s\u0000-\u001f]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
 const initialDates=()=>{const t=new Date().toISOString().slice(0,10);return {from:t.slice(0,7)+'-01',to:t};};
 export function AccountingVatReport({tenantId}:{tenantId:string}) {
  const [dates,setDates]=useState(initialDates);
@@ -27,12 +27,35 @@ export function AccountingVatReport({tenantId}:{tenantId:string}) {
  },[tenantId,query]);
  const changed=dates.from!==query.from||dates.to!==query.to;
  const valid=!!dates.from&&!!dates.to&&dates.from<=dates.to&&(Date.parse(dates.to)-Date.parse(dates.from))/86400000<=366;
+ const downloadCsv=(rows:unknown[][],suffix:string)=>{
+  const blob=new Blob(['\uFEFF'+rows.map(r=>r.map(csv).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TVA-'+query.from+'-'+query.to+'-'+suffix+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ };
+ const exportSummary=()=>{
+  if(!report)return;
+  downloadCsv([
+   ['Situation comptable de TVA','Du',query.from,'Au',query.to],
+   ['Indicateur','Montant FCFA'],
+   ['TVA collectée nette',Number(report.output_sales)],
+   ['TVA récupérable achats',Number(report.input_purchases)],
+   ['Différence commerciale',Number(report.net_trade)],
+   ['Autres mouvements collectée',Number(report.output_adjustments)],
+   ['Autres mouvements récupérable',Number(report.input_adjustments)],
+   ['Solde des mouvements',Number(report.net_movements)],
+   ['Ventes non comptabilisées - nombre',Number(report.pending_sales)],
+   ['Ventes non comptabilisées - TVA',Number(report.pending_sales_vat)],
+   ['Avoirs non comptabilisés - nombre',Number(report.pending_returns)],
+   ['Avoirs non comptabilisés - TVA',Number(report.pending_returns_vat)],
+   ['Commandes reçues non comptabilisées - nombre',Number(report.pending_purchases)],
+   ['Autres lignes 443 / 445 - nombre',Number(report.other_count)],
+   ['Attention','Situation comptable uniquement, pas une déclaration fiscale.']
+  ],'synthese');
+ };
  const exportPage=()=>{
   if(!report)return;
   const header=['Date','Pièce','Journal','Référence','Libellé','Compte','Intitulé','Type','Nature','Débit FCFA','Crédit FCFA'];
-  const rows=report.rows.map(r=>[r.entry_date,r.entry_number,r.journal_type,r.reference,r.description,r.account_code,r.account_name,category(r.category),nature(r.nature),r.debit,r.credit]);
-  const blob=new Blob(['\uFEFF'+[header,...rows].map(r=>r.map(csv).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TVA-'+query.from+'-'+query.to+'-page-'+(query.offset/50+1)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const rows=report.rows.map(r=>[r.entry_date,r.entry_number,r.journal_type,r.reference,r.description,r.account_code,r.account_name,category(r.category),nature(r.nature),Number(r.debit),Number(r.credit)]);
+  downloadCsv([header,...rows],'page-'+(query.offset/50+1));
  };
  return <section className="space-y-4 min-w-0">
   <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end print:hidden" onSubmit={e=>{e.preventDefault();if(valid)setQuery({...dates,offset:0,revision:query.revision+1});}}>
@@ -45,7 +68,7 @@ export function AccountingVatReport({tenantId}:{tenantId:string}) {
   {loading&&<p role="status" className="py-8 text-center text-sm text-neutral-500">Chargement de la situation de TVA…</p>}
   {error&&<p role="alert" className="text-sm text-red-700 break-words">{error}</p>}
   {report&&<div className="space-y-4">
-   <p className="text-xs text-neutral-600">Situation du {formatDate(query.from)} au {formatDate(query.to)} · Écritures validées uniquement.</p>
+   <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-neutral-600">Situation du {formatDate(query.from)} au {formatDate(query.to)} · Écritures validées uniquement.</p><button type="button" className="btn btn-secondary print:hidden" onClick={exportSummary}>Exporter la synthèse (CSV)</button></div>
    <div className="grid gap-3 sm:grid-cols-3">
     {[['TVA collectée nette (ventes et avoirs)',report.output_sales],['TVA récupérable sur achats',report.input_purchases],['Différence sur opérations commerciales',report.net_trade]].map(([label,amount])=><div key={String(label)} className="card p-4 min-w-0"><p className="text-xs text-neutral-600">{label}</p><p className="mt-2 text-lg font-bold tabular-nums break-words">{money(Number(amount))}</p></div>)}
    </div>
