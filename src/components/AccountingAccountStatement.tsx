@@ -1,5 +1,7 @@
 import { useEffect,useRef,useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { AccountingTable } from './AccountingWorkspace';
+import { ChevronLeft, ChevronRight, Search, MoreHorizontal } from './Icons';
 import { formatDate } from '../lib/format';
 
 type Account={code:string;name:string;account_type:string;is_active:boolean};
@@ -15,6 +17,8 @@ function csv(v:unknown){if(typeof v==='number'&&Number.isFinite(v))return String
 
 export function AccountingAccountStatement({tenantId,onView,initialAccount='',canManage=false,refreshRevision=0}:{tenantId:string;onView:(entry:Line)=>void;initialAccount?:string;canManage?:boolean;refreshRevision?:number}) {
  const [search,setSearch]=useState(initialAccount);
+ const [chooseAccount,setChooseAccount]=useState(!initialAccount);
+ const [matchingOpen,setMatchingOpen]=useState(false);
  const [searchQuery,setSearchQuery]=useState({term:initialAccount,offset:0});
  const [accounts,setAccounts]=useState<Account[]>([]);
  const [accountMore,setAccountMore]=useState(false);
@@ -102,14 +106,16 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='Compte-'+request.code+'-'+request.from+'-'+request.to+'-page-'+(request.offset/50+1)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  };
  return <section className="space-y-4 min-w-0">
-  <div className="card p-3 space-y-3">
+  <div className="space-y-2">
+   <div className="acc-toolbar"><button type="button" className="btn-secondary" aria-expanded={chooseAccount} onClick={()=>setChooseAccount(v=>!v)}><Search size={16}/>Choisir un compte</button><span className="text-xs text-neutral-500">{code||'Aucun compte sélectionné'}</span></div>
+   {chooseAccount&&<div className="space-y-2">
    <form className="flex flex-wrap items-end gap-2" onSubmit={e=>{e.preventDefault();setSearchQuery({term:search,offset:0});}}>
-    <label className="flex-1 min-w-0 text-xs font-medium">Rechercher un compte<input className="input mt-1 w-full" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Code ou intitulé"/></label>
-    <button className="btn btn-secondary" disabled={accountBusy}>Rechercher</button>
+    <input aria-label="Rechercher un compte" className="input flex-1 min-w-0" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Code ou intitulé"/>
+    <button className="btn-secondary" disabled={accountBusy}>Rechercher</button>
    </form>
    {accountError&&<p role="alert" className="text-xs text-red-700">{accountError}</p>}
-   {accountBusy?<p role="status" className="text-xs text-neutral-500">Recherche…</p>:<div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">{accounts.map(a=><button type="button" key={a.code} aria-pressed={code===a.code} className={'text-left rounded-lg p-2 border min-w-0 '+(code===a.code?'border-neutral-900 bg-neutral-100':'border-neutral-200')} onClick={()=>setCode(a.code)}><span className="block text-sm font-semibold">{a.code}</span><span className="block text-xs break-words">{a.name}</span><span className="text-xs text-neutral-500">{a.account_type==='auxiliary'?'Auxiliaire':'Général'}{a.is_active?'':' · Inactif'}</span></button>)}{!accounts.length&&<p className="text-xs text-neutral-500">Aucun compte trouvé.</p>}</div>}
-   <div className="flex justify-between"><button className="btn btn-secondary" type="button" disabled={accountBusy||searchQuery.offset===0} onClick={()=>setSearchQuery(p=>({...p,offset:p.offset-24}))}>Précédent</button><button className="btn btn-secondary" type="button" disabled={accountBusy||!accountMore} onClick={()=>setSearchQuery(p=>({...p,offset:p.offset+24}))}>Suivant</button></div>
+   {accountBusy?<p role="status" className="text-xs text-neutral-500">Recherche…</p>:<div className="acc-account-picker">{accounts.map(a=><button type="button" key={a.code} aria-pressed={code===a.code} onClick={()=>{setCode(a.code);setChooseAccount(false);}}><strong>{a.code}</strong><span>{a.name}</span><small>{a.account_type==='auxiliary'?'Auxiliaire':'Général'}{a.is_active?'':' · Inactif'}</small></button>)}{!accounts.length&&<p className="text-xs text-neutral-500">Aucun compte trouvé.</p>}</div>}
+   <div className="acc-pagination"><button className="acc-icon" aria-label="Comptes précédents" type="button" disabled={accountBusy||searchQuery.offset===0} onClick={()=>setSearchQuery(p=>({...p,offset:p.offset-24}))}><ChevronLeft size={17}/></button><span>Page {searchQuery.offset/24+1}</span><button className="acc-icon" aria-label="Comptes suivants" type="button" disabled={accountBusy||!accountMore} onClick={()=>setSearchQuery(p=>({...p,offset:p.offset+24}))}><ChevronRight size={17}/></button></div></div>}
    <form className="grid gap-2 sm:grid-cols-4 sm:items-end" onSubmit={e=>{e.preventDefault();run();}}>
     <label className="text-xs font-medium min-w-0">Compte sélectionné<input className="input mt-1 w-full" value={code} onChange={e=>setCode(e.target.value.trim())} required placeholder="Numéro exact"/></label>
     <label className="text-xs font-medium min-w-0">Du<input className="input mt-1 w-full" type="date" value={from} onChange={e=>setFrom(e.target.value)} required/></label>
@@ -122,9 +128,10 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   {error&&<p role="alert" className="text-sm text-red-700 break-words">{error}</p>}
   {result&&request&&<div className="space-y-4">
    <div className="flex flex-wrap justify-between gap-2 items-center"><div><h2 className="text-sm font-semibold break-words">{result.account.code} · {result.account.name}</h2><p className="text-xs text-neutral-500">{formatDate(request.from)} au {formatDate(request.to)} · Écritures validées</p></div><button className="btn btn-secondary" onClick={download}>Exporter cette page (CSV)</button></div>
-   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{[['Solde initial',balance(result.opening_balance)],['Débit période',money(result.total_debit)],['Crédit période',money(result.total_credit)],['Solde final',balance(result.closing_balance)]].map(([label,value])=><div className="card p-3 min-w-0" key={label}><p className="text-xs text-neutral-500">{label}</p><p className="mt-1 font-semibold text-sm tabular-nums break-words">{value}</p></div>)}</div>
+   <div className="acc-summary">{[['Solde initial',balance(result.opening_balance)],['Débit période',money(result.total_debit)],['Crédit période',money(result.total_credit)],['Solde final',balance(result.closing_balance)]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
    <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. {result.opening_mode==='fiscal'?'Solde d’ouverture certifié de l’exercice, puis mouvements validés.':'Historique continu des écritures validées, sans arrêté précédent.'}</p>
-   {canMatch&&<div className="card p-3 space-y-3">
+   {canMatch&&<div className="acc-toolbar"><button type="button" className="btn-secondary" aria-expanded={matchingOpen} onClick={()=>setMatchingOpen(v=>!v)}><MoreHorizontal size={16}/>Lettrage et propositions</button><span className="text-xs">{selected.length} ligne(s) · Écart : {money((sumDebit-sumCredit)/100)}</span><span className="acc-spacer"/><button type="button" className="btn-primary" disabled={!equal||saving||suggestionBusy||changed||!!release} onClick={()=>void apply()}>Lettrer</button></div>}
+   {canMatch&&(matchingOpen||!!release)&&<div className="space-y-3 border-b border-neutral-200 pb-3">
     <h3 className="text-sm font-semibold">Lettrage manuel</h3>
     <p className="text-xs text-neutral-600">Cochez les factures et règlements correspondants. Vous pouvez sélectionner des lignes sur plusieurs pages ; seuls les groupes exactement équilibrés sont acceptés.</p>
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
@@ -148,15 +155,14 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
     {writeError&&<p role="alert" className="text-xs text-red-700 break-words">{writeError}</p>}
     {notice&&<p role="status" className="text-xs text-neutral-700">{notice}</p>}
    </div>}
-   <div className="divide-y divide-neutral-200 border-y border-neutral-200">
-    {!result.rows.length&&<p className="py-5 text-sm text-neutral-500">Aucun mouvement dans cette période.</p>}
-    {result.rows.map(r=><div key={r.line_id} className="py-3 grid gap-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_auto] items-start">
-     <div className="min-w-0"><button type="button" className="text-sm font-semibold underline text-left break-words" onClick={()=>onView(r)}>{r.entry_number} · {formatDate(r.entry_date)}</button><p className="text-xs text-neutral-600 break-words">{r.journal_type} · {r.label||r.description}</p>{r.reference&&<p className="text-xs text-neutral-500 break-words">Réf. : {r.reference}</p>}{r.match_group_id?<div className="mt-1 flex flex-wrap items-center gap-2 text-xs"><span>Lettré · {r.match_code??'—'}</span>{canMatch&&<button type="button" className="underline" disabled={saving||changed} onClick={()=>setRelease({group:r.match_group_id!,code:r.match_code??'—',reason:''})}>Délettrer</button>}</div>:canMatch?<label className="mt-1 flex items-center gap-2 text-xs"><input type="checkbox" checked={!!chosen[r.line_id]} disabled={saving||changed||(!chosen[r.line_id]&&selected.length>=100)} onChange={()=>toggle(r)}/> Sélectionner</label>:null}</div>
-     <div className="grid grid-cols-2 gap-2"><div><p className="text-xs text-neutral-500">Débit</p><p className="text-sm tabular-nums break-words">{money(r.debit)}</p></div><div><p className="text-xs text-neutral-500">Crédit</p><p className="text-sm tabular-nums break-words">{money(r.credit)}</p></div></div>
-     <div><p className="text-xs text-neutral-500">Solde cumulé</p><p className="font-semibold text-sm tabular-nums break-words">{balance(r.running_balance)}</p></div>
-    </div>)}
-   </div>
-   <nav aria-label="Pages du compte" className="flex flex-wrap justify-between items-center gap-2"><button type="button" className="btn btn-secondary" disabled={saving||suggestionBusy||changed||request.offset===0} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset-50}))}>Précédente</button><span className="text-xs text-neutral-500">{result.row_count} mouvements · Page {request.offset/50+1}/{Math.max(1,Math.ceil(result.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={saving||suggestionBusy||changed||request.offset+50>=result.row_count} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset+50}))}>Suivante</button></nav>
+   <AccountingTable><table><thead><tr>{canMatch&&<th className="text-left"><span className="sr-only">Sélection</span></th>}<th className="text-left">Pièce / libellé</th><th className="text-right">Débit</th><th className="text-right">Crédit</th><th className="text-right hidden sm:table-cell">Solde</th><th className="text-center">Lettrage</th></tr></thead><tbody>
+    {!result.rows.length&&<tr><td colSpan={canMatch?6:5} className="text-center text-neutral-500">Aucun mouvement dans cette période.</td></tr>}
+    {result.rows.map(r=><tr key={r.line_id}>{canMatch&&<td>{!r.match_group_id&&<input type="checkbox" aria-label={'Sélectionner '+r.entry_number} checked={!!chosen[r.line_id]} disabled={saving||changed||(!chosen[r.line_id]&&selected.length>=100)} onChange={()=>toggle(r)}/>}</td>}
+     <td><button type="button" className="font-medium underline-offset-2 hover:underline text-left break-words" onClick={()=>onView(r)}>{r.entry_number}</button><span className="block text-[11px] text-neutral-500">{formatDate(r.entry_date)} · {r.journal_type}</span><span className="block text-[11px] break-words">{r.label||r.description}</span><span className="block sm:hidden text-[11px] text-neutral-500">Solde : {balance(r.running_balance)}</span></td>
+     <td className="text-right">{Number(r.debit)?Number(r.debit).toLocaleString('fr-FR'):'—'}</td><td className="text-right">{Number(r.credit)?Number(r.credit).toLocaleString('fr-FR'):'—'}</td><td className="text-right hidden sm:table-cell">{balance(r.running_balance)}</td>
+     <td className="text-center">{r.match_group_id?<div><strong>{r.match_code??'—'}</strong>{canMatch&&<button className="block text-[10px] underline" type="button" disabled={saving||changed} onClick={()=>setRelease({group:r.match_group_id!,code:r.match_code??'—',reason:''})}>Délettrer</button>}</div>:'—'}</td></tr>)}
+    </tbody></table></AccountingTable>
+   <nav aria-label="Pages du compte" className="acc-pagination"><button type="button" className="btn btn-secondary" disabled={saving||suggestionBusy||changed||request.offset===0} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset-50}))}>Précédente</button><span className="text-xs text-neutral-500">{result.row_count} mouvements · Page {request.offset/50+1}/{Math.max(1,Math.ceil(result.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={saving||suggestionBusy||changed||request.offset+50>=result.row_count} onClick={()=>setRequest(p=>p&&({...p,offset:p.offset+50}))}>Suivante</button></nav>
   </div>}
  </section>;
 }
