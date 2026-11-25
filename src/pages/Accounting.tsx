@@ -17,6 +17,7 @@ import { AccountingEntryReversal } from '../components/AccountingEntryReversal';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 import { Modal } from '../components/Modal';
@@ -32,7 +33,7 @@ const JOURNAL_TYPES: Record<string, string> = {
   OD: 'Opérations diverses',
 };
 
-export function Accounting({ section = 'plan',onNavigate }: { section?: TabKey;onNavigate?:(route:string)=>void }) {
+export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }: { section?: TabKey;onNavigate?:(route:string)=>void;inWindow?:boolean;onExit?:()=>void }) {
   const {tenant}=useApp();const {can}=usePermissions();
   const titles: Record<TabKey, { t: string; s: string }> = {
     overview: {t:'Accueil comptable',s:'Situation et accès directs.'},
@@ -53,11 +54,11 @@ export function Accounting({ section = 'plan',onNavigate }: { section?: TabKey;o
   const meta = titles[section];
   return (
     <div className="accounting-workspace">
-      <header className="acc-titlebar"><div><h1>{meta.t}</h1><p>{meta.s}</p></div><span className="acc-module">Comptabilité</span></header>
+      {!inWindow&&<header className="acc-titlebar"><div><h1>{meta.t}</h1><p>{meta.s}</p></div><span className="acc-module">Comptabilité</span></header>}
       <div className="acc-body" key={section}>
       {section === 'plan' && <PlanTab />}
       {section === 'overview' && tenant && <AccountingOverview key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} onNavigate={r=>onNavigate?.(r)}/>}
-      {section === 'entry' && can('manage_accounting') && <JournalsTab entryOnly onExit={()=>onNavigate?.('acc_journals')}/>}
+      {section === 'entry' && can('manage_accounting') && <JournalsTab entryOnly onExit={onExit??(()=>onNavigate?.('acc_journals'))}/>}
       {section === 'journals' && <JournalsTab onNew={onNavigate?()=>onNavigate('acc_entry'):undefined}/>}
       {section === 'balance' && <BalanceTab />}
       {section === 'grandlivre' && <GrandLivreTab />}
@@ -153,6 +154,7 @@ function PlanTab() {
 
 /* ===================== JOURNAUX ===================== */
 function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:()=>void;onNew?:()=>void}={}) {
+  const windowId=useAccountingWindowId();
   const { tenant } = useApp();
   const { success, error } = useToast();
   const { can } = usePermissions();
@@ -387,14 +389,15 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   useEffect(()=>{
     if(!entryOnly&&!open)return;
     const beforeNavigate=(event:Event)=>{
+      if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;
       if(savingLock.current){event.preventDefault();return;}
       const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));
       if(dirty&&!window.confirm('Une écriture est en cours de saisie. Quitter sans enregistrer ?'))event.preventDefault();
     };
     window.addEventListener('waarwi:accounting-before-navigate',beforeNavigate);
     return()=>window.removeEventListener('waarwi:accounting-before-navigate',beforeNavigate);
-  },[entryOnly,open,form,entryLines]);
-  const closeEntry=()=>{if(saving)return;const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));if(dirty&&!window.confirm('Abandonner la saisie en cours ?'))return;if(entryOnly)onExit?.();else setOpen(false);};
+  },[entryOnly,open,form,entryLines,windowId]);
+  const closeEntry=()=>{if(saving)return;if(entryOnly&&windowId){onExit?.();return;}const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));if(dirty&&!window.confirm('Abandonner la saisie en cours ?'))return;if(entryOnly)onExit?.();else setOpen(false);};
   const entryForm=( <fieldset disabled={saving} className="acc-entry-body space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
