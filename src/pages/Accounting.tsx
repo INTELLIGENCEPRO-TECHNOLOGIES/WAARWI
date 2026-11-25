@@ -1280,7 +1280,8 @@ function VatTab() {
 
 function AccountStatementTab() {
   const { tenant } = useApp();
+  const { can } = usePermissions();
   const [detail,setDetail]=useState<any>(null);
   useEffect(()=>setDetail(null),[tenant?.id]);
-  return tenant ? <><AccountingAccountStatement key={tenant.id} tenantId={tenant.id} onView={setDetail} />{detail&&<SearchDetailModal entry={detail} tenant={tenant} onClose={()=>setDetail(null)} />}</> : null;
+  return tenant ? <><AccountingAccountStatement key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} onView={setDetail} />{detail&&<SearchDetailModal entry={detail} tenant={tenant} onClose={()=>setDetail(null)} />}</> : null;
 }
