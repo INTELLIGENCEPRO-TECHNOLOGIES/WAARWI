@@ -1,7 +1,8 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Loader2, Save, Pencil as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
+import { Plus, Loader2, Save, Pencil as Edit2, Search, FileText, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
+import {AccountingOverview} from '../components/AccountingOverview';
 import { AccountingPagination, AccountingTable, AccountingRowActions, useAccountingPagination } from '../components/AccountingWorkspace';
 import './accounting-graphite.css';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
@@ -18,12 +19,12 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
-import { Modal, ConfirmDialog } from '../components/Modal';
+import { Modal } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
+type TabKey = 'overview' | 'entry' | 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
 
 const JOURNAL_TYPES: Record<string, string> = {
   VE: 'Journal des ventes', AC: 'Journal des achats',
@@ -31,8 +32,11 @@ const JOURNAL_TYPES: Record<string, string> = {
   OD: 'Opérations diverses',
 };
 
-export function Accounting({ section = 'plan' }: { section?: TabKey }) {
+export function Accounting({ section = 'plan',onNavigate }: { section?: TabKey;onNavigate?:(route:string)=>void }) {
+  const {tenant}=useApp();const {can}=usePermissions();
   const titles: Record<TabKey, { t: string; s: string }> = {
+    overview: {t:'Accueil comptable',s:'Situation et accès directs.'},
+    entry: {t:'Saisie des écritures',s:'Nouvelle pièce comptable.'},
     plan: { t: 'Plan comptable', s: 'Plan comptable SYSCOHADA.' },
     journals: { t: 'Journaux', s: "Journaux d'écritures comptables." },
     balance: { t: 'Balance générale', s: 'Balance des comptes par période.' },
@@ -52,7 +56,9 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
       <header className="acc-titlebar"><div><h1>{meta.t}</h1><p>{meta.s}</p></div><span className="acc-module">Comptabilité</span></header>
       <div className="acc-body" key={section}>
       {section === 'plan' && <PlanTab />}
-      {section === 'journals' && <JournalsTab />}
+      {section === 'overview' && tenant && <AccountingOverview key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} onNavigate={r=>onNavigate?.(r)}/>}
+      {section === 'entry' && can('manage_accounting') && <JournalsTab entryOnly onExit={()=>onNavigate?.('acc_journals')}/>}
+      {section === 'journals' && <JournalsTab onNew={onNavigate?()=>onNavigate('acc_entry'):undefined}/>}
       {section === 'balance' && <BalanceTab />}
       {section === 'grandlivre' && <GrandLivreTab />}
       {section === 'tiers' && <TiersTab />}
@@ -146,7 +152,7 @@ function PlanTab() {
 }
 
 /* ===================== JOURNAUX ===================== */
-function JournalsTab() {
+function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:()=>void;onNew?:()=>void}={}) {
   const { tenant } = useApp();
   const { success, error } = useToast();
   const { can } = usePermissions();
@@ -188,6 +194,7 @@ function JournalsTab() {
 
   const load = async (silent = false) => {
     if (!tenant) return;
+    if(entryOnly)return;
     if (!silent) setLoading(true);
     const seq=++loadSequence.current;
     setJournalError('');
@@ -375,34 +382,8 @@ function JournalsTab() {
     setLines(data || []);
   };
 
-  return (
-    <div className="space-y-3">
-      <div className="acc-toolbar acc-fixed">
-        <select aria-label="Journal" value={journalType} onChange={e=>{setJournalPage(0);setJournalType(e.target.value);}} className="input w-auto"><option value="">Tous les journaux</option>{Object.entries(JOURNAL_TYPES).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
-        <label>Du <input aria-label="Date de début" type="date" className="input w-auto" value={fromDate} onChange={e=>{setJournalPage(0);setFromDate(e.target.value);}}/></label>
-        <label>Au <input aria-label="Date de fin" type="date" className="input w-auto" value={toDate} onChange={e=>{setJournalPage(0);setToDate(e.target.value);}}/></label>
-        <span className="acc-spacer"/>
-        {canView&&<button onClick={openExportModal} className="btn-secondary"><Download size={16}/>Exporter</button>}
-        {canManage&&<button onClick={()=>setOpen(true)} className="btn-primary"><Plus size={16}/>Nouvelle écriture</button>}
-      </div>
-      {journalError&&<p role="alert" className="text-sm text-red-700">{journalError}</p>}
-      <AccountingTable footer={<AccountingPagination page={journalPage} size={journalSize} total={journalTotal} setPage={n=>{setContextRow(null);setJournalPage(n);}} setSize={n=>{setJournalPage(0);setJournalSize(n);}} disabled={loading}/>}>
-        <table><thead><tr><th className="text-left">Pièce</th><th className="text-left hidden md:table-cell">Date</th><th className="text-left hidden md:table-cell">Journal</th><th className="text-left">Libellé</th><th className="text-left hidden lg:table-cell">Statut</th><th className="text-right">Débit</th><th className="text-right hidden sm:table-cell">Crédit</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
-        <tbody>{loading?<tr><td colSpan={8} className="text-center"><Loader2 className="mx-auto animate-spin" size={20}/></td></tr>:entries.length===0?<tr><td colSpan={8} className="text-center text-neutral-500">Aucune écriture sur cette période.</td></tr>:entries.map(e=><tr key={e.id} onContextMenu={event=>{event.preventDefault();setContextRow({id:e.id,x:event.clientX,y:event.clientY});}}>
-          <td><button type="button" className="text-left font-medium underline-offset-2 hover:underline" onClick={()=>void openDetail(e)}>{e.entry_number}</button><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(e.entry_date)} · {e.journal_type}</span></td>
-          <td className="hidden md:table-cell whitespace-nowrap">{formatDate(e.entry_date)}</td><td className="hidden md:table-cell">{e.journal_type}</td>
-          <td className="break-words">{e.description}<span className="block lg:hidden text-[11px] text-neutral-500">{e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
-          <td className="hidden lg:table-cell"><span className={'acc-status '+(e.status==='posted'?'valid':e.status==='cancelled'?'cancelled':'draft')}>{e.status==='posted'&&<Check size={13}/>} {e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
-          <td className="text-right">{Number(e.total_debit).toLocaleString('fr-FR')}<span className="block sm:hidden text-[10px] text-neutral-500">C : {Number(e.total_credit).toLocaleString('fr-FR')}</span></td>
-          <td className="text-right hidden sm:table-cell">{Number(e.total_credit).toLocaleString('fr-FR')}</td>
-          <td className="text-right"><AccountingRowActions piece={e.entry_number} onView={()=>void openDetail(e)} anchor={contextRow?.id===e.id?contextRow:undefined} onDismiss={()=>setContextRow(null)}/></td>
-        </tr>)}</tbody></table>
-      </AccountingTable>
-
-      {/* Create modal */}
-      <Modal open={open} onClose={() => setOpen(false)} title="Nouvelle écriture comptable" size="lg"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary" title="Annuler"><X className="w-4 h-4" />Annuler</button><button onClick={save} disabled={saving || !isBalanced} className="btn-primary disabled:opacity-50" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Enregistrer</button></>}>
-        <div className="space-y-4">
+  const closeEntry=()=>{if(saving)return;const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));if(dirty&&!window.confirm('Abandonner la saisie en cours ?'))return;if(entryOnly)onExit?.();else setOpen(false);};
+  const entryForm=( <div className="acc-entry-body space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="label">Journal *</label>
@@ -429,7 +410,8 @@ function JournalsTab() {
               <label className="label mb-0">Lignes d'écriture</label>
               <button onClick={() => setEntryLines(p => [...p, { account_code: '', account_name: '', debit: 0, credit: 0, label: '' }])} className="btn-icon" title="Ajouter une ligne"><Plus className="w-4 h-4" /></button>
             </div>
-            <div className="space-y-2">
+            <div className="acc-entry-lines space-y-2">
+              <div className="hidden sm:grid grid-cols-12 gap-2 text-xs text-neutral-500"><span className="col-span-3">Compte</span><span className="col-span-4">Libellé</span><span className="col-span-2">Débit (FCFA)</span><span className="col-span-2">Crédit (FCFA)</span><span/></div>
               {entryLines.map((l, idx) => (
                 <div key={idx} className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-start">
                   <div className="col-span-2 sm:col-span-3">
@@ -444,10 +426,10 @@ function JournalsTab() {
                     <input value={l.label} onChange={e => updateLine(idx, 'label', e.target.value)} placeholder="Libellé" className="input text-xs" />
                   </div>
                   <div className="col-span-1 sm:col-span-2">
-                    <input type="number" value={l.debit || ''} onChange={e => updateLine(idx, 'debit', Number(e.target.value))} placeholder="Débit" className="input text-xs" min="0" />
+                    <input type="number" step="0.01" aria-label={"Débit ligne "+(idx+1)} value={l.debit || ''} onChange={e => updateLine(idx, 'debit', Number(e.target.value))} placeholder="Débit" className="input text-xs" min="0" />
                   </div>
                   <div className="col-span-1 sm:col-span-2">
-                    <input type="number" value={l.credit || ''} onChange={e => updateLine(idx, 'credit', Number(e.target.value))} placeholder="Crédit" className="input text-xs" min="0" />
+                    <input type="number" step="0.01" aria-label={"Crédit ligne "+(idx+1)} value={l.credit || ''} onChange={e => updateLine(idx, 'credit', Number(e.target.value))} placeholder="Crédit" className="input text-xs" min="0" />
                   </div>
                   <div className="col-span-2 sm:col-span-1 flex items-center justify-end pt-1">
                     <button onClick={() => setEntryLines(p => p.filter((_, i) => i !== idx))} disabled={entryLines.length <= 2} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 text-xs" aria-label="Retirer la ligne"><Trash2 size={16}/></button>
@@ -455,14 +437,38 @@ function JournalsTab() {
                 </div>
               ))}
             </div>
-            <div className={`mt-3 pt-3 border-t flex justify-end gap-6 text-sm font-mono ${isBalanced ? 'border-emerald-200' : 'border-slate-200'}`}>
-              <span>Débit : <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span>
-              <span>Crédit : <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span>
-              <span className={isBalanced ? 'text-emerald-700 font-semibold' : 'text-red-600'}>{isBalanced ? 'Équilibrée' : `Écart : ${(totalDebit - totalCredit).toLocaleString('fr-FR')}`}</span>
-            </div>
+
           </div>
-        </div>
-      </Modal>
+        </div> );
+  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={save} className="btn-primary" disabled={saving||!isBalanced}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
+  if(entryOnly)return <section className="acc-entry-page">{entryForm}{entryFooter}</section>;
+
+    return (
+    <div className="space-y-3">
+      <div className="acc-toolbar acc-fixed">
+        <select aria-label="Journal" value={journalType} onChange={e=>{setJournalPage(0);setJournalType(e.target.value);}} className="input w-auto"><option value="">Tous les journaux</option>{Object.entries(JOURNAL_TYPES).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
+        <label>Du <input aria-label="Date de début" type="date" className="input w-auto" value={fromDate} onChange={e=>{setJournalPage(0);setFromDate(e.target.value);}}/></label>
+        <label>Au <input aria-label="Date de fin" type="date" className="input w-auto" value={toDate} onChange={e=>{setJournalPage(0);setToDate(e.target.value);}}/></label>
+        <span className="acc-spacer"/>
+        {canView&&<button onClick={openExportModal} className="btn-secondary"><Download size={16}/>Exporter</button>}
+        {canManage&&<button onClick={()=>onNew?onNew():setOpen(true)} className="btn-primary"><Plus size={16}/>Nouvelle écriture</button>}
+      </div>
+      {journalError&&<p role="alert" className="text-sm text-red-700">{journalError}</p>}
+      <AccountingTable footer={<AccountingPagination page={journalPage} size={journalSize} total={journalTotal} setPage={n=>{setContextRow(null);setJournalPage(n);}} setSize={n=>{setJournalPage(0);setJournalSize(n);}} disabled={loading}/>}>
+        <table><thead><tr><th className="text-left">Pièce</th><th className="text-left hidden md:table-cell">Date</th><th className="text-left hidden md:table-cell">Journal</th><th className="text-left">Libellé</th><th className="text-left hidden lg:table-cell">Statut</th><th className="text-right">Débit</th><th className="text-right hidden sm:table-cell">Crédit</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
+        <tbody>{loading?<tr><td colSpan={8} className="text-center"><Loader2 className="mx-auto animate-spin" size={20}/></td></tr>:entries.length===0?<tr><td colSpan={8} className="text-center text-neutral-500">Aucune écriture sur cette période.</td></tr>:entries.map(e=><tr key={e.id} onContextMenu={event=>{event.preventDefault();setContextRow({id:e.id,x:event.clientX,y:event.clientY});}}>
+          <td><button type="button" className="text-left font-medium underline-offset-2 hover:underline" onClick={()=>void openDetail(e)}>{e.entry_number}</button><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(e.entry_date)} · {e.journal_type}</span></td>
+          <td className="hidden md:table-cell whitespace-nowrap">{formatDate(e.entry_date)}</td><td className="hidden md:table-cell">{e.journal_type}</td>
+          <td className="break-words">{e.description}<span className="block lg:hidden text-[11px] text-neutral-500">{e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
+          <td className="hidden lg:table-cell"><span className={'acc-status '+(e.status==='posted'?'valid':e.status==='cancelled'?'cancelled':'draft')}>{e.status==='posted'&&<Check size={13}/>} {e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
+          <td className="text-right">{Number(e.total_debit).toLocaleString('fr-FR')}<span className="block sm:hidden text-[10px] text-neutral-500">C : {Number(e.total_credit).toLocaleString('fr-FR')}</span></td>
+          <td className="text-right hidden sm:table-cell">{Number(e.total_credit).toLocaleString('fr-FR')}</td>
+          <td className="text-right"><AccountingRowActions piece={e.entry_number} onView={()=>void openDetail(e)} anchor={contextRow?.id===e.id?contextRow:undefined} onDismiss={()=>setContextRow(null)}/></td>
+        </tr>)}</tbody></table>
+      </AccountingTable>
+
+      {/* Create modal — retained fallback for embedded use */}
+      <Modal open={open} onClose={closeEntry} title="Nouvelle écriture comptable" size="xl" fullscreenMobile panelClassName="acc-entry-dialog" footer={entryFooter}>{entryForm}</Modal>
 
       {/* Export modal */}
       <Modal open={exportOpen} onClose={() => !exportLoading && setExportOpen(false)} title="Exporter les écritures comptables" size="lg"
