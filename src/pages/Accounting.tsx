@@ -401,7 +401,7 @@ function JournalsTab() {
 
       {/* Create modal */}
       <Modal open={open} onClose={() => setOpen(false)} title="Nouvelle écriture comptable" size="lg"
-        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving || !isBalanced} className="btn-icon-primary disabled:opacity-50" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-secondary" title="Annuler"><X className="w-4 h-4" />Annuler</button><button onClick={save} disabled={saving || !isBalanced} className="btn-primary disabled:opacity-50" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Enregistrer</button></>}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
@@ -431,8 +431,8 @@ function JournalsTab() {
             </div>
             <div className="space-y-2">
               {entryLines.map((l, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-1.5 items-start">
-                  <div className="col-span-3">
+                <div key={idx} className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-start">
+                  <div className="col-span-2 sm:col-span-3">
                     <SearchableSelect
                       options={accounts.map(a => ({ value: a.code, label: `${a.code} ${a.name}` }))}
                       value={l.account_code}
@@ -440,17 +440,17 @@ function JournalsTab() {
                       placeholder="— Compte —"
                     />
                   </div>
-                  <div className="col-span-4">
+                  <div className="col-span-2 sm:col-span-4">
                     <input value={l.label} onChange={e => updateLine(idx, 'label', e.target.value)} placeholder="Libellé" className="input text-xs" />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1 sm:col-span-2">
                     <input type="number" value={l.debit || ''} onChange={e => updateLine(idx, 'debit', Number(e.target.value))} placeholder="Débit" className="input text-xs" min="0" />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1 sm:col-span-2">
                     <input type="number" value={l.credit || ''} onChange={e => updateLine(idx, 'credit', Number(e.target.value))} placeholder="Crédit" className="input text-xs" min="0" />
                   </div>
-                  <div className="col-span-1 flex items-center justify-end pt-1">
-                    <button onClick={() => setEntryLines(p => p.filter((_, i) => i !== idx))} disabled={entryLines.length <= 2} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 text-xs">x</button>
+                  <div className="col-span-2 sm:col-span-1 flex items-center justify-end pt-1">
+                    <button onClick={() => setEntryLines(p => p.filter((_, i) => i !== idx))} disabled={entryLines.length <= 2} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 text-xs" aria-label="Retirer la ligne"><Trash2 size={16}/></button>
                   </div>
                 </div>
               ))}
@@ -798,94 +798,21 @@ function GrandLivreTab() {
   useEffect(() => { load(); }, [tenant?.id, period, accountFilter]);
   useRealtimeRefresh(['journal_entries', 'journal_lines', 'accounts'], () => load(true));
 
-  const groupedByAccount = useMemo(() => {
-    const map: Record<string, { code: string; name: string; lines: any[]; totalDebit: number; totalCredit: number }> = {};
-    data.forEach((r: any) => {
-      if (!map[r.account_code]) map[r.account_code] = { code: r.account_code, name: r.account_name, lines: [], totalDebit: 0, totalCredit: 0 };
-      map[r.account_code].lines.push(r);
-      map[r.account_code].totalDebit += Number(r.debit);
-      map[r.account_code].totalCredit += Number(r.credit);
-    });
-    return Object.values(map).sort((a, b) => a.code.localeCompare(b.code));
-  }, [data]);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <select value={period} onChange={e => setPeriod(e.target.value as any)} className="input w-48">
-          <option value="month">Mois en cours</option>
-          <option value="year">Exercice en cours</option>
-          <option value="all">Tout</option>
-        </select>
-        <div className="w-64">
-          <SearchableSelect
-            options={[{ value: '', label: 'Tous les comptes' }, ...accounts.map(a => ({ value: a.code, label: `${a.code} — ${a.name}` }))]}
-            value={accountFilter}
-            onChange={v => setAccountFilter(v)}
-            placeholder="Tous les comptes"
-          />
-        </div>
-        <p className="text-sm text-slate-500 ml-auto">{data.length} mouvement{data.length > 1 ? 's' : ''}</p>
-      </div>
-
-      {loading ? <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-        : groupedByAccount.length === 0 ? (
-          <div className="card py-12 text-center text-sm text-neutral-500">Aucun mouvement pour la période sélectionnée.</div>
-        ) : (
-          <div className="space-y-4">
-            {groupedByAccount.map(group => {
-              const solde = group.totalDebit - group.totalCredit;
-              return (
-                <div key={group.code} className="card overflow-hidden">
-                  <div className="px-1 md:px-4 py-2.5 bg-neutral-50 border-b border-neutral-100 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-brand-700 font-bold">{group.code}</span>
-                      <span className="text-sm font-semibold text-neutral-800">{group.name}</span>
-                    </div>
-                    <span className={`text-xs font-bold font-mono ${solde >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                      Solde : {solde.toLocaleString('fr-FR')} FCFA
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-[10px] uppercase text-neutral-500 bg-white">
-                        <tr>
-                          <th className="px-1 md:px-4 py-2 text-left">Date</th>
-                          <th className="px-1 md:px-4 py-2 text-left">N° Pièce</th>
-                          <th className="px-1 md:px-4 py-2 text-left">Journal</th>
-                          <th className="px-1 md:px-4 py-2 text-left">Libellé</th>
-                          <th className="px-1 md:px-4 py-2 text-right">Débit</th>
-                          <th className="px-1 md:px-4 py-2 text-right">Crédit</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--w-separator-l)]">
-                        {group.lines.map((l: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-neutral-50/40">
-                            <td className="px-1 md:px-4 py-2 text-xs text-neutral-600">{formatDate(l.entry_date)}</td>
-                            <td className="px-1 md:px-4 py-2 font-mono text-xs text-neutral-500">{l.entry_number}</td>
-                            <td className="px-1 md:px-4 py-2"><span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-neutral-100 text-neutral-600">{l.journal_type}</span></td>
-                            <td className="px-1 md:px-4 py-2 text-neutral-700 text-xs">{l.label || l.reference || '—'}</td>
-                            <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(l.debit) > 0 ? Number(l.debit).toLocaleString('fr-FR') : ''}</td>
-                            <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(l.credit) > 0 ? Number(l.credit).toLocaleString('fr-FR') : ''}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-neutral-50 border-t border-neutral-200 text-xs font-semibold">
-                        <tr>
-                          <td className="px-1 md:px-4 py-2" colSpan={4}>TOTAL</td>
-                          <td className="px-1 md:px-4 py-2 text-right font-mono">{group.totalDebit.toLocaleString('fr-FR')}</td>
-                          <td className="px-1 md:px-4 py-2 text-right font-mono">{group.totalCredit.toLocaleString('fr-FR')}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+  const ordered=useMemo(()=>[...data].sort((a,b)=>String(a.account_code).localeCompare(String(b.account_code))||String(a.entry_date).localeCompare(String(b.entry_date))||String(a.entry_number).localeCompare(String(b.entry_number))),[data]);
+  const paging=useAccountingPagination(ordered,period+'|'+accountFilter);
+  const debit=data.reduce((n,r)=>n+Number(r.debit),0),credit=data.reduce((n,r)=>n+Number(r.credit),0);
+  return <div className="space-y-3">
+    <div className="acc-toolbar acc-fixed">
+      <select aria-label="Période" value={period} onChange={e=>setPeriod(e.target.value as any)} className="input w-auto"><option value="month">Mois en cours</option><option value="year">Exercice en cours</option><option value="all">Tout</option></select>
+      <div className="w-64 max-w-full"><SearchableSelect options={[{value:'',label:'Tous les comptes'},...accounts.map(a=>({value:a.code,label:a.code+' — '+a.name}))]} value={accountFilter} onChange={setAccountFilter} placeholder="Tous les comptes"/></div>
     </div>
-  );
+    <div className="acc-summary"><div><span>Mouvements de la sélection</span><strong>{data.length}</strong></div><div><span>Total débit (FCFA)</span><strong>{debit.toLocaleString('fr-FR')}</strong></div><div><span>Total crédit (FCFA)</span><strong>{credit.toLocaleString('fr-FR')}</strong></div></div>
+    <AccountingTable footer={<AccountingPagination {...paging} disabled={loading}/>}>
+      <table><thead><tr><th className="text-left">Compte</th><th className="text-left hidden md:table-cell">Date</th><th className="text-left">Pièce / libellé</th><th className="text-right">Débit</th><th className="text-right">Crédit</th></tr></thead>
+      <tbody>{loading?<tr><td colSpan={5} className="text-center"><Loader2 size={20} className="mx-auto animate-spin"/></td></tr>:paging.rows.map((l,i)=><tr key={l.line_id??l.id??i}><td><span className="font-medium">{l.account_code}</span><span className="block text-[11px] text-neutral-500">{l.account_name}</span></td><td className="hidden md:table-cell">{formatDate(l.entry_date)}</td><td><span className="font-medium">{l.entry_number}</span><span className="block text-[11px] text-neutral-500">{l.journal_type} · {l.label||l.reference||'—'}</span><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(l.entry_date)}</span></td><td className="text-right">{Number(l.debit)?Number(l.debit).toLocaleString('fr-FR'):'—'}</td><td className="text-right">{Number(l.credit)?Number(l.credit).toLocaleString('fr-FR'):'—'}</td></tr>)}
+      {!loading&&!paging.total&&<tr><td colSpan={5} className="text-center text-neutral-500">Aucun mouvement sur cette période.</td></tr>}</tbody></table>
+    </AccountingTable>
+  </div>;
 }
 
 /* ===================== BALANCE DES TIERS ===================== */
@@ -912,6 +839,8 @@ function TiersTab() {
       });
   }, [tenant, type, realtimeTick]);
 
+  const tiersPaging=useAccountingPagination(tiers,type);
+  const extraitPaging=useAccountingPagination(extrait,selected?.account_code??'');
   function loadExtrait(account: any) {
     setSelected(account);
     setExtraitLoading(true);
@@ -939,11 +868,11 @@ function TiersTab() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Balance list */}
-          <div className="bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
+          <div className="min-w-0 border-t border-neutral-200">
             <div className="px-1 md:px-4 py-3 bg-neutral-50 border-b border-neutral-200">
               <h3 className="text-sm font-semibold text-slate-700">Balance des {type === 'client' ? 'clients' : 'fournisseurs'}</h3>
             </div>
-            <div className="max-h-[60vh] overflow-auto">
+            <AccountingTable footer={<AccountingPagination {...tiersPaging}/>}>
               <table className="w-full text-sm">
                 <thead className="bg-neutral-50 sticky top-0">
                   <tr className="text-xs text-neutral-500 uppercase">
@@ -958,24 +887,24 @@ function TiersTab() {
                   {tiers.length === 0 && (
                     <tr><td colSpan={5} className="px-1 md:px-4 py-8 text-center text-neutral-400">Aucun tiers trouvé</td></tr>
                   )}
-                  {tiers.map((t: any) => (
+                  {tiersPaging.rows.map((t: any) => (
                     <tr key={t.account_code} onClick={() => loadExtrait(t)} className={`cursor-pointer hover:bg-brand-50/40 transition ${selected?.account_code === t.account_code ? 'bg-brand-50' : ''}`}>
                       <td className="px-1 md:px-3 py-2 font-mono text-xs text-brand-700">{t.account_code}</td>
                       <td className="px-1 md:px-3 py-2 text-neutral-700 truncate max-w-[140px]">{t.tiers_name}</td>
                       <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(t.total_debit) > 0 ? Number(t.total_debit).toLocaleString('fr-FR') : '—'}</td>
                       <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(t.total_credit) > 0 ? Number(t.total_credit).toLocaleString('fr-FR') : '—'}</td>
-                      <td className={`px-1 md:px-3 py-2 text-right font-mono text-xs font-semibold ${Number(t.solde) >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                      <td className={`px-1 md:px-3 py-2 text-right font-mono text-xs font-semibold ${Number(t.solde) >= 0 ? 'text-neutral-900' : 'text-neutral-900'}`}>
                         {Number(t.solde).toLocaleString('fr-FR')}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </AccountingTable>
           </div>
 
           {/* Extrait de compte */}
-          <div className="bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
+          <div className="min-w-0 border-t border-neutral-200">
             <div className="px-1 md:px-4 py-3 bg-neutral-50 border-b border-neutral-200">
               <h3 className="text-sm font-semibold text-slate-700">
                 {selected ? `Extrait — ${selected.account_code} ${selected.tiers_name}` : 'Sélectionnez un tiers'}
@@ -986,7 +915,7 @@ function TiersTab() {
             ) : extraitLoading ? (
               <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
             ) : (
-              <div className="max-h-[60vh] overflow-auto">
+              <AccountingTable footer={<AccountingPagination {...extraitPaging}/>}>
                 <table className="w-full text-sm">
                   <thead className="bg-neutral-50 sticky top-0">
                     <tr className="text-xs text-neutral-500 uppercase">
@@ -1002,21 +931,21 @@ function TiersTab() {
                     {extrait.length === 0 && (
                       <tr><td colSpan={6} className="px-1 md:px-4 py-8 text-center text-neutral-400">Aucune écriture</td></tr>
                     )}
-                    {extrait.map((e: any, idx: number) => (
+                    {extraitPaging.rows.map((e: any, idx: number) => (
                       <tr key={idx} className="hover:bg-[var(--w-surface-el)]/40">
                         <td className="px-1 md:px-3 py-2 text-xs text-neutral-600">{formatDate(e.entry_date)}</td>
                         <td className="px-1 md:px-3 py-2 font-mono text-xs text-neutral-500">{e.entry_number}</td>
                         <td className="px-1 md:px-3 py-2 text-neutral-700 text-xs">{e.label || '—'}</td>
                         <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(e.debit) > 0 ? Number(e.debit).toLocaleString('fr-FR') : ''}</td>
                         <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(e.credit) > 0 ? Number(e.credit).toLocaleString('fr-FR') : ''}</td>
-                        <td className={`px-1 md:px-3 py-2 text-right font-mono text-xs font-semibold ${Number(e.solde_cumule) >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                        <td className={`px-1 md:px-3 py-2 text-right font-mono text-xs font-semibold ${Number(e.solde_cumule) >= 0 ? 'text-neutral-900' : 'text-neutral-900'}`}>
                           {Number(e.solde_cumule).toLocaleString('fr-FR')}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </AccountingTable>
             )}
           </div>
         </div>
