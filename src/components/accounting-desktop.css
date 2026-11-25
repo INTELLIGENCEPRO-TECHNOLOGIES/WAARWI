@@ -1,0 +1,44 @@
+/* Bureau comptable, confinement local au-dessous du menu en cascade. */
+.acc-desktop{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;width:100%;overflow:hidden;background:var(--w-bg)}
+.acc-desktop-area{position:relative;isolation:isolate;flex:1;min-height:0;min-width:0;overflow:hidden;background:var(--w-bg)}
+.acc-desktop-home{position:absolute;inset:0;overflow:auto;padding:10px 18px 16px}
+.acc-desktop-area .acc-work-window{box-shadow:0 2px 9px #00000020;max-width:100%;max-height:100%}
+.acc-desktop-area .acc-work-window[data-active=true]{border-color:var(--w-text-sec)}
+.acc-desktop-area .acc-work-window>div:first-child{padding-left:10px;padding-right:4px}
+.acc-desktop-area .acc-work-window>div:first-child button{border-radius:0;min-width:28px;height:28px;display:grid;place-items:center}
+.acc-desktop-area .acc-work-window>div:first-child span{font-size:12px}
+.acc-desktop-area .acc-work-window .acc-window-content{height:100%;min-width:0;min-height:0;overflow:auto;padding:0 12px 12px}
+.acc-window-content .accounting-workspace{--acc-head:0px;min-width:0}
+.acc-window-content .accounting-workspace .acc-body{padding-top:4px}
+.acc-window-content .accounting-workspace .acc-table-scroll{max-height:58vh}
+.acc-window-content .accounting-workspace .acc-entry-page{min-height:0}
+.acc-desktop-taskbar{display:flex;align-items:center;gap:4px;flex-shrink:0;min-height:35px;padding:2px 6px;border-top:1px solid var(--w-separator);background:var(--w-surface-el);color:var(--w-text)}
+.acc-desktop-taskbar button{background:transparent;border:0;display:flex;align-items:center;gap:6px;padding:5px 7px;font-size:12px;min-height:29px;color:inherit}
+.acc-desktop-taskbar button:focus-visible{outline:2px solid var(--w-text);outline-offset:-2px}
+.acc-desktop-taskbar button:disabled{opacity:.4;cursor:not-allowed}
+.acc-desktop-taskbar button:hover:not(:disabled){background:var(--w-hover)}
+.acc-desktop-tasks{display:flex;align-items:stretch;flex:1;min-width:0;gap:1px;overflow-x:auto;overscroll-behavior:contain}
+.acc-desktop-tasks .acc-task{display:flex;align-items:center;flex-shrink:0;max-width:240px;min-width:0;border-right:1px solid var(--w-separator);border-bottom:2px solid transparent}
+.acc-desktop-tasks .acc-task[data-active=true]{border-bottom-color:var(--w-text);font-weight:650;background:var(--w-surface)}
+.acc-desktop-tasks .acc-task button:first-child{min-width:0}
+.acc-desktop-tasks .acc-task span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-desktop-tasks .acc-task button:last-child{padding:4px;flex-shrink:0}
+.acc-desktop-taskbar .acc-task-action{flex-shrink:0}
+@media(max-width:1023px){
+ .acc-desktop{padding-bottom:calc(52px + env(safe-area-inset-bottom))}
+ .acc-desktop-area .acc-work-window{inset:0!important;width:100%!important;height:100%!important;max-height:100%;box-shadow:none;border:0!important}
+ .acc-desktop-area .acc-work-window[data-active=false]{display:none!important}
+ .acc-desktop-area .acc-work-window>div:first-child{cursor:default}
+ .acc-desktop-area .acc-work-window>div:first-child button[title="Agrandir"],.acc-desktop-area .acc-work-window>div:first-child button[title="Restaurer"],.acc-desktop .acc-tile-control,.acc-desktop-area .acc-work-window>[class*="cursor-"][class*="absolute"]{display:none!important}
+ .acc-desktop-area .acc-work-window .acc-window-content{padding:0 9px 12px}
+ .acc-desktop-home{padding:4px 9px 12px}
+ .acc-desktop-taskbar .acc-task-action span{display:none}
+ .acc-desktop-tasks .acc-task{max-width:175px}
+}
+@media print{
+ .acc-desktop,.acc-desktop-area{display:block!important;overflow:visible!important;height:auto!important}
+ .acc-desktop-taskbar,.acc-desktop-home,.acc-work-window[data-active=false]{display:none!important}
+ .acc-desktop-area .acc-work-window[data-active=true]{position:static!important;width:100%!important;height:auto!important;overflow:visible!important;box-shadow:none!important;border:0!important}
+ .acc-desktop-area .acc-work-window[data-active=true]>div:first-child{display:none!important}
+ .acc-desktop-area .acc-work-window[data-active=true]>div,.acc-desktop-area .acc-work-window .acc-window-content{height:auto!important;overflow:visible!important}
+}
