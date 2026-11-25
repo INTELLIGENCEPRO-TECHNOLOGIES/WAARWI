@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {buildFinancialStatements,balanceLabels,incomeLabels,type FinancialStatements,type FinancialSnapshot} from '../lib/accountingFinancialStatements.mjs';
-type Preview={closed:boolean;snapshot:FinancialSnapshot&{entries:number;opening_debit:number;opening_credit:number;year:number;closed_months:number}};
+type Preview={closed:boolean;snapshot:FinancialSnapshot&{entries:number;opening_debit:number;opening_credit:number;year:number;closed_months:number;inconsistent_entries:number;duplicate_sources:number;unposted_entries:number;inconsistent_accounts:number;unsupported_accounts:number}};
 type CashReport={opening:number;closing:number;variation:number;operating:number;investment:number;financing:number;unknown:number;unknown_count:number;prior_missing:boolean;unknown_rows:{id:string;entry_date:string;entry_number:string;description:string;amount:number}[]};
 type Period={report:FinancialStatements;cashReport:CashReport|null;cashError:string;closed:boolean;available:boolean;year:number;closedMonths:number};
 const money=(n:number|null)=>n===null?'—':new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(n)+' FCFA';
@@ -22,7 +22,7 @@ export function AccountingFinancialReports({tenantId,tenantName}:{tenantId:strin
  const valid=/^\d{4}$/.test(year)&&Number(year)>=2001&&Number(year)<=Math.min(2099,dateYear());
  useEffect(()=>{let live=true;setLoading(true);setCurrent(null);setPrevious(null);setError('');setPriorError('');
  const load=async(y:number):Promise<Period>=>{const {data,error:err}=await supabase.rpc('preview_fiscal_year',{p_tenant_id:tenantId,p_year:y});if(err)throw err;const p=data as Preview;
- const report=buildFinancialStatements(p.snapshot);const flow=await supabase.rpc('accounting_cash_flow_working',{p_tenant_id:tenantId,p_year:y});const cashReport=flow.error?null:flow.data as CashReport;
+ const report=buildFinancialStatements(p.snapshot);for(const [count,label] of [[p.snapshot.inconsistent_entries,'écritures incohérentes'],[p.snapshot.duplicate_sources,'sources dupliquées'],[p.snapshot.unposted_entries,'écritures en attente'],[p.snapshot.inconsistent_accounts,'comptes incohérents'],[p.snapshot.unsupported_accounts,'comptes hors périmètre']] as const){if(Number(count)>0)report.issues.push(count+' '+label+'.');}const flow=await supabase.rpc('accounting_cash_flow_working',{p_tenant_id:tenantId,p_year:y});const cashReport=flow.error?null:flow.data as CashReport;
  if(cashReport&&(Number(cashReport.variation)!==report.cash.variation||Number(cashReport.closing)!==report.cash.closing||Number(cashReport.opening)!==report.cash.opening))report.issues.push('Les données de trésorerie diffèrent de la balance source : vérifiez l’ouverture et les écritures.');
  return {report,cashReport,cashError:flow.error?.message??'',closed:p.closed,available:p.closed||p.snapshot.entries>0||p.snapshot.opening_debit>0||p.snapshot.opening_credit>0,year:y,closedMonths:p.snapshot.closed_months};};
  void(async()=>{try{const n=await load(query.year);if(!live)return;setCurrent(n);try{const p=await load(query.year-1);if(live)setPrevious(p);}catch(e){if(live)setPriorError(errorText(e));}}catch(e){if(live)setError(errorText(e));}finally{if(live)setLoading(false);}})();
