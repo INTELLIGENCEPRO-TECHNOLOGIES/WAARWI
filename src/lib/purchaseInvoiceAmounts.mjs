@@ -23,9 +23,9 @@ const roundRate = (amount, rate) => (amount * rate + SCALE / 2n) / SCALE;
  * @returns {{lines: {netMinor:number, vatMinor:number, deductibleVatMinor:number, nonDeductibleVatMinor:number, grossMinor:number, expenseMinor:number}[], netMinor:number, vatMinor:number, deductibleVatMinor:number, nonDeductibleVatMinor:number, grossMinor:number, expenseMinor:number}}
  */
 export function calculatePurchaseInvoice(lines) {
-  if (!Array.isArray(lines) || lines.length === 0) throw new RangeError('La facture doit contenir au moins une ligne.');
+  if (!Array.isArray(lines) || lines.length === 0 || lines.length > 500) throw new RangeError('Une facture doit contenir entre 1 et 500 lignes.');
   let net = 0n, vat = 0n, deductible = 0n;
-  const results = lines.map((line) => {
+  const results = Array.from(lines, (line) => {
     const n = integer(line?.netMinor, 'Montant HT');
     const rate = integer(line?.vatBps, 'Taux de TVA', 10000);
     const fraction = integer(line?.deductibleBps, 'Part de TVA déductible', 10000);
