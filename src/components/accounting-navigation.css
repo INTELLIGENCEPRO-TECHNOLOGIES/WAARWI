@@ -32,3 +32,6 @@
 @media(min-width:1024px){.acc-navigation .acc-nav-desktop{display:flex}.acc-navigation .acc-nav-mobile{display:none}}
 @media(min-width:1024px) and (max-width:1279px){.acc-navigation .acc-nav-desktop .acc-nav-current{display:none}.acc-navigation .acc-nav-home,.acc-navigation .acc-nav-trigger,.acc-navigation .acc-nav-exit{padding-left:9px;padding-right:9px}.acc-navigation .acc-nav-dropdown{max-width:220px}.acc-navigation .acc-nav-flyout{width:225px}}
 @media print{.acc-navigation{display:none!important}}
+
+.acc-navigation .acc-nav-trigger[data-current=true]{font-weight:650;border-bottom:2px solid var(--w-text)}
+.acc-navigation .acc-nav-sub:hover>.acc-nav-leaf{background:var(--w-hover)}
