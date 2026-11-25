@@ -45,6 +45,8 @@
     "supplierOrders": "Purchases",
     "accounting": "Accounting",
     "accountingPlan": "Chart of accounts",
+    "accountingOverview": "Accounting overview",
+    "accountingEntry": "Journal entry",
     "vatReport": "VAT statement",
     "accountStatement": "Account inquiry",
     "bankReconciliation": "Bank reconciliation",
