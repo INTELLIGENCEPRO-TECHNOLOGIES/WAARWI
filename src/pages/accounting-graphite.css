@@ -1,0 +1,56 @@
+/* Graphite V2 — uniquement le module comptabilité. Tokens natifs Waarwi. */
+.accounting-workspace{--acc-head:48px;min-width:0;min-height:0;color:var(--w-text);font-variant-numeric:tabular-nums}
+.accounting-workspace .acc-titlebar{position:sticky;top:0;z-index:12;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:var(--acc-head);padding:8px 0;background:var(--w-bg);border-bottom:1px solid var(--w-separator)}
+.accounting-workspace .acc-titlebar h1{font-size:17px;line-height:1.25;font-weight:650;margin:0}
+.accounting-workspace .acc-titlebar p{font-size:11px;color:var(--w-text-muted);margin:2px 0 0;line-height:1.3}
+.accounting-workspace .acc-titlebar .acc-module{font-size:11px;color:var(--w-text-muted);white-space:nowrap}
+.accounting-workspace .acc-body{min-width:0;padding-top:10px}
+.accounting-workspace .card{box-shadow:none;border:0;border-radius:0;background:transparent}
+.accounting-workspace .card:not(.acc-table-frame){padding-left:0;padding-right:0}
+.accounting-workspace .shadow-sm,.accounting-workspace .shadow-card{box-shadow:none}
+.accounting-workspace .acc-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--w-separator);background:var(--w-bg)}
+.accounting-workspace .acc-toolbar.acc-fixed{position:sticky;top:var(--acc-head);z-index:11}
+.accounting-workspace .acc-toolbar .acc-spacer{flex:1}
+.accounting-workspace .acc-toolbar label{font-size:11px;color:var(--w-text-sec)}
+.accounting-workspace .input,.accounting-workspace .acc-input{min-width:0;min-height:32px;padding:5px 7px;border:0;border-radius:0;border-bottom:1px solid var(--w-field-border);box-shadow:none;background:var(--w-field-bg);font-size:13px;color:var(--w-text)}
+.accounting-workspace .input:focus,.accounting-workspace .acc-input:focus{outline:0;border-bottom-color:var(--w-text);box-shadow:none}
+.accounting-workspace .btn,.accounting-workspace .btn-secondary,.accounting-workspace .btn-primary,.accounting-workspace .btn-icon,.accounting-workspace .btn-icon-primary{min-height:32px;max-width:100%;border-radius:5px;font-size:12px;gap:6px;box-shadow:none;padding:6px 10px}
+.accounting-workspace .btn-secondary,.accounting-workspace .btn-icon{border-color:var(--w-separator);background:var(--w-surface);color:var(--w-text)}
+.accounting-workspace .btn-primary,.accounting-workspace .btn-icon-primary{background:var(--w-accent);color:var(--w-accent-text)}
+.accounting-workspace .acc-icon{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border:0;background:transparent;color:var(--w-text-sec);border-radius:4px}
+.accounting-workspace .acc-icon:hover,.accounting-workspace .acc-context button:hover{background:var(--w-hover);color:var(--w-text)}
+.accounting-workspace button:disabled{opacity:.42;cursor:not-allowed}
+.accounting-workspace .acc-table-frame{min-width:0;border-top:1px solid var(--w-separator);border-bottom:1px solid var(--w-separator)}
+.accounting-workspace .acc-table-scroll{min-width:0;max-height:calc(100dvh - 270px);min-height:90px;overflow:auto;overscroll-behavior:contain}
+.accounting-workspace table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.accounting-workspace table thead th{position:sticky;top:0;z-index:2;background:var(--w-surface-el);color:var(--w-text-sec);font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;white-space:normal;border-bottom:1px solid var(--w-separator)}
+.accounting-workspace table td,.accounting-workspace table th{padding:8px 9px;vertical-align:middle}
+.accounting-workspace table tbody td{border-bottom:1px solid var(--w-separator-l)}
+.accounting-workspace table tbody tr:hover{background:var(--w-hover)}
+.accounting-workspace table tfoot td{position:sticky;bottom:0;z-index:1;background:var(--w-surface-el);border-top:1px solid var(--w-separator);font-weight:650}
+.accounting-workspace table .font-mono{font-family:inherit;font-variant-numeric:tabular-nums}
+.accounting-workspace table .text-right{font-variant-numeric:tabular-nums;white-space:nowrap}
+.accounting-workspace table .truncate{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.accounting-workspace .acc-status{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;white-space:nowrap;background:none;border:0;padding:0}
+.accounting-workspace .acc-status.valid{color:var(--w-success)}.accounting-workspace .acc-status.cancelled{color:var(--w-error)}.accounting-workspace .acc-status.draft{color:var(--w-text-muted)}
+.accounting-workspace .acc-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:43px;padding:5px 0;background:var(--w-bg);color:var(--w-text-sec);font-size:11px;border-top:1px solid var(--w-separator)}
+.accounting-workspace .acc-pagination label{display:flex;align-items:center;gap:6px}.accounting-workspace .acc-pagination select{min-height:30px;padding:3px 4px;border:0;border-bottom:1px solid var(--w-separator);background:var(--w-bg)}
+.accounting-workspace .acc-page-buttons{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.accounting-workspace .acc-context{position:fixed;z-index:90;width:216px;background:var(--w-surface);border:1px solid var(--w-separator);box-shadow:0 6px 20px #00000018;border-radius:5px;padding:4px;text-align:left;white-space:normal}
+.accounting-workspace .acc-context-label{display:block;padding:6px 8px;font-size:11px;color:var(--w-text-muted);border-bottom:1px solid var(--w-separator-l)}
+.accounting-workspace .acc-context button{display:flex;align-items:center;gap:8px;width:100%;padding:8px;border:0;background:transparent;text-align:left;font-size:12px;color:var(--w-text)}
+.accounting-workspace .acc-summary{display:flex;flex-wrap:wrap;gap:12px 28px;padding:10px 0;border-bottom:1px solid var(--w-separator)}
+.accounting-workspace .acc-summary>div{min-width:0;flex:1 1 130px}
+.accounting-workspace .acc-summary span{display:block;font-size:11px;color:var(--w-text-sec)}
+.accounting-workspace .acc-summary strong{display:block;font-size:16px;line-height:1.4;font-weight:650;overflow-wrap:anywhere}
+@media(max-width:767px){
+ .accounting-workspace{--acc-head:44px}
+ .accounting-workspace .acc-titlebar h1{font-size:15px}.accounting-workspace .acc-titlebar p,.accounting-workspace .acc-module{display:none}
+ .accounting-workspace .acc-table-scroll{max-height:calc(100dvh - 260px)}
+ .accounting-workspace table td,.accounting-workspace table th{padding:7px 5px}
+ .accounting-workspace .acc-toolbar{gap:6px}
+ .accounting-workspace .acc-pagination{gap:4px;flex-wrap:wrap}
+ .accounting-workspace .acc-icon{width:36px;height:36px}
+ .accounting-workspace .acc-summary{gap:10px}
+}
+@media print{.accounting-workspace .acc-toolbar,.accounting-workspace .acc-pagination,.accounting-workspace .acc-context{display:none!important}.accounting-workspace .acc-table-scroll{max-height:none;overflow:visible}.accounting-workspace table thead th,.accounting-workspace table tfoot td,.accounting-workspace .acc-titlebar{position:static}}
