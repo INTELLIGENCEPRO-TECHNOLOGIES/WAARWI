@@ -7,6 +7,8 @@ on:
       - 'scripts/pending-accounting/production-migration-versions.json'
       - 'scripts/pending-accounting/history-recovered/**'
       - 'supabase/migrations/**'
+      - 'scripts/pending-accounting/integrated-replay-plan.json'
+      - 'scripts/pending-accounting/*-candidate.sql'
   workflow_dispatch:
 permissions:
   contents: read
@@ -107,6 +109,55 @@ jobs:
           done </tmp/waarwi-replay-files.txt
           echo "$count/$expected migrations historiques rejouées." | tee -a "$GITHUB_STEP_SUMMARY"
           test "$count" -eq "$expected"
+      - name: Appliquer le lot candidat complet dans la même base jetable
+        id: candidate
+        run: |
+          set -euo pipefail
+          db=$(cat /tmp/waarwi-replay-container.txt)
+          test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 0
+          python3 - <<'PY'
+          import json,pathlib
+          plan=json.loads(pathlib.Path('scripts/pending-accounting/integrated-replay-plan.json').read_text())
+          for k in ('candidate_files','recipe_files'):
+              files=plan[k]
+              assert len(files)==len(set(files))
+              assert all(pathlib.Path(p).is_file() for p in files)
+              pathlib.Path('/tmp/waarwi-'+k+'.txt').write_text('\n'.join(files)+'\n')
+          PY
+          count=0
+          expected=$(wc -l </tmp/waarwi-candidate_files.txt)
+          while IFS= read -r file; do
+            echo "Candidat $((count+1))/$expected : $(basename "$file")"
+            if ! docker exec -i -e PGPASSWORD=postgres "$db" psql -X -q -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -v SHOW_CONTEXT=never --single-transaction -f - < "$file" >/tmp/waarwi-candidate-last.log 2>&1; then
+              grep -E 'ERROR: *[0-9A-Z]{5}' /tmp/waarwi-candidate-last.log | tail -5 || true
+              echo "Candidat en échec : $(basename "$file") ; $count précédents réussis." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            count=$((count+1))
+          done </tmp/waarwi-candidate_files.txt
+          echo "$count/$expected fichiers candidats appliqués." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Recettes SQL intégrées sans données réelles
+        id: recipes
+        run: |
+          set -euo pipefail
+          db=$(cat /tmp/waarwi-replay-container.txt)
+          test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 0
+          total=$(wc -l </tmp/waarwi-recipe_files.txt)
+          count=0
+          failed=0
+          while IFS= read -r file; do
+            echo "Recette : $(basename "$file")"
+            if docker exec -i -e PGPASSWORD=postgres "$db" psql -X -q -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -v SHOW_CONTEXT=never -f - < "$file" >/tmp/waarwi-recipe-last.log 2>&1; then
+              count=$((count+1))
+              echo "OK $(basename "$file")"
+            else
+              failed=$((failed+1))
+              grep -E 'ERROR: *[0-9A-Z]{5}' /tmp/waarwi-recipe-last.log | tail -5 || true
+              echo "ECHEC $(basename "$file")" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          done </tmp/waarwi-recipe_files.txt
+          echo "$count/$total recettes exécutées sans erreur SQL ; $failed échecs." | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$failed" -eq 0
       - name: Publier les statuts du commit (sans déploiement)
         if: ${{ always() }}
         env:
@@ -114,11 +165,13 @@ jobs:
           INVENTORY: ${{ steps.inventory.outcome }}
           INITIALIZE: ${{ steps.initialize.outcome }}
           REPLAY: ${{ steps.replay.outcome }}
+          CANDIDATE: ${{ steps.candidate.outcome }}
+          RECIPES: ${{ steps.recipes.outcome }}
         run: |
           node --input-type=module <<'JS'
           const url=process.env.GITHUB_API_URL+'/repos/'+process.env.GITHUB_REPOSITORY+'/statuses/'+process.env.GITHUB_SHA;
           const target=process.env.GITHUB_SERVER_URL+'/'+process.env.GITHUB_REPOSITORY+'/actions/runs/'+process.env.GITHUB_RUN_ID;
-          for(const name of ['inventory','initialize','replay']){
+          for(const name of ['inventory','initialize','replay','candidate','recipes']){
             const outcome=process.env[name.toUpperCase()];
             const state=outcome==='success'?'success':outcome==='failure'?'failure':'error';
             const res=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify({state,context:'waarwi-history/'+name,description:outcome||'not run',target_url:target})});
