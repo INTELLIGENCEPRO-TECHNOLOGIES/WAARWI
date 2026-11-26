@@ -5,6 +5,7 @@ import {BookOpen,LayoutGrid,Minus,Check,X} from './Icons';
 import {Accounting} from '../pages/Accounting';
 import {AccountingWindowId as WindowId,AccountingWorkContext,type AccountingPieceRequest} from '../context/AccountingWindowContext';
 import {AccountingPiece} from './AccountingPiece';
+import {AccountingPlanIO} from './AccountingPlanIO';
 import {AccountingAccountStatement} from './AccountingAccountStatement';
 import {useApp} from '../context/AppContext';
 import {usePermissions} from '../lib/permissions';
@@ -24,13 +25,13 @@ export function AccountingDesktop(props:Props){
  const getArea=useCallback(()=>({x:0,y:0,w:Math.max(1,area.current?.clientWidth??900),h:Math.max(1,area.current?.clientHeight??600)}),[]);
  return <WindowManagerProvider getArea={getArea}><Workspace {...props} area={area}/></WindowManagerProvider>;
 }
-type Work={id:string;title:string;kind:'section';route:WorkRoute}|{id:string;title:string;kind:'piece';request:AccountingPieceRequest}|{id:string;title:string;kind:'account';code:string};
+type Work={id:string;title:string;kind:'section';route:WorkRoute}|{id:string;title:string;kind:'piece';request:AccountingPieceRequest}|{id:string;title:string;kind:'account';code:string}|{id:string;title:string;kind:'import'};
 function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLDivElement>}){
  const wm=useWindowManager();const {tenant}=useApp();const {can}=usePermissions();
  const [open,setOpen]=useState<Work[]>([]);
  const [active,setActive]=useState<string|null>(null);
  const [revision,setRevision]=useState(0);
- const allowed=(w:Work)=>canAccess(w.kind==='section'?w.route:w.kind==='account'?'acc_statement':'acc_journals');
+ const allowed=(w:Work)=>(w.kind!=='import'||can('manage_accounting'))&&canAccess(w.kind==='section'?w.route:w.kind==='account'?'acc_statement':w.kind==='import'?'acc_plan':'acc_journals');
  const openRoute=useCallback((r:Route)=>{
   if(r==='acc_overview'){wm.minimizeAll();setActive(null);return;}
   if(!isWork(r)||!canAccess(r))return;
@@ -55,6 +56,7 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
   if(!canAccess('acc_statement')||!code)return;const id='account:'+code;
   setOpen(p=>p.some(w=>w.id===id)?p:[...p,{id,kind:'account',title:'Compte '+code,code}]);wm.restore(id);setActive(id);
  };
+ const openPlanImport=()=>{if(!canAccess('acc_plan')||!can('manage_accounting'))return;const id='plan:import';setOpen(p=>p.some(w=>w.id===id)?p:[...p,{id,kind:'import',title:'Import du plan comptable'}]);wm.restore(id);setActive(id);};
  const activate=(w:Work)=>{if(!allowed(w))return;setActive(w.id);wm.restore(w.id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);};
  const nextWindow=(id:string)=>{
   const next=wm.windows.filter(w=>w.id!==id&&!w.minimized).sort((a,b)=>b.zIndex-a.zIndex).map(w=>open.find(o=>o.id===w.id)).find((w):w is Work=>!!w&&allowed(w));
@@ -73,13 +75,13 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
  const cascade=()=>{const a=wm.getArea();visible.slice().sort((x,y)=>x.zIndex-y.zIndex).forEach((w,i)=>{const offset=16+(i%6)*22;wm.setMaximized(w.id,false);wm.updateRect(w.id,{x:Math.min(offset,Math.max(0,a.w-320)),y:Math.min(offset,Math.max(0,a.h-170)),w:Math.min(1100,Math.max(1,a.w-offset-18)),h:Math.min(730,Math.max(1,a.h-offset-18))});});};
  const closeAll=()=>{if(!window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{}})))return;setOpen([]);setActive(null);onNavigate('acc_overview');};
  useEffect(()=>{const h=(e:Event)=>{switch((e as CustomEvent<{action:string}>).detail?.action){case 'home':navigate('acc_overview');break;case 'tile':tile();break;case 'cascade':cascade();break;case 'closeAll':closeAll();break;}};window.addEventListener('waarwi:accounting-window-action',h);return()=>window.removeEventListener('waarwi:accounting-window-action',h);});
- return <AccountingWorkContext.Provider value={{openPiece,openAccount,revision}}><section className="acc-desktop" aria-label="Bureau comptable">
+ return <AccountingWorkContext.Provider value={{openPiece,openAccount,openPlanImport,revision}}><section className="acc-desktop" aria-label="Bureau comptable">
   <div className="acc-desktop-area" ref={area}>
    <div className="acc-desktop-home"><Accounting section="overview" onNavigate={navigate}/></div>
    {open.filter(allowed).map((w,index)=>{
     const a=wm.getArea();const offset=18+(index%5)*22;const id=w.id;
     return <DesktopWindow key={id} id={id} title={w.title} icon={<BookOpen size={16}/>} contained active={selected===id} onActivate={()=>{setActive(id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);}} minW={320} minH={170} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(w.kind==='piece'?850:1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(w)} onMinimize={()=>minimize(w)}>
-      <WindowId.Provider value={id}><div className="acc-window-content">{w.kind==='section'?<Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={()=>close(w)}/>:w.kind==='piece'?<AccountingPiece request={w.request} onPosted={()=>setRevision(v=>v+1)}/>:tenant&&<div className="accounting-workspace"><AccountingAccountStatement tenantId={tenant.id} initialAccount={w.code} canManage={can('manage_accounting')} refreshRevision={revision} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>}</div></WindowId.Provider>
+      <WindowId.Provider value={id}><div className="acc-window-content">{w.kind==='section'?<Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={()=>close(w)}/>:w.kind==='piece'?<AccountingPiece request={w.request} onPosted={()=>setRevision(v=>v+1)}/>:w.kind==='import'?<div className="accounting-workspace"><AccountingPlanIO accounts={[]} importOnly onClose={()=>close(w)} onImportDone={()=>setRevision(v=>v+1)}/></div>:tenant&&<div className="accounting-workspace"><AccountingAccountStatement tenantId={tenant.id} initialAccount={w.code} canManage={can('manage_accounting')} refreshRevision={revision} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>}</div></WindowId.Provider>
     </DesktopWindow>;
    })}
   </div>
