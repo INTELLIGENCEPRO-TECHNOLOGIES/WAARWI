@@ -45,7 +45,6 @@ export function useQuickAction() {
 }
 
 export function useQuickActionCurrentRoute(route: string) {
-  const ctx = useContext(Ctx);
   const ref = useRef('');
   ref.current = route;
   // Keep the ref in sync — provider reads it via closure

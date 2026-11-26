@@ -5,7 +5,6 @@ import { supabase } from '../../lib/supabase';
 import { useApp } from '../../context/AppContext';
 import { usePermissions } from '../../lib/permissions';
 import { useToast } from '../../context/ToastContext';
-import { formatFCFA } from '../../lib/format';
 import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../../lib/print';
 import { calculerIpm, parseConvention, type IpmArticleLine } from '../../lib/ipm';
 import { type SalesRepresentative, repDisplayName } from '../../lib/repCommission';

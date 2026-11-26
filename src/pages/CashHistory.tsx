@@ -4,7 +4,6 @@ import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA } from '../lib/format';
-import { Modal } from '../components/Modal';
 import { CashModal } from '../components/CashModal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';

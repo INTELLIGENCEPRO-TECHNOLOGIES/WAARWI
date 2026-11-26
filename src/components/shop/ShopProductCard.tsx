@@ -19,7 +19,6 @@ type Props = {
 
 export function ShopProductCard({
   article,
-  categories,
   cartQty,
   onDetail,
   onAddToCart,
@@ -28,7 +27,6 @@ export function ShopProductCard({
   lowStockThreshold,
 }: Props) {
   const badge = stockBadge(article.stock_qty, lowStockThreshold);
-  const cat = categories.find((c) => c.id === article.category_id);
   const outOfStock = article.stock_qty === 0;
   const maxReached = cartQty >= article.stock_qty;
 
@@ -98,7 +96,7 @@ export function ShopProductCard({
   );
 }
 
-export function ShopProductCardSkeleton({ theme }: { theme: ShopThemeConfig }) {
+export function ShopProductCardSkeleton(_props: { theme: ShopThemeConfig }) {
   return (
     <div className="flex flex-col bg-white">
       <div className="w-full aspect-square bg-neutral-50 animate-pulse" />

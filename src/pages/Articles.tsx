@@ -28,7 +28,6 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const dataTick = useRealtimeTick(['articles', 'part_categories', 'stock_levels', 'stock_lots', 'article_pricing_tiers', 'vehicle_brands', 'vehicle_models', 'article_compatibilities']);
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
-  const businessLabel = BUSINESS_TYPE_LABELS[tenant?.business_type || 'auto_parts'] || 'Catalogue';
   const { success, error } = useToast();
   const [articles, setArticles] = useState<Article[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -215,7 +214,6 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   }, []);
 
   // Articles are already filtered/sorted/paginated server-side
-  const filtered = articles;
   const paginated = articles;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -989,7 +987,6 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                     {paginated.map(a => {
                       const cat = categoryMap.get(a.category_id || '');
                       const qty = stockMap[a.id] || 0;
-                      const mStatus = stockStatus(qty, Number(a.stock_min || 0));
                       const mg = a.sale_price > 0 ? ((a.sale_price - a.purchase_price) / a.sale_price) * 100 : 0;
                       const mgTone = mg >= 30 ? 'text-emerald-600' : mg >= 15 ? 'text-amber-600' : 'text-red-600';
                       const isSel = selectedIds.has(a.id);

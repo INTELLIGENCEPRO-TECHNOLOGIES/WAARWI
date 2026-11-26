@@ -674,8 +674,6 @@ function SitesTab() {
   };
 
   const isPrimary = (s: any) => stores.indexOf(s) === 0;
-  const activeStores = stores.filter(s => s.is_active).length;
-  const activeDepots = depots.filter(d => d.is_active).length;
 
   const ActionMenu = ({ item, type }: { item: any; type: 'store' | 'depot' }) => {
     const isOpen = actionMenuId === item.id;

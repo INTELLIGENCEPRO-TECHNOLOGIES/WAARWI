@@ -17,7 +17,6 @@ import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { useTopLayer } from '../components/modalStack';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
-import { SearchableSelect } from '../components/SearchableSelect';
 import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
@@ -204,8 +203,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [quoteWindows, setQuoteWindows] = useState<Map<string, QuoteWindowDescriptor>>(new Map());
   const quoteWindowCounter = useRef(0);
   // Callback ref for vehicle picker / tier picker targeting in quote windows
-  const activeQuoteVehicleCb = useRef<((art: any) => void) | null>(null);
-  const activeQuoteTierCb = useRef<((tierName: string, tierPrice: number, idx: number) => void) | null>(null);
   const activeQuoteItemsSetter = useRef<((fn: any) => void) | null>(null);
 
   // IPM for quotes (pharmacy only) — mobile path only
@@ -1066,7 +1063,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   };
   
   const invoiceEditorSubtotal = invoicePricing.price?.ttc ?? invoiceEditorSubtotalRaw;
-  const invoiceEditorPaid = invoicePayList.reduce((s, p) => s + p.amount, 0);
 
   const openInvoiceEditor = () => {
     if (isDesktop) {

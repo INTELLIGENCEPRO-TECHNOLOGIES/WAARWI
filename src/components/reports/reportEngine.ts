@@ -1,6 +1,5 @@
 import { supabase } from '../../lib/supabase';
 import { formatDate } from '../../lib/format';
-import { BUSINESS_TYPE_LABELS } from '../../lib/types';
 import { renderA4Header, a4HeaderCss, buildPrintTenant } from '../../lib/print';
 import { UNASSIGNED_REGISTER_LABEL } from '../../lib/cashSession';
 
@@ -101,7 +100,6 @@ export function a4Style(): string {
   `;
 }
 
-const AMOUNT_NOTE = `<div class="amount-note">Montants en FCFA</div>`;
 
 export function docHeader(
   tenant: TenantMeta, title: string, subtitle: string, period: string, siteName?: string

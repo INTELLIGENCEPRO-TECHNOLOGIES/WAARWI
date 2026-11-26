@@ -88,7 +88,6 @@ export function Representatives() {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id]);
   useRealtimeRefresh(['sales_representatives', 'rep_commission_settings', 'sales', 'sale_payments', 'sale_returns', 'sites'], () => load(true));
 
-  const activeSales = useMemo(() => repSales.filter(s => s.status !== 'cancelled'), [repSales]);
 
   const aggByRep = useMemo(() => {
     const map = new Map<string, { count: number; ca: number; commission: number; cancelled: number }>();

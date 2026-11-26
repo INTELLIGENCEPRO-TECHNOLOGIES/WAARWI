@@ -234,7 +234,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     items, setItems, subtotal, saving, onSave, onClose,
     editingId, documentNumber, documentStatus,
     docSettings, autoMode, onVehiclePicker,
-    onCreateArticle, onCreateCustomer, reps,
+    onCreateCustomer, reps,
     paymentMethods, payments, setPayments, totalPaid = 0,
     isCredit, setIsCredit,
     isPharmacy, ipmLoading, ipmBeneficiaire, ipmTaux, ipmConvention,

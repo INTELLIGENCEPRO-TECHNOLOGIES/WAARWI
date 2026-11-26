@@ -1544,7 +1544,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const ipmPartIpm = ipmResult?.part_ipm || 0;
   const ipmPartClient = ipmBeneficiaire ? total - ipmPartIpm : total;
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
-  const remaining = ipmPartClient - totalPaid;
 
   // ─── Hold cart ────────────────────────────────────────────────────────────
 

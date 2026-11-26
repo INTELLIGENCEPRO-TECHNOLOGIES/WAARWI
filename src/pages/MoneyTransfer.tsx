@@ -1577,7 +1577,6 @@ function MTOperations() {
     const sp = selectedPoint;
     const svc = opModal.service?.id || '';
     const svcName = opModal.service?.name || '';
-    const svcFamily = opModal.service?.family || 'transfert';
     const opType = opModal.type;
     const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const operatorName = profile?.full_name || 'Opérateur';
@@ -3149,7 +3148,6 @@ function MTClosures() {
     const uvActualTotal = theoretical.uvByService.reduce((s, uv) => s + Number(actualInputs[`uv_${uv.serviceId}`] || 0), 0);
 
     const creditTheoreticalTotal = theoretical.creditByService.reduce((s, cr) => s + cr.amount, 0);
-    const creditActualTotal = theoretical.creditByService.reduce((s, cr) => s + Number(actualInputs[`credit_${cr.serviceId}`] || 0), 0);
 
     const totalVentesCredit = (todayOps || []).filter(o => o.type === 'vente_credit').reduce((s, o) => s + Number(o.amount), 0);
 

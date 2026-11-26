@@ -733,7 +733,6 @@ export function Stock() {
   };
 
   // Rows are already filtered/sorted/paginated server-side
-  const filtered = rows;
 
   const PAGE_SIZE = 50;
   // Sync listSourceSite when currentSite changes (e.g. user switches via header)
@@ -2136,7 +2135,6 @@ function LotsView({ lots, stockMethod }: { lots: LotRow[]; stockMethod: StockMet
 
   const expired = filtered.filter(l => l.expiry_date && l.expiry_date <= today);
   const expiringSoon = filtered.filter(l => l.expiry_date && l.expiry_date > today && l.expiry_date <= soon);
-  const ok = filtered.filter(l => !l.expiry_date || l.expiry_date > soon);
 
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 

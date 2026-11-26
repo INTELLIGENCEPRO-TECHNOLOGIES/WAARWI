@@ -69,11 +69,9 @@ export function usePaginatedList<T>(opts: {
   const cursorStackRef = useRef<{ val: string | null; id: string | null }[]>([]);
   const currentPageRef = useRef(0);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prefetchAbortedRef = useRef(false);
 
   // Determine if pageKey contains a search value that needs debouncing
   const searchValue = (pageKey as any).search ?? '';
-  const nonSearchKey = { ...pageKey, search: undefined };
   const cacheKey = buildKey(pageKey);
 
   const fetchPage = useCallback(async (page: number, cursor: { val: string | null; id: string | null }, isRefresh: boolean) => {

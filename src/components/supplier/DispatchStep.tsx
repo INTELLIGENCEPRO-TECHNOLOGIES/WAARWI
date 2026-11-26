@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Loader2, Truck, CheckCircle, AlertTriangle, Split, ChevronDown, Check } from 'lucide-react';
-import { formatNum } from '../../lib/format';
 import {
   computeAutoDistribution,
   type DistributeMode,
