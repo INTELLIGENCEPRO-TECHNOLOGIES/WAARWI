@@ -13,6 +13,7 @@ const groups:Group[]=[
   {label:'Consultation',children:[{route:'acc_search',label:'Recherche des écritures',icon:Search},{route:'acc_statement',label:'Interrogation et lettrage',icon:Search}]},
   {route:'acc_bank',label:'Rapprochement bancaire',icon:ArrowRightLeft},
   {route:'acc_revision',label:'Révision comptable',icon:FileText},
+  {route:'acc_assets',label:'Immobilisations et amortissements',icon:BookOpen},
   {label:'Clôtures',children:[{route:'acc_cloture',label:'Clôtures mensuelles',icon:Lock},{route:'acc_fiscal',label:'Exercices et reports à nouveau',icon:Lock}]}
  ]},
  {label:'État',items:[
