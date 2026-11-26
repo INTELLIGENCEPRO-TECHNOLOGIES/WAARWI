@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Save, Pencil as Edit2, Search, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
 import {useAccountingJournals} from '../lib/accountingJournals';
 import {AccountingEntryTemplates,type EntryTemplate} from '../components/AccountingEntryTemplates';
+import {AccountingAnalytics} from '../components/AccountingAnalytics';
 import {AccountingFixedAssets} from '../components/AccountingFixedAssets';
 import {AccountingRevision} from '../components/AccountingRevision';
 import {AccountingAging} from '../components/AccountingAging';
@@ -31,12 +32,13 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'assets' | 'revision' | 'aging' | 'journal_settings' | 'overview' | 'entry' | 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
+type TabKey = 'analytics' | 'assets' | 'revision' | 'aging' | 'journal_settings' | 'overview' | 'entry' | 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
 
 
 export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }: { section?: TabKey;onNavigate?:(route:string)=>void;inWindow?:boolean;onExit?:()=>void }) {
   const {tenant}=useApp();const {can}=usePermissions();
   const titles: Record<TabKey, { t: string; s: string }> = {
+    analytics:{t:'Analytique et budgets',s:'Ventilation des charges et produits, budgets et réalisations.'},
     assets:{t:'Immobilisations et amortissements',s:'Registre des biens, plans et dotations comptables.'},
     revision:{t:'Révision comptable',s:'Dossiers mensuels, contrôles et justificatifs.'},
     aging:{t:'Balance âgée et échéances',s:'Postes ouverts et échéances comptables.'},
@@ -72,6 +74,7 @@ export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }
       {section === 'aging' && <AccountingAging/>}
       {section === 'revision' && <AccountingRevision/>}
       {section === 'assets' && <AccountingFixedAssets/>}
+      {section === 'analytics' && <AccountingAnalytics/>}
       {section === 'search' && <SearchTab />}
       {section === 'cloture' && <ClotureTab />}
       {section === 'vat' && <VatTab />}
