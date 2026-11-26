@@ -131,3 +131,146 @@ REVOKE ALL ON FUNCTION public.post_accounting_asset_depreciation(uuid,uuid,date,
 GRANT EXECUTE ON FUNCTION public.register_accounting_asset(uuid,text,text,text,uuid,date,int,numeric,text,text,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.accounting_asset_detail(uuid,uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.post_accounting_asset_depreciation(uuid,uuid,date,numeric) TO authenticated;
+
+-- Search only actual posted acquisition or proceeds lines; unique IDs are retained.
+CREATE OR REPLACE FUNCTION public.accounting_asset_source_lines(p_tenant_id uuid,p_kind text,p_search text DEFAULT '',p_offset int DEFAULT 0,p_size int DEFAULT 20)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE result jsonb; term text:=lower(btrim(coalesce(p_search,'')));lim int:=least(100,greatest(1,coalesce(p_size,20)));offst int:=greatest(0,coalesce(p_offset,0));
+BEGIN
+ PERFORM public._bank_reconciliation_access(p_tenant_id,false);
+ IF p_kind IS NULL OR p_kind NOT IN ('acquisition','sale') THEN RAISE EXCEPTION 'Type de pièce invalide.';END IF;
+ WITH candidates AS MATERIALIZED (
+ SELECT l.id line_id,e.id entry_id,e.entry_number,e.entry_date,l.account_code,l.account_name,l.label,e.reference,CASE WHEN p_kind='acquisition' THEN l.debit ELSE l.credit END amount
+ FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id
+ WHERE l.tenant_id=p_tenant_id AND e.status='posted' AND e.source_type IS DISTINCT FROM 'reversal'
+ AND NOT EXISTS(SELECT 1 FROM public.journal_entries z WHERE z.tenant_id=e.tenant_id AND z.source_type='reversal' AND z.source_id=e.id)
+ AND ((p_kind='acquisition' AND l.account_code ~ '^2[1234]' AND l.debit>0 AND l.credit=0 AND NOT EXISTS(SELECT 1 FROM public.accounting_fixed_assets a WHERE a.tenant_id=p_tenant_id AND a.acquisition_line_id=l.id))
+ OR (p_kind='sale' AND l.account_code ~ '^(82|754)' AND l.credit>0 AND l.debit=0 AND NOT EXISTS(SELECT 1 FROM public.accounting_fixed_assets a WHERE a.tenant_id=p_tenant_id AND a.sale_line_id=l.id)))
+ AND (term='' OR strpos(lower(concat_ws(' ',e.entry_number,e.reference,l.account_code,l.label)),term)>0)
+ )
+ SELECT jsonb_build_object('count',(SELECT count(*) FROM candidates),'rows',(SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.entry_date DESC,x.entry_number,x.line_id),'[]'::jsonb) FROM (SELECT * FROM candidates ORDER BY entry_date DESC,entry_number,line_id LIMIT lim OFFSET offst)x)) INTO result;
+ RETURN result;
+END;$$;
+CREATE OR REPLACE FUNCTION public.accounting_asset_register(p_tenant_id uuid,p_search text DEFAULT '',p_status text DEFAULT 'all',p_offset int DEFAULT 0,p_size int DEFAULT 20)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE result jsonb; term text:=lower(btrim(coalesce(p_search,'')));lim int:=least(100,greatest(1,coalesce(p_size,20)));offst int:=greatest(0,coalesce(p_offset,0));
+BEGIN
+ PERFORM public._bank_reconciliation_access(p_tenant_id,false);
+ IF p_status IS NULL OR p_status NOT IN ('all','active','disposed') THEN RAISE EXCEPTION 'État invalide.';END IF;
+ WITH amounts AS (
+ SELECT asset_id,sum(amount) posted FROM public.accounting_asset_depreciations WHERE tenant_id=p_tenant_id GROUP BY asset_id
+ ), rows AS MATERIALIZED (
+ SELECT a.*,coalesce(d.posted,0) posted,a.cost-coalesce(d.posted,0) net,
+ greatest(0,public._asset_linear_cumulative(a.cost,a.residual,a.service_date,a.life_months,least(coalesce(a.disposed_on,'infinity'::date),(now() AT TIME ZONE 'Africa/Dakar')::date))-coalesce(d.posted,0)) accrued_not_posted
+ FROM public.accounting_fixed_assets a LEFT JOIN amounts d ON d.asset_id=a.id
+ WHERE a.tenant_id=p_tenant_id AND (p_status='all' OR (p_status='active' AND a.disposed_on IS NULL) OR (p_status='disposed' AND a.disposed_on IS NOT NULL))
+ AND (term='' OR strpos(lower(concat_ws(' ',a.code,a.name,a.location,a.asset_account)),term)>0)
+ ), totals AS (SELECT count(*) assets,coalesce(sum(cost) FILTER(WHERE disposed_on IS NULL),0) gross,coalesce(sum(posted) FILTER(WHERE disposed_on IS NULL),0) depreciation,coalesce(sum(net) FILTER(WHERE disposed_on IS NULL),0) net,coalesce(sum(accrued_not_posted) FILTER(WHERE disposed_on IS NULL),0) accrued FROM rows)
+ SELECT jsonb_build_object('count',(SELECT count(*) FROM rows),'totals',(SELECT to_jsonb(t) FROM totals t),'rows',(SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.code,x.id),'[]'::jsonb) FROM (SELECT * FROM rows ORDER BY code,id LIMIT lim OFFSET offst)x)) INTO result;
+ RETURN result;
+END;$$;
+
+-- Disposal: complementary depreciation + derecognition, in one transaction.
+-- Sale proceeds (and taxes, if applicable) are posted separately before selection.
+-- No automatic impairment reversal, component splitting, exchange or lease treatment.
+CREATE OR REPLACE FUNCTION public.dispose_accounting_asset(p_tenant_id uuid,p_asset_id uuid,p_date date,p_kind text,p_value_account text,p_sale_line uuid,p_reason text,p_expected_net numeric)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE a public.accounting_fixed_assets%ROWTYPE; p record; prior numeric; target numeric; delta numeric; net numeric; dep jsonb; outp jsonb; rows jsonb; sale record; sale_entry uuid;
+BEGIN
+ PERFORM public._bank_reconciliation_access(p_tenant_id,true);
+ IF p_date IS NULL OR NOT isfinite(p_date) OR p_date>(now() AT TIME ZONE 'Africa/Dakar')::date OR extract(year FROM p_date)<>extract(year FROM CURRENT_DATE) OR p_kind IS NULL OR p_kind NOT IN ('sale','scrap') OR p_reason IS NULL OR length(btrim(p_reason)) NOT BETWEEN 1 AND 500 THEN RAISE EXCEPTION 'Date, type et justification obligatoires.';END IF;
+ IF (p_kind='sale') IS DISTINCT FROM (p_sale_line IS NOT NULL) THEN RAISE EXCEPTION 'La cession nécessite la ligne de produit déjà comptabilisée.';END IF;
+ IF p_value_account IS NULL OR p_value_account !~ '^(81|654)' THEN RAISE EXCEPTION 'Compte de valeur comptable 81 ou 654 requis.';END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant_id::text||':journal:OD',0));
+ SELECT * INTO a FROM public.accounting_fixed_assets WHERE tenant_id=p_tenant_id AND id=p_asset_id FOR UPDATE;
+ IF NOT FOUND OR a.disposed_on IS NOT NULL OR p_date<a.service_date THEN RAISE EXCEPTION 'Bien actif et date postérieure à la mise en service requis.';END IF;
+ IF p_kind='sale' THEN
+  SELECT l.entry_id INTO sale_entry FROM public.journal_lines l WHERE l.tenant_id=p_tenant_id AND l.id=p_sale_line;
+  PERFORM 1 FROM public.journal_entries WHERE tenant_id=p_tenant_id AND id=sale_entry FOR UPDATE;
+  SELECT l.account_code,l.credit,l.debit,e.entry_date,e.status,e.source_type INTO sale FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id WHERE l.tenant_id=p_tenant_id AND l.id=p_sale_line FOR UPDATE OF l;
+  IF NOT FOUND OR sale.status<>'posted' OR sale.source_type='reversal' OR sale.entry_date<>p_date OR sale.credit<=0 OR sale.debit<>0 OR (p_value_account LIKE '81%' AND sale.account_code NOT LIKE '82%') OR (p_value_account LIKE '654%' AND sale.account_code NOT LIKE '754%') OR EXISTS(SELECT 1 FROM public.journal_entries WHERE tenant_id=p_tenant_id AND source_type='reversal' AND source_id=sale_entry) OR EXISTS(SELECT 1 FROM public.accounting_fixed_assets WHERE tenant_id=p_tenant_id AND sale_line_id=p_sale_line) THEN RAISE EXCEPTION 'Produit de cession incompatible, déjà lié ou extourné.';END IF;
+ END IF;
+ IF EXISTS(SELECT 1 FROM public.accounting_asset_depreciations WHERE tenant_id=p_tenant_id AND asset_id=a.id AND through_date>p_date) THEN RAISE EXCEPTION 'Des dotations sont postérieures à la sortie.';END IF;
+ IF EXISTS(SELECT 1 FROM public._asset_plan(p_tenant_id,a.id,p_date) x WHERE x.period_start<date_trunc('month',p_date)::date AND x.amount>0 AND x.entry_id IS NULL) THEN RAISE EXCEPTION 'Comptabilisez les échéances antérieures avant la sortie.';END IF;
+ SELECT coalesce(sum(amount),0) INTO prior FROM public.accounting_asset_depreciations WHERE tenant_id=p_tenant_id AND asset_id=a.id;
+ target:=public._asset_linear_cumulative(a.cost,a.residual,a.service_date,a.life_months,p_date);delta:=target-prior;net:=a.cost-target;
+ IF delta<0 OR net IS DISTINCT FROM p_expected_net THEN RAISE EXCEPTION 'Valeur nette modifiée. Actualisez.' USING ERRCODE='40001';END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.accounts WHERE tenant_id=p_tenant_id AND code=p_value_account AND is_active AND account_type='general' AND class=CASE WHEN p_value_account LIKE '81%' THEN 8 ELSE 6 END) THEN RAISE EXCEPTION 'Compte de sortie actif requis.';END IF;
+ IF delta>0 THEN
+  SELECT * INTO p FROM public._asset_plan(p_tenant_id,a.id,p_date) x WHERE x.period_start=date_trunc('month',p_date)::date;
+  IF NOT FOUND OR p.entry_id IS NOT NULL OR p.amount IS DISTINCT FROM delta THEN RAISE EXCEPTION 'Plan de sortie incohérent.';END IF;
+  dep:=public.create_manual_journal_entry(p_tenant_id,'OD',p_date,'Dotation complémentaire '+a.code,a.code,jsonb_build_array(jsonb_build_object('account_code',a.expense_account,'debit',delta,'credit',0,'label',a.name),jsonb_build_object('account_code',a.depreciation_account,'debit',0,'credit',delta,'label',a.name)));
+  IF NOT coalesce((dep->>'success')::boolean,false) THEN RAISE EXCEPTION 'Dotation complémentaire non validée.';END IF;
+  INSERT INTO public.accounting_asset_depreciations(tenant_id,asset_id,period_start,through_date,amount,entry_id,created_by) VALUES(p_tenant_id,a.id,p.period_start,p_date,delta,(dep->>'entry_id')::uuid,auth.uid());
+ END IF;
+ rows:=jsonb_build_array(jsonb_build_object('account_code',a.asset_account,'debit',0,'credit',a.cost,'label',a.name));
+ IF target>0 THEN rows:=rows||jsonb_build_array(jsonb_build_object('account_code',a.depreciation_account,'debit',target,'credit',0,'label',a.name));END IF;
+ IF net>0 THEN rows:=rows||jsonb_build_array(jsonb_build_object('account_code',p_value_account,'debit',net,'credit',0,'label',a.name));END IF;
+ outp:=public.create_manual_journal_entry(p_tenant_id,'OD',p_date,'Sortie immobilisation '+a.code,a.code,rows);
+ IF NOT coalesce((outp->>'success')::boolean,false) THEN RAISE EXCEPTION 'Sortie non validée.';END IF;
+ UPDATE public.accounting_fixed_assets SET disposed_on=p_date,disposal_kind=p_kind,disposal_entry_id=(outp->>'entry_id')::uuid,sale_line_id=p_sale_line,disposal_reason=btrim(p_reason) WHERE tenant_id=p_tenant_id AND id=a.id;
+ RETURN outp||jsonb_build_object('net',net,'complementary_depreciation',delta,'depreciation_entry_id',dep->>'entry_id');
+END;$$;
+REVOKE ALL ON FUNCTION public.accounting_asset_source_lines(uuid,text,text,int,int) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.accounting_asset_register(uuid,text,text,int,int) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.dispose_accounting_asset(uuid,uuid,date,text,text,uuid,text,numeric) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.accounting_asset_source_lines(uuid,text,text,int,int) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.accounting_asset_register(uuid,text,text,int,int) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.dispose_accounting_asset(uuid,uuid,date,text,text,uuid,text,numeric) TO authenticated;
+
+-- Generic extourne must not break the asset register. Dedicated corrections are a separate scope.
+CREATE OR REPLACE FUNCTION public.reverse_manual_accounting_entry(p_tenant_id uuid, p_entry_id uuid, p_date date, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+ o public.journal_entries%ROWTYPE;
+ prev public.journal_entries%ROWTYPE;
+ v_id uuid; v_piece text; v_d numeric; v_c numeric; v_count int;
+ v_reason text:=nullif(btrim(p_reason),'');
+BEGIN
+ IF auth.uid() IS NULL OR p_tenant_id IS NULL OR p_tenant_id IS DISTINCT FROM public.current_tenant_id() OR NOT public.current_user_can_manage_accounting() THEN
+  RAISE EXCEPTION 'Accès refusé à la comptabilité.' USING ERRCODE='42501';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.tenants t WHERE t.id=p_tenant_id AND t.enabled_modules ? 'accounting') THEN RAISE EXCEPTION 'Module comptable non activé.' USING ERRCODE='42501'; END IF;
+ IF v_reason IS NULL OR length(v_reason)>500 THEN RAISE EXCEPTION 'Motif d’extourne obligatoire (500 caractères maximum).'; END IF;
+ SELECT * INTO o FROM public.journal_entries e WHERE e.tenant_id=p_tenant_id AND e.id=p_entry_id FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Écriture introuvable.'; END IF;
+ IF EXISTS(SELECT 1 FROM public.accounting_fixed_assets a LEFT JOIN public.journal_lines l ON l.tenant_id=a.tenant_id AND l.id IN(a.acquisition_line_id,a.sale_line_id) WHERE a.tenant_id=p_tenant_id AND (l.entry_id=o.id OR a.disposal_entry_id=o.id))
+ OR EXISTS(SELECT 1 FROM public.accounting_asset_depreciations d WHERE d.tenant_id=p_tenant_id AND d.entry_id=o.id) THEN RAISE EXCEPTION 'Cette pièce est liée au registre des immobilisations. Correction spécialisée requise.';END IF;
+ IF o.source_type IS DISTINCT FROM 'manual' OR o.status IS DISTINCT FROM 'posted' THEN
+  RAISE EXCEPTION 'Extourne réservée aux écritures manuelles validées. Corrigez les pièces commerciales depuis leur module d’origine.';
+ END IF;
+ IF p_date IS NULL OR NOT isfinite(p_date) OR p_date<o.entry_date OR p_date>(now() AT TIME ZONE 'Africa/Dakar')::date THEN RAISE EXCEPTION 'Date d’extourne invalide : elle doit être comprise entre la date d’origine et aujourd’hui.'; END IF;
+ IF extract(year FROM p_date)<>extract(year FROM CURRENT_DATE) THEN RAISE EXCEPTION 'Choisissez une date dans l’exercice courant : numérotation des exercices antérieurs non disponible.'; END IF;
+ SELECT * INTO prev FROM public.journal_entries WHERE tenant_id=p_tenant_id AND source_type='reversal' AND source_id=o.id;
+ IF FOUND THEN
+  IF prev.status='posted' AND prev.entry_date=p_date AND prev.reversal_reason=v_reason THEN
+   RETURN jsonb_build_object('success',true,'entry_id',prev.id,'piece_number',prev.entry_number,'already_reversed',true);
+  END IF;
+  RAISE EXCEPTION 'Cette écriture possède déjà une extourne : %.',prev.entry_number;
+ END IF;
+ -- Les opérations de lettrage verrouillent également l'écriture parente avant ses lignes.
+ PERFORM 1 FROM public.journal_lines l WHERE l.tenant_id=p_tenant_id AND l.entry_id=o.id ORDER BY l.id FOR UPDATE;
+ IF EXISTS(SELECT 1 FROM public.journal_lines l JOIN public.accounting_match_lines m ON m.tenant_id=l.tenant_id AND m.line_id=l.id AND m.released_at IS NULL WHERE l.tenant_id=p_tenant_id AND l.entry_id=o.id) THEN
+  RAISE EXCEPTION 'Délettrez les lignes de cette écriture avant de l’extourner.';
+ END IF;
+ SELECT count(*),coalesce(sum(debit),0),coalesce(sum(credit),0) INTO v_count,v_d,v_c FROM public.journal_lines WHERE tenant_id=p_tenant_id AND entry_id=o.id;
+ IF v_count<2 OR v_d<=0 OR v_d IS DISTINCT FROM v_c OR v_d IS DISTINCT FROM o.total_debit OR v_c IS DISTINCT FROM o.total_credit OR v_d IN ('NaN'::numeric,'Infinity'::numeric) THEN
+  RAISE EXCEPTION 'L’écriture d’origine doit être équilibrée et ses totaux cohérents.';
+ END IF;
+ PERFORM public._assert_accounting_month_open(p_tenant_id,date_trunc('month',p_date)::date);
+ v_piece:=public.next_accounting_piece_number(p_tenant_id,o.journal_type);
+ INSERT INTO public.journal_entries(tenant_id,entry_number,journal_type,entry_date,reference,description,total_debit,total_credit,is_balanced,source_type,source_id,status,posted_at,posted_by,reversal_reason)
+ VALUES(p_tenant_id,v_piece,o.journal_type,p_date,o.entry_number,'Extourne de '||o.entry_number||' : '||v_reason,v_c,v_d,true,'reversal',o.id,'posted',now(),auth.uid(),v_reason)
+ RETURNING id INTO v_id;
+ INSERT INTO public.journal_lines(tenant_id,entry_id,account_code,account_name,debit,credit,label,third_party_id)
+ SELECT p_tenant_id,v_id,l.account_code,l.account_name,l.credit,l.debit,'Extourne : '||coalesce(nullif(l.label,''),o.entry_number),l.third_party_id
+ FROM public.journal_lines l WHERE l.tenant_id=p_tenant_id AND l.entry_id=o.id ORDER BY l.id;
+ RETURN jsonb_build_object('success',true,'entry_id',v_id,'piece_number',v_piece,'original_piece',o.entry_number,'total',v_d);
+END;
+$function$
+
+;
