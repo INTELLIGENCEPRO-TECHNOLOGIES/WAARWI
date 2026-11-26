@@ -211,7 +211,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
   coffre: 'vault',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_overview: 'accounting', acc_entry: 'accounting', acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting', acc_financial: 'accounting',
+  acc_journal_settings: 'accounting', acc_overview: 'accounting', acc_entry: 'accounting', acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting', acc_financial: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer', settings: 'settings', reports: 'reports',
   representatives: 'billing',
 };
@@ -230,6 +230,7 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
   stock: 'view_stock_levels',
   supplier_orders: 'manage_supplier_orders',
   online_orders: 'manage_online_orders',
+  acc_journal_settings: 'view_accounting',
   acc_overview: 'view_accounting',
   acc_entry: 'manage_accounting',
   acc_plan: 'view_accounting',
