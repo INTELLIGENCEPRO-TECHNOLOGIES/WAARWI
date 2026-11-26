@@ -293,3 +293,25 @@ BEGIN
 END;$$;
 REVOKE ALL ON FUNCTION public.preview_accounting_asset_disposal(uuid,uuid,date) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.preview_accounting_asset_disposal(uuid,uuid,date) TO authenticated;
+
+-- Comparison with ledger balances: unmatched amounts require review, not auto-adjustment.
+-- Non-depreciable assets and legacy/unregistered assets may legitimately explain differences.
+CREATE OR REPLACE FUNCTION public.accounting_asset_reconciliation(p_tenant_id uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE dt date:=(now() AT TIME ZONE 'Africa/Dakar')::date; result jsonb;
+BEGIN
+ PERFORM public._bank_reconciliation_access(p_tenant_id,false);
+ WITH dep AS (SELECT d.asset_id,sum(d.amount) amount FROM public.accounting_asset_depreciations d WHERE d.tenant_id=p_tenant_id GROUP BY d.asset_id),
+ reg AS (
+ SELECT a.asset_account code,a.cost amount FROM public.accounting_fixed_assets a WHERE a.tenant_id=p_tenant_id AND a.disposed_on IS NULL
+ UNION ALL
+ SELECT a.depreciation_account,-coalesce(d.amount,0) FROM public.accounting_fixed_assets a LEFT JOIN dep d ON d.asset_id=a.id WHERE a.tenant_id=p_tenant_id AND a.disposed_on IS NULL
+ ), grouped AS (SELECT code,sum(amount) amount FROM reg GROUP BY code),
+ books AS (SELECT b.account_code,b.account_name,b.closing FROM public._accounting_period_balances(p_tenant_id,date_trunc('year',dt)::date,dt) b WHERE b.account_code ~ '^(2[1234]|28[1234])'),
+ combined AS (SELECT coalesce(b.account_code,g.code) code,coalesce(b.account_name,a.name,'Compte absent') name,coalesce(g.amount,0) registered,coalesce(b.closing,0) ledger,coalesce(b.closing,0)-coalesce(g.amount,0) difference
+ FROM books b FULL JOIN grouped g ON g.code=b.account_code LEFT JOIN public.accounts a ON a.tenant_id=p_tenant_id AND a.code=coalesce(b.account_code,g.code))
+ SELECT jsonb_build_object('as_of',dt,'rows',coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.code),'[]'::jsonb),'difference_count',count(*) FILTER(WHERE c.difference<>0)) INTO result FROM combined c;
+ RETURN result;
+END;$$;
+REVOKE ALL ON FUNCTION public.accounting_asset_reconciliation(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.accounting_asset_reconciliation(uuid) TO authenticated;
