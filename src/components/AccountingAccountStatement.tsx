@@ -9,7 +9,7 @@ type Account={code:string;name:string;account_type:string;is_active:boolean};
 type Line={line_id:string;entry_id:string;entry_date:string;entry_number:string;journal_type:string;reference:string|null;description:string;source_type:string|null;source_id:string|null;status:string;label:string|null;debit:number;credit:number;running_balance:number;match_group_id:string|null;match_code:string|null};
 type Suggestion={root:string;root_piece:string;first_date:string;last_date:string;amount:number;line_ids:string[];entries:string[]};
 type Suggestions={total:number;rows:Suggestion[]};
-type Statement={opening_mode?:'fiscal'|'continuous';account:Account;opening_balance:number;total_debit:number;total_credit:number;closing_balance:number;row_count:number;rows:Line[]};
+type Statement={opening_mode?:'fiscal'|'continuous'|'provisional';account:Account;opening_balance:number;total_debit:number;total_credit:number;closing_balance:number;row_count:number;rows:Line[]};
 const money=(n:number)=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(Number(n))+' FCFA';
 const balance=(n:number)=>Number(n)===0?'0 FCFA':money(Math.abs(Number(n)))+(Number(n)>0?' D':' C');
 const today=()=>new Date().toISOString().slice(0,10);
@@ -156,7 +156,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   {result&&request&&<div className="space-y-4">
    <div className="flex flex-wrap justify-between gap-2 items-center"><div><h2 className="text-sm font-semibold break-words">{result.account.code} · {result.account.name}</h2><p className="text-xs text-neutral-500">{formatDate(request.from)} au {formatDate(request.to)} · Écritures validées</p></div><button className="btn btn-secondary" onClick={download}>Exporter cette page (CSV)</button></div>
    <div className="acc-summary">{[['Solde initial',balance(result.opening_balance)],['Débit période',money(result.total_debit)],['Crédit période',money(result.total_credit)],['Solde final',balance(result.closing_balance)]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
-   <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. {result.opening_mode==='fiscal'?'Solde d’ouverture arrêté de l’exercice, puis mouvements validés.':'Historique continu des écritures validées, sans arrêté précédent.'}</p>
+   <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. {result.opening_mode==='fiscal'?'Solde d’ouverture arrêté de l’exercice, puis mouvements validés.':result.opening_mode==='provisional'?'Ouverture provisoire depuis le dernier arrêté disponible, exercice précédent non clôturé.':'Historique continu des écritures validées, sans arrêté précédent.'}</p>
    {canMatch&&<div className="acc-toolbar"><button type="button" className="btn-secondary" aria-expanded={matchingOpen} onClick={()=>setMatchingOpen(v=>!v)}><MoreHorizontal size={16}/>Lettrage et propositions</button><span className="text-xs">{selected.length} ligne(s) · Écart : {money((sumDebit-sumCredit)/100)}</span><span className="acc-spacer"/><button type="button" className="btn-primary" disabled={!equal||saving||suggestionBusy||changed||!!release||!!gap} onClick={()=>void apply()}>Lettrer</button></div>}
    {canMatch&&(matchingOpen||!!release)&&<div className="space-y-3 border-b border-neutral-200 pb-3">
     <h3 className="text-sm font-semibold">Lettrage manuel</h3>
