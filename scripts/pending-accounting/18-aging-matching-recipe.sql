@@ -17,8 +17,8 @@ BEGIN
   report:=public.accounting_open_items(t,'client',dt,'summary',aux);
   before_net:=(report->'totals'->>'net')::numeric;
   BEGIN PERFORM public.accounting_open_items(other,'client',dt);RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Fuite tenant';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
-  r:=public.create_manual_journal_entry(t,'OD',dt,tag,'',jsonb_build_array(jsonb_build_object('account_code',aux,'debit',12345,'credit',0,'label',tag),jsonb_build_object('account_code',bank,'debit',0,'credit',12345,'label',tag)));
-  r2:=public.create_manual_journal_entry(t,'OD',dt,tag,'',jsonb_build_array(jsonb_build_object('account_code',aux,'debit',0,'credit',12245,'label',tag),jsonb_build_object('account_code',bank,'debit',12245,'credit',0,'label',tag)));
+  r:=public.create_manual_journal_entry_idempotent(t,'OD',dt,tag,'',jsonb_build_array(jsonb_build_object('account_code',aux,'debit',12345,'credit',0,'label',tag),jsonb_build_object('account_code',bank,'debit',0,'credit',12345,'label',tag)),gen_random_uuid());
+  r2:=public.create_manual_journal_entry_idempotent(t,'OD',dt,tag,'',jsonb_build_array(jsonb_build_object('account_code',aux,'debit',0,'credit',12245,'label',tag),jsonb_build_object('account_code',bank,'debit',12245,'credit',0,'label',tag)),gen_random_uuid());
   SELECT id INTO STRICT line1 FROM public.journal_lines WHERE tenant_id=t AND entry_id=(r->>'entry_id')::uuid AND account_code=aux;
   SELECT id INTO STRICT line2 FROM public.journal_lines WHERE tenant_id=t AND entry_id=(r2->>'entry_id')::uuid AND account_code=aux;
   report:=public.accounting_open_items(t,'client',dt,'items',aux,tag);

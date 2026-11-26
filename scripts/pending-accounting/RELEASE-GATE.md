@@ -41,3 +41,8 @@ Périmètre : branche codex/waarwi-comptabilite-suite, Waarwi principal exclusiv
 6. Seulement après accord : sauvegarde vérifiée, migration versionnée, publication unique, contrôle post-publication et plan de retour arrière.
 
 Aucune étape n'est réputée réussie sans preuve issue du commit et de l'environnement réellement testés.
+
+## Phase 10 — protection des saisies manuelles
+- Script 39 / migration 20261126041824 exécuté exclusivement sur la branche Supabase de recette. Les appels publics passent par la nouvelle RPC avec UUID obligatoire ; anciennes recettes adaptées.
+- 12 contrôles SQL réussis : réessai identique, saisie volontaire distincte, collision de contenu, échec atomique, reprise après rejet, clé absente, ancienne RPC, anon, isolation et comptage exact. Fixtures annulées.
+- Restent bloquants : concurrence réelle à deux sessions, compilation et scénario navigateur après coupure, contrôle de la restauration des nouvelles colonnes, fidélité de la branche SQL (migrations en échec), autres recettes et non-régressions.

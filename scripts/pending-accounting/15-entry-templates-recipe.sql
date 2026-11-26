@@ -34,7 +34,7 @@ BEGIN
   IF n<>1 THEN RAISE EXCEPTION 'Occurrence non unique';END IF;
   BEGIN PERFORM public.post_accounting_template_occurrence(t,template_id,due,'Contenu différent','',lines);RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Doublon accepté';EXCEPTION WHEN raise_exception THEN NULL;END;
   PERFORM public.save_accounting_journal(t,'ZZQ','Recette journal',false,1);
-  BEGIN PERFORM public.create_manual_journal_entry(t,'ZZQ',due,'Journal inactif','',lines);RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Journal inactif accepté';EXCEPTION WHEN raise_exception THEN NULL;END;
+  BEGIN PERFORM public.create_manual_journal_entry_idempotent(t,'ZZQ',due,'Journal inactif','',lines,gen_random_uuid());RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Journal inactif accepté';EXCEPTION WHEN raise_exception THEN NULL;END;
   IF NOT EXISTS(SELECT 1 FROM public.list_accounting_journals(t) WHERE code='ZZQ' AND NOT is_active) THEN RAISE EXCEPTION 'Historique du journal perdu';END IF;
   EXECUTE 'RESET ROLE';
   RAISE EXCEPTION USING ERRCODE='P9099',MESSAGE='RECETTE_OK_ROLLBACK';

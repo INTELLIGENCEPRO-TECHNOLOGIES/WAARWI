@@ -17,7 +17,7 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub',u::text,true);
  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);
  EXECUTE 'SET LOCAL ROLE authenticated';
- created:=public.create_manual_journal_entry(t,'OD',dt,'RECETTE EXT OURNE','TEST',jsonb_build_array(jsonb_build_object('account_code',acc1,'debit',12345,'credit',0),jsonb_build_object('account_code',acc2,'debit',0,'credit',12345)));
+ created:=public.create_manual_journal_entry_idempotent(t,'OD',dt,'RECETTE EXT OURNE','TEST',jsonb_build_array(jsonb_build_object('account_code',acc1,'debit',12345,'credit',0),jsonb_build_object('account_code',acc2,'debit',0,'credit',12345)),gen_random_uuid());
  original_id:=(created->>'entry_id')::uuid;
  reversed:=public.reverse_manual_accounting_entry(t,original_id,dt,'Recette annulée');
  reverse_id:=(reversed->>'entry_id')::uuid;

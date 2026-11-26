@@ -15,9 +15,9 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub',u::text,true);
  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);
  EXECUTE 'SET LOCAL ROLE authenticated';
- r:=public.create_manual_journal_entry(t,'BQ',dt,'RECETTE BANQUE 1','TEST',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',100000,'credit',0),jsonb_build_object('account_code',contra,'debit',0,'credit',100000)));
+ r:=public.create_manual_journal_entry_idempotent(t,'BQ',dt,'RECETTE BANQUE 1','TEST',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',100000,'credit',0),jsonb_build_object('account_code',contra,'debit',0,'credit',100000)),gen_random_uuid());
  e1:=(r->>'entry_id')::uuid;
- r:=public.create_manual_journal_entry(t,'BQ',dt,'RECETTE BANQUE 2','TEST',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',0,'credit',25000),jsonb_build_object('account_code',contra,'debit',25000,'credit',0)));
+ r:=public.create_manual_journal_entry_idempotent(t,'BQ',dt,'RECETTE BANQUE 2','TEST',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',0,'credit',25000),jsonb_build_object('account_code',contra,'debit',25000,'credit',0)),gen_random_uuid());
  e2:=(r->>'entry_id')::uuid;
  SELECT id INTO STRICT l1 FROM public.journal_lines WHERE tenant_id=t AND entry_id=e1 AND account_code=bank;
  SELECT id INTO STRICT l2 FROM public.journal_lines WHERE tenant_id=t AND entry_id=e2 AND account_code=bank;

@@ -169,7 +169,7 @@ function PlanTab() {
 function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:()=>void;onNew?:()=>void}={}) {
   const windowId=useAccountingWindowId();
   const work=useAccountingWork();
-  const { tenant } = useApp();
+  const { tenant, user } = useApp();
   const journalCatalog=useAccountingJournals(tenant?.id,work?.revision??0);
   const journalOptions=journalCatalog.rows.map(j=>({code:j.code,name:j.name,active:j.is_active}));
   const journalLabels=Object.fromEntries(journalOptions.map(j=>[j.code,j.name]));
@@ -378,9 +378,29 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     setSaving(true);
     try{
       const payload={p_tenant_id:tenant.id,p_description:form.description,p_reference:form.reference||'',p_lines:validLines.map(l=>({account_code:l.account_code,debit:l.debit,credit:l.credit,label:l.label}))};
-      const {data,error:e}=occurrence?await supabase.rpc('post_accounting_template_occurrence',{...payload,p_template_id:occurrence.id,p_due_on:occurrence.due}):await supabase.rpc('create_manual_journal_entry',{...payload,p_journal_type:form.journal_type,p_entry_date:form.entry_date});
-      if(e){error(e.message);return;}
+      const manualPayload={...payload,p_journal_type:form.journal_type,p_entry_date:form.entry_date};
+      let pendingKey:string|null=null;
+      let requestId:string|null=null;
+      if(!occurrence){
+        if(!user?.id)throw new Error('Session utilisateur indisponible.');
+        // Preserve the request identity through a lost response or reload in this tab.
+        // Only a digest and UUID are stored, never the contents of the accounting entry.
+        const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(manualPayload)));
+        const fingerprint=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+        const prefix='waarwi:manual-post:'+user.id+':'+tenant.id+':';
+        pendingKey=prefix+fingerprint;
+        requestId=sessionStorage.getItem(pendingKey);
+        if(!requestId){
+          const otherPending=Array.from({length:sessionStorage.length},(_,i)=>sessionStorage.key(i)).some(k=>k?.startsWith(prefix));
+          if(otherPending&&!window.confirm('Une autre demande de comptabilisation reste sans confirmation. Vérifiez le journal avant de créer cette nouvelle écriture. Continuer ?'))return;
+          requestId=crypto.randomUUID();
+          sessionStorage.setItem(pendingKey,requestId);
+        }
+      }
+      const {data,error:e}=occurrence?await supabase.rpc('post_accounting_template_occurrence',{...payload,p_template_id:occurrence.id,p_due_on:occurrence.due}):await supabase.rpc('create_manual_journal_entry_idempotent',{...manualPayload,p_request_id:requestId});
+      if(e){error(e.message+(!occurrence?' — En cas de réponse incertaine, réessayez la même saisie sans la modifier.':''));return;}
       if(!(data as any)?.success){error((data as any)?.error||'Erreur');return;}
+      if(pendingKey&&sessionStorage.getItem(pendingKey)===requestId)sessionStorage.removeItem(pendingKey);
       success('Écriture '+(data as any).piece_number+' enregistrée');
       setOpen(false);
       setOccurrence(null);setEntryLines([newLine(),newLine()]);
