@@ -42,3 +42,34 @@
  .acc-desktop-area .acc-work-window[data-active=true]>div:first-child{display:none!important}
  .acc-desktop-area .acc-work-window[data-active=true]>div,.acc-desktop-area .acc-work-window .acc-window-content{height:auto!important;overflow:visible!important}
 }
+
+/* The actual window, not the monitor, determines the available work area. */
+.acc-desktop-area .acc-work-window .acc-window-content{container:acc-window / size;overscroll-behavior:contain;scrollbar-gutter:stable}
+.acc-desktop-area .acc-work-window>div:first-child{touch-action:none}
+.acc-desktop-area .acc-work-window>[class*="cursor-"][class*="absolute"]{touch-action:none}
+.acc-desktop-area .acc-work-window>div:first-child button:focus-visible{outline:2px solid var(--w-text);outline-offset:-2px}
+.acc-window-content .accounting-workspace .acc-table-scroll{max-height:clamp(90px,55cqh,58vh)}
+.acc-window-content .accounting-workspace .acc-form-scroll{max-height:clamp(100px,55cqh,58vh)}
+@container acc-window (max-width:660px){
+ .acc-window-content .accounting-workspace .acc-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .acc-window-content .accounting-workspace .acc-months{grid-template-columns:repeat(3,minmax(0,1fr));gap:0 8px}
+ .acc-window-content .accounting-workspace .acc-toolbar label{min-width:0;flex:1 1 130px}
+ .acc-window-content .accounting-workspace .acc-toolbar label input[type=date]{width:100%;max-width:100%}
+ .acc-window-content .accounting-workspace .acc-pagination{gap:4px;flex-wrap:wrap}
+ .acc-window-content .accounting-workspace .acc-entry-footer>div:last-child{width:100%}
+ .acc-window-content .accounting-workspace .acc-entry-footer>div:last-child>button{flex:1}
+ .acc-window-content .accounting-workspace .acc-entry-header{grid-template-columns:minmax(0,1fr)}
+}
+@container acc-window (max-width:400px){
+ .acc-window-content .accounting-workspace .acc-form-grid{grid-template-columns:minmax(0,1fr)}
+ .acc-window-content .accounting-workspace .acc-summary>div{flex-basis:115px}
+}
+@media(max-width:1023px){
+ .acc-desktop-area .acc-work-window>div:first-child{touch-action:auto;height:40px!important}
+ .acc-desktop-area .acc-work-window>div:first-child button{min-width:36px;height:36px}
+ .acc-desktop-taskbar button{min-height:36px}
+}
+@media print{
+ .acc-desktop-area .acc-work-window .acc-window-content{container-type:normal;scrollbar-gutter:auto}
+ .acc-window-content .accounting-workspace .acc-table-scroll,.acc-window-content .accounting-workspace .acc-form-scroll{max-height:none;overflow:visible}
+}
