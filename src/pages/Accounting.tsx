@@ -2,6 +2,7 @@ import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Save, Pencil as Edit2, Search, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
+import {useAccountingJournals} from '../lib/accountingJournals';
 import {AccountingJournalSettings} from '../components/AccountingJournalSettings';
 import {AccountingOverview} from '../components/AccountingOverview';
 import { AccountingPagination, AccountingTable, AccountingRowActions, useAccountingPagination } from '../components/AccountingWorkspace';
@@ -157,6 +158,9 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const windowId=useAccountingWindowId();
   const work=useAccountingWork();
   const { tenant } = useApp();
+  const journalCatalog=useAccountingJournals(tenant?.id,work?.revision??0);
+  const journalOptions=journalCatalog.rows.map(j=>({code:j.code,name:j.name,active:j.is_active}));
+  const journalLabels=Object.fromEntries(journalOptions.map(j=>[j.code,j.name]));
   const { success, error } = useToast();
   const { can } = usePermissions();
   const canManage = can('manage_accounting');
@@ -212,7 +216,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   useRealtimeRefresh(['journal_entries', 'journal_lines'], () => load(true));
   useEffect(() => {
     if (!tenant) return;
-    supabase.from('accounts').select('code, name').eq('tenant_id', tenant.id).order('code').then(({ data }) => setAccounts(data || []));
+    supabase.from('accounts').select('code, name').eq('tenant_id', tenant.id).eq('is_active',true).order('code').then(({ data }) => setAccounts(data || []));
   }, [tenant?.id]);
   const openExportModal = () => {
     const now = new Date();
@@ -301,7 +305,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
           { 'Champ': 'Entreprise', 'Valeur': tenantName },
           { 'Champ': 'Période du', 'Valeur': exportDateFrom },
           { 'Champ': 'Période au', 'Valeur': exportDateTo },
-          { 'Champ': 'Journal', 'Valeur': exportJournal ? (JOURNAL_TYPES[exportJournal] || exportJournal) : 'Tous' },
+          { 'Champ': 'Journal', 'Valeur': exportJournal ? (journalLabels[exportJournal] || exportJournal) : 'Tous' },
           { 'Champ': 'Écritures', 'Valeur': String(exportData.entryCount) },
           { 'Champ': 'Lignes exportées', 'Valeur': String(exportData.totalCount) },
           { 'Champ': 'Total débit', 'Valeur': exportData.totalDebitSum.toLocaleString('fr-FR') },
@@ -353,6 +357,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const savingLock=useRef(false);
   const save = async () => {
     if (!tenant || savingLock.current || !canManage) return;
+    if(journalCatalog.loading||journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)){error('Sélectionnez un journal actif.');return;}
     if (!form.description.trim()) { error('Description obligatoire'); return; }
     if (!isBalanced) { error("L'écriture n'est pas équilibrée (débit ≠ crédit)"); return; }
     const validLines=entryLines.filter(l=>l.account_code||l.label.trim()||l.debit!==0||l.credit!==0);
@@ -392,11 +397,12 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   },[entryOnly,open,form,entryLines,windowId]);
   const closeEntry=()=>{if(saving)return;if(entryOnly&&windowId){onExit?.();return;}const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));if(dirty&&!window.confirm('Abandonner la saisie en cours ?'))return;if(entryOnly)onExit?.();else setOpen(false);};
   const entryForm=( <fieldset disabled={saving} className="acc-entry-body space-y-4">
+          {journalCatalog.error&&<p role="alert" className="text-xs text-red-700">{journalCatalog.error}</p>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="label">Journal *</label>
-              <select value={form.journal_type} onChange={e => setForm(f => ({ ...f, journal_type: e.target.value }))} className="input">
-                {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
+              <select value={form.journal_type} onChange={e => setForm(f => ({ ...f, journal_type: e.target.value }))} className="input" disabled={journalCatalog.loading||!!journalCatalog.error}>
+                {journalOptions.filter(j=>j.active||j.code===form.journal_type).map(j => <option key={j.code} value={j.code} disabled={!j.active}>{j.code} — {j.name}{!j.active?' (désactivé)':''}</option>)}
               </select>
             </div>
             <div>
@@ -448,13 +454,13 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
 
           </div>
         </fieldset> );
-  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={save} className="btn-primary" disabled={saving||!isBalanced}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
+  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={save} className="btn-primary" disabled={saving||!isBalanced||journalCatalog.loading||!!journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
   if(entryOnly)return <section className="acc-entry-page">{entryForm}{entryFooter}</section>;
 
     return (
     <div className="space-y-3">
       <div className="acc-toolbar acc-fixed">
-        <select aria-label="Journal" value={journalType} onChange={e=>{setJournalPage(0);setJournalType(e.target.value);}} className="input w-auto"><option value="">Tous les journaux</option>{Object.entries(JOURNAL_TYPES).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
+        <select aria-label="Journal" value={journalType} onChange={e=>{setJournalPage(0);setJournalType(e.target.value);}} className="input w-auto"><option value="">Tous les journaux</option>{journalOptions.map(j=><option key={j.code} value={j.code}>{j.code} — {j.name}{!j.active?' (désactivé)':''}</option>)}</select>
         <label>Du <input aria-label="Date de début" type="date" className="input w-auto" value={fromDate} onChange={e=>{setJournalPage(0);setFromDate(e.target.value);}}/></label>
         <label>Au <input aria-label="Date de fin" type="date" className="input w-auto" value={toDate} onChange={e=>{setJournalPage(0);setToDate(e.target.value);}}/></label>
         <span className="acc-spacer"/>
@@ -495,7 +501,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
               <label className="label">Journal</label>
               <select value={exportJournal} onChange={e => { setExportJournal(e.target.value); setExportData(null); }} className="input" disabled={exportLoading}>
                 <option value="">Tous les journaux</option>
-                {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
+                {journalOptions.map(j => <option key={j.code} value={j.code}>{j.code} — {j.name}{!j.active?' (désactivé)':''}</option>)}
               </select>
             </div>
             <div>
