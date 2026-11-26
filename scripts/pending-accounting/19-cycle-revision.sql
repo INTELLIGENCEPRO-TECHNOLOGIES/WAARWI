@@ -64,10 +64,18 @@ BEGIN
   FROM lines l LEFT JOIN public.customers c ON c.tenant_id=l.tenant_id AND c.id=l.third_party_id
   LEFT JOIN public.suppliers s ON s.tenant_id=l.tenant_id AND s.id=l.third_party_id WHERE l.status='posted'
  ), bank AS (
-  SELECT count(*) FILTER(WHERE b.status='finalized') finalized,count(*) FILTER(WHERE b.status='draft') draft
+  SELECT count(*) FILTER(WHERE b.status='final') finalized,count(*) FILTER(WHERE b.status='draft') draft
   FROM public.accounting_bank_statements b WHERE b.tenant_id=p_tenant_id AND b.date_from<=stop_day AND b.date_to>=p_month_start
  ), pending AS (
   SELECT count(*) FILTER(WHERE e.status IS DISTINCT FROM 'posted' AND e.status IS DISTINCT FROM 'cancelled') n FROM entries e
+ ), anomalies AS (
+ SELECT l.id,l.entry_id,l.entry_number,l.entry_date,l.account_code,l.cycle,l.debit,l.credit,
+ CASE WHEN l.account_id IS NULL THEN 'Compte absent'
+ WHEN l.account_active IS NOT TRUE THEN 'Compte inactif'
+ WHEN (l.debit>0 AND l.credit>0) OR l.debit<0 OR l.credit<0 OR (l.debit=0 AND l.credit=0) THEN 'Montants de ligne incohérents'
+ WHEN l.account_code LIKE '411%' AND NOT EXISTS(SELECT 1 FROM public.customers c WHERE c.tenant_id=l.tenant_id AND c.id=l.third_party_id) THEN 'Tiers client non identifié'
+ WHEN l.account_code LIKE '401%' AND NOT EXISTS(SELECT 1 FROM public.suppliers s WHERE s.tenant_id=l.tenant_id AND s.id=l.third_party_id) THEN 'Tiers fournisseur non identifié' END reason
+ FROM lines l WHERE l.status='posted'
  ), fingerprints AS (
   SELECT
    (SELECT md5(coalesce(string_agg(md5(to_jsonb(e)::text),'' ORDER BY e.id),'')) FROM entries e) entries_hash,
@@ -79,6 +87,8 @@ BEGIN
  'controls',controls,'cycles',(SELECT jsonb_agg(to_jsonb(m) ORDER BY m.cycle) FROM movements m),
  'unassigned',(SELECT to_jsonb(u) FROM unassigned u),'bank',(SELECT to_jsonb(b) FROM bank b),'pending',(SELECT n FROM pending),
  'fingerprints',(SELECT to_jsonb(f) FROM fingerprints f),
+ 'anomaly_count',(SELECT count(*) FROM anomalies WHERE reason IS NOT NULL),
+ 'anomalies',(SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.entry_date,x.entry_number,x.id),'[]'::jsonb) FROM (SELECT * FROM anomalies WHERE reason IS NOT NULL ORDER BY entry_date,entry_number,id LIMIT 30) x),
  'blocking',coalesce((controls->'journal'->>'inconsistent_entries')::bigint,0)+coalesce((controls->'journal'->>'duplicate_sources')::bigint,0)+coalesce((controls->'accounts'->>'inconsistent_accounts')::bigint,0)+(SELECT n FROM pending)+(SELECT abnormal_lines FROM movements WHERE cycle='integrity'))
  INTO core;
  token:=md5(core::text);
@@ -105,11 +115,12 @@ BEGIN
   FOREACH k IN ARRAY required LOOP IF coalesce(p_checklist->>k,'todo') NOT IN ('done','na') THEN RAISE EXCEPTION 'Terminez ou justifiez chaque contrôle.';END IF;END LOOP;
   IF n='' OR ev='' THEN RAISE EXCEPTION 'Conclusion et références justificatives obligatoires.';END IF;
  END IF;
+ IF p_month_start IS NULL OR NOT isfinite(p_month_start) OR extract(day FROM p_month_start)<>1 THEN RAISE EXCEPTION 'Mois invalide.';END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant_id::text||':revision:'||p_month_start::text||':'||p_cycle,0));
  report:=public.accounting_revision_report(p_tenant_id,p_month_start);
  IF p_token IS DISTINCT FROM report->>'token' THEN RAISE EXCEPTION 'Données modifiées. Actualisez les contrôles.' USING ERRCODE='40001';END IF;
  IF p_status<>'in_progress' AND NOT (report->>'period_finished')::boolean THEN RAISE EXCEPTION 'Le mois est encore en cours.';END IF;
- IF p_status='reviewed' AND (report->>'blocking')::bigint>0 THEN RAISE EXCEPTION 'Des incohérences bloquantes subsistent. Documentez les observations.';END IF;
+ IF p_status='reviewed' AND ((report->>'blocking')::bigint>0 OR EXISTS(SELECT 1 FROM jsonb_array_elements(report->'cycles') x WHERE x->>'cycle'=p_cycle AND (x->>'inactive_lines')::bigint>0) OR (p_cycle='customers' AND (report->'unassigned'->>'clients')::bigint>0) OR (p_cycle='suppliers' AND (report->'unassigned'->>'suppliers')::bigint>0) OR (p_cycle='treasury' AND EXISTS(SELECT 1 FROM jsonb_array_elements(report->'controls'->'coverage') x WHERE x->>'family' IN ('cash','vault') AND ((x->>'missing')::bigint+(x->>'invalid')::bigint+(x->>'date_differences')::bigint)>0))) THEN RAISE EXCEPTION 'Des incohérences bloquantes subsistent. Documentez les observations.';END IF;
  SELECT * INTO old FROM public.accounting_cycle_reviews WHERE tenant_id=p_tenant_id AND month_start=p_month_start AND cycle=p_cycle FOR UPDATE;
  IF coalesce(old.revision,0)<>p_revision THEN RAISE EXCEPTION 'Dossier modifié. Actualisez.' USING ERRCODE='40001';END IF;
  INSERT INTO public.accounting_cycle_reviews(tenant_id,month_start,cycle,status,checklist,note,evidence,review_token,snapshot,updated_by)
