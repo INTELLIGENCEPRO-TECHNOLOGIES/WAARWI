@@ -8,6 +8,7 @@ BEGIN
  PERFORM public._bank_reconciliation_access(p_tenant_id,false);
  IF p_from IS NULL OR p_to IS NULL OR NOT isfinite(p_from) OR NOT isfinite(p_to) OR p_from>p_to OR extract(year from p_from)<>extract(year from p_to) OR p_to>(now() AT TIME ZONE 'Africa/Dakar')::date THEN RAISE EXCEPTION 'Choisissez une période non future dans un seul exercice.' USING ERRCODE='22023';END IF;
  SELECT f.snapshot,make_date(f.fiscal_year+1,1,1) INTO prior,anchor FROM public.accounting_fiscal_years f WHERE f.tenant_id=p_tenant_id AND f.fiscal_year<extract(year from p_from) ORDER BY f.fiscal_year DESC LIMIT 1;
+ RETURN QUERY
  WITH carry AS (
  SELECT x->>'account_code' code,sum((x->>'balance')::numeric) amount FROM jsonb_array_elements(coalesce(prior->'carry','[]'::jsonb)) x GROUP BY 1
  ), activity AS (
