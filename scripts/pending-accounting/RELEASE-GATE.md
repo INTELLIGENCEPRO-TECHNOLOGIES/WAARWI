@@ -59,3 +59,6 @@ Recettes synthétiques des RPC : 8 pièces équilibrées (325900 FCFA par côté
 
 ### Phase 10.12 — reprise et concurrence
 Reprise transactionnelle, compteur, répétition intersession et jeton de clôture obsolète vérifiés. Correction préventive de l'ordre de verrouillage mois/journal (migration 20261126045014), cinq recettes rejouées avec succès. Les appels du connecteur ne se chevauchent pas : concurrence réelle non validée ; voir PHASE-10-12-CONCURRENCY-RECIPE.md. Aucun déploiement.
+
+### Verrouillage collaboratif — premier lot
+Socle et saisie comptable intégrés ; aucune publication tant que les recettes multi-utilisateurs et réseau, les parcours commerciaux, le reste des écrans et la compatibilité des anciennes recettes ne sont pas validés.
