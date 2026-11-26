@@ -77,3 +77,5 @@ Recettes 51 et 52 : six scénarios de conversion et modification facture, plus r
 
 ### Cycle inverse des factures converties
 Recette 53 : restitution des lots et stock agrégé au dépôt réel, remboursement IPM, idempotence, verrou actif, refus fiscal sans mouvement résiduel. Le nouveau registre privé quote_conversion_stock_trace doit être intégré aux procédures de sauvegarde, restauration et purge avant publication. Les anciennes conversions sans trace conservent leur traitement historique (audit restant), les avoirs TVA, désimputation des crédits, autres cas de remboursement et suppression à compléter. Aucun déploiement.
+
+Recette 54 : suppression logique d’une facture non fiscale non réglée avec lots, restitution unique, crédit patient conservé et refus des historiques incohérents. La protection fiscale existante est maintenue ; ne pas assimiler ces tests à une certification de facturation électronique.
