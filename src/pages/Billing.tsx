@@ -202,6 +202,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const quoteOriginal=useRef<string|null>(null);
   const quoteEditSite=useRef<string|null>(null);
   const quoteSavingRef=useRef(false);
+  const quoteCreationRequest=useRef<string>(crypto.randomUUID());
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
   const [stickyTopRef, stickyTop] = useStickyOffset<HTMLDivElement>();
 
@@ -914,7 +915,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if(editingQuoteId&&(!quoteLease.held||!quoteLease.token||!quoteSnapshot.ready||quoteBaseline?.quoteId!==editingQuoteId)){error('Reprenez l’accès et vérifiez la version du devis.');return;}
     quoteSavingRef.current=true;setSaving(true);
     const valid = quoteItems.filter(i => i.name.trim());
-    const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
     const quoteRepLabel = repLabelOf(quoteForm.representative);
     const docHeader = (quoteForm.delivery_date || quoteForm.reference || quoteForm.warranty || quoteRepLabel || quoteForm.imei)
       ? { delivery_date: quoteForm.delivery_date || null, reference: quoteForm.reference || null, warranty: quoteForm.warranty || null, representative: quoteRepLabel, imei: quoteForm.imei || null }
@@ -929,30 +929,17 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       }catch(e){error(e&&typeof e==='object'&&'message' in e?String(e.message):'Enregistrement impossible.');}
       finally{quoteSavingRef.current=false;setSaving(false);}
     } else {
-      const { data: numData } = await supabase.rpc('next_doc_number', {
-        p_tenant_id: tenant.id, p_kind: 'quote', p_prefix: 'DEV',
-      });
-      const qNum = (numData as string) || ('DEV-' + Date.now());
-      const { data: q, error: e } = await supabase.from('quotes').insert({
-        tenant_id: tenant.id, site_id: currentSite.id,
-        customer_id: quoteForm.customer_id || null,
-        quote_number: qNum, subtotal, discount: 0, total: subtotal,
-        valid_until: quoteForm.valid_until || null, note: quoteForm.note, status: 'draft',
-        user_id: profile?.id || null,
-        representative_id: quoteForm.representative || null,
-        doc_header: docHeader,
-      }).select().single();
-      if (e || !q) { error(e?.message || 'Erreur'); quoteSavingRef.current=false;setSaving(false); return; }
-      await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
-      setEditingQuoteId(q.id);
-      quoteSavingRef.current=false;setSaving(false);
-      if (!opts?.silent) {
-        success('Devis créé');
-        closeQuotePanel();
-        const customer = customers.find(item => item.id === q.customer_id);
-        void openQuoteDetail({ ...q, customers: customer ? { name: customer.name } : null });
-        void loadTab(billPage, true);
-      }
+      try{
+        const {data,error:e}=await supabase.rpc('create_quote_atomic',{p_tenant_id:tenant.id,p_site_id:currentSite.id,p_customer_id:quoteForm.customer_id||null,p_valid_until:quoteForm.valid_until||null,p_note:quoteForm.note,p_doc_header:docHeader,p_representative_id:quoteForm.representative||null,p_items:valid.map(i=>({article_id:i.article_id,name:i.name,quantity:i.quantity,unit_price:i.unit_price,discount:i.discount})),p_request_id:quoteCreationRequest.current});
+        if(e)throw e;
+        const snap=data as LockedQuoteSnapshot&{success:boolean;already_created:boolean};
+        if(!snap?.success||!snap.quote?.id)throw new Error('Le devis n’a pas été créé.');
+        const q=snap.quote,customer=customers.find(item=>item.id===q.customer_id);
+        if(!opts?.silent)success(snap.already_created?'Devis retrouvé':'Devis créé');
+        closeQuotePanel();void openQuoteDetail({...q,customers:customer?{name:customer.name}:null} as Quote);void loadTab(billPage,true);
+      }catch(e){error(e&&typeof e==='object'&&'message' in e?String(e.message):'Création impossible. Réessayez avec le même brouillon.');}
+      finally{quoteSavingRef.current=false;setSaving(false);}
+
     }
   };
 
@@ -962,7 +949,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     setQuoteOpen(false);
     setQuoteEditorMode('create');
     setEditingQuoteId(null);
-    setQuoteBaseline(null);quoteOriginal.current=null;quoteEditSite.current=null;
+    setQuoteBaseline(null);quoteOriginal.current=null;quoteEditSite.current=null;quoteCreationRequest.current=crypto.randomUUID();
     setQuoteItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setQuoteForm({ customer_id: '', valid_until: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
   };

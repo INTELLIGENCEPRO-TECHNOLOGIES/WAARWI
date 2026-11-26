@@ -87,6 +87,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
   const [items, setItems] = useState<QuoteItem[]>([{ ...EMPTY_ITEM }]);
   const [saving, setSaving] = useState(false);
   const savingRef=useRef(false);
+  const creationRequest=useRef<string>(crypto.randomUUID());
   const [baseline,setBaseline]=useState<QuoteBaseline|null>(null);
   const originalDraft=useRef<string|null>(null);
   const [viewVersion,setViewVersion]=useState<string|null>(null);
@@ -137,6 +138,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
     const d = loadFormDraft<any>(scope, descriptor.windowId);
     if (d && d.kind === 'quote' && d.data) {
       hasRecoveredDraftRef.current = true;
+      if(typeof d.data.creationRequestId==='string')creationRequest.current=d.data.creationRequestId;
       if(d.data.baseline?.quoteId&&typeof d.data.baseline.version==='string')setBaseline(d.data.baseline);
       if (d.data.quoteForm) setQuoteForm(d.data.quoteForm);
       if (Array.isArray(d.data.items) && d.data.items.length > 0) setItems(d.data.items);
@@ -157,7 +159,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
       kind: 'quote',
       documentId: editingQuoteId,
       mode,
-      data: { quoteForm, items, editingQuoteId, baseline },
+      data: { quoteForm, items, editingQuoteId, baseline, creationRequestId:creationRequest.current },
       opInProgress: opInProgressRef.current,
     }, 400);
   }, [recoveryChecked, scope, siteMismatch, descriptor.windowId, mode, editingQuoteId, quoteForm, items, baseline]);
@@ -244,7 +246,6 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
     if(editingQuoteId&&(!editLease.held||!editLease.token||!editSnapshot.ready||baseline?.quoteId!==editingQuoteId)){error('Reprenez l’accès et vérifiez la version du devis.');return;}
     savingRef.current=true;setSaving(true);
     const valid = items.filter(i => i.name.trim());
-    const st = valid.reduce((s, i) => s + Number(i.total), 0);
     const quoteRepLabel = repLabelOf(quoteForm.representative);
     const docHeader = (quoteForm.doc_date || quoteForm.delivery_date || quoteForm.reference || quoteForm.warranty || quoteRepLabel || quoteForm.imei)
       ? { doc_date: quoteForm.doc_date || null, delivery_date: quoteForm.delivery_date || null, reference: quoteForm.reference || null, warranty: quoteForm.warranty || null, representative: quoteRepLabel, imei: quoteForm.imei || null }
@@ -254,7 +255,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
     saveFormDraft(scope, {
       windowId: descriptor.windowId, kind: 'quote',
       documentId: editingQuoteId, mode,
-      data: { quoteForm, items, editingQuoteId, baseline },
+      data: { quoteForm, items, editingQuoteId, baseline, creationRequestId:creationRequest.current },
       opInProgress: 'save',
     });
     if (editingQuoteId) {
@@ -269,32 +270,18 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
       }catch(e){opInProgressRef.current=null;error(e&&typeof e==='object'&&'message' in e?String(e.message):'Enregistrement impossible.');}
       finally{savingRef.current=false;setSaving(false);}
     } else {
-      const { data: numData } = await supabase.rpc('next_doc_number', {
-        p_tenant_id: tenant.id, p_kind: 'quote', p_prefix: 'DEV',
-      });
-      const qNum = (numData as string) || ('DEV-' + Date.now());
-      const { data: q, error: e } = await supabase.from('quotes').insert({
-        tenant_id: tenant.id, site_id: descriptor.siteId,
-        customer_id: quoteForm.customer_id || null,
-        quote_number: qNum, subtotal: st, discount: 0, total: st,
-        valid_until: quoteForm.valid_until || null, note: quoteForm.note, status: 'draft',
-        user_id: profile?.id || null,
-        representative_id: quoteForm.representative || null,
-        doc_header: docHeader,
-      }).select().single();
-      if (e || !q) { error(e?.message || 'Erreur'); savingRef.current=false;setSaving(false); return; }
-      await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
-      setEditingQuoteId(q.id);
-      setEditingQuote(q as Quote);
-      savingRef.current=false;setSaving(false);
-      opInProgressRef.current = null;
-      clearFormDraft(scope, descriptor.windowId);
-      if (!opts?.silent) {
-        success('Devis créé');
-        setMode('view');
-        onCreated(q.id, qNum);
-        onSaved();
-      }
+      try{
+        const {data,error:e}=await supabase.rpc('create_quote_atomic',{p_tenant_id:tenant.id,p_site_id:descriptor.siteId,p_customer_id:quoteForm.customer_id||null,p_valid_until:quoteForm.valid_until||null,p_note:quoteForm.note,p_doc_header:docHeader,p_representative_id:quoteForm.representative||null,p_items:valid.map(i=>({article_id:i.article_id,name:i.name,quantity:i.quantity,unit_price:i.unit_price,discount:i.discount})),p_request_id:creationRequest.current});
+        if(e)throw e;
+        const snap=data as LockedQuoteSnapshot&{success:boolean;already_created:boolean};
+        if(!snap?.success||!snap.quote?.id)throw new Error('Le devis n’a pas été créé.');
+        setEditingQuoteId(snap.quote.id);hydrateQuote(snap);setBaseline({quoteId:snap.quote.id,version:snap.version});
+        opInProgressRef.current=null;clearFormDraft(scope,descriptor.windowId);
+        setMode('view');onCreated(snap.quote.id,snap.quote.quote_number);onSaved();
+        if(!opts?.silent)success(snap.already_created?'Devis retrouvé':'Devis créé');
+      }catch(e){error(e&&typeof e==='object'&&'message' in e?String(e.message):'Création impossible. Réessayez avec le même brouillon.');}
+      finally{savingRef.current=false;setSaving(false);}
+
     }
   };
 
