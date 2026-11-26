@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {useApp} from '../context/AppContext';
 import {usePermissions} from '../lib/permissions';
 import {useAccountingWork} from '../context/AccountingWindowContext';
+import {useAccountingJournals} from '../lib/accountingJournals';
 import {supabase} from '../lib/supabase';
 import {formatDate} from '../lib/format';
 import {Search,RefreshCw,Download,Loader2} from './Icons';
@@ -10,11 +11,10 @@ import {sanitizeCsvValue} from '../lib/csvSanitize';
 type Filters={piece:string;description:string;reference:string;account:string;journal:string;from:string;to:string;min:string;max:string;status:string};
 type Row={id:string;entry_number:string;entry_date:string;journal_type:string;description:string|null;reference:string|null;total_debit:number;total_credit:number;source_type:string|null;status:string};
 const empty:Filters={piece:'',description:'',reference:'',account:'',journal:'',from:'',to:'',min:'',max:'',status:''};
-const journals={VE:'Ventes',AC:'Achats',CA:'Caisse',BQ:'Banque',OD:'Opérations diverses'};
 const money=(n:number)=>Number(n).toLocaleString('fr-FR',{maximumFractionDigits:2});
 const statusLabel=(s:string)=>s==='posted'?'Validée':s==='cancelled'?'Annulée':'Brouillon';
 export function AccountingSearch(){
- const {tenant}=useApp();const {can}=usePermissions();const work=useAccountingWork();
+ const {tenant}=useApp();const {can}=usePermissions();const work=useAccountingWork();const journalCatalog=useAccountingJournals(tenant?.id,work?.revision??0);
  const [filters,setFilters]=useState<Filters>({...empty}),[applied,setApplied]=useState<Filters|null>(null),[page,setPage]=useState(0),[size,setSize]=useState(20),[total,setTotal]=useState(0),[rows,setRows]=useState<Row[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[revision,setRevision]=useState(0),[context,setContext]=useState<{id:string;x:number;y:number}|null>(null);
  const seq=useRef(0);const change=(k:keyof Filters,v:string)=>setFilters(f=>({...f,[k]:v}));
  const validate=()=>{if(filters.from&&filters.to&&filters.from>filters.to)return 'La date de fin doit suivre la date de début.';if([filters.min,filters.max].some(v=>v!==''&&(!Number.isFinite(Number(v))||Number(v)<0)))return 'Montants positifs ou nuls requis.';if(filters.min!==''&&filters.max!==''&&Number(filters.min)>Number(filters.max))return 'Le minimum doit être inférieur ou égal au maximum.';return '';};
@@ -43,13 +43,13 @@ export function AccountingSearch(){
   <form className="acc-search-form" onSubmit={e=>{e.preventDefault();submit();}}>
    <div className="acc-search-fields">
     {field('piece','N° de pièce',{placeholder:'OD260…'})}{field('reference','Référence')}{field('description','Libellé')}{field('account','N° de compte',{placeholder:'Compte exact'})}
-    <label className="acc-search-field acc-search-journal"><span>Journal</span><select className="input" value={filters.journal} onChange={e=>change('journal',e.target.value)}><option value="">Tous</option>{Object.entries(journals).map(([k,v])=><option key={k} value={k}>{k} — {v}</option>)}</select></label>
+    <label className="acc-search-field acc-search-journal"><span>Journal</span><select className="input" value={filters.journal} onChange={e=>change('journal',e.target.value)}><option value="">Tous</option>{journalCatalog.rows.map(j=><option key={j.code} value={j.code}>{j.code} — {j.name}{!j.is_active?' (désactivé)':''}</option>)}</select></label>
     <label className="acc-search-field acc-search-status"><span>Statut</span><select className="input" value={filters.status} onChange={e=>change('status',e.target.value)}><option value="">Tous</option><option value="posted">Validées</option><option value="draft">Brouillons</option><option value="cancelled">Annulées</option></select></label>
     {field('from','Du',{type:'date'})}{field('to','Au',{type:'date'})}{field('min','Débit min. (FCFA)',{type:'number'})}{field('max','Débit max. (FCFA)',{type:'number'})}
    </div>
    <div className="acc-search-actions"><button type="submit" className="btn-primary" disabled={busy}>{busy?<Loader2 size={15} className="animate-spin"/>:<Search size={15}/>}Rechercher</button><button type="button" className="btn-secondary" onClick={reset}><RefreshCw size={15}/>Réinitialiser</button><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={busy||!rows.length} onClick={exportPage}><Download size={15}/>Exporter la page</button></div>
   </form>
-  {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
+  {(error||journalCatalog.error)&&<p role="alert" className="text-xs text-red-700">{error||journalCatalog.error}</p>}
   <div className="acc-search-result-label" role="status">{busy?'Recherche en cours…':applied?total.toLocaleString('fr-FR')+' écriture(s) trouvée(s)':'Renseignez les critères ou recherchez toutes les écritures.'}</div>
   <AccountingTable footer={<AccountingPagination page={page} size={size} total={total} setPage={setPage} setSize={n=>{setPage(0);setSize(n);}} disabled={busy||!applied}/>}>
    <table><thead><tr><th className="text-left">Date / pièce</th><th className="text-left acc-search-journal-col">Journal</th><th className="text-left">Libellé / référence</th><th className="text-right">Débit</th><th className="text-right">Crédit</th><th className="text-left acc-search-status-col">Statut</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map(r=><tr key={r.id} onDoubleClick={()=>view(r)} onContextMenu={e=>{e.preventDefault();setContext({id:r.id,x:e.clientX,y:e.clientY});}}><td><span className="block text-[11px] text-neutral-500">{formatDate(r.entry_date)}</span><button type="button" className="font-medium hover:underline text-left" onClick={()=>view(r)}>{r.entry_number}</button><span className="acc-search-compact-meta">{r.journal_type} · {statusLabel(r.status)}</span></td><td className="acc-search-journal-col">{r.journal_type}</td><td>{r.description||'—'}{r.reference&&<span className="block text-[11px] text-neutral-500">{r.reference}</span>}</td><td className="text-right">{money(r.total_debit)}</td><td className="text-right">{money(r.total_credit)}</td><td className="acc-search-status-col"><span className="acc-status">{statusLabel(r.status)}</span></td><td className="text-right"><AccountingRowActions piece={r.entry_number} onView={()=>view(r)} onReverse={can('manage_accounting')&&r.source_type==='manual'&&r.status==='posted'?()=>view(r,true):undefined} reverseDisabledReason={!can('manage_accounting')?'Droit de gestion requis':r.source_type==='reversal'?'Pièce d’extourne':r.source_type!=='manual'?'Corriger la pièce d’origine':r.status!=='posted'?'Écriture non validée':undefined} anchor={context?.id===r.id?context:undefined} onDismiss={()=>setContext(null)}/></td></tr>)}{!rows.length&&<tr><td colSpan={7} className="text-center text-neutral-500">{busy?'Chargement…':applied?'Aucun résultat.':'Aucune recherche lancée.'}</td></tr>}</tbody></table>
