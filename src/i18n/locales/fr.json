@@ -45,6 +45,7 @@
     "supplierOrders": "Achats",
     "accounting": "Comptabilité",
     "accountingPlan": "Plan comptable",
+    "accountingJournalSettings":"Codes journaux",
     "accountingOverview": "Accueil comptable",
     "accountingEntry": "Saisie des écritures",
     "vatReport": "Situation de TVA",
