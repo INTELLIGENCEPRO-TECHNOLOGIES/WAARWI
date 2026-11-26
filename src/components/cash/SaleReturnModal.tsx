@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, Loader2, Minus, Plus, RefreshCw, Search } from 'lucide-react';
 import {loadReturnLots,returnLotAllocation,type ReturnLotLine} from '../../lib/returnLotAllocation';
 import {ReturnLotFields} from '../billing/ReturnLotFields';
+import {HistoricalLotMatchPanel} from './HistoricalLotMatchPanel';
 import { desktopAutoFocus } from '../../lib/device';
 import { supabase } from '../../lib/supabase';
 import { useApp } from '../../context/AppContext';
@@ -20,13 +21,19 @@ interface Props {
 }
 
 export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
-  const { tenant } = useApp();
+  const { tenant, profile, isOwner } = useApp();
+  const mayMatch = isOwner || profile?.role === 'admin' || profile?.role === 'super_admin';
   const { can, loading: permsLoading, error: permsError, reload: reloadPerms } = usePermissions();
   const permsPending = permsPendingMessage(permsLoading, permsError);
   const returnsAllowed = can('pos_returns');
   const { success, error } = useToast();
   const [bound] = useState(ctx);
   const [opKey, setOpKey] = useState(newIdempotencyKey);
+  const [restock,setRestock]=useState(true);
+  const [financialReason,setFinancialReason]=useState('');
+  const [matchArticle,setMatchArticle]=useState<string|null>(null);
+  const [uncertain,setUncertain]=useState(false);
+  const inFlight=useRef(false);
   const [returnSearch, setReturnSearch] = useState('');
   const [returnSales, setReturnSales] = useState<SessionSale[]>([]);
   const [returnLoading, setReturnLoading] = useState(false);
@@ -103,6 +110,8 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   }, [started, permsPending, returnsAllowed]);
 
   const selectReturnSale = (s: SessionSale) => {
+    if(inFlight.current||uncertain)return;
+    setOpKey(newIdempotencyKey());setRestock(true);setFinancialReason('');setMatchArticle(null);
     const req=++lotLoadRequest.current;setLotLoad({busy:true,error:''});
     setReturnSelected(s);
     setReturnSearch('');
@@ -116,23 +125,26 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   const [returnProcessing, setReturnProcessing] = useState(false);
 
   const processReturn = async () => {
-    if (!returnSelected || !tenant || returnProcessing || lotLoad.busy || lotLoad.error) return;
+    if (!returnSelected || !tenant || inFlight.current || returnProcessing || lotLoad.busy || lotLoad.error || matchArticle) return;
     if (permsPending) { error(permsPending); return; }
     if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
     const lines = returnLines.filter(l => l.selected && l.quantity > 0);
     if (lines.length === 0) { error('Aucun article sélectionné'); return; }
     const returnTotal = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
 
-    setReturnProcessing(true);
+    if(restock && lines.some(l=>!returnLotAllocation(l,true).valid)){error('Vérifiez les quantités par lot.');return;}
+    if(!restock && financialReason.trim().length<8){error('Précisez le motif du retour sans remise en stock.');return;}
+    const items = lines.map(l => ({ sale_item_id: l.sale_item_id, quantity: l.quantity,lots:restock?returnLotAllocation(l,true).lots:[] }));
+    const reason=restock?'Retour au POS':'Retour financier au POS : '+financialReason.trim();
+    inFlight.current=true;setReturnProcessing(true);
     try {
-      if(lines.some(l=>!returnLotAllocation(l,true).valid))throw new Error('Vérifiez les quantités par lot.');
-      const items = lines.map(l => ({ sale_item_id: l.sale_item_id, quantity: l.quantity,lots:returnLotAllocation(l,true).lots }));
       const { data: result, error: rpcErr } = bound.mode === 'supervision'
-        ? await supabase.rpc('cash_supervision_sale_return', {
+        ? await supabase.rpc('cash_supervision_sale_return_v2', {
             p_session_id: bound.sessionId,
             p_sale_id: returnSelected.id,
             p_items: items,
-            p_reason: 'Retour au POS',
+            p_reason: reason,
+            p_restock: restock,
             p_refund_method: null,
             p_idempotency_key: opKey,
           })
@@ -141,26 +153,35 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             p_site_id: bound.siteId,
             p_cash_session_id: bound.sessionId,
             p_items: items,
-            p_reason: 'Retour au POS',
+            p_reason: reason,
             p_refund_now: true,
-            p_restock: true,
+            p_restock: restock,
             p_request_id: opKey,
           });
 
-      if (rpcErr) throw new Error(rpcErr.message);
+      if (rpcErr) {
+        // SQL rejections are definitive unless the previous request was already uncertain.
+        const rejected=/^(22|23|42|55|P0)/.test(rpcErr.code||'') && rpcErr.code!=='23505';
+        if(!uncertain&&rejected){setOpKey(newIdempotencyKey());}
+        else {setUncertain(true);}
+        error(rpcErr.message || 'Retour non confirmé. Réessayez sans modifier la demande.');return;
+      }
+      if(!result?.success || !result?.return_id){setUncertain(true);error('Retour non confirmé. Réessayez sans modifier la demande.');return;}
+      setUncertain(false);
 
       const refunded = Number(result?.total ?? returnTotal);
       const retNum = result?.return_number || 'RET-?';
-      printReturnTicket80Shared(returnSelected.sale_number, lines, refunded, bound.printTenant, bound.userName, retNum, returnSelected.customer_name, result);
+      try {printReturnTicket80Shared(returnSelected.sale_number, lines, refunded, bound.printTenant, bound.userName, retNum, returnSelected.customer_name, result);} catch {error('Retour enregistré, mais impression du ticket impossible.');}
 
       setOpKey(newIdempotencyKey());
       onClose();
       success(`Retour effectué: -${formatFCFA(refunded)} remboursé`);
       onDone();
     } catch (e: any) {
-      error(e.message || 'Erreur lors du retour');
+      setUncertain(true);
+      error(e.message || 'Retour non confirmé. Réessayez sans modifier la demande.');
     } finally {
-      setReturnProcessing(false);
+      inFlight.current=false;setReturnProcessing(false);
     }
   };
 
@@ -172,14 +193,14 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
 
 
   return (
-      <CashModal open={true} onClose={() => onClose()} title="Ticket de retour"
+      <CashModal open={true} onClose={() => {if(!inFlight.current&&!uncertain)onClose();}} title="Ticket de retour"
         footer={!returnSelected ? (
           <button onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Fermer</button>
         ) : (
           <div className="flex items-center justify-end gap-3 w-full">
-            <button onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
-            <button onClick={processReturn} disabled={returnProcessing || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || returnLines.filter(l => l.selected).length === 0 || returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : "Créer l'avoir"}
+            <button disabled={returnProcessing||uncertain} onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors disabled:opacity-40">Annuler</button>
+            <button onClick={processReturn} disabled={returnProcessing || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || !!matchArticle || returnLines.filter(l => l.selected && l.quantity>0).length === 0 || (restock&&returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)) || (!restock&&financialReason.trim().length<8)} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : uncertain ? 'Réessayer le retour' : 'Valider le retour'}
             </button>
           </div>
         )}
@@ -236,11 +257,20 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             {/* Selected ticket header */}
             <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
               <span className="text-[15px] font-bold text-neutral-900 doc-number">{returnSelected.sale_number}</span>
-              <button disabled={returnProcessing} onClick={() => {lotLoadRequest.current++;setReturnSelected(null);}} className="text-[13px] text-neutral-600 underline underline-offset-2 hover:text-neutral-900 transition-colors">Changer</button>
+              <button disabled={returnProcessing||uncertain} onClick={() => {lotLoadRequest.current++;setReturnSelected(null);setMatchArticle(null);}} className="text-[13px] text-neutral-600 underline underline-offset-2 hover:text-neutral-900 transition-colors">Changer</button>
             </div>
 
             {lotLoad.busy&&<p role="status" className="py-2 text-xs text-neutral-500">Chargement des lots d’origine…</p>}
             {lotLoad.error&&<div role="alert" className="py-2 text-sm"><p>{lotLoad.error}</p><button type="button" className="underline" onClick={()=>selectReturnSale(returnSelected)}>Réessayer</button></div>}
+            {uncertain&&<p role="alert" className="mt-3 text-xs text-amber-800">Le résultat n'a pas été confirmé. Réessayez la même opération sans modifier ses données. Avant toute nouvelle tentative après fermeture du navigateur, vérifiez l'historique des retours et la caisse.</p>}
+            {matchArticle&&<HistoricalLotMatchPanel key={matchArticle} saleId={returnSelected.id} articleId={matchArticle} onCancel={()=>setMatchArticle(null)} onDone={()=>{setMatchArticle(null);selectReturnSale(returnSelected);}}/>}
+            <fieldset disabled={returnProcessing||uncertain||!!matchArticle} className="min-w-0">
+              <div className="mt-3 space-y-2 border border-neutral-200 rounded-lg p-3">
+                <p className="text-xs font-semibold">Traitement du stock</p>
+                <label className="flex items-center gap-2 text-xs"><input type="radio" name="return-stock-mode" checked={restock} onChange={()=>setRestock(true)}/>Retour avec remise en stock</label>
+                <label className="flex items-center gap-2 text-xs"><input type="radio" name="return-stock-mode" checked={!restock} onChange={()=>setRestock(false)}/>Remboursement sans remise en stock</label>
+                {!restock&&<><p className="text-xs text-amber-800">Le montant sera remboursé, mais aucun article ne sera réintégré au stock. Ne choisissez ce mode que si le retour est uniquement financier ou la marchandise n'est pas remise en stock.</p><label className="block text-xs">Motif obligatoire<textarea className="mt-1 w-full rounded border border-neutral-300 p-2 text-sm" rows={2} maxLength={500} value={financialReason} onChange={e=>setFinancialReason(e.target.value)}/></label></>}
+              </div>
             {/* Instructions */}
             <p className="text-[13px] text-neutral-600 mt-4 mb-4 leading-relaxed">Sélectionnez les articles à retourner et ajustez les quantités.</p>
 
@@ -252,7 +282,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
                 return (
                   <div key={i} className="py-4 border-b border-neutral-100 last:border-b-0">
                     <div className="flex items-start gap-3">
-                      <button type="button" onClick={() => toggle(!l.selected)} className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-neutral-300'}`}>
+                      <button type="button" disabled={l.maxQty<=0} onClick={() => toggle(!l.selected)} className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-neutral-300'}`}>
                         {l.selected && <Check className="w-3 h-3 text-white" />}
                       </button>
                       <div className="min-w-0 flex-1">
@@ -271,7 +301,8 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
                             </div>
                           </div>
                         )}
-                        {l.selected&&!lotLoad.busy&&!lotLoad.error&&<ReturnLotFields line={l} restock={true} onChange={lotQuantities=>setReturnLines(lines=>lines.map((x,j)=>j===i?{...x,lotQuantities}:x))}/>}
+                        {restock&&l.selected&&!lotLoad.busy&&!lotLoad.error&&<ReturnLotFields line={l} restock={true} onChange={lotQuantities=>setReturnLines(lines=>lines.map((x,j)=>j===i?{...x,lotQuantities}:x))}/>}
+                        {mayMatch&&restock&&l.selected&&l.article_id&&<button type="button" onClick={()=>setMatchArticle(l.article_id)} className="mt-2 text-xs font-medium underline underline-offset-2">Rapprocher les lots historiques</button>}
                       </div>
                     </div>
                   </div>
@@ -279,6 +310,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
               })}
             </div>
 
+            </fieldset>
             {/* Total avoir */}
             <div className="flex items-center justify-between pt-4 mt-2 border-t border-neutral-200">
               <div>
