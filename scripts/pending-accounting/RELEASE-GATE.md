@@ -71,3 +71,6 @@ Recettes 45 et 46 exécutées avec succès sur données synthétiques : édition
 
 ### Conversion transactionnelle des devis — actualisation
 Les appels séparés sont remplacés par convert_quote_atomic. Recettes 48 et 50 exécutées ; voir PHASE-10-12-BIS-QUOTE-CONVERSION.md pour les validations et blocages. Conversion IPM et parcours ultérieurs à harmoniser, tests simultanés/navigateur et recette commerciale de bout en bout encore obligatoires. Aucune publication.
+
+### Autorisation du stock négatif
+Recettes 51 et 52 : six scénarios de conversion et modification facture, plus recette 44 rejouée. Alignement sur la règle de production : magasin parent prioritaire pour un dépôt, ancien paramètre tenant non prioritaire. Stock par lots strict, pas de lot fictif. Aucun changement de règle de production. Recette navigateur et concurrence restent ouvertes.
