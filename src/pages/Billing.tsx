@@ -35,6 +35,7 @@ import { QuickCreateArticleModal, QuickCreateCustomerModal } from '../components
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 import { DocumentEditor } from '../components/DocumentEditor';
 import { DesktopWindow } from '../components/DesktopWindow';
+import {useLockedQuoteSnapshot,quoteSnapshotForm,readQuoteActionSnapshot,type QuoteBaseline,type LockedQuoteSnapshot} from '../lib/useLockedQuoteSnapshot';
 import {useDocumentEditLease} from '../lib/useDocumentEditLease';
 import {useLockedInvoiceSnapshot,invoiceSnapshotForm,type InvoiceBaseline} from '../lib/useLockedInvoiceSnapshot';
 import {DocumentEditLeaseBar} from '../components/DocumentEditLeaseBar';
@@ -195,7 +196,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
   const [vehiclePickerTargetIdx, setVehiclePickerTargetIdx] = useState<number | null>(null);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
-  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+  const [quoteBaseline,setQuoteBaseline]=useState<QuoteBaseline|null>(null);
+  const [quoteViewBaseline,setQuoteViewBaseline]=useState<QuoteBaseline|null>(null);
+  const quoteOriginal=useRef<string|null>(null);
+  const quoteEditSite=useRef<string|null>(null);
+  const quoteSavingRef=useRef(false);
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
   const [stickyTopRef, stickyTop] = useStickyOffset<HTMLDivElement>();
 
@@ -527,6 +532,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [quoteDocSettings, setQuoteDocSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
 
   const [saving, setSaving] = useState(false);
+  const quoteEditEnabled=visible&&!isDesktop&&quoteOpen&&!!editingQuoteId&&quoteEditSite.current===currentSite?.id&&can('edit_quotes');
+  const quoteDirty=!!editingQuoteId&&quoteOriginal.current!==JSON.stringify([quoteForm,quoteItems]);
+  const quoteLease=useDocumentEditLease({tenantId:tenant?.id,userId:profile?.id||user?.id,kind:'quote',resource:editingQuoteId||'',enabled:quoteEditEnabled,dirty:quoteDirty,saving});
+  const quoteSnapshot=useLockedQuoteSnapshot({tenantId:tenant?.id,quoteId:editingQuoteId,lease:quoteLease,enabled:quoteEditEnabled,baseline:quoteBaseline,preserveDraft:false,hydrate:s=>{const f=quoteSnapshotForm(s),lines=s.items.map(i=>({...i,quantity:Number(i.quantity),unit_price:Number(i.unit_price),discount:Number(i.discount||0),total:Number(i.total)}));setQuoteForm(f);setQuoteItems(lines);quoteOriginal.current=JSON.stringify([f,lines]);},onBaseline:setQuoteBaseline});
+  const quoteEditBlocked=!!editingQuoteId&&(!quoteLease.held||!quoteSnapshot.ready);
 
   // Debounce search
   useEffect(() => {
@@ -897,9 +907,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   const saveQuote = async (opts?: { silent?: boolean }) => {
     if (!tenant || !currentSite) { if (!opts?.silent) error('Magasin introuvable'); return; }
-    if (!can('create_quotes')) { if (!opts?.silent) error('Vous n\'avez pas la permission de créer des devis'); return; }
+    if (quoteSavingRef.current||saving)return;
+    if (!can(editingQuoteId?'edit_quotes':'create_quotes')) { if (!opts?.silent) error('Vous n\'avez pas la permission de créer des devis'); return; }
     if (quoteItems.every(i => !i.name.trim())) { if (!opts?.silent) error('Ajoutez au moins un article'); return; }
-    setSaving(true);
+    if(editingQuoteId&&(!quoteLease.held||!quoteLease.token||!quoteSnapshot.ready||quoteBaseline?.quoteId!==editingQuoteId)){error('Reprenez l’accès et vérifiez la version du devis.');return;}
+    quoteSavingRef.current=true;setSaving(true);
     const valid = quoteItems.filter(i => i.name.trim());
     const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
     const quoteRepLabel = repLabelOf(quoteForm.representative);
@@ -908,25 +920,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       : null;
 
     if (editingQuoteId) {
-      const prevRepId = (editingQuote as any)?.representative_id || null;
-      await supabase.from('quotes').update({
-        customer_id: quoteForm.customer_id || null,
-        subtotal, discount: 0, total: subtotal,
-        valid_until: quoteForm.valid_until || null, note: quoteForm.note,
-        representative_id: quoteForm.representative || null,
-        doc_header: docHeader,
-      }).eq('id', editingQuoteId);
-      if (prevRepId !== (quoteForm.representative || null)) {
-        await supabase.from('audit_logs').insert({
-          tenant_id: tenant.id, user_id: profile?.id || null,
-          action: 'representative_change', module: 'billing', reference_id: editingQuoteId,
-          old_value: { representative_id: prevRepId }, new_value: { representative_id: quoteForm.representative || null },
-        });
-      }
-      await supabase.from('quote_items').delete().eq('quote_id', editingQuoteId);
-      await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: editingQuoteId, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
-      setSaving(false);
-      if (!opts?.silent) { success('Devis mis à jour'); closeQuotePanel(); loadTab(billPage, true); }
+      try{
+        const {data,error:e}=await supabase.rpc('save_locked_quote_edit',{p_tenant_id:tenant.id,p_quote_id:editingQuoteId,p_window_id:quoteLease.windowId,p_lock_token:quoteLease.token,p_expected_version:quoteBaseline!.version,p_items:valid.map(i=>({article_id:i.article_id,name:i.name,quantity:i.quantity,unit_price:i.unit_price,discount:i.discount})),p_customer_id:quoteForm.customer_id||null,p_valid_until:quoteForm.valid_until||null,p_note:quoteForm.note,p_doc_header:docHeader,p_representative_id:quoteForm.representative||null,p_release:true});
+        if(e){if(e.code==='40001')quoteSnapshot.retry();throw e;}
+        if(!(data as LockedQuoteSnapshot&{success:boolean})?.success)throw new Error('Le devis n’a pas été enregistré.');
+        success('Devis mis à jour');closeQuotePanel();loadTab(billPage,true);
+      }catch(e){error(e&&typeof e==='object'&&'message' in e?String(e.message):'Enregistrement impossible.');}
+      finally{quoteSavingRef.current=false;setSaving(false);}
     } else {
       const { data: numData } = await supabase.rpc('next_doc_number', {
         p_tenant_id: tenant.id, p_kind: 'quote', p_prefix: 'DEV',
@@ -941,10 +941,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         representative_id: quoteForm.representative || null,
         doc_header: docHeader,
       }).select().single();
-      if (e || !q) { error(e?.message || 'Erreur'); setSaving(false); return; }
+      if (e || !q) { error(e?.message || 'Erreur'); quoteSavingRef.current=false;setSaving(false); return; }
       await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
       setEditingQuoteId(q.id);
-      setSaving(false);
+      quoteSavingRef.current=false;setSaving(false);
       if (!opts?.silent) {
         success('Devis créé');
         closeQuotePanel();
@@ -961,7 +961,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     setQuoteOpen(false);
     setQuoteEditorMode('create');
     setEditingQuoteId(null);
-    setEditingQuote(null);
+    setQuoteBaseline(null);quoteOriginal.current=null;quoteEditSite.current=null;
     setQuoteItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setQuoteForm({ customer_id: '', valid_until: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
   };
@@ -990,17 +990,28 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (isDesktop) {
       openDesktopQuoteWindow(q.id, q.status === 'draft' || q.status === 'sent' ? 'edit' : 'view');
     } else {
-      setQuoteItemsDetail([]);
+      setQuoteItemsDetail([]);setQuoteViewBaseline(null);
       setQuoteDetail(q);
+      if(tenant&&can('edit_quotes')){try{const snap=await readQuoteActionSnapshot(tenant.id,q.id);setQuoteDetail({...q,...snap.quote} as Quote);setQuoteItemsDetail(snap.items);setQuoteViewBaseline({quoteId:q.id,version:snap.version});return;}catch{/* consultation simple */}}
       const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref)').eq('quote_id', q.id);
       setQuoteItemsDetail(data || []);
     }
   };
-  const changeQuoteStatus = async (q: Quote, status: string) => {
-    if (!can('edit_quotes')) { error('Vous n\'avez pas la permission de modifier les devis'); return; }
-    await supabase.from('quotes').update({ status }).eq('id', q.id);
-    success('Statut mis à jour'); loadTab(billPage, true);
-    if (quoteDetail?.id === q.id) setQuoteDetail({ ...q, status });
+  const changeQuoteStatus = async (q:Quote,status:string)=>{
+    if(!tenant||!can('edit_quotes')){error('Vous n’avez pas la permission de modifier les devis');return;}
+    try{
+      let version=quoteViewBaseline?.quoteId===q.id?quoteViewBaseline.version:null;
+      if(!version){const snap=await readQuoteActionSnapshot(tenant.id,q.id);if(snap.quote.status!==q.status||Number(snap.quote.total)!==Number(q.total)){error('Le devis a changé. Ouvrez-le avant de poursuivre.');return;}version=snap.version;}
+      const {data,error:e}=await supabase.rpc('change_locked_quote_status',{p_tenant_id:tenant.id,p_quote_id:q.id,p_expected_version:version,p_status:status});
+      if(e)throw e;
+      const snap=data as LockedQuoteSnapshot;
+      if(quoteDetail?.id===q.id){setQuoteDetail({...q,...snap.quote} as Quote);setQuoteItemsDetail(snap.items);setQuoteViewBaseline({quoteId:q.id,version:snap.version});}
+      success('Statut mis à jour');loadTab(billPage,true);
+    }catch(e){error(e&&typeof e==='object'&&'message' in e?String(e.message):'Changement impossible.');}
+  };
+  const editMobileQuote=(q:Quote)=>{
+    if(!can('edit_quotes')||!['draft','sent'].includes(q.status))return;
+    quoteEditSite.current=currentSite?.id||null;setQuoteBaseline(null);quoteOriginal.current=null;setEditingQuoteId(q.id);setQuoteEditorMode('edit');setQuoteDetail(null);setQuoteOpen(true);
   };
 
   const printQuote = () => {
@@ -3015,7 +3026,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         <MobileBillingWizard
           open={true}
           onClose={closeQuotePanel}
-          title={editingQuoteId ? 'Edition devis' : 'Nouveau devis'}
+          title={editingQuoteId ? 'Modifier le devis' : 'Nouveau devis'}
+          editBlocked={quoteEditBlocked}
+          onActivity={quoteLease.markActivity}
+          editLeaseBanner={editingQuoteId?<div className="px-3 pt-2"><DocumentEditLeaseBar lease={quoteLease} dirty={quoteDirty} saving={saving} label="ce devis" onSaveAndRelease={quoteSnapshot.ready?()=>void saveQuote():undefined}/><InvoiceEditSnapshotBar state={quoteSnapshot} document="devis"/></div>:undefined}
           headerFields={[
             { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
             { key: 'valid_until', label: 'Valide jusqu\'au', type: 'date' },
@@ -3121,6 +3135,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       <Modal open={visible && !!quoteDetail} onClose={() => setQuoteDetail(null)} title={quoteDetail ? `Devis ${quoteDetail.quote_number}` : ''} size="lg" clayPreviewActions
         footer={<>
           <div className="flex gap-1.5 mr-auto">
+            {quoteDetail&&can('edit_quotes')&&['draft','sent'].includes(quoteDetail.status)&&<button onClick={()=>editMobileQuote(quoteDetail)} className={quotePreviewAction} title="Modifier"><Pencil className="w-4 h-4"/></button>}
             {quoteDetail?.status === 'draft' && <button onClick={() => changeQuoteStatus(quoteDetail, 'sent')} className={quotePreviewAction} title="Marquer envoyé"><CheckCircle className="w-4 h-4" /></button>}
             {quoteDetail && ['draft', 'sent'].includes(quoteDetail.status) && <button onClick={() => changeQuoteStatus(quoteDetail, 'accepted')} className={quotePreviewAction} title="Accepter"><CheckCircle className="w-4 h-4" /></button>}
             {quoteDetail?.status === 'accepted' && <button onClick={() => openConvert(quoteDetail)} className={quotePreviewAction} title="Convertir en facture"><ArrowRight className="w-4 h-4" /></button>}

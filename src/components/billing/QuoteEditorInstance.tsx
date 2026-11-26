@@ -8,6 +8,10 @@ import { useToast } from '../../context/ToastContext';
 import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../../lib/print';
 import { calculerIpm, parseConvention, type IpmArticleLine } from '../../lib/ipm';
 import { type SalesRepresentative, repDisplayName } from '../../lib/repCommission';
+import {useDocumentEditLease} from '../../lib/useDocumentEditLease';
+import {useLockedQuoteSnapshot,quoteSnapshotForm,readQuoteActionSnapshot,type QuoteBaseline,type LockedQuoteSnapshot} from '../../lib/useLockedQuoteSnapshot';
+import {DocumentEditLeaseBar} from '../DocumentEditLeaseBar';
+import {InvoiceEditSnapshotBar} from '../InvoiceEditSnapshotBar';
 import { DocumentEditor } from '../DocumentEditor';
 import type { DocSettings } from '../DocumentSettingsTab';
 
@@ -82,6 +86,10 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
   }>({ customer_id: '', valid_until: '', note: '', doc_date: new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'}), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
   const [items, setItems] = useState<QuoteItem[]>([{ ...EMPTY_ITEM }]);
   const [saving, setSaving] = useState(false);
+  const savingRef=useRef(false);
+  const [baseline,setBaseline]=useState<QuoteBaseline|null>(null);
+  const originalDraft=useRef<string|null>(null);
+  const [viewVersion,setViewVersion]=useState<string|null>(null);
 
   const [ipmBeneficiaire, setIpmBeneficiaire] = useState<any>(null);
   const [ipmConvention, setIpmConvention] = useState<any>(null);
@@ -90,6 +98,16 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
 
   const siteMismatch = !!(currentSite?.id && descriptor.siteId && currentSite.id !== descriptor.siteId);
 
+  const editEnabled=recoveryChecked&&mode==='edit'&&!!editingQuoteId&&!siteMismatch&&can('edit_quotes');
+  const dirtyEdit=mode==='edit'&&originalDraft.current!==JSON.stringify([quoteForm,items]);
+  const editLease=useDocumentEditLease({tenantId:descriptor.tenantId,userId,kind:'quote',resource:editingQuoteId||'',enabled:editEnabled,dirty:dirtyEdit,saving});
+  const hydrateQuote=(snap:LockedQuoteSnapshot)=>{
+    const f=quoteSnapshotForm(snap),lines=snap.items.map(i=>({...i,quantity:Number(i.quantity),unit_price:Number(i.unit_price),discount:Number(i.discount||0),total:Number(i.total)}));
+    setQuoteForm(f);setItems(lines);setEditingQuote({...snap.quote,customers:customers.find(c=>c.id===snap.quote.customer_id)?{name:customers.find(c=>c.id===snap.quote.customer_id).name}:null} as Quote);
+    originalDraft.current=JSON.stringify([f,lines]);hasRecoveredDraftRef.current=false;setViewVersion(snap.version);
+  };
+  const editSnapshot=useLockedQuoteSnapshot({tenantId:descriptor.tenantId,quoteId:editingQuoteId,lease:editLease,enabled:editEnabled,baseline,preserveDraft:hasRecoveredDraftRef.current,hydrate:hydrateQuote,onBaseline:setBaseline});
+  const editBlocked=mode==='edit'&&(!editLease.held||!editSnapshot.ready);
   const ipmConfig = useMemo(() => parseConvention(ipmConvention), [ipmConvention]);
   const subtotal = items.reduce((s, i) => s + Number(i.total), 0);
   const ipmResult = useMemo(() => {
@@ -119,6 +137,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
     const d = loadFormDraft<any>(scope, descriptor.windowId);
     if (d && d.kind === 'quote' && d.data) {
       hasRecoveredDraftRef.current = true;
+      if(d.data.baseline?.quoteId&&typeof d.data.baseline.version==='string')setBaseline(d.data.baseline);
       if (d.data.quoteForm) setQuoteForm(d.data.quoteForm);
       if (Array.isArray(d.data.items) && d.data.items.length > 0) setItems(d.data.items);
       if (d.mode) setMode(d.mode as any);
@@ -138,18 +157,19 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
       kind: 'quote',
       documentId: editingQuoteId,
       mode,
-      data: { quoteForm, items, editingQuoteId },
+      data: { quoteForm, items, editingQuoteId, baseline },
       opInProgress: opInProgressRef.current,
     }, 400);
-  }, [recoveryChecked, scope, siteMismatch, descriptor.windowId, mode, editingQuoteId, quoteForm, items]);
+  }, [recoveryChecked, scope, siteMismatch, descriptor.windowId, mode, editingQuoteId, quoteForm, items, baseline]);
 
   // Load existing quote data on mount
   useEffect(() => {
-    if (!recoveryChecked) return;
+    if (!recoveryChecked || mode==='edit') return;
     const targetId = editingQuoteId || descriptor.quoteId;
     if (!targetId) return;
     let cancelled = false;
     (async () => {
+      if(can('edit_quotes')&&!siteMismatch){try{const snap=await readQuoteActionSnapshot(descriptor.tenantId,targetId);if(!cancelled){hydrateQuote(snap);setBaseline({quoteId:targetId,version:snap.version});}return;}catch{/* lecture ordinaire, aucune action de statut sans version */}}
       const [{ data: q }, { data: qItems }] = await Promise.all([
         supabase.from('quotes').select('*, customers(name)').eq('id', targetId).maybeSingle(),
         supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', targetId),
@@ -172,7 +192,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recoveryChecked, descriptor.quoteId]);
+  }, [recoveryChecked, descriptor.quoteId, editingQuoteId, mode]);
 
   // Auto-focus first input on create
   useEffect(() => {
@@ -216,12 +236,13 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
       error("Un enregistrement était en cours au moment du rechargement. Vérifiez le devis côté serveur puis cliquez sur « J'ai vérifié » avant de relancer.");
       return;
     }
-    if (saving) return;
+    if (savingRef.current||saving) return;
     if (!tenant || !currentSite) { if (!opts?.silent) error('Magasin introuvable'); return; }
     if (siteMismatch) { if (!opts?.silent) error('Ce devis appartient à un autre magasin'); return; }
-    if (!can('create_quotes')) { if (!opts?.silent) error('Vous n\'avez pas la permission de créer des devis'); return; }
+    if (!can(editingQuoteId?'edit_quotes':'create_quotes')) { if (!opts?.silent) error('Vous n\'avez pas la permission de créer des devis'); return; }
     if (items.every(i => !i.name.trim())) { if (!opts?.silent) error('Ajoutez au moins un article'); return; }
-    setSaving(true);
+    if(editingQuoteId&&(!editLease.held||!editLease.token||!editSnapshot.ready||baseline?.quoteId!==editingQuoteId)){error('Reprenez l’accès et vérifiez la version du devis.');return;}
+    savingRef.current=true;setSaving(true);
     const valid = items.filter(i => i.name.trim());
     const st = valid.reduce((s, i) => s + Number(i.total), 0);
     const quoteRepLabel = repLabelOf(quoteForm.representative);
@@ -233,31 +254,20 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
     saveFormDraft(scope, {
       windowId: descriptor.windowId, kind: 'quote',
       documentId: editingQuoteId, mode,
-      data: { quoteForm, items, editingQuoteId },
+      data: { quoteForm, items, editingQuoteId, baseline },
       opInProgress: 'save',
     });
     if (editingQuoteId) {
-      const prevRepId = (editingQuote as any)?.representative_id || null;
-      await supabase.from('quotes').update({
-        customer_id: quoteForm.customer_id || null,
-        subtotal: st, discount: 0, total: st,
-        valid_until: quoteForm.valid_until || null, note: quoteForm.note,
-        representative_id: quoteForm.representative || null,
-        doc_header: docHeader,
-      }).eq('id', editingQuoteId).eq('tenant_id', descriptor.tenantId).eq('site_id', descriptor.siteId);
-      if (prevRepId !== (quoteForm.representative || null)) {
-        await supabase.from('audit_logs').insert({
-          tenant_id: tenant.id, user_id: profile?.id || null,
-          action: 'representative_change', module: 'billing', reference_id: editingQuoteId,
-          old_value: { representative_id: prevRepId }, new_value: { representative_id: quoteForm.representative || null },
-        });
-      }
-      await supabase.from('quote_items').delete().eq('quote_id', editingQuoteId);
-      await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: editingQuoteId, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
-      setSaving(false);
-      opInProgressRef.current = null;
-      clearFormDraft(scope, descriptor.windowId);
-      if (!opts?.silent) { success('Devis mis à jour'); onSaved(); onClose(); }
+      try{
+        const {data,error:e}=await supabase.rpc('save_locked_quote_edit',{p_tenant_id:tenant.id,p_quote_id:editingQuoteId,p_window_id:editLease.windowId,p_lock_token:editLease.token,p_expected_version:baseline!.version,p_items:valid.map(i=>({article_id:i.article_id,name:i.name,quantity:i.quantity,unit_price:i.unit_price,discount:i.discount})),p_customer_id:quoteForm.customer_id||null,p_valid_until:quoteForm.valid_until||null,p_note:quoteForm.note,p_doc_header:docHeader,p_representative_id:quoteForm.representative||null,p_release:!opts?.silent});
+        if(e){if(e.code==='40001')editSnapshot.retry();throw e;}
+        const snap=data as LockedQuoteSnapshot&{success:boolean};
+        if(!snap?.success)throw new Error('Le devis n’a pas été enregistré.');
+        hydrateQuote(snap);setBaseline({quoteId:editingQuoteId,version:snap.version});
+        opInProgressRef.current=null;clearFormDraft(scope,descriptor.windowId);
+        if(!opts?.silent){success('Devis mis à jour');onSaved();onClose();}
+      }catch(e){opInProgressRef.current=null;error(e&&typeof e==='object'&&'message' in e?String(e.message):'Enregistrement impossible.');}
+      finally{savingRef.current=false;setSaving(false);}
     } else {
       const { data: numData } = await supabase.rpc('next_doc_number', {
         p_tenant_id: tenant.id, p_kind: 'quote', p_prefix: 'DEV',
@@ -272,11 +282,11 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
         representative_id: quoteForm.representative || null,
         doc_header: docHeader,
       }).select().single();
-      if (e || !q) { error(e?.message || 'Erreur'); setSaving(false); return; }
+      if (e || !q) { error(e?.message || 'Erreur'); savingRef.current=false;setSaving(false); return; }
       await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
       setEditingQuoteId(q.id);
       setEditingQuote(q as Quote);
-      setSaving(false);
+      savingRef.current=false;setSaving(false);
       opInProgressRef.current = null;
       clearFormDraft(scope, descriptor.windowId);
       if (!opts?.silent) {
@@ -288,14 +298,21 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
     }
   };
 
-  const changeStatus = async (status: string) => {
-    if (!editingQuote) return;
-    if (!can('edit_quotes')) { error('Vous n\'avez pas la permission de modifier les devis'); return; }
-    if (siteMismatch) { error('Ce devis appartient à un autre magasin'); return; }
-    await supabase.from('quotes').update({ status }).eq('id', editingQuote.id);
-    success('Statut mis à jour');
-    setEditingQuote({ ...editingQuote, status });
-    onSaved();
+  const changeStatus = async(status:string)=>{
+    if(!editingQuote||!tenant||!can('edit_quotes')||siteMismatch||savingRef.current)return;
+    if(mode==='edit'&&(!editSnapshot.ready||!editLease.held||dirtyEdit)){error('Enregistrez le devis avant de changer son statut.');return;}
+    const version=mode==='edit'?baseline?.version:viewVersion;
+    if(!version){error('Rechargez le devis avant de changer son statut.');return;}
+    savingRef.current=true;setSaving(true);
+    try{
+      const {data,error:e}=await supabase.rpc('change_locked_quote_status',{p_tenant_id:tenant.id,p_quote_id:editingQuote.id,p_expected_version:version,p_status:status,...(mode==='edit'?{p_window_id:editLease.windowId,p_lock_token:editLease.token}:{})});
+      if(e){if(e.code==='40001'&&mode==='edit')editSnapshot.retry();throw e;}
+      const snap=data as LockedQuoteSnapshot;
+      hydrateQuote(snap);setBaseline({quoteId:editingQuote.id,version:snap.version});
+      if(status==='accepted'||status==='rejected')setMode('view');
+      success('Statut mis à jour');onSaved();
+    }catch(e){error(e&&typeof e==='object'&&'message' in e?String(e.message):'Changement impossible.');}
+    finally{savingRef.current=false;setSaving(false);}
   };
 
   const handleConvert = () => {
@@ -328,8 +345,8 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
   };
 
   const openForEdit = () => {
-    if (!editingQuote) return;
-    setMode('edit');
+    if (!editingQuote||!can('edit_quotes')||!['draft','sent'].includes(editingQuote.status)) return;
+    setBaseline(null);originalDraft.current=null;hasRecoveredDraftRef.current=false;setMode('edit');
   };
 
   // ── Tier picker callback ──────────────────────────────────
@@ -341,7 +358,8 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
   // Expose helpers to parent via ref-like pattern not needed — parent uses callbacks
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full relative">
+    <div ref={containerRef} className="flex flex-col h-full relative" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
+      {mode==='edit'&&<div className="px-3 pt-2 shrink-0"><DocumentEditLeaseBar lease={editLease} dirty={dirtyEdit} saving={saving} label="ce devis" onSaveAndRelease={editSnapshot.ready?()=>void saveQuote():undefined}/><InvoiceEditSnapshotBar state={editSnapshot} document="devis"/></div>}
       {siteMismatch && (
         <>
           <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-2 text-xs text-amber-800 relative z-10">
@@ -364,7 +382,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
       <DocumentEditor
         embedded
         docType="quote"
-        mode={mode}
+        mode={editBlocked?'view':mode}
         articles={articles}
         customers={customers}
         headerForm={{ doc_date: quoteForm.doc_date || '', customer_id: quoteForm.customer_id, note: quoteForm.note, delivery_date: quoteForm.delivery_date, reference: quoteForm.reference, warranty: quoteForm.warranty, representative: quoteForm.representative, imei: quoteForm.imei, valid_until: quoteForm.valid_until }}
@@ -373,7 +391,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
         setItems={setItems}
         subtotal={subtotal}
         saving={saving}
-        onSave={saveQuote}
+        onSave={editBlocked?undefined:saveQuote}
         onClose={onClose}
         inactive={siteMismatch}
         editingId={editingQuoteId}
@@ -382,8 +400,8 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
         docSettings={docSettings}
         autoMode={autoMode}
         onVehiclePicker={onVehiclePicker}
-        onChangeStatus={changeStatus}
-        onConvert={handleConvert}
+        onChangeStatus={!saving&&can('edit_quotes')&&(mode==='edit'?editSnapshot.ready&&!dirtyEdit:!!viewVersion)?changeStatus:undefined}
+        onConvert={mode==='view'?handleConvert:undefined}
         isPharmacy={isPharmacy}
         ipmBeneficiaire={ipmBeneficiaire}
         ipmTaux={ipmTaux}
@@ -393,7 +411,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
         onCreateArticle={onCreateArticle}
         onCreateCustomer={onCreateCustomer}
         reps={activeReps}
-        onEdit={editingQuote && mode === 'view' ? openForEdit : undefined}
+        onEdit={editingQuote && mode === 'view'&&can('edit_quotes')&&['draft','sent'].includes(editingQuote.status) ? openForEdit : undefined}
       />
     </div>
   );

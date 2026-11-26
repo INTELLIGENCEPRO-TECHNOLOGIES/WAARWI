@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState,useCallback} from 'react';
 import {supabase} from './supabase';
 
-export type LeaseKind='accounting_journal'|'sale';
+export type LeaseKind='accounting_journal'|'sale'|'quote';
 type Action='acquire'|'heartbeat'|'status'|'request'|'decline'|'release'|'takeover';
 type Result={state:'held'|'busy'|'expired'|'free';token?:string|null;owner_name?:string;opened_at?:string;expires_at?:string;server_now:string;request_state?:'pending'|'declined'|null;requester_name?:string;requested_at?:string;can_takeover?:boolean};
 type Snapshot={scope:string;windowId:string;result:Result|null;error:string;checking:boolean;validUntil:number;released:boolean};
