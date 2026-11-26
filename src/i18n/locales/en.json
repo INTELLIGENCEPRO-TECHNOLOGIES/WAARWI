@@ -47,6 +47,7 @@
     "accountingPlan": "Chart of accounts",
     "accountingJournalSettings":"Journal codes",
     "accountingAging":"Aging and due dates",
+    "accountingRevision":"Accounting review",
     "accountingOverview": "Accounting overview",
     "accountingEntry": "Journal entry",
     "vatReport": "VAT statement",
