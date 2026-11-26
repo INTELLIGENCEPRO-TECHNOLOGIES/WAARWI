@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import {useAccountingWork} from '../context/AccountingWindowContext';
 import { supabase } from '../lib/supabase';
 import {AccountingTable} from './AccountingWorkspace';
 import { formatDate } from '../lib/format';
@@ -11,6 +12,7 @@ const nature=(v:string)=>v==='sales'?'Ventes et avoirs':v==='purchases'?'Achats'
 const csv=(v:unknown)=>{if(typeof v==='number'&&Number.isFinite(v))return String(v).replace('.',',');let s=String(v??'');if(/^[\s\u0000-\u001f]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
 const initialDates=()=>{const t=new Date().toISOString().slice(0,10);return {from:t.slice(0,7)+'-01',to:t};};
 export function AccountingVatReport({tenantId}:{tenantId:string}) {
+ const work=useAccountingWork();
  const [dates,setDates]=useState(initialDates);
  const [query,setQuery]=useState(()=>({...initialDates(),offset:0,revision:0}));
  const [report,setReport]=useState<Report|null>(null);
@@ -90,7 +92,7 @@ export function AccountingVatReport({tenantId}:{tenantId:string}) {
     <p className="text-xs text-neutral-500">Les achats historiques sans détail fiscal ne permettent pas de reconstituer automatiquement la TVA récupérable.</p>
    </div>
    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Détail des écritures de TVA ({report.row_count})</h2><button type="button" className="btn btn-secondary print:hidden" disabled={!report.rows.length} onClick={exportPage}>Exporter cette page (CSV)</button></div>
-   <AccountingTable><table><thead><tr><th className="text-left">Pièce</th><th className="text-left">Compte / nature</th><th className="text-right">Débit</th><th className="text-right">Crédit</th></tr></thead><tbody>{report.rows.map(r=><tr key={r.id}><td><span className="font-medium">{r.entry_number}</span><span className="block text-[11px] text-neutral-500">{formatDate(r.entry_date)} · {r.reference||r.description}</span></td><td><span>{r.account_code}</span><span className="block text-[11px]">{category(r.category)} · {nature(r.nature)}</span></td><td className="text-right">{Number(r.debit).toLocaleString('fr-FR')}</td><td className="text-right">{Number(r.credit).toLocaleString('fr-FR')}</td></tr>)}{!report.rows.length&&<tr><td colSpan={4} className="text-center text-neutral-500">Aucun mouvement de TVA sur cette page.</td></tr>}</tbody></table></AccountingTable>
+   <AccountingTable><table><thead><tr><th className="text-left">Pièce</th><th className="text-left">Compte / nature</th><th className="text-right">Débit</th><th className="text-right">Crédit</th></tr></thead><tbody>{report.rows.map(r=><tr key={r.id}><td><button type="button" className="font-medium hover:underline" onClick={()=>work?.openPiece({entryNumber:r.entry_number})}>{r.entry_number}</button><span className="block text-[11px] text-neutral-500">{formatDate(r.entry_date)} · {r.reference||r.description}</span></td><td><button type="button" className="hover:underline" onClick={()=>work?.openAccount(r.account_code)}>{r.account_code}</button><span className="block text-[11px]">{category(r.category)} · {nature(r.nature)}</span></td><td className="text-right">{Number(r.debit).toLocaleString('fr-FR')}</td><td className="text-right">{Number(r.credit).toLocaleString('fr-FR')}</td></tr>)}{!report.rows.length&&<tr><td colSpan={4} className="text-center text-neutral-500">Aucun mouvement de TVA sur cette page.</td></tr>}</tbody></table></AccountingTable>
    <nav className="acc-pagination print:hidden" aria-label="Pages des écritures de TVA"><button type="button" className="btn btn-secondary" disabled={query.offset===0||changed} onClick={()=>setQuery(p=>({...p,offset:Math.max(0,p.offset-50)}))}>Précédente</button><span className="text-xs text-neutral-500">Page {query.offset/50+1} / {Math.max(1,Math.ceil(report.row_count/50))}</span><button type="button" className="btn btn-secondary" disabled={query.offset+50>=report.row_count||changed} onClick={()=>setQuery(p=>({...p,offset:p.offset+50}))}>Suivante</button></nav>
   </div>}
  </section>;
