@@ -2,6 +2,7 @@ import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Save, Pencil as Edit2, Search, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
+import {AccountingJournalSettings} from '../components/AccountingJournalSettings';
 import {AccountingOverview} from '../components/AccountingOverview';
 import { AccountingPagination, AccountingTable, AccountingRowActions, useAccountingPagination } from '../components/AccountingWorkspace';
 import './accounting-graphite.css';
@@ -24,7 +25,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'overview' | 'entry' | 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
+type TabKey = 'journal_settings' | 'overview' | 'entry' | 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
 
 const JOURNAL_TYPES: Record<string, string> = {
   VE: 'Journal des ventes', AC: 'Journal des achats',
@@ -35,6 +36,7 @@ const JOURNAL_TYPES: Record<string, string> = {
 export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }: { section?: TabKey;onNavigate?:(route:string)=>void;inWindow?:boolean;onExit?:()=>void }) {
   const {tenant}=useApp();const {can}=usePermissions();
   const titles: Record<TabKey, { t: string; s: string }> = {
+    journal_settings:{t:'Codes journaux',s:'Paramétrage des journaux comptables.'},
     overview: {t:'Accueil comptable',s:'Situation et accès directs.'},
     entry: {t:'Saisie des écritures',s:'Nouvelle pièce comptable.'},
     plan: { t: 'Plan comptable', s: 'Plan comptable SYSCOHADA.' },
@@ -55,6 +57,7 @@ export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }
     <div className="accounting-workspace">
       {!inWindow&&<header className="acc-titlebar"><div><h1>{meta.t}</h1><p>{meta.s}</p></div><span className="acc-module">Comptabilité</span></header>}
       <div className="acc-body" key={section}>
+      {section === 'journal_settings' && <AccountingJournalSettings/>}
       {section === 'plan' && <PlanTab />}
       {section === 'overview' && tenant && <AccountingOverview key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} onNavigate={r=>onNavigate?.(r)}/>}
       {section === 'entry' && can('manage_accounting') && <JournalsTab entryOnly onExit={onExit??(()=>onNavigate?.('acc_journals'))}/>}
