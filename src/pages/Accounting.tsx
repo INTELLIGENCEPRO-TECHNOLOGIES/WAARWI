@@ -1,3 +1,4 @@
+import {AccountingPeriodBooks} from '../components/AccountingPeriodBooks';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -562,41 +563,13 @@ function BalanceTab() {
   const { success, error: toastError } = useToast();
   const { can } = usePermissions();
   const canManage = can('manage_accounting');
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'month' | 'year' | 'all'>('year');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkPayBusy, setBulkPayBusy] = useState(false);
   const [showPurchaseInvoice, setShowPurchaseInvoice] = useState(false);
   const [bulkPayFournBusy, setBulkPayFournBusy] = useState(false);
   const [showCashReview, setShowCashReview] = useState(false);
 
-  const load = async (silent = false) => {
-    if (!tenant) return;
-    if (!silent) setLoading(true);
-    const now = new Date();
-    let dateFrom: string | null = null;
-    if (period === 'month') dateFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    else if (period === 'year') dateFrom = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
-
-    const { data: rows, error } = await supabase.rpc('balance_generale', {
-      p_tenant_id: tenant.id,
-      p_date_from: dateFrom,
-      p_date_to: null,
-    });
-    if (error) { toastError(error.message); setLoading(false); return; }
-    setData(rows || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, [tenant?.id, period]);
-  useRealtimeRefresh(['journal_entries', 'journal_lines', 'accounts'], () => load(true));
-
-  const totalDebit = data.reduce((s: number, r: any) => s + Number(r.total_debit), 0);
-  const totalCredit = data.reduce((s: number, r: any) => s + Number(r.total_credit), 0);
-  const totalSoldeDebiteur = data.reduce((s: number, r: any) => s + Number(r.solde_debiteur), 0);
-  const totalSoldeCrediteur = data.reduce((s: number, r: any) => s + Number(r.solde_crediteur), 0);
-  const balancePaging=useAccountingPagination(data,period);
+  const load=()=>work?.refresh();
 
   const comptabiliserTout = async () => {
     if (!tenant || bulkBusy) return;
@@ -645,11 +618,6 @@ function BalanceTab() {
   return (
     <div className="space-y-4">
       <div className="acc-toolbar acc-fixed">
-        <select value={period} onChange={e => setPeriod(e.target.value as any)} className="input w-48">
-          <option value="month">Mois en cours</option>
-          <option value="year">Exercice en cours</option>
-          <option value="all">Tout</option>
-        </select>
         {canManage && <div className="flex items-center gap-2 flex-wrap">
           <button onClick={comptabiliserTout} disabled={bulkBusy} className="btn-secondary">
             {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
@@ -674,110 +642,19 @@ function BalanceTab() {
       </div>
 
       {canManage && tenant && showPurchaseInvoice && (
-        <AccountingPurchaseInvoice key={tenant.id} tenantId={tenant.id} onPosted={() => void load(true)} />
+        <AccountingPurchaseInvoice key={tenant.id} tenantId={tenant.id} onPosted={() => void load()} />
       )}
       {canManage && tenant && showCashReview && (
-        <AccountingCashReview key={tenant.id} tenantId={tenant.id} onPosted={() => void load(true)} />
+        <AccountingCashReview key={tenant.id} tenantId={tenant.id} onPosted={() => void load()} />
       )}
 
-      {loading ? <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-        : data.length === 0 ? (
-          <div className="card py-12 text-center text-sm text-neutral-500">Aucune écriture pour la période sélectionnée.</div>
-        ) : (
-          <AccountingTable footer={<AccountingPagination {...balancePaging}/>}>
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 text-xs uppercase text-neutral-600">
-                  <tr>
-                    <th className="px-1 md:px-4 py-3 text-left">Compte</th>
-                    <th className="px-1 md:px-4 py-3 text-left">Intitulé</th>
-                    <th className="px-1 md:px-4 py-3 text-right">Débit (FCFA)</th>
-                    <th className="px-1 md:px-4 py-3 text-right">Crédit (FCFA)</th>
-                    <th className="px-1 md:px-4 py-3 text-right">Solde débiteur</th>
-                    <th className="px-1 md:px-4 py-3 text-right">Solde créditeur</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {balancePaging.rows.map((r: any) => (
-                    <tr key={r.account_code} className="hover:bg-[var(--w-surface-el)]/60">
-                      <td className="px-1 md:px-4 py-2.5 text-xs"><button type="button" className="font-medium hover:underline" onClick={()=>work?.openAccount(r.account_code)}>{r.account_code}</button></td>
-                      <td className="px-1 md:px-4 py-2.5 text-neutral-700">{r.account_name}</td>
-                      <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs">{Number(r.total_debit) > 0 ? Number(r.total_debit).toLocaleString('fr-FR') : '—'}</td>
-                      <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs">{Number(r.total_credit) > 0 ? Number(r.total_credit).toLocaleString('fr-FR') : '—'}</td>
-                      <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs font-semibold text-neutral-900">{Number(r.solde_debiteur) > 0 ? Number(r.solde_debiteur).toLocaleString('fr-FR') : '—'}</td>
-                      <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs font-semibold text-neutral-900">{Number(r.solde_crediteur) > 0 ? Number(r.solde_crediteur).toLocaleString('fr-FR') : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-neutral-50 border-t-2 border-neutral-200 font-semibold text-sm">
-                  <tr>
-                    <td className="px-1 md:px-4 py-3" colSpan={2}>TOTAL</td>
-                    <td className="px-1 md:px-4 py-3 text-right font-mono">{totalDebit.toLocaleString('fr-FR')}</td>
-                    <td className="px-1 md:px-4 py-3 text-right font-mono">{totalCredit.toLocaleString('fr-FR')}</td>
-                    <td className="px-1 md:px-4 py-3 text-right font-mono text-neutral-900">{totalSoldeDebiteur.toLocaleString('fr-FR')}</td>
-                    <td className="px-1 md:px-4 py-3 text-right font-mono text-neutral-900">{totalSoldeCrediteur.toLocaleString('fr-FR')}</td>
-                  </tr>
-                </tfoot>
-              </table>
-          </AccountingTable>
-        )}
+      <AccountingPeriodBooks mode="balance"/>
     </div>
   );
 }
 
 /* ===================== GRAND LIVRE ===================== */
-function GrandLivreTab() {
-  const { tenant } = useApp();
-  const work=useAccountingWork();
-  const { error: toastError } = useToast();
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'month' | 'year' | 'all'>('month');
-  const [accountFilter, setAccountFilter] = useState('');
-  const [accounts, setAccounts] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (!tenant) return;
-    supabase.from('accounts').select('code, name').eq('tenant_id', tenant.id).order('code').then(({ data }) => setAccounts(data || []));
-  }, [tenant?.id]);
-
-  const load = async (silent = false) => {
-    if (!tenant) return;
-    if (!silent) setLoading(true);
-    const now = new Date();
-    let dateFrom: string | null = null;
-    if (period === 'month') dateFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    else if (period === 'year') dateFrom = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
-
-    const { data: rows, error } = await supabase.rpc('grand_livre', {
-      p_tenant_id: tenant.id,
-      p_date_from: dateFrom,
-      p_date_to: null,
-      p_account_code: accountFilter || null,
-    });
-    if (error) { toastError(error.message); setLoading(false); return; }
-    setData(rows || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, [tenant?.id, period, accountFilter]);
-  useRealtimeRefresh(['journal_entries', 'journal_lines', 'accounts'], () => load(true));
-
-  const ordered=useMemo(()=>[...data].sort((a,b)=>String(a.account_code).localeCompare(String(b.account_code))||String(a.entry_date).localeCompare(String(b.entry_date))||String(a.entry_number).localeCompare(String(b.entry_number))),[data]);
-  const paging=useAccountingPagination(ordered,period+'|'+accountFilter);
-  const debit=data.reduce((n,r)=>n+Number(r.debit),0),credit=data.reduce((n,r)=>n+Number(r.credit),0);
-  return <div className="space-y-3">
-    <div className="acc-toolbar acc-fixed">
-      <select aria-label="Période" value={period} onChange={e=>setPeriod(e.target.value as any)} className="input w-auto"><option value="month">Mois en cours</option><option value="year">Exercice en cours</option><option value="all">Tout</option></select>
-      <div className="w-64 max-w-full"><SearchableSelect options={[{value:'',label:'Tous les comptes'},...accounts.map(a=>({value:a.code,label:a.code+' — '+a.name}))]} value={accountFilter} onChange={setAccountFilter} placeholder="Tous les comptes"/></div>
-    </div>
-    <div className="acc-summary"><div><span>Mouvements de la sélection</span><strong>{data.length}</strong></div><div><span>Total débit (FCFA)</span><strong>{debit.toLocaleString('fr-FR')}</strong></div><div><span>Total crédit (FCFA)</span><strong>{credit.toLocaleString('fr-FR')}</strong></div></div>
-    <AccountingTable footer={<AccountingPagination {...paging} disabled={loading}/>}>
-      <table><thead><tr><th className="text-left">Compte</th><th className="text-left hidden md:table-cell">Date</th><th className="text-left">Pièce / libellé</th><th className="text-right">Débit</th><th className="text-right">Crédit</th></tr></thead>
-      <tbody>{loading?<tr><td colSpan={5} className="text-center"><Loader2 size={20} className="mx-auto animate-spin"/></td></tr>:paging.rows.map((l,i)=><tr key={l.line_id??l.id??i}><td><button type="button" className="font-medium hover:underline" onClick={()=>work?.openAccount(l.account_code)}>{l.account_code}</button><span className="block text-[11px] text-neutral-500">{l.account_name}</span></td><td className="hidden md:table-cell">{formatDate(l.entry_date)}</td><td><button type="button" className="font-medium hover:underline" onClick={()=>work?.openPiece({entryId:l.entry_id,entryNumber:l.entry_number})}>{l.entry_number}</button><span className="block text-[11px] text-neutral-500">{l.journal_type} · {l.label||l.reference||'—'}</span><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(l.entry_date)}</span></td><td className="text-right">{Number(l.debit)?Number(l.debit).toLocaleString('fr-FR'):'—'}</td><td className="text-right">{Number(l.credit)?Number(l.credit).toLocaleString('fr-FR'):'—'}</td></tr>)}
-      {!loading&&!paging.total&&<tr><td colSpan={5} className="text-center text-neutral-500">Aucun mouvement sur cette période.</td></tr>}</tbody></table>
-    </AccountingTable>
-  </div>;
-}
+function GrandLivreTab(){return <AccountingPeriodBooks mode="ledger"/>;}
 
 /* ===================== BALANCE DES TIERS ===================== */
 function TiersTab() {
