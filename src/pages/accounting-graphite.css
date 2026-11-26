@@ -223,3 +223,10 @@
 .accounting-workspace .acc-assets-fields .input{margin-top:3px;min-width:0}
 @container(max-width:760px){.accounting-workspace .acc-assets-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container(max-width:400px){.accounting-workspace .acc-assets-fields{grid-template-columns:minmax(0,1fr)}}
+
+/* Analytique : formulaires compacts, adaptés à la fenêtre de travail. */
+.accounting-workspace .acc-analytics{container-type:inline-size;min-width:0}
+.accounting-workspace .acc-analytics-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.accounting-workspace .acc-analytics-fields label{font-size:11px;min-width:0}
+.accounting-workspace .acc-analytics-fields .input{margin-top:3px;min-width:0}
+@container(max-width:680px){.accounting-workspace .acc-analytics-fields{grid-template-columns:minmax(0,1fr)}}
