@@ -7,7 +7,7 @@ type Leaf={route:Route;label:string;icon:ComponentType<{size?:number;className?:
 type Group={label:string;items:(Leaf|{label:string;children:Leaf[]})[]};
 const groups:Group[]=[
  {label:'Fichier',items:[{route:'acc_overview',label:'Accueil comptable',icon:LayoutDashboard}]},
- {label:'Structure',items:[{route:'acc_plan',label:'Plan comptable',icon:BookOpen}]},
+ {label:'Structure',items:[{route:'acc_plan',label:'Plan comptable',icon:BookOpen},{route:'acc_journal_settings',label:'Codes journaux',icon:FileText}]},
  {label:'Traitement',items:[
   {label:'Écritures',children:[{route:'acc_entry',label:'Saisie des écritures',icon:Plus},{route:'acc_journals',label:'Journaux comptables',icon:FileText}]},
   {label:'Consultation',children:[{route:'acc_search',label:'Recherche des écritures',icon:Search},{route:'acc_statement',label:'Interrogation et lettrage',icon:Search}]},
