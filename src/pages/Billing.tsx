@@ -1,6 +1,7 @@
 import './Billing.css';
 import { useSalePrice, type PriceLine } from '../lib/useSalePrice';
 import { formatVatAmount } from '../lib/salesVat';
+import {returnLotAllocation,type ReturnLotLine} from '../lib/returnLotAllocation';
 import { loadInvoiceReturnLines } from '../lib/saleReturnLines';
 import { newIdempotencyKey } from '../lib/cashSession';
 import type { VatAmounts } from '../lib/salesVat';
@@ -1818,9 +1819,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   // ── Returns ──────────────────────────────────────────────────
   const returnTotal = returnLines.filter(i => i.selected).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
 
-  const prepareVatReturn = async (saleId: string, siteId: string, lines: { item_id: string; quantity: number }[],
+  const prepareVatReturn = async (saleId: string, siteId: string, lines: (ReturnLotLine & { item_id: string })[],
     reason: string, restock: boolean, issueCredit: boolean, showError: (message: string) => void = error) => {
-    const items = lines.map(line => ({ sale_item_id: line.item_id, quantity: line.quantity }));
+    if(lines.some(line=>!returnLotAllocation(line,restock).valid)){showError('Vérifiez les quantités retournées par lot.');return null;}
+    const items = lines.map(line => ({ sale_item_id: line.item_id, quantity: line.quantity, lots:returnLotAllocation(line,restock).lots }));
     const payload = JSON.stringify({ saleId, siteId, items, reason, restock, issueCredit });
     if (vatReturnAttempt.current?.payload !== payload) {
       vatReturnAttempt.current = { payload, key: newIdempotencyKey() };
@@ -3367,7 +3369,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           </div>}
           <div className="flex w-full items-center gap-2">
             {isDesktop && <button type="button" onClick={closeReturnForm} disabled={saving} className="min-h-11 px-3 text-sm font-medium">Annuler</button>}
-            <button type="button" onClick={() => void saveReturn()} disabled={saving || returnLoad.busy || !hasLines}
+            <button type="button" onClick={() => void saveReturn()} disabled={saving || returnLoad.busy || !!returnLoad.error || !hasLines || returnLines.some(line=>line.selected&&!returnLotAllocation(line,returnForm.restock).valid)}
               className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-neutral-900 px-4 text-sm font-semibold text-white disabled:opacity-40">
               {saving && <Loader2 className="h-4 w-4 animate-spin" />} {label}
             </button>

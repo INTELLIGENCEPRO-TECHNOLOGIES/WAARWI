@@ -1,10 +1,12 @@
 import { supabase } from './supabase';
+import {loadReturnLots} from './returnLotAllocation';
 
 export async function loadInvoiceReturnLines(saleId: string) {
   const { data: items, error: itemsError } = await supabase.from('sale_items')
     .select('id, article_id, name, quantity, unit_price, purchase_cost, vat_net_amount, vat_amount').eq('sale_id', saleId);
   if (itemsError) throw itemsError;
   const fiscal = items.some(item => item.vat_net_amount != null);
+  const returnLots = fiscal ? await loadReturnLots(saleId) : {};
   const alreadyReturned = new Map<string, { quantity: number; total: number }>();
 
   if (fiscal) {
@@ -37,7 +39,7 @@ export async function loadInvoiceReturnLines(saleId: string) {
     return [{
       item_id: item.id, article_id: item.article_id, name: item.name,
       max_qty: remaining, quantity: Math.min(remaining, 1), unit_price: netPerUnit,
-      purchase_cost: Number(item.purchase_cost ?? 0), selected: false,
+      purchase_cost: Number(item.purchase_cost ?? 0), selected: false, returnLots: returnLots[item.id] || [], lotQuantities: {},
     }];
   });
 }

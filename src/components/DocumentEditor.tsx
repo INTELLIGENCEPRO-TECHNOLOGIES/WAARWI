@@ -1,3 +1,5 @@
+import {returnLotAllocation,type ReturnLotLine} from '../lib/returnLotAllocation';
+import {ReturnLotFields} from './billing/ReturnLotFields';
 import { clayTouchHandlers } from '../lib/clayTouch';
 import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -136,7 +138,7 @@ export type DocumentEditorProps = {
   inactive?: boolean;
 };
 
-export type ReturnLineItem = {
+export type ReturnLineItem = ReturnLotLine & {
   item_id: string;
   article_id: string;
   name: string;
@@ -988,7 +990,7 @@ function ReturnConfigDialog({ lines, onConfirm, onClose }: {
   useEffect(() => { setLocalLines(lines.map(l => ({ ...l }))); }, [lines]);
 
   const toggleItem = (idx: number) => setLocalLines(p => p.map((x, i) => i === idx ? { ...x, selected: !x.selected } : x));
-  const setQty = (idx: number, q: number) => setLocalLines(p => p.map((x, i) => i === idx ? { ...x, quantity: Math.min(x.max_qty, Math.max(1, q)) } : x));
+  const setQty = (idx: number, q: number) => setLocalLines(p => p.map((x, i) => i === idx ? { ...x, quantity: Math.min(x.max_qty, Math.max(Math.min(1,x.max_qty), q)), lotQuantities: {} } : x));
   const selected = localLines.filter(i => i.selected && i.quantity > 0);
   const total = selected.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const { isTop, zIndex } = useTopLayer(true);
@@ -1016,7 +1018,7 @@ function ReturnConfigDialog({ lines, onConfirm, onClose }: {
           ) : (
             <div className="space-y-1">
               {localLines.map((it, idx) => (
-                <div key={idx} className={`flex items-center gap-2 px-2 py-2 border-b border-neutral-100 transition-colors ${it.selected ? 'bg-neutral-50/50' : ''}`}>
+                <div key={it.item_id} className="border-b border-neutral-100"><div className={`flex items-center gap-2 px-2 py-2 transition-colors ${it.selected ? 'bg-neutral-50/50' : ''}`}>
                   <button type="button" onClick={() => toggleItem(idx)} className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${it.selected ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300'}`}>
                     {it.selected && <Check className="w-2.5 h-2.5 text-white" />}
                   </button>
@@ -1034,7 +1036,7 @@ function ReturnConfigDialog({ lines, onConfirm, onClose }: {
                   <span className="num text-xs font-bold text-neutral-700 shrink-0 w-16 text-right">
                     {it.selected ? formatNum(it.quantity * it.unit_price) : '—'}
                   </span>
-                </div>
+                </div>{it.selected&&<div className="ml-6 px-2"><ReturnLotFields line={it} restock={restock} onChange={lotQuantities=>setLocalLines(p=>p.map((x,i)=>i===idx?{...x,lotQuantities}:x))}/></div>}</div>
               ))}
             </div>
           )}
@@ -1064,7 +1066,7 @@ function ReturnConfigDialog({ lines, onConfirm, onClose }: {
           <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors">Annuler</button>
           <button
             onClick={() => onConfirm({ reason, restock, selectedItems: selected })}
-            disabled={selected.length === 0}
+            disabled={selected.length === 0 || selected.some(line=>!returnLotAllocation(line,restock).valid)}
             className="px-4 py-1.5 text-xs font-semibold bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-40 transition-colors flex items-center gap-1"
           >
             <RotateCcw className="w-3 h-3" /> Créer le retour

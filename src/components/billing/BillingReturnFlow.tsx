@@ -5,7 +5,10 @@ import { useTopLayer } from '../modalStack';
 import { formatDateTime } from '../../lib/format';
 import { formatVatAmount, type VatAmounts } from '../../lib/salesVat';
 
-export type ReturnLine = {
+import {ReturnLotFields} from './ReturnLotFields';
+import type {ReturnLotLine} from '../../lib/returnLotAllocation';
+
+export type ReturnLine = ReturnLotLine & {
   item_id: string;
   article_id: string | null;
   name: string;
@@ -29,7 +32,7 @@ export function BillingReturnFields({ origins, saleId, lines, loading, loadError
   busy: boolean;
   onSale: (id: string) => void;
   onRetry: () => void;
-  onLine: (id: string, values: Partial<Pick<ReturnLine, 'selected' | 'quantity'>>) => void;
+  onLine: (id: string, values: Partial<Pick<ReturnLine, 'selected' | 'quantity' | 'lotQuantities'>>) => void;
   onReason: (value: string) => void;
   onRestock: (value: boolean) => void;
 }) {
@@ -66,7 +69,7 @@ export function BillingReturnFields({ origins, saleId, lines, loading, loadError
             : <ul className="divide-y divide-[var(--w-separator-l)] border-y border-[var(--w-separator-l)]">
               {lines.map(line => {
                 const step = line.max_qty < 1 ? line.max_qty : 1;
-                const setQuantity = (value: number) => onLine(line.item_id, { quantity: Math.min(line.max_qty, Math.max(step, value)) });
+                const setQuantity = (value: number) => onLine(line.item_id, { quantity: Math.min(line.max_qty, Math.max(step, value)), lotQuantities: {} });
                 return (
                   <li key={line.item_id} className="py-2">
                     <label className="flex min-h-11 items-center gap-3">
@@ -92,6 +95,7 @@ export function BillingReturnFields({ origins, saleId, lines, loading, loadError
                         <span className="whitespace-nowrap text-sm font-semibold tabular-nums">{formatVatAmount(line.quantity * line.unit_price)}</span>
                       </div>
                     )}
+                    {line.selected&&<div className="ml-8"><ReturnLotFields line={line} restock={restock} onChange={lotQuantities=>onLine(line.item_id,{lotQuantities})}/></div>}
                   </li>
                 );
               })}
