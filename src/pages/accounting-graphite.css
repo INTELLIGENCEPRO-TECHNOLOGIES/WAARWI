@@ -215,3 +215,11 @@
 .accounting-workspace .acc-bank-import{border-top:1px solid var(--w-separator);border-bottom:1px solid var(--w-separator);padding:6px 0}
 .accounting-workspace .acc-bank-import select{max-width:100%;min-width:0}
 @container(max-width:880px){.accounting-workspace .acc-bank-panels{grid-template-columns:minmax(0,1fr);gap:8px}}
+
+/* Registre des immobilisations : surfaces continues adaptées aux fenêtres. */
+.accounting-workspace .acc-assets{container-type:inline-size;min-width:0}
+.accounting-workspace .acc-assets-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.accounting-workspace .acc-assets-fields label{font-size:11px;min-width:0}
+.accounting-workspace .acc-assets-fields .input{margin-top:3px;min-width:0}
+@container(max-width:760px){.accounting-workspace .acc-assets-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container(max-width:400px){.accounting-workspace .acc-assets-fields{grid-template-columns:minmax(0,1fr)}}
