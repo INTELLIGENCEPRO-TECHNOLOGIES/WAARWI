@@ -17,7 +17,7 @@ const groups:Group[]=[
  {label:'État',items:[
   {route:'acc_balance',label:'Balance générale',icon:TrendingUp},
   {route:'acc_grandlivre',label:'Grand livre',icon:BookOpen},
-  {route:'acc_tiers',label:'Balance des tiers',icon:Users},
+  {route:'acc_tiers',label:'Balance des tiers',icon:Users},{route:'acc_aging',label:'Balance âgée et échéances',icon:FileText},
   {route:'acc_vat',label:'Situation de TVA',icon:FileText},
   {route:'acc_financial',label:'États financiers',icon:FileText}
  ]}
