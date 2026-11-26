@@ -99,3 +99,5 @@ Un blocage défensif ne constitue pas une fonctionnalité terminée lorsqu'il em
 
 ### Affectation multi-lots — avancement
 Recettes 59 et 60 : vente fiscale convertie 6 A + 4 B, retour 2 A + 1 B, avoir sans stock sur B, retour automatique du solde, plafonds et réessai, TVA historique. Coût des lots mémorisé à la conversion et utilisé au retour même après changement du prix d’achat. Recettes 57 et 58 rejouées. Sélecteur partagé facturation desktop/mobile et retour caisse ; parcours caisse de bout en bout, ventes historiques hors registre et retours non fiscaux à recetter/compléter, sauvegarde/restauration du registre et des affectations, simultanéité et navigateur encore ouverts. Aucune publication.
+
+Recette 62 : retour fiscal multi-lots via API normale du POS, remboursement partiel et total en caisse, réessai sans doublon, restitution exacte. Supervision multi-caisse et navigateur restent à vérifier ; script 61 exclusivement recette.
