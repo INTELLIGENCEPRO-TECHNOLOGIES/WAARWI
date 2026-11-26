@@ -10,6 +10,8 @@ import { usePermissions } from '../../lib/permissions';
 import { useToast } from '../../context/ToastContext';
 import { formatFCFA } from '../../lib/format';
 import { CashModal } from '../CashModal';
+import {ReturnRecoveryPanel} from '../ReturnRecoveryPanel';
+import {submitReturnRequest,finishReturnRequest} from '../../lib/returnRequestJournal';
 import { printReturnTicket80 as printReturnTicket80Shared } from '../../lib/print';
 import { newIdempotencyKey } from '../../lib/cashSession';
 import { cashOpError, permsPendingMessage, type CashOpContext, type SessionSale } from './cashOpContext';
@@ -33,7 +35,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   const [refundMode,setRefundMode]=useState<'cash'|'avoir'|'deferred'>('cash');
   const [financialReason,setFinancialReason]=useState('');
   const [matchArticle,setMatchArticle]=useState<string|null>(null);
-  const [uncertain,setUncertain]=useState(false);
+  const [pendingReturn,setPendingReturn]=useState<boolean|null>(null);
   const inFlight=useRef(false);
   const [returnSearch, setReturnSearch] = useState('');
   const [returnSales, setReturnSales] = useState<SessionSale[]>([]);
@@ -111,7 +113,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   }, [started, permsPending, returnsAllowed]);
 
   const selectReturnSale = (s: SessionSale) => {
-    if(inFlight.current||uncertain)return;
+    if(inFlight.current||pendingReturn!==false)return;
     setOpKey(newIdempotencyKey());setRestock(true);setRefundMode('cash');setFinancialReason('');setMatchArticle(null);
     const req=++lotLoadRequest.current;setLotLoad({busy:true,error:''});
     setReturnSelected(s);
@@ -126,7 +128,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   const [returnProcessing, setReturnProcessing] = useState(false);
 
   const processReturn = async () => {
-    if (!returnSelected || !tenant || inFlight.current || returnProcessing || lotLoad.busy || lotLoad.error || matchArticle) return;
+    if (!returnSelected || !tenant || inFlight.current || returnProcessing || pendingReturn!==false || lotLoad.busy || lotLoad.error || matchArticle) return;
     if (permsPending) { error(permsPending); return; }
     if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
     const lines = returnLines.filter(l => l.selected && l.quantity > 0);
@@ -138,52 +140,25 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
     if(!restock && financialReason.trim().length<8){error('Précisez le motif du retour sans remise en stock.');return;}
     const items = lines.map(l => ({ sale_item_id: l.sale_item_id, quantity: l.quantity,lots:restock?returnLotAllocation(l,true).lots:[] }));
     const reason=restock?'Retour au POS':'Retour financier au POS : '+financialReason.trim();
-    inFlight.current=true;setReturnProcessing(true);
+    inFlight.current=true;setReturnProcessing(true);setPendingReturn(null);
     try {
-      const { data: result, error: rpcErr } = bound.mode === 'supervision'
-        ? await supabase.rpc('cash_supervision_sale_return_v2', {
-            p_session_id: bound.sessionId,
-            p_sale_id: returnSelected.id,
-            p_items: items,
-            p_reason: reason,
-            p_restock: restock,
-            p_refund_method: refundMode==='cash'?null:refundMode,
-            p_idempotency_key: opKey,
-          })
-        : await supabase.rpc('process_sale_return', {
-            p_sale_id: returnSelected.id,
-            p_site_id: bound.siteId,
-            p_cash_session_id: bound.sessionId,
-            p_items: items,
-            p_reason: reason,
-            p_refund_now: refundMode==='cash',
-            p_refund_method: refundMode==='avoir'?'avoir':null,
-            p_restock: restock,
-            p_request_id: opKey,
-          });
-
-      if (rpcErr) {
-        // SQL rejections are definitive unless the previous request was already uncertain.
-        const rejected=/^(22|23|42|55|P0)/.test(rpcErr.code||'') && rpcErr.code!=='23505';
-        if(!uncertain&&rejected){setOpKey(newIdempotencyKey());}
-        else {setUncertain(true);}
-        error(rpcErr.message || 'Retour non confirmé. Réessayez sans modifier la demande.');return;
-      }
-      if(!result?.success || !result?.return_id){setUncertain(true);error('Retour non confirmé. Réessayez sans modifier la demande.');return;}
-      setUncertain(false);
-
+      const result=await submitReturnRequest({
+        key:opKey,flow:bound.mode==='supervision'?'supervision':'pos',saleId:returnSelected.id,siteId:bound.siteId,sessionId:bound.sessionId,
+        items,reason,restock,mode:refundMode
+      });
+      if(!result?.success||!result?.return_id)throw new Error('Retour non confirmé. Consultez le panneau de reprise.');
       const refunded = Number(result?.total ?? returnTotal);
       const settledMode = result.refund_method==='avoir'?'avoir':result.refunded===true?'cash':'deferred';
       const retNum = result?.return_number || 'RET-?';
       try {printReturnTicket80Shared(returnSelected.sale_number, lines, refunded, bound.printTenant, bound.userName, retNum, returnSelected.customer_name, result, settledMode);} catch {error('Retour enregistré, mais impression du ticket impossible.');}
 
+      try{await finishReturnRequest(opKey,'ack');}catch{error('Retour enregistré. Une confirmation reste disponible dans le panneau de reprise.');}
       setOpKey(newIdempotencyKey());
       onClose();
       success(settledMode==='avoir'?`Avoir de ${formatFCFA(refunded)} enregistré`:settledMode==='cash'?`Retour effectué : ${formatFCFA(refunded)} remboursés`:`Retour enregistré : ${formatFCFA(refunded)} à traiter depuis la facturation`);
       onDone();
     } catch (e: any) {
-      setUncertain(true);
-      error(e.message || 'Retour non confirmé. Réessayez sans modifier la demande.');
+      error(e?.message || 'Retour non confirmé. Consultez le panneau de reprise.');
     } finally {
       inFlight.current=false;setReturnProcessing(false);
     }
@@ -197,18 +172,19 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
 
 
   return (
-      <CashModal open={true} onClose={() => {if(!inFlight.current&&!uncertain)onClose();}} title="Ticket de retour"
+      <CashModal open={true} onClose={() => {if(!inFlight.current)onClose();}} title="Ticket de retour"
         footer={!returnSelected ? (
           <button onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Fermer</button>
         ) : (
           <div className="flex items-center justify-end gap-3 w-full">
-            <button disabled={returnProcessing||uncertain} onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors disabled:opacity-40">Annuler</button>
-            <button onClick={processReturn} disabled={returnProcessing || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || !!matchArticle || returnLines.filter(l => l.selected && l.quantity>0).length === 0 || (restock&&returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)) || (!restock&&financialReason.trim().length<8) || (refundMode==='avoir'&&!returnSelected.customer_id)} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : uncertain ? 'Réessayer le retour' : 'Valider le retour'}
+            <button disabled={returnProcessing} onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors disabled:opacity-40">{pendingReturn?'Fermer':'Annuler'}</button>
+            <button onClick={processReturn} disabled={returnProcessing || pendingReturn!==false || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || !!matchArticle || returnLines.filter(l => l.selected && l.quantity>0).length === 0 || (restock&&returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)) || (!restock&&financialReason.trim().length<8) || (refundMode==='avoir'&&!returnSelected.customer_id)} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : 'Valider le retour'}
             </button>
           </div>
         )}
       >
+        <ReturnRecoveryPanel enabled={!permsPending&&returnsAllowed} onActiveChange={setPendingReturn} onResolved={()=>{setReturnSelected(null);setReturnLines([]);setOpKey(newIdempotencyKey());void loadReturnSales();onDone();}}/>
         {!started ? (
           permsLoading ? (
             <div className="py-12 flex flex-col items-center gap-2 text-xs text-neutral-500"><Loader2 className="w-6 h-6 animate-spin text-brand-700" />Vérification des autorisations…</div>
@@ -238,7 +214,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             ) : (
               <div>
                 {filteredReturnSales.map(s => (
-                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left py-2.5 border-b border-neutral-100 last:border-b-0 flex items-center justify-between gap-2 transition-colors ${s.fullyReturned ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned||pendingReturn!==false} className={`w-full text-left py-2.5 border-b border-neutral-100 last:border-b-0 flex items-center justify-between gap-2 transition-colors ${s.fullyReturned ? 'opacity-40 cursor-not-allowed' : ''}`}>
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-bold text-neutral-900 doc-number">{s.sale_number}</div>
                       <div className="text-[12px] text-neutral-500 mt-0.5">
@@ -261,14 +237,13 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             {/* Selected ticket header */}
             <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
               <span className="text-[15px] font-bold text-neutral-900 doc-number">{returnSelected.sale_number}</span>
-              <button disabled={returnProcessing||uncertain} onClick={() => {lotLoadRequest.current++;setReturnSelected(null);setMatchArticle(null);}} className="text-[13px] text-neutral-600 underline underline-offset-2 hover:text-neutral-900 transition-colors">Changer</button>
+              <button disabled={returnProcessing||pendingReturn!==false} onClick={() => {lotLoadRequest.current++;setReturnSelected(null);setMatchArticle(null);}} className="text-[13px] text-neutral-600 underline underline-offset-2 hover:text-neutral-900 transition-colors">Changer</button>
             </div>
 
             {lotLoad.busy&&<p role="status" className="py-2 text-xs text-neutral-500">Chargement des lots d’origine…</p>}
             {lotLoad.error&&<div role="alert" className="py-2 text-sm"><p>{lotLoad.error}</p><button type="button" className="underline" onClick={()=>selectReturnSale(returnSelected)}>Réessayer</button></div>}
-            {uncertain&&<p role="alert" className="mt-3 text-xs text-amber-800">Le résultat n'a pas été confirmé. Réessayez la même opération sans modifier ses données. Avant toute nouvelle tentative après fermeture du navigateur, vérifiez l'historique des retours et la caisse.</p>}
             {matchArticle&&<HistoricalLotMatchPanel key={matchArticle} saleId={returnSelected.id} articleId={matchArticle} onCancel={()=>setMatchArticle(null)} onDone={()=>{setMatchArticle(null);selectReturnSale(returnSelected);}}/>}
-            <fieldset disabled={returnProcessing||uncertain||!!matchArticle} className="min-w-0">
+            <fieldset disabled={returnProcessing||pendingReturn!==false||!!matchArticle} className="min-w-0">
               <div className="mt-3 space-y-2 border border-neutral-200 rounded-lg p-3">
                 <p className="text-xs font-semibold">Traitement du stock</p>
                 <label className="flex items-center gap-2 text-xs"><input type="radio" name="return-stock-mode" checked={restock} onChange={()=>setRestock(true)}/>Retour avec remise en stock</label>
