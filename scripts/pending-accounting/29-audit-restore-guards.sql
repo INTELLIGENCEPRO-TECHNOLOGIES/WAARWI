@@ -193,3 +193,12 @@ GRANT EXECUTE ON FUNCTION public.br_preflight_restore(uuid) TO authenticated;
 -- Export is a private accounting endpoint. Its existing in-function authentication remains in force.
 REVOKE ALL ON FUNCTION public.export_accounting_entries(uuid,date,date,text,integer,integer) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.export_accounting_entries(uuid,date,date,text,integer,integer) TO authenticated;
+
+-- The numbering counter is an internal state, never a client-writeable table.
+-- The current next_accounting_piece_number function is SECURITY DEFINER and not directly callable by clients.
+REVOKE ALL ON TABLE public.accounting_sequences FROM PUBLIC,anon;
+REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON TABLE public.accounting_sequences FROM authenticated;
+-- Restrict read access without altering internal number generation.
+DROP POLICY IF EXISTS acseq_select ON public.accounting_sequences;
+CREATE POLICY acseq_select ON public.accounting_sequences FOR SELECT TO authenticated
+ USING(tenant_id=public.current_tenant_id() AND public.current_user_can_view_accounting());
