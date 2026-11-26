@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Save, Pencil as Edit2, Search, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
 import {useAccountingJournals} from '../lib/accountingJournals';
 import {AccountingEntryTemplates,type EntryTemplate} from '../components/AccountingEntryTemplates';
+import {AccountingAging} from '../components/AccountingAging';
 import {AccountingJournalSettings} from '../components/AccountingJournalSettings';
 import {AccountingOverview} from '../components/AccountingOverview';
 import { AccountingPagination, AccountingTable, AccountingRowActions, useAccountingPagination } from '../components/AccountingWorkspace';
@@ -27,12 +28,13 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
-type TabKey = 'journal_settings' | 'overview' | 'entry' | 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
+type TabKey = 'aging' | 'journal_settings' | 'overview' | 'entry' | 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
 
 
 export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }: { section?: TabKey;onNavigate?:(route:string)=>void;inWindow?:boolean;onExit?:()=>void }) {
   const {tenant}=useApp();const {can}=usePermissions();
   const titles: Record<TabKey, { t: string; s: string }> = {
+    aging:{t:'Balance âgée et échéances',s:'Postes ouverts et échéances comptables.'},
     journal_settings:{t:'Codes journaux',s:'Paramétrage des journaux comptables.'},
     overview: {t:'Accueil comptable',s:'Situation et accès directs.'},
     entry: {t:'Saisie des écritures',s:'Nouvelle pièce comptable.'},
@@ -62,6 +64,7 @@ export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }
       {section === 'balance' && <BalanceTab />}
       {section === 'grandlivre' && <GrandLivreTab />}
       {section === 'tiers' && <TiersTab />}
+      {section === 'aging' && <AccountingAging/>}
       {section === 'search' && <SearchTab />}
       {section === 'cloture' && <ClotureTab />}
       {section === 'vat' && <VatTab />}
