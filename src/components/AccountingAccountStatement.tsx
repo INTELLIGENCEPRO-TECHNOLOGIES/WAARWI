@@ -1,4 +1,5 @@
 import { useEffect,useRef,useState } from 'react';
+import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
 import { supabase } from '../lib/supabase';
 import { AccountingTable } from './AccountingWorkspace';
 import { ChevronLeft, ChevronRight, Search, MoreHorizontal } from './Icons';
@@ -40,6 +41,8 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
  const [suggestions,setSuggestions]=useState<Suggestions|null>(null);
  const [suggestionBusy,setSuggestionBusy]=useState(false);
  const [confirmSuggestion,setConfirmSuggestion]=useState<string|null>(null);
+ const windowId=useAccountingWindowId();
+ useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(writeLock.current||((Object.keys(chosen).length>0||!!release||!!confirmSuggestion)&&!window.confirm('Un lettrage est en préparation. Fermer cette fenêtre ?')))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[windowId,chosen,release,confirmSuggestion]);
  useEffect(()=>{
   let live=true;setAccountBusy(true);setAccountError('');
   void (async()=>{try{
