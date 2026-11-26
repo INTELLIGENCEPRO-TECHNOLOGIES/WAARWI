@@ -11,7 +11,7 @@ import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useSupplierOrderRights, revertSupplierOrderReception, deleteSupplierOrder, RECEIVED_STATUSES } from '../lib/supplierOrderActions';
 import { useToast } from '../context/ToastContext';
-import { Modal, ConfirmDialog } from '../components/Modal';
+import { ConfirmDialog } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate } from '../lib/format';
@@ -679,17 +679,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
     }
   };
 
-  const isDispatchValid = () => {
-    for (const [idx, item] of editorItems.entries()) {
-      const itemId = item.id || `idx-${idx}`;
-      const addQty = Number(receiveQty[itemId] || 0);
-      if (addQty <= 0 || !item.article_id) continue;
-      const values = Object.values(dispatchData[itemId] || {}).map(v => Number(v || 0));
-      if (values.some(v => v < 0)) return false;
-      if (values.reduce((s, v) => s + v, 0) !== addQty) return false;
-    }
-    return true;
-  };
+  
 
   const loadStockForDispatch = async (lineItems: SOLineItem[], siteIds: string[]) => {
     setDispatchStockLoading(true);
@@ -1376,13 +1366,7 @@ const MOBILE_STATUS_COLORS: Record<string, string> = {
   partial: 'text-amber-600', received: 'text-emerald-600', cancelled: 'text-red-600',
 };
 
-function MobileOrderDetail({
-  mode, order, items, headerForm, subtotal, saving,
-  onClose, onPrint, onCopyLink, onWhatsApp, onEdit, onStartReceive,
-  onChangeStatus, onCancel, onDelete,
-  receiveQty, setReceiveQty, receiveLotData, setReceiveLotData,
-  stockMethod, onConfirmReceive,
-}: {
+function MobileOrderDetail({ mode, order, items, subtotal, saving, onClose, onPrint, onCopyLink, onWhatsApp, onEdit, onStartReceive, onChangeStatus, onCancel, onDelete, receiveQty, setReceiveQty, receiveLotData, setReceiveLotData, stockMethod, onConfirmReceive }: {
   mode: 'view' | 'receive';
   order: any; items: SOLineItem[]; articles: any[]; suppliers: any[];
   headerForm: SOHeaderForm; subtotal: number; saving: boolean;

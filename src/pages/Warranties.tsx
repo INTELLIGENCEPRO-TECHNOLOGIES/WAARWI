@@ -1,5 +1,5 @@
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Filter, RefreshCw, Printer, Download, Search,
   X, Eye, FileText, Copy, Clock, ShieldCheck, Smartphone, Store, User, Calendar,

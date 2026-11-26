@@ -1,12 +1,7 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff, UserPlus,
-  X, Calendar, FileText, Wallet, Info, ChevronRight, ChevronLeft, Phone,
-  ShoppingBag, Check, Printer, Tag, Trash2,
-  Download, Upload, Scale, RotateCcw, Save, Search, ChevronDown, TrendingUp
-} from 'lucide-react';
+import { Plus, Users, Truck, Loader2, CreditCard as Edit2, UserPlus, X, Calendar, FileText, Wallet, Info, ChevronRight, ChevronLeft, ShoppingBag, Check, Printer, Tag, Trash2, Download, Upload, Scale, RotateCcw, Save, Search, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
 import { fetchPrepayAvailable } from '../lib/customerCredit';
@@ -17,7 +12,7 @@ import { Modal, ConfirmDialog } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
-import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
+import { formatFCFA, formatDate } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
 import { printDocumentA4, printCustomerStatementA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
@@ -29,7 +24,7 @@ import { SupplierOrderEditor, type SOLineItem, type SOHeaderForm, type SOMode } 
 import { SupplierPaymentModal } from '../components/supplier/SupplierPaymentModal';
 import { RecentPaymentsAccordion } from '../components/RecentPaymentsAccordion';
 import type { Customer } from '../lib/types';
-import { CollapsibleSection, FormField, ValidatedInput } from '../components/FormPrimitives';
+import { FormField, ValidatedInput } from '../components/FormPrimitives';
 import { useTranslation } from 'react-i18next';
 import { DesktopWindow } from '../components/DesktopWindow';
 import { useWindowManager } from '../context/WindowManagerContext';
@@ -53,7 +48,7 @@ type LedgerWindowDescriptor = { windowId: string; customerId: string; customer: 
 let ledgerWinCounter = 0;
 
 export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void } = {}) {
-  const { tenant, currentSite, sites, profile } = useApp();
+  const { tenant, currentSite, profile } = useApp();
   const dataTick = useRealtimeTick(['customers', 'suppliers', 'customer_payments', 'supplier_payments', 'customer_prepayments', 'balance_adjustments', 'credit_allocations', 'sales', 'sale_payments', 'supplier_orders', 'customer_exception_prices']);
   const { can } = usePermissions();
   const { t } = useTranslation();
@@ -119,10 +114,10 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [dueMap, setDueMap] = useState<Record<string, number>>({});
-  const [paidMap, setPaidMap] = useState<Record<string, number>>({});
-  const [totalMap, setTotalMap] = useState<Record<string, number>>({});
-  const [supDueMap, setSupDueMap] = useState<Record<string, { total: number; paid: number; due: number }>>({});
+  const [, setDueMap] = useState<Record<string, number>>({});
+  const [, setPaidMap] = useState<Record<string, number>>({});
+  const [, setTotalMap] = useState<Record<string, number>>({});
+  const [, setSupDueMap] = useState<Record<string, { total: number; paid: number; due: number }>>({});
   const [prepayMap, setPrepayMap] = useState<Record<string, number>>({});
   const [avoirMap, setAvoirMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -276,7 +271,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
   useEffect(() => { load(); }, [tenant?.id, currentSite?.id, sharedCustomers, sharedSuppliers]);
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
 
-  const [flashTarget, setFlashTarget] = useState<'customers' | 'suppliers' | null>(null);
+  const [, setFlashTarget] = useState<'customers' | 'suppliers' | null>(null);
   const pendingNavRef = useRef<string | null>(null);
   useEffect(() => {
     const ctx = consumeNavContext();
@@ -397,12 +392,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
     else { success('Client désactivé (opérations associées conservées)'); setToDeactivateCust(null); load(); }
   };
 
-  const reactivateCust = async (c: Customer) => {
-    if (!can('delete_customers')) { error('Vous n\'avez pas la permission'); return; }
-    const { error: e } = await supabase.from('customers').update({ is_active: true }).eq('id', c.id);
-    if (e) error(e.message);
-    else { success('Client réactivé'); load(); }
-  };
+  
 
   // ── CRUD: Supplier ───────────────────────────────────────────
   const validateSupField = (field: string, val: any): string | undefined => {
@@ -522,12 +512,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
     else { success('Fournisseur désactivé (opérations associées conservées)'); setToDeactivateSup(null); load(); }
   };
 
-  const reactivateSup = async (s: Supplier) => {
-    if (!can('delete_customers')) { error('Vous n\'avez pas la permission'); return; }
-    const { error: e } = await supabase.from('suppliers').update({ is_active: true }).eq('id', s.id);
-    if (e) error(e.message);
-    else { success('Fournisseur réactivé'); load(); }
-  };
+  
 
   const activeCustCount = customers.filter(c => (c as any).is_active !== false).length;
   const activeSupCount = suppliers.filter(s => s.is_active).length;
@@ -1619,180 +1604,13 @@ function Badge({ tone, children }: { tone: 'neutral' | 'emerald' | 'amber' | 're
 }
 
 /* ───────────────────────── Customer list ───────────────────────── */
-function CustomerList({ list, total, dueMap, paidMap, totalMap, prepayMap, avoirMap, onCreate, onClickRow }: {
-  list: Customer[]; total: number;
-  dueMap: Record<string, number>; paidMap: Record<string, number>; totalMap: Record<string, number>;
-  prepayMap: Record<string, number>; avoirMap: Record<string, number>;
-  onCreate: () => void; onClickRow: (c: Customer) => void;
-}) {
-  if (list.length === 0) {
-    return total === 0
-      ? <div className="card"><EmptyState icon={Users} title="Aucun client" description="Créez votre premier client pour démarrer." action={<button onClick={onCreate} className="btn-icon-primary" title="Nouveau client"><Plus className="w-4 h-4" /></button>} /></div>
-      : <div className="card"><EmptyState icon={Users} title="Aucun résultat" description="Aucun client ne correspond à votre recherche." /></div>;
-  }
-  return (
-    <div className="space-y-2 sm:space-y-0">
-      {list.map(c => {
-        const inactive = (c as any).is_active === false;
-        const limit = Number((c as any).credit_limit || 0);
-        const blocked = (c as any).credit_blocked === true;
-        const balance = Number((c as any).balance || 0);
-        const nearLimit = limit > 0 && balance >= limit * 0.8;
-        const overLimit = limit > 0 && balance >= limit;
-        // Le solde serveur fait foi : positif = dette, négatif = crédit disponible.
-        const netLabel = balance > 0 ? 'Solde dû' : balance < 0 ? 'Crédit disponible' : 'Solde';
-        const netAmount = Math.abs(balance);
-        const netColor = balance > 0 ? 'text-amber-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300';
-        return (
-          <button
-            key={c.id}
-            onClick={() => onClickRow(c)}
-            className={`w-full text-left transition-colors ${inactive ? 'opacity-50' : ''} sm:hover:bg-[var(--w-hover)] sm:rounded-none sm:px-2 sm:py-1.5 bg-[var(--w-surface)] rounded-2xl border border-[var(--w-separator)] active:scale-[0.99] px-3.5 py-3`}
-          >
-            {/* Desktop: single flat line */}
-            <div className="hidden sm:flex items-center gap-3">
-              <div className="w-5 h-5 shrink-0 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center text-[10px] font-bold">{c.name.charAt(0).toUpperCase()}</div>
-              <p className="text-[12px] font-bold text-[var(--w-text)] truncate flex-1 min-w-0">{c.name}</p>
-              {c.phone && <span className="text-[11px] text-[var(--w-text-disabled)] shrink-0 tabular-nums hidden md:inline">{c.phone}</span>}
-              <div className="flex items-center gap-1 shrink-0">
-                {blocked && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
-                {!blocked && overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
-                {!blocked && nearLimit && !overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
-                {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[var(--w-surface-el)] text-[var(--w-text-disabled)] border border-[var(--w-separator)]">Inactif</span>}
-              </div>
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--w-text-disabled)] shrink-0 hidden lg:inline">{netLabel}</span>
-              <span className={`text-[12px] font-black tabular-nums shrink-0 w-28 text-right ${netColor}`}>{formatFCFA(netAmount)}</span>
-            </div>
-            {/* Mobile: card layout */}
-            <div className="sm:hidden">
-              <div className="flex items-start gap-2 mb-1.5">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-bold text-[var(--w-text)] leading-snug">{c.name}</p>
-                  {c.phone && (
-                    <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">{c.phone}</div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {blocked && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
-                  {!blocked && overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
-                  {!blocked && nearLimit && !overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
-                  {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[var(--w-surface-el)] text-[var(--w-text-disabled)] border border-[var(--w-separator)]">Inactif</span>}
-                </div>
-              </div>
-              <div className="flex items-center justify-between border-t border-[var(--w-separator-l)] pt-1.5 mt-1.5">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--w-text-disabled)]">{netLabel}</span>
-                <span className={`text-[12px] font-black tabular-nums ${netColor}`}>{formatFCFA(netAmount)}</span>
-              </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+
 
 /* ───────────────────────── Supplier list ───────────────────────── */
-function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
-  list: Supplier[]; total: number;
-  dueMap: Record<string, { total: number; paid: number; due: number }>;
-  onCreate: () => void; onClickRow: (s: Supplier) => void;
-}) {
-  if (list.length === 0) {
-    return total === 0
-      ? <div className="card"><EmptyState icon={Truck} title="Aucun fournisseur" description="Créez votre premier fournisseur." action={<button onClick={onCreate} className="btn-icon-primary" title="Nouveau fournisseur"><Plus className="w-4 h-4" /></button>} /></div>
-      : <div className="card"><EmptyState icon={Truck} title="Aucun résultat" description="Aucun fournisseur ne correspond à votre recherche." /></div>;
-  }
-  return (
-    <div className="space-y-2 sm:space-y-0">
-      {list.map(s => {
-        const balance = Number((s as any).balance || 0);
-        const netColor = balance > 0 ? 'text-red-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300';
-        return (
-          <button
-            key={s.id}
-            onClick={() => onClickRow(s)}
-            className={`w-full text-left transition-colors ${!s.is_active ? 'opacity-50' : ''} sm:hover:bg-[var(--w-hover)] sm:rounded-none sm:px-2 sm:py-1.5 bg-[var(--w-surface)] rounded-2xl border border-[var(--w-separator)] active:scale-[0.99] px-3.5 py-3`}
-          >
-            {/* Desktop: single flat line */}
-            <div className="hidden sm:flex items-center gap-3">
-              <div className="w-5 h-5 shrink-0 rounded-md bg-neutral-100 text-[var(--w-text)] flex items-center justify-center text-[10px] font-bold">{s.name.charAt(0).toUpperCase()}</div>
-              <p className="text-[12px] font-bold text-[var(--w-text)] truncate flex-1 min-w-0">{s.name}</p>
-              {s.phone && <span className="text-[11px] text-[var(--w-text-disabled)] shrink-0 tabular-nums hidden md:inline">{s.phone}</span>}
-              {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[var(--w-surface-el)] text-[var(--w-text-disabled)] border border-[var(--w-separator)] shrink-0">Inactif</span>}
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--w-text-disabled)] shrink-0 hidden lg:inline">Solde comptable</span>
-              <span className={`text-[12px] font-black tabular-nums shrink-0 w-28 text-right ${netColor}`}>{formatFCFA(balance)}</span>
-            </div>
-            {/* Mobile: card layout */}
-            <div className="sm:hidden">
-              <div className="flex items-start gap-2 mb-1.5">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-bold text-[var(--w-text)] leading-snug">{s.name}</p>
-                  {s.phone && (
-                    <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">{s.phone}</div>
-                  )}
-                </div>
-                {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[var(--w-surface-el)] text-[var(--w-text-disabled)] border border-[var(--w-separator)] shrink-0">Inactif</span>}
-              </div>
-              <div className="flex items-center justify-between border-t border-[var(--w-separator-l)] pt-1.5 mt-1.5">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--w-text-disabled)]">Solde comptable</span>
-                <span className={`text-[12px] font-black tabular-nums ${netColor}`}>{formatFCFA(balance)}</span>
-              </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+
 
 /* ───────────────────────── Options bottom sheet ───────────────────────── */
-function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate, onReactivate }: {
-  title: string; subtitle?: React.ReactNode; onClose: () => void;
-  actions: { icon: any; label: string; desc?: string; onClick: () => void }[];
-  onEdit?: () => void; onDeactivate?: () => void; onReactivate?: () => void;
-}) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
-  }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-      <div className="scrim" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-premium animate-sheet-up sm:animate-scale-in">
-        <div className="sm:hidden sheet-handle" />
-        <div className="px-5 pt-3 sm:pt-4 pb-3 flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-base font-bold text-[var(--w-text)] truncate">{title}</div>
-            {subtitle && <div className="text-xs text-[var(--w-text-muted)] mt-0.5">{subtitle}</div>}
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)]"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="px-3 pb-2 space-y-1">
-          {actions.map((a, i) => {
-            const Icon = a.icon;
-            return (
-              <button key={i} onClick={a.onClick} className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-[var(--w-hover)] active:bg-[var(--w-hover)] transition-colors text-left">
-                <span className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"><Icon className="w-5 h-5" /></span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-semibold text-[var(--w-text)]">{a.label}</span>
-                  {a.desc && <span className="block text-xs text-[var(--w-text-muted)] mt-0.5">{a.desc}</span>}
-                </span>
-                <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-              </button>
-            );
-          })}
-        </div>
-        <div className="px-3 pb-4 pt-1 border-t border-[var(--w-separator-l)] flex gap-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
-          {onEdit && <button onClick={onEdit} className="flex-1 btn-icon justify-center" title="Modifier"><Edit2 className="w-4 h-4" /></button>}
-          {onReactivate && <button onClick={onReactivate} className="flex-1 btn-icon-success" title="Réactiver"><RotateCcw className="w-4 h-4" /></button>}
-          {onDeactivate && <button onClick={onDeactivate} className="flex-1 btn-icon-danger" title="Supprimer"><Trash2 className="w-4 h-4" /></button>}
-        </div>
-      </div>
-    </div>
-  );
-}
+
 
 /* ───────────────────────── Customer detail modal ───────────────────────── */
 function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomerChange }: { view: { c: Customer; key: CustomerOptionKey }; customerList: Customer[]; onClose: () => void; windowed?: boolean; onCustomerChange?: (c: Customer) => void }) {
@@ -2774,10 +2592,7 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
 }
 
 /* ───────────────────────── Payment form ───────────────────────── */
-function PaymentForm({
-  unpaid, methods, paySale, setPaySale, payAmount, setPayAmount, payMethod, setPayMethod,
-  payRef, setPayRef, paying, onSelectSale, recentPayments,
-}: any) {
+function PaymentForm({ unpaid, methods, paySale, setPaySale, payAmount, setPayAmount, payMethod, setPayMethod, payRef, setPayRef, onSelectSale, recentPayments }: any) {
   const selected = unpaid.find((s: any) => s.id === paySale);
   const isBalance = selected?.id === '__balance__';
   const due = selected ? Math.max(0, Number(selected.total) - Number(selected.paid)) : 0;
@@ -2881,7 +2696,7 @@ function PaymentForm({
 }
 
 /* ───────────────────────── Documents view ───────────────────────── */
-function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPicker, onClearDates, onOpenInvoice }: any) {
+function DocsView({ kpis, docs, dateFrom, dateTo, onOpenPicker, onClearDates, onOpenInvoice }: any) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -3511,7 +3326,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 }
 
 /* ───────────────────────── Supplier ledger view ───────────────────────── */
-function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due, dateFrom, dateTo, onOpenPicker, onClearDates }: {
+function SupplierLedgerView({ supplierName, ledger, dateFrom, dateTo, onOpenPicker, onClearDates }: {
   supplierName: string;
   ledger: { id: string; ts: string; label: string; ref: string; debit: number; credit: number; running: number; kind: string }[];
   totalCredit: number; totalDebit: number; due: number;
@@ -3638,7 +3453,7 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
 }
 
 /* ───────────────────────── Supplier docs view ───────────────────────── */
-function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo, onOpenPicker, onClearDates, onOpenOrder }: any) {
+function SupplierDocsView({ kpis, yearStats, docs, dateFrom, dateTo, onOpenPicker, onClearDates, onOpenOrder }: any) {
   const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
   const maxMonth = Math.max(1, ...yearStats.months.map((m: any) => m.total));
   const [statsOpen, setStatsOpen] = useState(false);
