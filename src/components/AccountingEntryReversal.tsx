@@ -1,4 +1,4 @@
-import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
+import {useAccountingWindowId,mayCloseAccountingWindow,useAccountingWork} from '../context/AccountingWindowContext';
 import {useEffect,useRef,useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {formatDate} from '../lib/format';
@@ -18,7 +18,7 @@ export function AccountingEntryReversal({tenantId,entryId,canManage,onPosted,ini
  const [revision,setRevision]=useState(0);
  const [notice,setNotice]=useState('');
  const lock=useRef(false);
- const windowId=useAccountingWindowId();
+ const windowId=useAccountingWindowId();const work=useAccountingWork();
  useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(lock.current||(open&&!!reason.trim())&&!window.confirm("Un motif d’extourne est en cours de saisie. Fermer ?"))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[windowId,open,reason]);
  useEffect(()=>{
   let active=true;setLoading(true);setEntry(null);setLinked(null);setError('');setOpen(false);
@@ -30,10 +30,11 @@ export function AccountingEntryReversal({tenantId,entryId,canManage,onPosted,ini
    q=e.source_type==='reversal'?q.eq('id',e.source_id??'00000000-0000-0000-0000-000000000000'):q.eq('source_type','reversal').eq('source_id',e.id);
    const {data:other,error:otherErr}=await q.maybeSingle();
    if(otherErr)throw otherErr;
-   if(active){setEntry(e);setLinked(other as Entry|null);if(initialOpen&&revision===0&&canManage&&e.source_type==='manual'&&e.status==='posted'&&!other){setDate(today());setReason('');setOpen(true);}}
+   if(active){setEntry(e);setLinked(other as Entry|null);}
   }catch(e){if(active)setError(message(e));}finally{if(active)setLoading(false);}})();
   return()=>{active=false;};
- },[tenantId,entryId,revision,initialOpen,canManage]);
+ },[tenantId,entryId,revision]);
+ useEffect(()=>{if(initialOpen&&!loading&&revision===0&&canManage&&entry?.source_type==='manual'&&entry.status==='posted'&&!linked)setOpen(true);},[initialOpen,loading,entry,linked,revision,canManage]);
  const valid=!!entry&&!!date&&date>=entry.entry_date&&date<=today()&&!!reason.trim()&&reason.trim().length<=500;
  const post=async()=>{
   if(!entry||!valid||!canManage||linked||lock.current||entry.source_type!=='manual'||entry.status!=='posted')return;
@@ -52,7 +53,7 @@ export function AccountingEntryReversal({tenantId,entryId,canManage,onPosted,ini
   <h3 className="text-sm font-semibold">Correction comptable</h3>
   {notice&&<p role="status" className="text-sm text-neutral-700">{notice}</p>}
   {error&&<p role="alert" className="text-xs text-red-700 break-words">{error}</p>}
-  {isReversal?<div className="text-sm space-y-1"><p>Extourne de la pièce {linked?.entry_number??'Pièce d’origine indisponible'}</p><p className="text-xs text-neutral-600 break-words">Motif : {entry.reversal_reason??'—'}</p></div>:linked?<div className="text-sm space-y-1"><p className="font-medium">Écriture extournée · {linked.entry_number} du {formatDate(linked.entry_date)}</p><p className="text-xs text-neutral-600 break-words">Motif : {linked.reversal_reason??'—'}</p><p className="text-xs text-neutral-500">L’écriture d’origine demeure dans les journaux.</p></div>:entry.source_type!=='manual'?<p className="text-xs text-neutral-500">Corrigez cette opération depuis sa pièce commerciale d’origine.</p>:entry.status!=='posted'?<p className="text-xs text-neutral-500">Seules les écritures manuelles validées sont extournables.</p>:canManage&&!open?<button type="button" className="btn btn-secondary" onClick={()=>{setDate(today());setReason('');setOpen(true);setError('');}}>Extourner l’écriture</button>:!canManage?<p className="text-xs text-neutral-500">Le droit de gestion comptable est requis pour extourner.</p>:null}
+  {isReversal?<div className="text-sm space-y-1"><p>Extourne de la pièce {linked?<button type="button" className="underline" onClick={()=>work?.openPiece({entryId:linked.id,entryNumber:linked.entry_number})}>{linked.entry_number}</button>:'Pièce d’origine indisponible'}</p><p className="text-xs text-neutral-600 break-words">Motif : {entry.reversal_reason??'—'}</p></div>:linked?<div className="text-sm space-y-1"><p className="font-medium">Écriture extournée · <button type="button" className="underline" onClick={()=>work?.openPiece({entryId:linked.id,entryNumber:linked.entry_number})}>{linked.entry_number}</button> du {formatDate(linked.entry_date)}</p><p className="text-xs text-neutral-600 break-words">Motif : {linked.reversal_reason??'—'}</p><p className="text-xs text-neutral-500">L’écriture d’origine demeure dans les journaux.</p></div>:entry.source_type!=='manual'?<p className="text-xs text-neutral-500">Corrigez cette opération depuis sa pièce commerciale d’origine.</p>:entry.status!=='posted'?<p className="text-xs text-neutral-500">Seules les écritures manuelles validées sont extournables.</p>:canManage&&!open?<button type="button" className="btn btn-secondary" onClick={()=>{setDate(today());setReason('');setOpen(true);setError('');}}>Extourner l’écriture</button>:!canManage?<p className="text-xs text-neutral-500">Le droit de gestion comptable est requis pour extourner.</p>:null}
   {open&&!linked&&canManage&&entry.source_type==='manual'&&entry.status==='posted'&&<form className="space-y-3" onSubmit={e=>{e.preventDefault();void post();}}>
    <p className="text-xs text-neutral-600">Une nouvelle pièce inverse les débits et crédits sans modifier l’original. La date choisie doit appartenir à une période ouverte. Délettrez d’abord les lignes concernées.</p>
    <label className="block text-xs font-medium">Date de contrepassation<input className="input mt-1 w-full" type="date" min={entry.entry_date} max={today()} required value={date} disabled={busy} onChange={e=>setDate(e.target.value)}/></label>
