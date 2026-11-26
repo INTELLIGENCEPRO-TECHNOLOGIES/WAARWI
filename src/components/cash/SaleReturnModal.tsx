@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, Loader2, Minus, Plus, RefreshCw, Search } from 'lucide-react';
+import {loadReturnLots,returnLotAllocation,type ReturnLotLine} from '../../lib/returnLotAllocation';
+import {ReturnLotFields} from '../billing/ReturnLotFields';
 import { desktopAutoFocus } from '../../lib/device';
 import { supabase } from '../../lib/supabase';
 import { useApp } from '../../context/AppContext';
@@ -31,7 +33,9 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   const [loadError, setLoadError] = useState('');
   const [started, setStarted] = useState(false);
   const [returnSelected, setReturnSelected] = useState<SessionSale | null>(null);
-  const [returnLines, setReturnLines] = useState<{ sale_item_id: string; article_id: string; name: string; quantity: number; unit_price: number; purchase_cost: number; maxQty: number; selected: boolean }[]>([]);
+  const [returnLines, setReturnLines] = useState<(ReturnLotLine & { sale_item_id: string; article_id: string; name: string; quantity: number; unit_price: number; purchase_cost: number; maxQty: number; selected: boolean })[]>([]);
+  const lotLoadRequest=useRef(0);
+  const [lotLoad,setLotLoad]=useState({busy:false,error:''});
 
   const loadReturnSales = async () => {
     if (!tenant || permsPending || !returnsAllowed) return;
@@ -99,18 +103,20 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   }, [started, permsPending, returnsAllowed]);
 
   const selectReturnSale = (s: SessionSale) => {
+    const req=++lotLoadRequest.current;setLotLoad({busy:true,error:''});
     setReturnSelected(s);
     setReturnSearch('');
     setReturnLines(s.items.map(i => {
       const remaining = i.quantity - (i.returned || 0);
-      return { ...i, purchase_cost: i.purchase_cost || 0, quantity: remaining, maxQty: remaining, selected: remaining > 0 };
+      return { ...i, purchase_cost: i.purchase_cost || 0, quantity: remaining, maxQty: remaining, selected: remaining > 0,returnLots:[],lotQuantities:{} };
     }));
+    void loadReturnLots(s.id).then(lots=>{if(req===lotLoadRequest.current){setReturnLines(lines=>lines.map(l=>({...l,returnLots:lots[l.sale_item_id]||[]})));setLotLoad({busy:false,error:''});}}).catch(e=>{if(req===lotLoadRequest.current)setLotLoad({busy:false,error:e?.message||'Impossible de charger les lots d’origine.'});});
   };
 
   const [returnProcessing, setReturnProcessing] = useState(false);
 
   const processReturn = async () => {
-    if (!returnSelected || !tenant) return;
+    if (!returnSelected || !tenant || returnProcessing || lotLoad.busy || lotLoad.error) return;
     if (permsPending) { error(permsPending); return; }
     if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
     const lines = returnLines.filter(l => l.selected && l.quantity > 0);
@@ -119,7 +125,8 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
 
     setReturnProcessing(true);
     try {
-      const items = lines.map(l => ({ sale_item_id: l.sale_item_id, quantity: l.quantity }));
+      if(lines.some(l=>!returnLotAllocation(l,true).valid))throw new Error('Vérifiez les quantités par lot.');
+      const items = lines.map(l => ({ sale_item_id: l.sale_item_id, quantity: l.quantity,lots:returnLotAllocation(l,true).lots }));
       const { data: result, error: rpcErr } = bound.mode === 'supervision'
         ? await supabase.rpc('cash_supervision_sale_return', {
             p_session_id: bound.sessionId,
@@ -171,7 +178,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
         ) : (
           <div className="flex items-center justify-end gap-3 w-full">
             <button onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
-            <button onClick={processReturn} disabled={returnProcessing || !!permsPending || !returnsAllowed || returnLines.filter(l => l.selected).length === 0} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <button onClick={processReturn} disabled={returnProcessing || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || returnLines.filter(l => l.selected).length === 0 || returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : "Créer l'avoir"}
             </button>
           </div>
@@ -229,9 +236,11 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             {/* Selected ticket header */}
             <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
               <span className="text-[15px] font-bold text-neutral-900 doc-number">{returnSelected.sale_number}</span>
-              <button onClick={() => setReturnSelected(null)} className="text-[13px] text-neutral-600 underline underline-offset-2 hover:text-neutral-900 transition-colors">Changer</button>
+              <button disabled={returnProcessing} onClick={() => {lotLoadRequest.current++;setReturnSelected(null);}} className="text-[13px] text-neutral-600 underline underline-offset-2 hover:text-neutral-900 transition-colors">Changer</button>
             </div>
 
+            {lotLoad.busy&&<p role="status" className="py-2 text-xs text-neutral-500">Chargement des lots d’origine…</p>}
+            {lotLoad.error&&<div role="alert" className="py-2 text-sm"><p>{lotLoad.error}</p><button type="button" className="underline" onClick={()=>selectReturnSale(returnSelected)}>Réessayer</button></div>}
             {/* Instructions */}
             <p className="text-[13px] text-neutral-600 mt-4 mb-4 leading-relaxed">Sélectionnez les articles à retourner et ajustez les quantités.</p>
 
@@ -239,7 +248,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             <div>
               {returnLines.map((l, i) => {
                 const toggle = (v: boolean) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, selected: v } : x));
-                const setQ = (q: number) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, quantity: Math.min(l.maxQty, Math.max(1, q)) } : x));
+                const setQ = (q: number) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, quantity: Math.min(l.maxQty, Math.max(Math.min(1,l.maxQty), q)),lotQuantities:{} } : x));
                 return (
                   <div key={i} className="py-4 border-b border-neutral-100 last:border-b-0">
                     <div className="flex items-start gap-3">
@@ -262,6 +271,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
                             </div>
                           </div>
                         )}
+                        {l.selected&&!lotLoad.busy&&!lotLoad.error&&<ReturnLotFields line={l} restock={true} onChange={lotQuantities=>setReturnLines(lines=>lines.map((x,j)=>j===i?{...x,lotQuantities}:x))}/>}
                       </div>
                     </div>
                   </div>
