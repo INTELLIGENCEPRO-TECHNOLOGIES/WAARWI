@@ -36,6 +36,7 @@ import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTI
 import { DocumentEditor } from '../components/DocumentEditor';
 import { DesktopWindow } from '../components/DesktopWindow';
 import {useLockedQuoteSnapshot,quoteSnapshotForm,readQuoteActionSnapshot,type QuoteBaseline,type LockedQuoteSnapshot} from '../lib/useLockedQuoteSnapshot';
+import {Pencil} from '../components/Icons';
 import {useDocumentEditLease} from '../lib/useDocumentEditLease';
 import {useLockedInvoiceSnapshot,invoiceSnapshotForm,type InvoiceBaseline} from '../lib/useLockedInvoiceSnapshot';
 import {DocumentEditLeaseBar} from '../components/DocumentEditLeaseBar';
