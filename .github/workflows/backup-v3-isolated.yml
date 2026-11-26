@@ -1,0 +1,58 @@
+name: Recette sauvegarde chiffrée V3 (isolée)
+on:
+  push:
+    branches: [codex/waarwi-comptabilite-suite]
+    paths:
+      - '.github/workflows/backup-v3-isolated.yml'
+      - 'tests/backup-v3/**'
+      - 'supabase/functions/backup-export-v3/**'
+      - 'supabase/migrations_review/**'
+      - 'scripts/pending-accounting/104-v2-restored-content-integrity-candidate.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup-recipes:
+    if: github.ref == 'refs/heads/codex/waarwi-comptabilite-suite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      BR_TEST_PG_PORT: '54329'
+      BR_TEST_DEPS: /tmp/waarwi-backup-test/node_modules
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dépendance PostgreSQL de test (hors application)
+        run: npm install --prefix /tmp/waarwi-backup-test --no-audit --no-fund --save-exact pg@8.16.3
+      - name: Chaîne V3 chiffrée et reprise
+        run: node --experimental-strip-types --test --test-concurrency=1 tests/backup-v3/lotc_export.test.mjs
+      - name: Préparer Lot D avec contrôle V2
+        if: ${{ !cancelled() }}
+        run: |
+          cat supabase/migrations_review/20261112090000_lot_d_safe_restore_reset_inactive.sql scripts/pending-accounting/104-v2-restored-content-integrity-candidate.sql > /tmp/waarwi-lot-d.sql
+      - name: Restauration V2 et V3, concurrence et reset
+        if: ${{ !cancelled() }}
+        env:
+          BR_LOT_D_SQL: /tmp/waarwi-lot-d.sql
+        run: node --experimental-strip-types --test --test-concurrency=1 tests/backup-v3/lotd_restore.test.mjs
+      - name: Chaîne serveur Lot E, sans secrets ni déploiement
+        if: ${{ !cancelled() }}
+        env:
+          BR_LOT_D_SQL: /tmp/waarwi-lot-d.sql
+        run: node --experimental-strip-types --test --test-concurrency=1 tests/backup-v3/lote_chain.test.mjs
