@@ -208,7 +208,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const [exportError, setExportError] = useState('');
 
   const [occurrence,setOccurrence]=useState<{id:string;due:string;name:string}|null>(null);
-  const [form, setForm] = useState({ journal_type: 'OD', entry_date: new Date().toISOString().slice(0, 10), description: '', reference: '' });
+  const [form, setForm] = useState({ journal_type: 'OD', entry_date: new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'}), description: '', reference: '' });
   const [entryLines, setEntryLines] = useState<{key:number;account_code: string; account_name: string; debit: number; credit: number; label: string }[]>([
     {key:1, account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
     {key:2, account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
@@ -409,7 +409,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
           {(journalCatalog.error||accountError)&&<p role="alert" className="text-xs text-red-700">{journalCatalog.error||accountError}</p>}
           {tenant&&<AccountingEntryTemplates tenantId={tenant.id} canSave={canManage&&isBalanced&&readyLines&&!!form.description.trim()&&journalOptions.some(j=>j.code===form.journal_type&&j.active)&&!accountLoading&&!accountError} journal={form.journal_type} description={form.description} lines={usedLines.map(({account_code,label,debit,credit})=>({account_code,label,debit,credit}))} onApply={applyTemplate}/>}
           {occurrence&&<div className="acc-toolbar"><strong className="text-xs">Échéance mensuelle : {occurrence.name} · {formatDate(occurrence.due)}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Détacher cette échéance ? La saisie actuelle sera effacée et l’échéance restera à traiter.')){setOccurrence(null);setEntryLines([newLine(),newLine()]);setForm(p=>({...p,description:'',reference:'',entry_date:new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'})}));}}}>Annuler l’échéance</button></div>}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="acc-entry-header">
             <div>
               <label className="label">Journal *</label>
               <select value={form.journal_type} onChange={e => setForm(f => ({ ...f, journal_type: e.target.value }))} className="input" disabled={!!occurrence||journalCatalog.loading||!!journalCatalog.error}>
@@ -418,7 +418,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
             </div>
             <div>
               <label className="label">Date *</label>
-              <input type="date" value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} className="input" disabled={!!occurrence} />
+              <input type="date" aria-label="Date comptable" min="2000-01-01" max={new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'})} value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} className="input" disabled={!!occurrence} />
             </div>
             <div>
               <label className="label">Référence</label>
