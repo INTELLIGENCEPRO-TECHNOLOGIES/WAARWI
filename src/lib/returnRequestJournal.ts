@@ -3,7 +3,7 @@ export const RETURN_REQUEST_CHANGED='waarwi:return-request-changed';
 export type ReturnMode='cash'|'avoir'|'deferred';
 export type ReturnFlow='invoice'|'pos'|'supervision';
 export type ReturnRequestInput={key:string;flow:ReturnFlow;saleId:string;siteId:string;sessionId:string|null;items:unknown[];reason:string;restock:boolean;mode:ReturnMode};
-export type ReturnRequestResult={id?:string;return_id?:string;return_number?:string;total?:number;success?:boolean;refunded?:boolean;refund_method?:string;status?:string};
+export type ReturnRequestResult={id?:string;return_id?:string;return_number?:string;total?:number;success?:boolean;refunded?:boolean;refund_method?:string;status?:string;vat_net_amount?:number|null;vat_amount?:number|null};
 export type ActiveReturnRequest={request_key:string;state:'pending'|'succeeded';flow?:ReturnFlow;sale_number?:string;site_name?:string;access_revoked?:boolean;payload?:{items?:unknown[];restock?:boolean;mode?:ReturnMode;reason?:string};result?:ReturnRequestResult};
 function changed(){window.dispatchEvent(new Event(RETURN_REQUEST_CHANGED));}
 export async function readActiveReturnRequest():Promise<ActiveReturnRequest|null>{
