@@ -191,3 +191,20 @@
  .accounting-workspace .acc-entry-grid-row>[data-entry-col=credit]{grid-column:3}
  .accounting-workspace .acc-entry-line-actions{grid-column:4}
 }
+
+/* Dossier de révision : liste métier et feuille de travail, sans cartes ni modales. */
+.accounting-workspace .acc-revision{container-type:inline-size;min-width:0}
+.accounting-workspace .acc-revision-layout{display:grid;grid-template-columns:minmax(165px,220px) minmax(0,1fr);gap:14px;align-items:start}
+.accounting-workspace .acc-revision-cycles{border-right:1px solid var(--w-separator);min-width:0}
+.accounting-workspace .acc-revision-cycles>button{display:flex;flex-direction:column;gap:3px;width:100%;min-width:0;text-align:left;padding:8px 10px;border:0;border-bottom:1px solid var(--w-separator-l);background:transparent;color:var(--w-text);font-size:12px}
+.accounting-workspace .acc-revision-cycles>button strong{font-weight:500;overflow-wrap:anywhere}
+.accounting-workspace .acc-revision-cycles>button span{font-size:10px;color:var(--w-text-muted)}
+.accounting-workspace .acc-revision-cycles>button[aria-pressed=true]{background:var(--w-hover);box-shadow:inset 2px 0 0 var(--w-text)}
+.accounting-workspace .acc-revision-cycles>button[aria-pressed=true] strong{font-weight:650}
+.accounting-workspace .acc-revision-cycles>button:focus-visible{outline:2px solid var(--w-text);outline-offset:-2px}
+.accounting-workspace .acc-revision textarea{resize:vertical}
+@container(max-width:680px){
+ .accounting-workspace .acc-revision-layout{grid-template-columns:minmax(0,1fr);gap:8px}
+ .accounting-workspace .acc-revision-cycles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-right:0;border-top:1px solid var(--w-separator)}
+ .accounting-workspace .acc-revision-cycles>button{padding:6px}
+}
