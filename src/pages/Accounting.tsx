@@ -190,6 +190,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const [exportData, setExportData] = useState<{ rows: any[]; totalCount: number; totalDebitSum: number; totalCreditSum: number; entryCount: number } | null>(null);
   const [exportError, setExportError] = useState('');
 
+  const [occurrence,setOccurrence]=useState<{id:string;due:string;name:string}|null>(null);
   const [form, setForm] = useState({ journal_type: 'OD', entry_date: new Date().toISOString().slice(0, 10), description: '', reference: '' });
   const [entryLines, setEntryLines] = useState<{key:number;account_code: string; account_name: string; debit: number; credit: number; label: string }[]>([
     {key:1, account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
@@ -347,7 +348,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const focusCell=(key:number,col:string)=>requestAnimationFrame(()=>gridRef.current?.querySelector<HTMLInputElement>('[data-entry-key="'+key+'"][data-entry-col="'+col+'"]')?.focus());
   const addLine=()=>{if(entryLines.length>=500)return;const l=newLine();setEntryLines(p=>[...p,l]);focusCell(l.key,'account');};
   const balanceLine=(idx:number)=>{const l=entryLines[idx];if(!l||!l.account_code||!Number.isSafeInteger(debitCents)||!Number.isSafeInteger(creditCents))return;const diff=debitCents-creditCents-minor(l.debit)+minor(l.credit);if(!Number.isSafeInteger(diff)||!diff)return;setEntryLines(p=>p.map((row,i)=>i===idx?{...row,debit:Math.max(0,-diff)/100,credit:Math.max(0,diff)/100}:row));};
-  const applyTemplate=(t:EntryTemplate)=>{if((form.description.trim()||form.reference.trim()||usedLines.length)&&!window.confirm('Remplacer la saisie actuelle par ce modèle ?'))return;if(!journalOptions.some(j=>j.code===t.journal_code&&j.active)||t.lines.some(l=>!accounts.some(a=>a.code===l.account_code))){error('Le modèle comporte un journal ou un compte inactif.');return;}setForm(p=>({...p,journal_type:t.journal_code,description:t.description,reference:''}));setEntryLines(t.lines.map(l=>({...newLine(),...l,account_name:accounts.find(a=>a.code===l.account_code)?.name??''})));};
+  const applyTemplate=(t:EntryTemplate,scheduled=false)=>{if(scheduled&&!t.next_due_on)return;if((form.description.trim()||form.reference.trim()||usedLines.length)&&!window.confirm('Remplacer la saisie actuelle par ce modèle ?'))return;if(!journalOptions.some(j=>j.code===t.journal_code&&j.active)||t.lines.some(l=>!accounts.some(a=>a.code===l.account_code))){error('Le modèle comporte un journal ou un compte inactif.');return;}setOccurrence(scheduled&&t.next_due_on?{id:t.id,due:t.next_due_on,name:t.name}:null);setForm(p=>({...p,journal_type:t.journal_code,entry_date:scheduled&&t.next_due_on?t.next_due_on:p.entry_date,description:t.description,reference:''}));setEntryLines(t.lines.map(l=>({...newLine(),...l,account_name:accounts.find(a=>a.code===l.account_code)?.name??''})));};
   const savingLock=useRef(false);
   const save = async () => {
     if (!tenant || savingLock.current || !canManage) return;
@@ -360,17 +361,14 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     savingLock.current=true;
     setSaving(true);
     try{
-      const { data, error: e } = await supabase.rpc('create_manual_journal_entry', {
-        p_tenant_id: tenant.id, p_journal_type: form.journal_type, p_entry_date: form.entry_date,
-        p_description: form.description, p_reference: form.reference || '',
-        p_lines: validLines.map(l=>({account_code:l.account_code,debit:l.debit,credit:l.credit,label:l.label})),
-      });
+      const payload={p_tenant_id:tenant.id,p_description:form.description,p_reference:form.reference||'',p_lines:validLines.map(l=>({account_code:l.account_code,debit:l.debit,credit:l.credit,label:l.label}))};
+      const {data,error:e}=occurrence?await supabase.rpc('post_accounting_template_occurrence',{...payload,p_template_id:occurrence.id,p_due_on:occurrence.due}):await supabase.rpc('create_manual_journal_entry',{...payload,p_journal_type:form.journal_type,p_entry_date:form.entry_date});
       if(e){error(e.message);return;}
       if(!(data as any)?.success){error((data as any)?.error||'Erreur');return;}
       success('Écriture '+(data as any).piece_number+' enregistrée');
       setOpen(false);
-      setEntryLines([newLine(),newLine()]);
-      setForm(p=>({...p,description:'',reference:''}));
+      setOccurrence(null);setEntryLines([newLine(),newLine()]);
+      setForm(p=>({...p,entry_date:occurrence?new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'}):p.entry_date,description:'',reference:''}));
       work?.refresh();void load();
     }catch(e){error(e instanceof Error?e.message:'Impossible d’enregistrer l’écriture.');}
     finally{savingLock.current=false;setSaving(false);}
@@ -390,19 +388,20 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     return()=>window.removeEventListener('waarwi:accounting-before-navigate',beforeNavigate);
   },[entryOnly,open,form,entryLines,windowId]);
   const closeEntry=()=>{if(saving)return;if(entryOnly&&windowId){onExit?.();return;}const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));if(dirty&&!window.confirm('Abandonner la saisie en cours ?'))return;if(entryOnly)onExit?.();else setOpen(false);};
-  const entryForm=( <fieldset disabled={saving} className="acc-entry-body space-y-2" onKeyDown={e=>{if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();void save();}else if(e.key==='F2'){e.preventDefault();addLine();}}}>
+  const entryForm=( <fieldset disabled={saving} className="acc-entry-body space-y-2" onKeyDown={e=>{if((e.target as HTMLElement).closest('.acc-template-strip'))return;if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();void save();}else if(e.key==='F2'){e.preventDefault();addLine();}}}>
           {(journalCatalog.error||accountError)&&<p role="alert" className="text-xs text-red-700">{journalCatalog.error||accountError}</p>}
           {tenant&&<AccountingEntryTemplates tenantId={tenant.id} canSave={canManage&&isBalanced&&readyLines&&!!form.description.trim()&&journalOptions.some(j=>j.code===form.journal_type&&j.active)&&!accountLoading&&!accountError} journal={form.journal_type} description={form.description} lines={usedLines.map(({account_code,label,debit,credit})=>({account_code,label,debit,credit}))} onApply={applyTemplate}/>}
+          {occurrence&&<div className="acc-toolbar"><strong className="text-xs">Échéance mensuelle : {occurrence.name} · {formatDate(occurrence.due)}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Détacher cette échéance ? La saisie actuelle sera effacée et l’échéance restera à traiter.')){setOccurrence(null);setEntryLines([newLine(),newLine()]);setForm(p=>({...p,description:'',reference:'',entry_date:new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'})}));}}}>Annuler l’échéance</button></div>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="label">Journal *</label>
-              <select value={form.journal_type} onChange={e => setForm(f => ({ ...f, journal_type: e.target.value }))} className="input" disabled={journalCatalog.loading||!!journalCatalog.error}>
+              <select value={form.journal_type} onChange={e => setForm(f => ({ ...f, journal_type: e.target.value }))} className="input" disabled={!!occurrence||journalCatalog.loading||!!journalCatalog.error}>
                 {journalOptions.filter(j=>j.active||j.code===form.journal_type).map(j => <option key={j.code} value={j.code} disabled={!j.active}>{j.code} — {j.name}{!j.active?' (désactivé)':''}</option>)}
               </select>
             </div>
             <div>
               <label className="label">Date *</label>
-              <input type="date" value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} className="input" />
+              <input type="date" value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} className="input" disabled={!!occurrence} />
             </div>
             <div>
               <label className="label">Référence</label>
