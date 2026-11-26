@@ -47,6 +47,9 @@ type Props = {
   saveLabel?: string;
   itemPriceField?: 'sale_price' | 'purchase_price';
   banner?: ReactNode;
+  editBlocked?:boolean;
+  editLeaseBanner?:ReactNode;
+  onActivity?:()=>void;
   onCreateArticle?: (name: string) => void;
   onCreateCustomer?: (name: string) => void;
   brandMode?: boolean; // deprecated — kept for call-site compat, ignored
@@ -71,6 +74,7 @@ export function MobileBillingWizard({
   saveLabel = 'Enregistrer',
   itemPriceField = 'sale_price',
   banner,
+  editBlocked=false,editLeaseBanner,onActivity,
   onCreateArticle,
   onCreateCustomer,
 }: Props) {
@@ -96,6 +100,7 @@ export function MobileBillingWizard({
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  useEffect(()=>{if(editBlocked){setSearchOpen(false);setEditingIdx(null);}},[editBlocked]);
   const filteredArticles = useMemo(() => {
     if (!searchQuery.trim()) return articles.slice(0, 50);
     const q = searchQuery.toLowerCase();
@@ -112,7 +117,7 @@ export function MobileBillingWizard({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col animate-fade-in bg-white">
+    <div className="fixed inset-0 z-50 flex flex-col animate-fade-in bg-white" onPointerDownCapture={onActivity} onKeyDownCapture={onActivity} onInputCapture={onActivity}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-neutral-200 flex-shrink-0">
         <button onClick={onClose} aria-label="Fermer" className="p-2 -ml-2 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] active:scale-95 transition-all">
@@ -124,6 +129,8 @@ export function MobileBillingWizard({
         </div>
       </div>
 
+      {editLeaseBanner&&<div className="flex-shrink-0">{editLeaseBanner}</div>}
+      {editBlocked?<div className="flex-1 overflow-y-auto px-4 py-3"><p className="text-xs text-neutral-500 mb-3">Consultation uniquement. Vos lignes restent dans cette fenêtre.</p>{validItems.map((item,i)=><div key={i} className="py-2 border-b border-neutral-200 flex justify-between gap-2 text-sm"><span>{item.name} × {item.quantity}</span><strong className="whitespace-nowrap">{formatFCFA(item.total)}</strong></div>)}</div>:<>
       {banner && <div className="flex-shrink-0">{banner}</div>}
 
       <div className="flex-1 overflow-y-auto">
@@ -189,8 +196,9 @@ export function MobileBillingWizard({
         )}
       </div>
 
+      </>}
       {/* Bottom sheet - article search */}
-      {searchOpen && (
+      {!editBlocked&&searchOpen && (
         <div className="fixed inset-0 z-[70] flex flex-col bg-white animate-sheet-up">
           <div className="flex items-center gap-3 px-4 py-2.5 border-b border-neutral-200 flex-shrink-0">
             <button onClick={() => setSearchOpen(false)} className="p-2 -ml-2 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] active:scale-95 transition-all">
@@ -243,7 +251,7 @@ export function MobileBillingWizard({
       )}
 
       {/* Edit article panel with numeric keypad */}
-      {editingIdx !== null && items[editingIdx] && (
+      {!editBlocked&&editingIdx !== null && items[editingIdx] && (
         <EditArticlePanel
           item={items[editingIdx]}
           idx={editingIdx}

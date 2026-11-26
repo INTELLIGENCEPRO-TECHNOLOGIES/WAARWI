@@ -41,6 +41,10 @@ import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } 
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 import { DocumentEditor } from '../components/DocumentEditor';
 import { DesktopWindow } from '../components/DesktopWindow';
+import {useDocumentEditLease} from '../lib/useDocumentEditLease';
+import {useLockedInvoiceSnapshot,invoiceSnapshotForm,type InvoiceBaseline} from '../lib/useLockedInvoiceSnapshot';
+import {DocumentEditLeaseBar} from '../components/DocumentEditLeaseBar';
+import {InvoiceEditSnapshotBar} from '../components/InvoiceEditSnapshotBar';
 import { InvoiceEditorInstance, type InvoiceWindowDescriptor } from '../components/billing/InvoiceEditorInstance';
 import { QuoteEditorInstance, type QuoteWindowDescriptor } from '../components/billing/QuoteEditorInstance';
 import { useWindowManager } from '../context/WindowManagerContext';
@@ -420,6 +424,14 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [invoiceIsCredit, setInvoiceIsCredit] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
+  const [mobileInvoiceBaseline,setMobileInvoiceBaseline]=useState<InvoiceBaseline|null>(null);
+  const mobileOriginalDraft=useRef<string|null>(null);
+  const mobileEditSite=useRef<string|null>(null);
+  const mobileEditEnabled=visible&&!isDesktop&&mobileInvoiceOpen&&mobileInvoiceMode==='edit'&&!!mobileEditingInvoiceId&&mobileEditSite.current===currentSite?.id&&can('edit_invoices');
+  const mobileDirty=mobileInvoiceMode==='edit'&&mobileOriginalDraft.current!==JSON.stringify([invoiceForm,invoiceEditorItems]);
+  const mobileLease=useDocumentEditLease({tenantId:tenant?.id,userId:profile?.id||user?.id,kind:'sale',resource:mobileEditingInvoiceId||'',enabled:mobileEditEnabled,dirty:mobileDirty,saving:savingInvoice});
+  const mobileSnapshot=useLockedInvoiceSnapshot({tenantId:tenant?.id,saleId:mobileEditingInvoiceId,lease:mobileLease,enabled:mobileEditEnabled,baseline:mobileInvoiceBaseline,preserveDraft:false,hydrate:s=>{const f=invoiceSnapshotForm(s);setInvoiceForm(f);setInvoiceEditorItems(s.items);setInvoicePayList([]);setInvoiceIsCredit(s.sale.status==='validated'&&Number(s.sale.paid)===0);setInvoiceDetail(old=>({...old,...s.sale} as Invoice));mobileOriginalDraft.current=JSON.stringify([f,s.items]);},onBaseline:setMobileInvoiceBaseline});
+  const mobileEditBlocked=mobileInvoiceMode==='edit'&&(!mobileLease.held||!mobileSnapshot.ready);
   const editingInvoicePrevRep = useRef<string | null>(null);
   const [invoiceNavIdx, setInvoiceNavIdx] = useState(-1);
 
@@ -1260,6 +1272,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       ]);
       setInvoicePostCreation(null);
       if (full) setInvoiceDetail(full as any);
+      mobileEditSite.current=currentSite?.id||null;setMobileInvoiceBaseline(null);mobileOriginalDraft.current=null;
       setMobileEditingInvoiceId(inv.id);
       setMobileInvoiceMode('edit');
       setInvoiceForm({
@@ -1329,38 +1342,20 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
     // Edit existing invoice via RPC (handles stock + balance recalculation)
     if (mobileEditingInvoiceId) {
+      if(savingInvoice||mobileInvoiceMode!=='edit'||!mobileLease.held||!mobileLease.token||!mobileSnapshot.ready||mobileInvoiceBaseline?.saleId!==mobileEditingInvoiceId){error('Reprenez l’accès et vérifiez la version de la facture avant de l’enregistrer.');return;}
       setSavingInvoice(true);
       try {
         const invRepLabel = repLabelOf(invoiceForm.representative);
         const docHeader = { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invRepLabel, imei: invoiceForm.imei || null };
-        const { data: result, error: rpcErr } = await supabase.rpc('update_sale_items_and_totals', {
-          p_sale_id: mobileEditingInvoiceId,
-          p_tenant_id: tenant.id,
-          p_items: valid.map(i => ({
-            article_id: i.article_id, name: i.name,
-            quantity: i.quantity, unit_price: i.unit_price,
-            discount: i.discount,
-          })),
-          p_customer_id: invoiceForm.customer_id || null,
-          p_doc_header: docHeader,
+        const editSubtotal=valid.reduce((sum,i)=>sum+Number(i.total),0);
+        const editRepSnapshot=await buildRepSnapshot(invoiceForm.representative||null,valid,editSubtotal);
+        const {data:result,error:rpcErr}=await supabase.rpc('save_locked_invoice_edit',{
+          p_tenant_id:tenant.id,p_sale_id:mobileEditingInvoiceId,p_window_id:mobileLease.windowId,p_lock_token:mobileLease.token,p_expected_version:mobileInvoiceBaseline.version,
+          p_items:valid.map(i=>({article_id:i.article_id,name:i.name,quantity:i.quantity,unit_price:i.unit_price,discount:i.discount})),
+          p_customer_id:invoiceForm.customer_id||null,p_doc_header:docHeader,p_representative_id:invoiceForm.representative||null,p_rep_commission:editRepSnapshot,p_release:true,
         });
-        if (rpcErr) throw rpcErr;
-        if (result && !(result as any).success) throw new Error((result as any).error || 'Erreur');
-
-        const editSubtotal = valid.reduce((s, i) => s + Number(i.total), 0);
-        const editSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, editSubtotal);
-        await supabase.from('sales').update({
-          representative_id: invoiceForm.representative || null,
-          rep_commission: editSnapshot,
-        }).eq('id', mobileEditingInvoiceId);
-        if (editingInvoicePrevRep.current !== (invoiceForm.representative || null)) {
-          await supabase.from('audit_logs').insert({
-            tenant_id: tenant.id, user_id: profile?.id || null,
-            action: 'representative_change', module: 'billing', reference_id: mobileEditingInvoiceId,
-            old_value: { representative_id: editingInvoicePrevRep.current }, new_value: { representative_id: invoiceForm.representative || null },
-          });
-        }
-
+        if(rpcErr){if(rpcErr.code==='40001')mobileSnapshot.retry();throw rpcErr;}
+        if(!(result as any)?.success)throw new Error('La facture n’a pas été modifiée.');
         success('Facture mise à jour');
         closeInvoiceEditor();
         loadTab(billPage, true);
@@ -2981,6 +2976,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           open={true}
           onClose={closeInvoiceEditor}
           title={mobileEditingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}
+          editBlocked={mobileEditBlocked}
+          onActivity={mobileLease.markActivity}
+          editLeaseBanner={mobileInvoiceMode==='edit'?<div className="px-3 pt-2"><DocumentEditLeaseBar lease={mobileLease} dirty={mobileDirty} saving={savingInvoice} label="cette facture" onSaveAndRelease={mobileSnapshot.ready?()=>void saveInvoice():undefined}/><InvoiceEditSnapshotBar state={mobileSnapshot}/></div>:undefined}
           headerFields={[
             { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
             { key: 'doc_date', label: 'Date', type: 'date' as const },

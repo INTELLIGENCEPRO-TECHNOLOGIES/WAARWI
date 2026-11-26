@@ -1,3 +1,7 @@
+import {useDocumentEditLease} from '../../lib/useDocumentEditLease';
+import {useLockedInvoiceSnapshot,invoiceSnapshotForm,type InvoiceBaseline} from '../../lib/useLockedInvoiceSnapshot';
+import {DocumentEditLeaseBar} from '../DocumentEditLeaseBar';
+import {InvoiceEditSnapshotBar} from '../InvoiceEditSnapshotBar';
 import { useSalePrice } from '../../lib/useSalePrice';
 import { loadInvoiceReturnLines } from '../../lib/saleReturnLines';
 import type { VatAmounts } from '../../lib/salesVat';
@@ -123,6 +127,8 @@ export function InvoiceEditorInstance({
   const [payList, setPayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [isCredit, setIsCredit] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [invoiceBaseline,setInvoiceBaseline]=useState<InvoiceBaseline|null>(null);
+  const originalDraft=useRef<string|null>(null);
   const [postCreation, setPostCreation] = useState<{ saleNumber: string; createdAt: string; createdBy: string } | null>(null);
   const [invoiceDetail, setInvoiceDetail] = useState<any>(null);
   const editingInvoicePrevRep = useRef<string | null>(null);
@@ -140,6 +146,12 @@ export function InvoiceEditorInstance({
   // Return lines for transform-to-return
   const [returnLines, setReturnLines] = useState<any[]>([]);
 
+  const editEnabled=recoveryChecked&&mode==='edit'&&!!editingInvoiceId&&!siteMismatch&&can('edit_invoices');
+  const dirtyEdit=mode==='edit'&&originalDraft.current!==JSON.stringify([invoiceForm,items]);
+  const editLease=useDocumentEditLease({tenantId:descriptor.tenantId,userId,kind:'sale',resource:editingInvoiceId||'',enabled:editEnabled,dirty:dirtyEdit,saving});
+  const editSnapshot=useLockedInvoiceSnapshot({tenantId:descriptor.tenantId,saleId:editingInvoiceId,lease:editLease,enabled:editEnabled,baseline:invoiceBaseline,preserveDraft:hasRecoveredDraftRef.current,hydrate:s=>{const f=invoiceSnapshotForm(s);setInvoiceForm(f);setItems(s.items);setPayList([]);setIsCredit(s.sale.status==='validated'&&Number(s.sale.paid)===0);setInvoiceDetail((old:any)=>({...old,...s.sale}));originalDraft.current=JSON.stringify([f,s.items]);hasRecoveredDraftRef.current=false;},onBaseline:setInvoiceBaseline});
+  const editBlocked=mode==='edit'&&(!editLease.held||!editSnapshot.ready);
+
   // ── Draft recovery: pass 1 — hydrate once from sessionStorage ──
   useEffect(() => {
     if (recoveryChecked) return;
@@ -147,6 +159,7 @@ export function InvoiceEditorInstance({
     const d = loadFormDraft<any>(scope, descriptor.windowId);
     if (d && d.kind === 'invoice' && d.data) {
       hasRecoveredDraftRef.current = true;
+      if (d.data.invoiceBaseline?.saleId && typeof d.data.invoiceBaseline.version==='string') setInvoiceBaseline(d.data.invoiceBaseline);
       if (d.data.invoiceForm) setInvoiceForm(d.data.invoiceForm);
       if (Array.isArray(d.data.items) && d.data.items.length > 0) setItems(d.data.items);
       if (Array.isArray(d.data.payList)) setPayList(d.data.payList);
@@ -169,10 +182,10 @@ export function InvoiceEditorInstance({
       kind: 'invoice',
       documentId: editingInvoiceId,
       mode,
-      data: { invoiceForm, items, payList, isCredit, ipmDocuments, editingInvoiceId },
+      data: { invoiceForm, items, payList, isCredit, ipmDocuments, editingInvoiceId, invoiceBaseline },
       opInProgress: opInProgressRef.current,
     }, 400);
-  }, [recoveryChecked, scope, siteMismatch, descriptor.windowId, mode, editingInvoiceId, invoiceForm, items, payList, isCredit, ipmDocuments]);
+  }, [recoveryChecked, scope, siteMismatch, descriptor.windowId, mode, editingInvoiceId, invoiceForm, items, payList, isCredit, ipmDocuments, invoiceBaseline]);
 
   // ── IPM lookup on customer change ─────────────────────────────
   useEffect(() => {
@@ -272,7 +285,8 @@ export function InvoiceEditorInstance({
   // ── Load invoice data on mount (edit/view) ────────────────────
   useEffect(() => {
     if (!recoveryChecked) return;
-    if (!descriptor.invoiceId) return;
+    if (!descriptor.invoiceId || mode==='edit') return;
+    let alive=true;
     const inv = invoices.find(i => i.id === descriptor.invoiceId);
     if (!inv) return;
 
@@ -281,6 +295,7 @@ export function InvoiceEditorInstance({
         supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
         supabase.from('sales').select('*, customers(name, phone, address)').eq('id', inv.id).maybeSingle(),
       ]);
+      if(!alive)return;
       if (full) setInvoiceDetail(full);
       setEditingInvoiceId(inv.id);
       setNavIdx(invoices.findIndex(i => i.id === inv.id));
@@ -316,7 +331,8 @@ export function InvoiceEditorInstance({
         editingInvoicePrevRep.current = (inv as any).representative_id || null;
       }
     })();
-  }, [recoveryChecked, descriptor.invoiceId, descriptor.mode]);
+    return()=>{alive=false;};
+  }, [recoveryChecked, descriptor.invoiceId, descriptor.mode,mode]);
 
   // ── Navigate to another invoice (view mode prev/next) ─────────
   const navigateToInvoice = useCallback(async (inv: Invoice) => {
@@ -378,44 +394,27 @@ export function InvoiceEditorInstance({
 
     // Edit existing invoice
     if (editingInvoiceId) {
+      if(mode!=='edit'||!editLease.held||!editLease.token||!editSnapshot.ready||invoiceBaseline?.saleId!==editingInvoiceId){error('Reprenez l’accès et vérifiez la version de la facture avant de l’enregistrer.');return;}
       setSaving(true);
       opInProgressRef.current = 'save';
       saveFormDraft(scope, {
         windowId: descriptor.windowId, kind: 'invoice',
         documentId: editingInvoiceId, mode,
-        data: { invoiceForm, items, payList, isCredit, ipmDocuments, editingInvoiceId },
+        data: { invoiceForm, items, payList, isCredit, ipmDocuments, editingInvoiceId, invoiceBaseline },
         opInProgress: 'save',
       });
       try {
         const invRepLabel = repLabelOf(invoiceForm.representative);
         const docHeader = { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invRepLabel, imei: invoiceForm.imei || null };
-        const { data: result, error: rpcErr } = await supabase.rpc('update_sale_items_and_totals', {
-          p_sale_id: editingInvoiceId,
-          p_tenant_id: tenant.id,
-          p_items: valid.map(i => ({
-            article_id: i.article_id, name: i.name,
-            quantity: i.quantity, unit_price: i.unit_price,
-            discount: i.discount,
-          })),
-          p_customer_id: invoiceForm.customer_id || null,
-          p_doc_header: docHeader,
+        const editSubtotal=valid.reduce((sum,i)=>sum+Number(i.total),0);
+        const editRepSnapshot=await buildRepSnapshot(invoiceForm.representative||null,valid,editSubtotal);
+        const {data:result,error:rpcErr}=await supabase.rpc('save_locked_invoice_edit',{
+          p_tenant_id:tenant.id,p_sale_id:editingInvoiceId,p_window_id:editLease.windowId,p_lock_token:editLease.token,p_expected_version:invoiceBaseline.version,
+          p_items:valid.map(i=>({article_id:i.article_id,name:i.name,quantity:i.quantity,unit_price:i.unit_price,discount:i.discount})),
+          p_customer_id:invoiceForm.customer_id||null,p_doc_header:docHeader,p_representative_id:invoiceForm.representative||null,p_rep_commission:editRepSnapshot,p_release:true,
         });
-        if (rpcErr) throw rpcErr;
-        if (result && !(result as any).success) throw new Error((result as any).error || 'Erreur');
-
-        const editSubtotal = valid.reduce((s, i) => s + Number(i.total), 0);
-        const editSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, editSubtotal);
-        await supabase.from('sales').update({
-          representative_id: invoiceForm.representative || null,
-          rep_commission: editSnapshot,
-        }).eq('id', editingInvoiceId);
-        if (editingInvoicePrevRep.current !== (invoiceForm.representative || null)) {
-          await supabase.from('audit_logs').insert({
-            tenant_id: tenant.id, user_id: profile?.id || null,
-            action: 'representative_change', module: 'billing', reference_id: editingInvoiceId,
-            old_value: { representative_id: editingInvoicePrevRep.current }, new_value: { representative_id: invoiceForm.representative || null },
-          });
-        }
+        if(rpcErr){if(rpcErr.code==='40001')editSnapshot.retry();throw rpcErr;}
+        if(!(result as any)?.success)throw new Error('La facture n’a pas été modifiée.');
         success('Facture mise à jour');
         clearFormDraft(scope, descriptor.windowId);
         opInProgressRef.current = null;
@@ -635,7 +634,8 @@ export function InvoiceEditorInstance({
   }, []);
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full relative">
+    <div ref={containerRef} className="flex flex-col h-full relative" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
+    {mode==='edit'&&<div className="px-3 pt-2 shrink-0"><DocumentEditLeaseBar lease={editLease} dirty={dirtyEdit} saving={saving} label={'cette facture'} onSaveAndRelease={editSnapshot.ready?()=>void saveInvoice():undefined}/><InvoiceEditSnapshotBar state={editSnapshot}/></div>}
     {siteMismatch && (
       <>
       <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-2 text-xs text-amber-800 relative z-10">
@@ -658,7 +658,7 @@ export function InvoiceEditorInstance({
     <DocumentEditor
       embedded
       docType="invoice"
-      mode={mode}
+      mode={editBlocked?'view':mode}
       articles={articles}
       customers={customers}
       headerForm={{ ...invoiceForm, valid_until: '', note: '', doc_date: invoiceForm.doc_date || '' }}
@@ -673,12 +673,12 @@ export function InvoiceEditorInstance({
       vat={pricing.price?.enabled ? { vat_net_amount: pricing.price.ht, vat_amount: pricing.price.vat } : invoiceDetail ?? undefined}
       documentTotal={pricing.price?.ttc ?? invoiceDetail?.total}
       saving={saving}
-      onSave={saveInvoice}
+      onSave={editBlocked?undefined:saveInvoice}
       onClose={onClose}
-      hasPrev={navIdx > 0}
-      hasNext={navIdx >= 0 && navIdx < invoices.length - 1}
-      onPrev={navIdx > 0 ? () => { const prev = invoices[navIdx - 1]; if (prev) navigateToInvoice(prev); } : undefined}
-      onNext={navIdx >= 0 && navIdx < invoices.length - 1 ? () => { const next = invoices[navIdx + 1]; if (next) navigateToInvoice(next); } : undefined}
+      hasPrev={mode==='view'&&navIdx > 0}
+      hasNext={mode==='view'&&navIdx >= 0 && navIdx < invoices.length - 1}
+      onPrev={mode==='view'&&navIdx > 0 ? () => { const prev = invoices[navIdx - 1]; if (prev) navigateToInvoice(prev); } : undefined}
+      onNext={mode==='view'&&navIdx >= 0 && navIdx < invoices.length - 1 ? () => { const next = invoices[navIdx + 1]; if (next) navigateToInvoice(next); } : undefined}
       onSearchOpen={onSearchOpen}
       editingId={editingInvoiceId}
       documentNumber={invForLookup?.sale_number || undefined}
@@ -716,48 +716,21 @@ export function InvoiceEditorInstance({
       onNewInvoice={() => {
         onOpenNew();
       }}
-      onEdit={editingInvoiceId ? () => {
-        setPostCreation(null);
-        const inv = invoices.find(i => i.id === editingInvoiceId);
-        if (!inv) return;
-        (async () => {
-          const [{ data: saleItems }, { data: full }] = await Promise.all([
-            supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
-            supabase.from('sales').select('*, customers(name, phone, address)').eq('id', inv.id).maybeSingle(),
-          ]);
-          if (full) setInvoiceDetail(full);
-          setMode('edit');
-          setInvoiceForm({
-            customer_id: inv.customer_id || '',
-            doc_date: (inv as any).doc_header?.doc_date || new Date(inv.created_at).toISOString().slice(0, 10),
-            delivery_date: (inv as any).doc_header?.delivery_date || '',
-            reference: (inv as any).doc_header?.reference || '',
-            warranty: (inv as any).doc_header?.warranty || '',
-            representative: (inv as any).representative_id || '',
-            imei: (inv as any).doc_header?.imei || '',
-          });
-          editingInvoicePrevRep.current = (inv as any).representative_id || null;
-          setItems((saleItems || []).map((i: any) => ({
-            article_id: i.article_id, name: i.name,
-            quantity: Number(i.quantity), unit_price: Number(i.unit_price),
-            discount: Number(i.discount || 0), total: Number(i.total),
-          })));
-          setPayList([]);
-          setIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
-        })();
+      onEdit={mode==='view'&&editingInvoiceId&&can('edit_invoices') ? () => {
+        setPostCreation(null);hasRecoveredDraftRef.current=false;originalDraft.current=null;setInvoiceBaseline(null);setMode('edit');
       } : undefined}
       onApplyCredit={mode === 'view' && invForLookup?.customer_id && onOpenCredit ? () => onOpenCredit(invForLookup) : undefined}
-      onPay={editingInvoiceId && invForLookup ? () => onOpenPay(invForLookup) : undefined}
+      onPay={mode==='view'&&editingInvoiceId && invForLookup ? () => onOpenPay(invForLookup) : undefined}
       onCopyLink={editingInvoiceId && invForLookup ? () => onCopyLink(invForLookup) : undefined}
       onWhatsApp={editingInvoiceId && invForLookup?.customers ? () => onWhatsApp(invForLookup) : undefined}
-      onCancel={editingInvoiceId && invForLookup ? () => onCancelInvoice(invForLookup) : undefined}
-      onComptabiliser={editingInvoiceId && invForLookup && onComptabiliser ? () => onComptabiliser(invForLookup) : undefined}
+      onCancel={mode==='view'&&editingInvoiceId && invForLookup ? () => onCancelInvoice(invForLookup) : undefined}
+      onComptabiliser={mode==='view'&&editingInvoiceId && invForLookup && onComptabiliser ? () => onComptabiliser(invForLookup) : undefined}
       accountingBusy={accountingBusy}
       onPrint={editingInvoiceId ? handlePrint : undefined}
       inactive={siteMismatch}
       transformReturnLines={returnLines}
       loadReturnLines={loadReturnLines}
-      onTransformToReturn={editingInvoiceId ? async (config) => {
+      onTransformToReturn={mode==='view'&&editingInvoiceId ? async (config) => {
         await onReturnTransform(config, editingInvoiceId);
       } : undefined}
     />
