@@ -30,6 +30,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   const [bound] = useState(ctx);
   const [opKey, setOpKey] = useState(newIdempotencyKey);
   const [restock,setRestock]=useState(true);
+  const [refundMode,setRefundMode]=useState<'cash'|'avoir'|'deferred'>('cash');
   const [financialReason,setFinancialReason]=useState('');
   const [matchArticle,setMatchArticle]=useState<string|null>(null);
   const [uncertain,setUncertain]=useState(false);
@@ -52,7 +53,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
     try {
     const { data, error: salesErr } = await supabase
       .from('sales')
-      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(id, article_id, name, quantity, unit_price, purchase_cost, vat_net_amount, vat_amount)')
+      .select('id, sale_number, total, customer_id, created_at, customers(name, phone, address), status, sale_items(id, article_id, name, quantity, unit_price, purchase_cost, vat_net_amount, vat_amount)')
       .eq('tenant_id', tenant.id)
       .eq('cash_session_id', bound.sessionId)
       .neq('status', 'cancelled')
@@ -91,7 +92,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
       });
       const fullyReturned = items.every((i: any) => i.returned >= i.quantity);
       return {
-        id: s.id, sale_number: s.sale_number, total: Number(s.total),
+        id: s.id, sale_number: s.sale_number, total: Number(s.total), customer_id: s.customer_id || null,
         created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
         items, fullyReturned,
       };
@@ -111,7 +112,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
 
   const selectReturnSale = (s: SessionSale) => {
     if(inFlight.current||uncertain)return;
-    setOpKey(newIdempotencyKey());setRestock(true);setFinancialReason('');setMatchArticle(null);
+    setOpKey(newIdempotencyKey());setRestock(true);setRefundMode('cash');setFinancialReason('');setMatchArticle(null);
     const req=++lotLoadRequest.current;setLotLoad({busy:true,error:''});
     setReturnSelected(s);
     setReturnSearch('');
@@ -132,6 +133,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
     if (lines.length === 0) { error('Aucun article sélectionné'); return; }
     const returnTotal = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
 
+    if(refundMode==='avoir'&&!returnSelected.customer_id){error('Associez un client à la vente avant d’émettre un avoir.');return;}
     if(restock && lines.some(l=>!returnLotAllocation(l,true).valid)){error('Vérifiez les quantités par lot.');return;}
     if(!restock && financialReason.trim().length<8){error('Précisez le motif du retour sans remise en stock.');return;}
     const items = lines.map(l => ({ sale_item_id: l.sale_item_id, quantity: l.quantity,lots:restock?returnLotAllocation(l,true).lots:[] }));
@@ -145,7 +147,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             p_items: items,
             p_reason: reason,
             p_restock: restock,
-            p_refund_method: null,
+            p_refund_method: refundMode==='cash'?null:refundMode,
             p_idempotency_key: opKey,
           })
         : await supabase.rpc('process_sale_return', {
@@ -154,7 +156,8 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             p_cash_session_id: bound.sessionId,
             p_items: items,
             p_reason: reason,
-            p_refund_now: true,
+            p_refund_now: refundMode==='cash',
+            p_refund_method: refundMode==='avoir'?'avoir':null,
             p_restock: restock,
             p_request_id: opKey,
           });
@@ -170,12 +173,13 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
       setUncertain(false);
 
       const refunded = Number(result?.total ?? returnTotal);
+      const settledMode = result.refund_method==='avoir'?'avoir':result.refunded===true?'cash':'deferred';
       const retNum = result?.return_number || 'RET-?';
-      try {printReturnTicket80Shared(returnSelected.sale_number, lines, refunded, bound.printTenant, bound.userName, retNum, returnSelected.customer_name, result);} catch {error('Retour enregistré, mais impression du ticket impossible.');}
+      try {printReturnTicket80Shared(returnSelected.sale_number, lines, refunded, bound.printTenant, bound.userName, retNum, returnSelected.customer_name, result, settledMode);} catch {error('Retour enregistré, mais impression du ticket impossible.');}
 
       setOpKey(newIdempotencyKey());
       onClose();
-      success(`Retour effectué: -${formatFCFA(refunded)} remboursé`);
+      success(settledMode==='avoir'?`Avoir de ${formatFCFA(refunded)} enregistré`:settledMode==='cash'?`Retour effectué : ${formatFCFA(refunded)} remboursés`:`Retour enregistré : ${formatFCFA(refunded)} à traiter depuis la facturation`);
       onDone();
     } catch (e: any) {
       setUncertain(true);
@@ -199,7 +203,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
         ) : (
           <div className="flex items-center justify-end gap-3 w-full">
             <button disabled={returnProcessing||uncertain} onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors disabled:opacity-40">Annuler</button>
-            <button onClick={processReturn} disabled={returnProcessing || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || !!matchArticle || returnLines.filter(l => l.selected && l.quantity>0).length === 0 || (restock&&returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)) || (!restock&&financialReason.trim().length<8)} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <button onClick={processReturn} disabled={returnProcessing || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || !!matchArticle || returnLines.filter(l => l.selected && l.quantity>0).length === 0 || (restock&&returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)) || (!restock&&financialReason.trim().length<8) || (refundMode==='avoir'&&!returnSelected.customer_id)} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : uncertain ? 'Réessayer le retour' : 'Valider le retour'}
             </button>
           </div>
@@ -268,8 +272,19 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
               <div className="mt-3 space-y-2 border border-neutral-200 rounded-lg p-3">
                 <p className="text-xs font-semibold">Traitement du stock</p>
                 <label className="flex items-center gap-2 text-xs"><input type="radio" name="return-stock-mode" checked={restock} onChange={()=>setRestock(true)}/>Retour avec remise en stock</label>
-                <label className="flex items-center gap-2 text-xs"><input type="radio" name="return-stock-mode" checked={!restock} onChange={()=>setRestock(false)}/>Remboursement sans remise en stock</label>
-                {!restock&&<><p className="text-xs text-amber-800">Le montant sera remboursé, mais aucun article ne sera réintégré au stock. Ne choisissez ce mode que si le retour est uniquement financier ou la marchandise n'est pas remise en stock.</p><label className="block text-xs">Motif obligatoire<textarea className="mt-1 w-full rounded border border-neutral-300 p-2 text-sm" rows={2} maxLength={500} value={financialReason} onChange={e=>setFinancialReason(e.target.value)}/></label></>}
+                <label className="flex items-center gap-2 text-xs"><input type="radio" name="return-stock-mode" checked={!restock} onChange={()=>setRestock(false)}/>Retour sans remise en stock</label>
+                {!restock&&<><p className="text-xs text-amber-800">Le retour sera enregistré sans réintégrer les articles au stock. Ne choisissez ce mode que si le retour est uniquement financier ou la marchandise n'est pas remise en stock.</p><label className="block text-xs">Motif obligatoire<textarea className="mt-1 w-full rounded border border-neutral-300 p-2 text-sm" rows={2} maxLength={500} value={financialReason} onChange={e=>setFinancialReason(e.target.value)}/></label></>}
+              </div>
+              <div className="mt-3 border border-neutral-200 rounded-lg p-3">
+                <p className="text-xs font-semibold mb-2">Traitement du montant</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {([{value:'cash',label:'Rembourser en espèces',hint:'Décaissement immédiat'},{value:'avoir',label:'Émettre un avoir',hint:returnSelected.customer_id?'Crédit du client':'Client identifié requis'},{value:'deferred',label:'Traiter plus tard',hint:'Depuis la facturation'}] as const).map(option=>
+                    <label key={option.value} className={`flex gap-2 items-start rounded-md border p-2.5 text-xs ${refundMode===option.value?'border-neutral-900 bg-neutral-50':'border-neutral-200'} ${option.value==='avoir'&&!returnSelected.customer_id?'opacity-50':''}`}>
+                      <input type="radio" name="return-refund-mode" value={option.value} checked={refundMode===option.value} disabled={option.value==='avoir'&&!returnSelected.customer_id} onChange={()=>setRefundMode(option.value)} />
+                      <span className="min-w-0"><span className="block font-semibold">{option.label}</span><span className="block mt-1 text-neutral-500">{option.hint}</span></span>
+                    </label>)}
+                </div>
+                {refundMode==='deferred'&&<p className="mt-2 text-xs text-neutral-600">Aucun décaissement immédiat. Le retour reste à traiter dans la facturation.</p>}
               </div>
             {/* Instructions */}
             <p className="text-[13px] text-neutral-600 mt-4 mb-4 leading-relaxed">Sélectionnez les articles à retourner et ajustez les quantités.</p>
@@ -314,7 +329,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             {/* Total avoir */}
             <div className="flex items-center justify-between pt-4 mt-2 border-t border-neutral-200">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-900">Avoir total</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-900">Montant estimé du retour</div>
                 <div className="text-[11px] text-neutral-500 mt-0.5">{returnLines.filter(l => l.selected).length} article{returnLines.filter(l => l.selected).length > 1 ? 's' : ''}</div>
               </div>
               <div className="text-xl font-bold text-red-600 num">
