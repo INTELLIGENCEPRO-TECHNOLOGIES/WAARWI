@@ -20,10 +20,10 @@ export function AccountingPiece({request,onPosted}:{request:AccountingPieceReque
    let q=supabase.from('journal_entries').select('id,entry_number,entry_date,journal_type,description,reference,source_type,status,total_debit,total_credit,posted_at,reversal_reason,source_id').eq('tenant_id',tenant.id);
    q=request.entryId?q.eq('id',request.entryId):q.eq('entry_number',request.entryNumber);
    const {data:e,error:err}=await q.single();if(err)throw err;if(!e||e.entry_number!==request.entryNumber)throw new Error('Pièce introuvable.');
-   const {data:l,error:le}=await supabase.from('journal_lines').select('id,account_code,account_name,label,debit,credit,third_party_id').eq('tenant_id',tenant.id).eq('entry_id',e.id).order('created_at').order('id');if(le)throw le;
-   if(active){setEntry(e as Entry);setLines((l??[]) as Line[]);}
+   const all:Line[]=[];for(let off=0;;off+=250){const {data:l,error:le}=await supabase.from('journal_lines').select('id,account_code,account_name,label,debit,credit,third_party_id').eq('tenant_id',tenant.id).eq('entry_id',e.id).order('created_at').order('id').range(off,off+249);if(le)throw le;if(!active)return;all.push(...((l??[]) as Line[]));if((l??[]).length<250)break;}
+   if(active){setEntry(e as Entry);setLines(all);}
   }catch(e){if(active){setEntry(null);setLines([]);setError(e&&typeof e==='object'&&'message' in e?String(e.message):'Chargement impossible.');}}finally{if(active)setBusy(false);}
- })();return()=>{active=false;};},[tenant?.id,request.entryId,request.entryNumber,revision]);
+ })();return()=>{active=false;};},[tenant?.id,request.entryId,request.entryNumber,revision,work?.revision]);
  const d=lines.reduce((a,l)=>a+Number(l.debit),0),c=lines.reduce((a,l)=>a+Number(l.credit),0);
  return <div className="accounting-workspace acc-piece-workspace">
   <div className="acc-toolbar acc-fixed"><strong className="text-sm">{request.entryNumber}</strong>{entry&&<span className="acc-status">{status(entry.status)}</span>}<span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={busy} onClick={()=>setRevision(v=>v+1)}><RefreshCw size={15}/>Actualiser</button></div>
