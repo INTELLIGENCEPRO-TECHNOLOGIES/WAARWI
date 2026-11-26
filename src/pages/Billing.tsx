@@ -1824,14 +1824,20 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if(lines.some(line=>!returnLotAllocation(line,restock).valid)){showError('Vérifiez les quantités retournées par lot.');return null;}
     const items = lines.map(line => ({ sale_item_id: line.item_id, quantity: line.quantity, lots:returnLotAllocation(line,restock).lots }));
     const payload = JSON.stringify({ saleId, siteId, items, reason, restock, issueCredit });
-    if (vatReturnAttempt.current?.payload !== payload) {
-      vatReturnAttempt.current = { payload, key: newIdempotencyKey() };
+    if (vatReturnAttempt.current && vatReturnAttempt.current.payload !== payload) {
+      showError('Une demande précédente reste à confirmer. Réessayez avec les mêmes données avant de créer un autre retour.');
+      return null;
     }
-    const { data, error: failure } = await supabase.rpc('prepare_vat_invoice_return', {
+    if (!vatReturnAttempt.current) vatReturnAttempt.current = { payload, key: newIdempotencyKey() };
+    const { data, error: failure } = await supabase.rpc('prepare_invoice_return', {
       p_sale_id: saleId, p_site_id: siteId, p_items: items,
       p_reason: reason, p_restock: restock, p_request_id: vatReturnAttempt.current.key, p_issue_credit: issueCredit,
     });
-    if (failure) { showError(failure.message); return null; }
+    if (failure) {
+      if (/^(22|23|42|55|P0)/.test(failure.code||'') && failure.code!=='23505') vatReturnAttempt.current=null;
+      showError(failure.message); return null;
+    }
+    if (!data?.id) { showError('Retour non confirmé. Réessayez sans modifier la demande.'); return null; }
     vatReturnAttempt.current = null;
     return data as SaleReturn;
   };
@@ -1871,11 +1877,25 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     }
 
     // Check if sale has IPM coverage
-    const { data: ipmVente } = await supabase.from('ipm_ventes')
+    const { data: ipmVente, error: ipmCheckError } = await supabase.from('ipm_ventes')
       .select('id, part_ipm, part_client, montant_total, bordereau_id, statut')
       .eq('sale_id', returnForm.sale_id)
       .limit(1)
       .maybeSingle();
+    if (ipmCheckError) { setReturnError(ipmCheckError.message); setSaving(false); return; }
+    if (!ipmVente) {
+      const ret=await prepareVatReturn(sale.id,sale.site_id,sel,returnForm.reason,returnForm.restock,returnMode==='avoir',setReturnError);
+      setSaving(false);
+      if (!ret) return;
+      setReturnOpen(false);setReturnForm({sale_id:'',reason:'',restock:true});setReturnLines([]);
+      if (mobileInvoiceOpen && mobileEditingInvoiceId===sale.id && returnMode==='avoir') void reloadInvoice(sale.id);
+      else void loadTab(billPage,true);
+      await openReturnDetail({...ret,customers:Array.isArray(sale.customers)?sale.customers[0]??null:sale.customers,sales:{sale_number:sale.sale_number}});
+      success(ret.refund_method==='avoir'?'Avoir créé.':'Retour enregistré. Choisissez le mode de remboursement.');
+      return;
+    }
+    // IPM : parcours historique conservé jusqu'à validation du traitement atomique spécifique.
+
 
     // For IPM sales, refund only client portion
     let refundTotal = returnTotal;
@@ -2721,9 +2741,22 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 return;
               }
               const localReturnTotal = sel.reduce((s: number, i: any) => s + Number(i.quantity) * Number(i.unit_price), 0);
-              const { data: ipmVente } = await supabase.from('ipm_ventes')
+              const { data: ipmVente, error: ipmCheckError } = await supabase.from('ipm_ventes')
                 .select('id, part_ipm, part_client, montant_total, bordereau_id, statut')
                 .eq('sale_id', saleId).limit(1).maybeSingle();
+              if(ipmCheckError){error(ipmCheckError.message);setSaving(false);return;}
+              if(!ipmVente){
+                const ret=await prepareVatReturn(saleId,sourceInvoice.site_id,sel,config.reason,config.restock,false);
+                setSaving(false);
+                if(!ret)return;
+                closeInvoiceWindow(desc.windowId);
+                await loadTab(billPage,true);
+                await openReturnDetail({...ret,customers:Array.isArray(sourceInvoice.customers)?sourceInvoice.customers[0]??null:sourceInvoice.customers,sales:{sale_number:sourceInvoice.sale_number}});
+                success('Retour enregistré. Choisissez le mode de remboursement.');
+                return;
+              }
+              // IPM : parcours historique conservé jusqu'à validation du traitement atomique spécifique.
+
               let refundTotal = localReturnTotal;
               if (ipmVente && ipmVente.montant_total > 0) {
                 const ipmRatio = Number(ipmVente.part_client) / Number(ipmVente.montant_total);
