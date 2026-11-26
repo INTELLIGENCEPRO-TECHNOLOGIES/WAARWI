@@ -166,3 +166,28 @@
 
 .accounting-workspace .acc-search-compact-meta{display:none}
 @container (max-width:760px){.accounting-workspace .acc-search-compact-meta{display:block;font-size:10px;color:var(--w-text-muted)}}
+
+/* Saisie au clavier : grille de travail, adaptée à la largeur de la fenêtre. */
+.accounting-workspace .acc-entry-body{container-type:inline-size;min-width:0}
+.accounting-workspace .acc-template-strip{border-bottom:1px solid var(--w-separator);padding-bottom:4px}
+.accounting-workspace .acc-entry-grid{min-width:0;border-top:1px solid var(--w-separator)}
+.accounting-workspace .acc-entry-grid-head,.accounting-workspace .acc-entry-grid-row{display:grid;grid-template-columns:24px minmax(115px,1.45fr) minmax(110px,2fr) minmax(80px,1fr) minmax(80px,1fr) 55px;gap:6px;align-items:start;padding:5px 3px;border-bottom:1px solid var(--w-separator-l)}
+.accounting-workspace .acc-entry-grid-head{background:var(--w-surface-el);color:var(--w-text-sec);font-size:11px;font-weight:600;position:sticky;top:0;z-index:2;align-items:center}
+.accounting-workspace .acc-entry-grid-row:focus-within{background:var(--w-hover)}
+.accounting-workspace .acc-entry-grid-row .input{width:100%;min-width:0;font-size:12px;min-height:30px;padding:3px 4px}
+.accounting-workspace .acc-entry-account{display:flex;flex-direction:column;gap:2px;min-width:0}
+.accounting-workspace .acc-entry-account>span{overflow-wrap:anywhere}
+.accounting-workspace .acc-entry-amount{text-align:right;font-variant-numeric:tabular-nums;appearance:textfield}
+.accounting-workspace .acc-entry-amount::-webkit-inner-spin-button,.accounting-workspace .acc-entry-amount::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.accounting-workspace .acc-line-number{font-size:11px;padding-top:8px;color:var(--w-text-muted)}
+.accounting-workspace .acc-entry-line-actions{display:flex;justify-content:flex-end;align-items:center;gap:1px}
+.accounting-workspace .acc-entry-line-actions .acc-icon{padding:5px;min-width:24px}
+@container(max-width:660px){
+ .accounting-workspace .acc-entry-grid-head{display:none}
+ .accounting-workspace .acc-entry-grid-row{grid-template-columns:24px minmax(0,1fr) minmax(0,1fr) 55px;gap:5px;padding:7px 0}
+ .accounting-workspace .acc-entry-grid-row .acc-entry-account{grid-column:2/-1}
+ .accounting-workspace .acc-entry-grid-row>[data-entry-col=label]{grid-column:2/-1}
+ .accounting-workspace .acc-entry-grid-row>[data-entry-col=debit]{grid-column:2}
+ .accounting-workspace .acc-entry-grid-row>[data-entry-col=credit]{grid-column:3}
+ .accounting-workspace .acc-entry-line-actions{grid-column:4}
+}
