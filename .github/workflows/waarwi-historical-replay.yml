@@ -1,0 +1,125 @@
+name: Recette historique SQL locale (aucun déploiement)
+on:
+  push:
+    branches: [codex/waarwi-comptabilite-suite]
+    paths:
+      - '.github/workflows/waarwi-historical-replay.yml'
+      - 'scripts/pending-accounting/production-migration-versions.json'
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  replay:
+    if: github.ref == 'refs/heads/codex/waarwi-comptabilite-suite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Inventaire exact des fichiers historiques
+        id: inventory
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, re, sys, os
+          manifest=json.loads(pathlib.Path('scripts/pending-accounting/production-migration-versions.json').read_text())
+          versions=manifest['versions']
+          files={}
+          for path in pathlib.Path('supabase/migrations').glob('*.sql'):
+              m=re.fullmatch(r'(\d{14})_.+\.sql',path.name)
+              if not m: continue
+              files.setdefault(m[1],[]).append(path)
+          missing=[v for v in versions if v not in files]
+          duplicate=[v for v in versions if len(files.get(v,[]))>1]
+          extra=sorted(set(files)-set(versions))
+          print(f'Production : {len(versions)} versions ; GitHub : {len(files)} versions')
+          print('Manquantes :',len(missing),*missing,sep='\n')
+          print('Ambiguës :',len(duplicate),*duplicate,sep='\n')
+          print('Supplémentaires (non exécutées) :',len(extra),*extra,sep='\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
+              summary.write(f'## Inventaire historique\nProduction : {len(versions)} ; GitHub : {len(files)} ; absentes : {len(missing)} ; ambiguës : {len(duplicate)} ; supplémentaires : {len(extra)}.\n')
+          # Replay strict: stop at the first missing/ambiguous version, never guess or skip it.
+          paths=[]
+          for version in versions:
+              if len(files.get(version,[]))!=1: break
+              paths.append(str(files[version][0].resolve()))
+          pathlib.Path('/tmp/waarwi-replay-files.txt').write_text('\n'.join(paths)+'\n')
+          pathlib.Path('/tmp/waarwi-replay-total.txt').write_text(str(len(versions)))
+          print('Préfixe continu rejouable :',len(paths))
+          if not paths: sys.exit('Première migration introuvable ou ambiguë')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: supabase/setup-cli@v3
+        with:
+          version: '2.122.1'
+      - name: Initialiser une base PostgreSQL 17 Supabase jetable
+        id: initialize
+        run: |
+          set -euo pipefail
+          supabase --version
+          supabase init --help >/dev/null
+          supabase db start --help >/dev/null
+          work=$(mktemp -d /tmp/waarwi-history.XXXXXX)
+          cd "$work"
+          unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_SERVICE_ROLE_KEY SUPABASE_ANON_KEY SUPABASE_URL DATABASE_URL
+          supabase init
+          test -f supabase/config.toml
+          sed -i 's/^project_id = .*/project_id = "waarwi_history_replay"/;s/^major_version = .*/major_version = 17/' supabase/config.toml
+          grep -qx 'project_id = "waarwi_history_replay"' supabase/config.toml
+          grep -qx 'major_version = 17' supabase/config.toml
+          # No repository config, migration, seed, remote project link or user secret has been copied.
+          supabase db start
+          db=$(docker ps --filter 'name=^/supabase_db_waarwi_history_replay$' --format '{{.ID}}')
+          test -n "$db"
+          test "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$db")" != host
+          # Cut every network connection BEFORE executing any historic SQL (including pg_net/cron).
+          for network in $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$db"); do
+            docker network disconnect -f "$network" "$db"
+          done
+          test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 0
+          printf '%s\n' "$db" >/tmp/waarwi-replay-container.txt
+          docker exec -e PGPASSWORD=postgres "$db" psql -h 127.0.0.1 -U postgres -d postgres -Atc "select current_setting('server_version_num')::int/10000" | grep -qx 17
+      - name: Rejouer les fichiers GitHub dans l'ordre de production
+        id: replay
+        run: |
+          set -euo pipefail
+          db=$(cat /tmp/waarwi-replay-container.txt)
+          test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 0
+          expected=$(cat /tmp/waarwi-replay-total.txt)
+          count=0
+          while IFS= read -r file; do
+            test -n "$file"
+            echo "Migration $((count+1))/$expected : $(basename "$file")"
+            # SQL sent over stdin inside the isolated container. No production connection.
+            if ! docker exec -i -e PGPASSWORD=postgres "$db" psql -X -q -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -v SHOW_CONTEXT=never --single-transaction -f - < "$file" >/tmp/waarwi-replay-last.log 2>&1; then
+              # Only line number and SQLSTATE are shown, never SQL data or literal credentials.
+              grep -E 'ERROR: *[0-9A-Z]{5}' /tmp/waarwi-replay-last.log | tail -5 || true
+              echo "Première migration en échec : $(basename "$file") ; $count migrations précédentes réussies." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            count=$((count+1))
+          done </tmp/waarwi-replay-files.txt
+          echo "$count/$expected migrations historiques rejouées." | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$count" -eq "$expected"
+      - name: Publier les statuts du commit (sans déploiement)
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INVENTORY: ${{ steps.inventory.outcome }}
+          INITIALIZE: ${{ steps.initialize.outcome }}
+          REPLAY: ${{ steps.replay.outcome }}
+        run: |
+          node --input-type=module <<'JS'
+          const url=process.env.GITHUB_API_URL+'/repos/'+process.env.GITHUB_REPOSITORY+'/statuses/'+process.env.GITHUB_SHA;
+          const target=process.env.GITHUB_SERVER_URL+'/'+process.env.GITHUB_REPOSITORY+'/actions/runs/'+process.env.GITHUB_RUN_ID;
+          for(const name of ['inventory','initialize','replay']){
+            const outcome=process.env[name.toUpperCase()];
+            const state=outcome==='success'?'success':outcome==='failure'?'failure':'error';
+            const res=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify({state,context:'waarwi-history/'+name,description:outcome||'not run',target_url:target})});
+            if(!res.ok)throw new Error('HTTP '+res.status);
+          }
+          JS
