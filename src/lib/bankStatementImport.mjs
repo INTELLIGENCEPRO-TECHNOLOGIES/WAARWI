@@ -39,6 +39,6 @@ export function bankRows(matrix,mode='signed'){
  }catch(e){throw Error('Opération '+(i+1)+' : '+e.message);}});
 }
 export function bankCsv(text,mode='signed'){
- let result,success=0,last;for(const delimiter of [';',',','\t']){try{const parsed=bankRows(parseDelimited(text,delimiter),mode);result=parsed;success++;}catch(e){last=e;}}
+ let result,success=0,last;for(const delimiter of [';',',','\t']){try{const matrix=parseDelimited(text,delimiter).filter(row=>row.some(v=>String(v).trim()!==''));if(matrix.some(row=>row.length!==matrix[0]?.length))throw Error('Nombre de colonnes incohérent.');const parsed=bankRows(matrix,mode);result=parsed;success++;}catch(e){last=e;}}
  if(success!==1)throw Error(success?'Séparateur ambigu.':last?.message||'CSV invalide.');return result;
 }
