@@ -26,49 +26,38 @@ type Props = {
   onConfirm: (selections: ArticleLotSelection[]) => void;
   title?: string;
   confirmLabel?: string;
+  siteId?: string;
+  strict?: boolean;
 };
 
-export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selection des lots', confirmLabel = 'Confirmer' }: Props) {
+export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selection des lots', confirmLabel = 'Confirmer', siteId, strict=false }: Props) {
   const { tenant, currentSite } = useApp();
   const [loading, setLoading] = useState(true);
   const [selections, setSelections] = useState<ArticleLotSelection[]>([]);
+  const [loadError,setLoadError]=useState('');
+  const sourceSiteId=siteId||currentSite?.id;
 
-  useEffect(() => {
-    if (!open || !tenant || !currentSite || items.length === 0) return;
-    loadLots();
-  }, [open, items]);
-
-  const loadLots = async () => {
-    if (!tenant || !currentSite) return;
-    setLoading(true);
-    const result: ArticleLotSelection[] = [];
-
-    for (const item of items) {
-      const { data: lots } = await supabase
-        .from('stock_lots')
-        .select('id, batch_number, expiry_date, remaining_quantity, purchase_price')
-        .eq('tenant_id', tenant.id)
-        .eq('site_id', currentSite.id)
-        .eq('article_id', item.article_id)
-        .gt('remaining_quantity', 0)
-        .order('expiry_date', { ascending: true });
-
-      result.push({
-        article_id: item.article_id,
-        article_name: item.name,
-        needed: item.quantity,
-        assignments: (lots || []).map(l => ({
-          lot_id: l.id,
-          batch_number: l.batch_number,
-          expiry_date: l.expiry_date,
-          quantity: 0,
-          available: Number(l.remaining_quantity),
-        })),
-      });
-    }
-    setSelections(result);
-    setLoading(false);
-  };
+  useEffect(()=>{
+    if(!open||!tenant?.id||!sourceSiteId||!items.length)return;
+    let alive=true;setLoading(true);setSelections([]);setLoadError('');
+    void(async()=>{
+      try{
+        const result:ArticleLotSelection[]=[];
+        const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'});
+        for(const item of items){
+          let query=supabase.from('stock_lots').select('id,batch_number,expiry_date,remaining_quantity,purchase_price').eq('tenant_id',tenant.id).eq('site_id',sourceSiteId).eq('article_id',item.article_id).gt('remaining_quantity',0);
+          if(strict)query=query.or('expiry_date.is.null,expiry_date.gte.'+today);
+          const {data:lots,error}=await query.order('expiry_date',{ascending:true});
+          if(error)throw error;
+          if(!alive)return;
+          result.push({article_id:item.article_id,article_name:item.name,needed:item.quantity,assignments:(lots||[]).map(l=>({lot_id:l.id,batch_number:l.batch_number,expiry_date:l.expiry_date,quantity:0,available:Number(l.remaining_quantity)}))});
+        }
+        if(alive)setSelections(result);
+      }catch(e){if(alive)setLoadError(e&&typeof e==='object'&&'message' in e?String(e.message):'Impossible de charger les lots.');}
+      finally{if(alive)setLoading(false);}
+    })();
+    return()=>{alive=false;};
+  },[open,tenant?.id,sourceSiteId,items,strict]);
 
   const autoFEFO = () => {
     setSelections(prev => prev.map(s => {
@@ -93,11 +82,11 @@ export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selec
   };
 
   const allValid = useMemo(() => {
-    return selections.every(s => {
+    return !loading&&!loadError&&selections.length===items.length&&selections.every(s => {
       const total = s.assignments.reduce((sum, a) => sum + a.quantity, 0);
-      return total >= s.needed || s.assignments.length === 0;
+      return strict?Math.abs(total-s.needed)<1e-8:total>=s.needed||s.assignments.length===0;
     });
-  }, [selections]);
+  }, [selections,loading,loadError,items.length,strict]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -111,7 +100,7 @@ export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selec
         </button>
       </>}
     >
-      {loading ? (
+      {loadError ? <div className="p-4 text-xs text-[var(--w-text)]" role="alert">{loadError}</div> : loading ? (
         <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : (
         <div className="space-y-4 max-h-[60vh] overflow-y-auto">

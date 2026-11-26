@@ -484,10 +484,28 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     invoiceEditorItems.filter(i => i.name.trim()));
   const convertPricing = useSalePrice(convertReady ? currentSite?.id : null, convertItems, Number(convertFrom?.discount ?? 0));
   const convertTtc = convertPricing.price?.ttc ?? 0;
+  const convertIpmCalc=useMemo(()=>{
+    const cfg=parseConvention(convertIpmConvention);
+    if(!convertIpmBeneficiaire||!cfg||!convertPricing.price)return null;
+    const result=calculerIpm(cfg,convertItems.map(i=>({montant_ligne:Number(i.quantity)*Number(i.unit_price)-Number(i.discount||0),ipm_eligible:articles.find(a=>a.id===i.article_id)?.ipm_eligible!==false})),Number(convertFrom?.discount||0));
+    const part=Math.max(0,Math.min(convertTtc,result.part_ipm));
+    return {...result,part_ipm:part,part_client:Math.max(0,convertTtc-part)};
+  },[convertIpmBeneficiaire,convertIpmConvention,convertPricing.price,convertItems,articles,convertFrom?.discount,convertTtc]);
+  const convertStockItems=useMemo(()=>{
+    const byArticle=new Map<string,{article_id:string;name:string;quantity:number}>();
+    for(const item of convertItems){
+      if(!item.article_id||articles.find(a=>a.id===item.article_id)?.track_stock===false)continue;
+      const previous=byArticle.get(item.article_id);
+      byArticle.set(item.article_id,{article_id:item.article_id,name:item.name,quantity:Number(item.quantity)+(previous?.quantity||0)});
+    }
+    return Array.from(byArticle.values());
+  },[convertItems,articles]);
+  const convertStockSiteId=billSourceSiteId||currentSite?.id||'';
+  const convertPaymentLimit=convertIpmCalc?.part_client??convertTtc;
 
   useEffect(() => {
-    if (!convertPayNow && convertPricing.price) setConvertPayAmount(String(convertPricing.price.ttc));
-  }, [convertPayNow, convertPricing.price]);
+    if (!convertPayNow && convertPricing.price) setConvertPayAmount(String(convertPaymentLimit));
+  }, [convertPayNow, convertPricing.price,convertPaymentLimit]);
 
   const ipmResult = useMemo(() => {
     if (!ipmBeneficiaire || !ipmConfig) return null;
@@ -1490,7 +1508,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         if(isPharmacy&&snap.quote.customer_id){
           const {data:benef,error:ipmError}=await supabase.from('ipm_beneficiaires').select('*, ipm_organismes(nom), ipm_conventions(nom, taux_defaut, plafond_facture, mode_calcul, mode_arrondi, application_plafond, ordonnance_obligatoire, bon_prise_en_charge_obligatoire, numero_bon_obligatoire, numero_ordonnance_obligatoire, medecin_prescripteur_obligatoire, matricule_obligatoire)').eq('tenant_id',tid).eq('customer_id',snap.quote.customer_id).eq('statut','actif').limit(1).maybeSingle();
           if(ipmError)throw ipmError;if(!alive)return;
-          if(benef){setConvertIpmBeneficiaire(benef);setConvertIpmConvention(benef.ipm_conventions);const cfg=parseConvention(benef.ipm_conventions);if(cfg)setConvertPayAmount(String(calculerIpm(cfg,[{montant_ligne:snap.quote.total,ipm_eligible:true}],0).part_client));}
+          if(benef){setConvertIpmBeneficiaire(benef);setConvertIpmConvention(benef.ipm_conventions);}
         }
         if(alive)setConvertBaseline({id,token,version:snap.version});
       }catch(e){if(alive)setConvertLoadError(e&&typeof e==='object'&&'message' in e?String(e.message):'Chargement impossible.');}
@@ -1513,28 +1531,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       }
     }
 
-    // Stock check: block if insufficient stock and negative stock not allowed
-    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
-    const trackedConvertItems = convertItems.filter(i => {
-      const art = articles.find((a: any) => a.id === i.article_id);
-      return art && art.track_stock !== false;
-    });
-    if (!allowNeg && trackedConvertItems.length > 0) {
-      const { data: stk } = await supabase
-        .from('stock_levels')
-        .select('article_id, quantity')
-        .eq('tenant_id', tenant!.id)
-        .eq('site_id', currentSite.id)
-        .in('article_id', trackedConvertItems.map(i => i.article_id!));
-      const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-      const insufficient = trackedConvertItems.filter(i => (stockMap.get(i.article_id) || 0) < i.quantity);
-      if (insufficient.length > 0) {
-        error(`Stock insuffisant pour: ${insufficient.map(i => i.name).join(', ')}. Conversion impossible.`);
-        return;
-      }
-    }
-
-    if (stockMethod === 'lot' && convertItems.length > 0) {
+    // The server validates quantities again, under row locks, in the actual stock depot.
+    if (stockMethod === 'lot' && convertStockItems.length > 0) {
       setLotPickerConvertOpen(true);
       return;
     }
@@ -1549,6 +1547,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       if (convertPricing.error) convertPricing.refresh();
       return;
     }
+    if(convertPayNow&&(!Number.isFinite(Number(convertPayAmount))||Number(convertPayAmount)<=0||Number(convertPayAmount)>convertPaymentLimit||!convertPayMethod)){error('Vérifiez le montant et le mode de règlement.');return;}
+    if(convertIpmBeneficiaire&&!convertIpmCalc){error('Convention IPM indisponible.');return;}
     if (convertIpmBeneficiaire && convertPricing.price.vat > 0) {
       error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
       return;
@@ -1560,7 +1560,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (currentSite && tenant) {
       const cashCtx = await getOperationalCashContext(currentSite.id);
       convertSessionId = cashCtx.session?.id || null;
-      if (!convertSessionId && convertPayNow && Number(convertPayAmount) > 0 && (cashCtx.multiEnabled || cashCtx.error)) {
+      if (!convertSessionId && convertPayNow && Number(convertPayAmount) > 0) {
         setConverting(false); error(missingSessionMessage(cashCtx, '')); return;
       }
     }
@@ -1571,87 +1571,19 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       payments.push({
         payment_method_id: convertPayMethod,
         method_name: pm?.name || 'Paiement',
-        amount: Math.min(Number(convertPayAmount), convertTtc),
+        amount: Number(convertPayAmount),
         reference: '',
       });
     }
-    const { data, error: e } = await supabase.rpc('convert_checked_quote_to_sale', {
+    const lotAssignments:Record<string,{lot_id:string;quantity:number}[]>={};
+    for(const sel of lotSelections||[])lotAssignments[sel.article_id]=sel.assignments.filter(a=>a.quantity>0).map(a=>({lot_id:a.lot_id,quantity:a.quantity}));
+    const ipm=convertIpmBeneficiaire&&convertIpmCalc?{beneficiaire_id:convertIpmBeneficiaire.id,expected_part_ipm:convertIpmCalc.part_ipm,documents:convertIpmDocs}:null;
+    const {data,error:e}=await supabase.rpc('convert_quote_atomic',{
       p_tenant_id:tenant.id,p_quote_id:convertFrom.id,p_window_id:convertLease.windowId,p_lock_token:convertLease.token,p_expected_version:convertBaseline.version,
-      p_stock_site_id:billSourceSiteId||currentSite.id,p_cash_session_id:convertSessionId,p_payments:payments,
+      p_stock_site_id:convertStockSiteId,p_cash_session_id:convertSessionId,p_payments:payments,p_lot_assignments:lotAssignments,p_ipm:ipm,
     });
-    if (e) { if(e.code==='40001')setConvertRetry(n=>n+1);convertPricing.refresh();error(e.message);return; }
-
-    if (lotSelections && lotSelections.length > 0) {
-      for (const sel of lotSelections) {
-        const assignments = sel.assignments.filter(a => a.quantity > 0).map(a => ({ lot_id: a.lot_id, quantity: a.quantity }));
-        if (assignments.length > 0) {
-          await supabase.rpc('deduct_stock_manual_lots', {
-            p_article_id: sel.article_id,
-            p_site_id: billSourceSiteId || currentSite.id,
-            p_total_quantity: assignments.reduce((s, a) => s + a.quantity, 0),
-            p_lot_assignments: assignments,
-          });
-        }
-      }
-    } else if (convertItems.length > 0) {
-      const saleNum = (data as any)?.sale_number || '';
-      for (const item of convertItems) {
-        if (!item.article_id) continue;
-        await supabase.rpc('adjust_stock', {
-          p_article_id: item.article_id,
-          p_site_id: billSourceSiteId || currentSite.id,
-          p_quantity: -item.quantity,
-          p_movement_type: 'sale',
-          p_note: `Facture ${saleNum} (devis converti)`,
-        });
-      }
-    }
-
-
-
-    // Carry representative + commission snapshot onto the new sale
-    const convRepId = (convertFrom as any).representative_id || null;
-    const newSaleId = (data as any)?.sale_id;
-    if (convRepId && newSaleId) {
-      const { data: sItems } = await supabase.from('sale_items').select('article_id, quantity, total').eq('sale_id', newSaleId);
-      const convItems: QuoteItem[] = (sItems || []).map((i: any) => ({
-        article_id: i.article_id, name: '', quantity: Number(i.quantity), unit_price: 0, discount: 0, total: Number(i.total),
-      }));
-      const convSubtotal = convItems.reduce((s, i) => s + Number(i.total), 0) || Number(convertFrom.total);
-      const convSnapshot = await buildRepSnapshot(convRepId, convItems, convSubtotal);
-      await supabase.from('sales').update({ representative_id: convRepId, rep_commission: convSnapshot }).eq('id', newSaleId);
-    }
-
-    // Create IPM vente record if beneficiary
-    const saleId = (data as any)?.sale_id;
-    if (convertIpmBeneficiaire && tenant && saleId) {
-      const cfg = parseConvention(convertIpmConvention);
-      if (cfg) {
-        const ipmCalc = calculerIpm(cfg, [{ montant_ligne: convertTtc, ipm_eligible: true }], 0);
-        const payAmt = convertPayNow ? Math.min(Number(convertPayAmount), convertTtc) : 0;
-        await supabase.from('ipm_ventes').insert({
-          tenant_id: tenant.id,
-          organisme_id: convertIpmBeneficiaire.organisme_id,
-          beneficiaire_id: convertIpmBeneficiaire.id,
-          convention_id: convertIpmBeneficiaire.convention_id || null,
-          sale_id: saleId,
-          date_vente: new Date().toISOString().slice(0, 10),
-          part_ipm: ipmCalc.part_ipm,
-          part_client: ipmCalc.part_client,
-          montant_total: convertTtc,
-          part_beneficiaire_payee: Math.min(payAmt, ipmCalc.part_client),
-          statut: 'en_attente',
-          numero_ordonnance: convertIpmDocs.numero_ordonnance || null,
-          medecin_prescripteur: convertIpmDocs.medecin || null,
-          numero_bon_pec: convertIpmDocs.numero_bon || null,
-        });
-        // Update sale status: mark as paid if payment covers client part
-        if (payAmt >= ipmCalc.part_client) {
-          await supabase.from('sales').update({ status: 'paid', paid: payAmt + ipmCalc.part_ipm }).eq('id', saleId);
-        }
-      }
-    }
-
+    if(e){if(e.code==='40001')setConvertRetry(n=>n+1);convertPricing.refresh();error(e.message);return;}
+    if(!data?.success||!data?.stock_atomic||!data?.sale_id)throw new Error('Résultat de conversion incertain. Actualisez le devis avant de réessayer.');
     setConverting(false);
     success(`Facture ${(data as any)?.sale_number || ''} créée`);
     setConvertFrom(null); setQuoteDetail(null);
@@ -3187,7 +3119,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         </>}>
         {convertFrom && (() => {
           const convertIpmCfg = parseConvention(convertIpmConvention);
-          const convertIpmCalc = convertIpmBeneficiaire && convertIpmCfg ? calculerIpm(convertIpmCfg, [{ montant_ligne: convertFrom.total, ipm_eligible: true }], 0) : null;
           const convertDocValid = convertIpmCfg ? validerDocumentsIpm(convertIpmCfg, convertIpmDocs, convertIpmBeneficiaire?.matricule) : { valide: true, champs_manquants: [] };
           return (
           <div className="space-y-4" onPointerDownCapture={convertLease.markActivity} onKeyDownCapture={convertLease.markActivity} onInputCapture={convertLease.markActivity}>
@@ -3278,8 +3209,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       <LotPickerModal
         open={lotPickerConvertOpen}
         onClose={() => setLotPickerConvertOpen(false)}
-        items={convertItems.flatMap(item => item.article_id ? [{ ...item, article_id: item.article_id }] : [])}
-        onConfirm={(selections) => { setLotPickerConvertOpen(false); executeConvert(selections); }}
+        items={convertStockItems}
+        siteId={convertStockSiteId}
+        strict
+        onConfirm={(selections) => { setLotPickerConvertOpen(false); if(convertReady)void executeConvert(selections); }}
         title="Sélection des lots (Facturation)"
         confirmLabel="Confirmer & Facturer"
       />
