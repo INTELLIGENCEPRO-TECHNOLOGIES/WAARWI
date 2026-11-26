@@ -10,3 +10,7 @@ export type AccountingPieceRequest={entryId?:string;entryNumber:string;reverse?:
 export type AccountingWorkActions={openPiece:(request:AccountingPieceRequest)=>void;openAccount:(code:string)=>void;openPlanImport:()=>void;refresh:()=>void;revision:number};
 export const AccountingWorkContext=createContext<AccountingWorkActions|null>(null);
 export const useAccountingWork=()=>useContext(AccountingWorkContext);
+
+// null outside the accounting desktop; false for reduced/hidden windows.
+export const AccountingWindowVisible=createContext<boolean|null>(null);
+export const useAccountingWindowVisible=()=>useContext(AccountingWindowVisible);
