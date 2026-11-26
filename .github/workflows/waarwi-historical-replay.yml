@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/waarwi-historical-replay.yml'
       - 'scripts/pending-accounting/production-migration-versions.json'
+      - 'scripts/pending-accounting/history-recovered/**'
       - 'supabase/migrations/**'
   workflow_dispatch:
 permissions:
@@ -27,7 +28,8 @@ jobs:
           manifest=json.loads(pathlib.Path('scripts/pending-accounting/production-migration-versions.json').read_text())
           versions=manifest['versions']
           files={}
-          for path in pathlib.Path('supabase/migrations').glob('*.sql'):
+          roots=(pathlib.Path('supabase/migrations'), pathlib.Path('scripts/pending-accounting/history-recovered'))
+          for path in sorted(p for root in roots for p in root.glob('*.sql')):
               m=re.fullmatch(r'(\d{14})_.+\.sql',path.name)
               if not m: continue
               files.setdefault(m[1],[]).append(path)
