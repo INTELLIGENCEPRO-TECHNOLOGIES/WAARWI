@@ -1,6 +1,5 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { Plus, Users, Truck, Loader2, CreditCard as Edit2, UserPlus, X, Calendar, FileText, Wallet, Info, ChevronRight, ChevronLeft, ShoppingBag, Check, Printer, Tag, Trash2, Download, Upload, Scale, RotateCcw, Save, Search, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
@@ -1602,13 +1601,6 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     });
   }, [tenant?.id]);
   const creatorName = (userId?: string | null) => (userId && profileNames[userId]) || 'Utilisateur non renseigné';
-  const [prepayments, setPrepayments] = useState<{ id: string; amount: number; amount_used: number; method_name: string; reference: string; created_at: string }[]>([]);
-  const [prepayAvailable, setPrepayAvailable] = useState(0);
-  const [avoirs, setAvoirs] = useState<{ id: string; return_number: string; total: number; credit_used: number; created_at: string; refunded_at?: string | null }[]>([]);
-  const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string; kind: string }[]>([]);
-  const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; reason: string; reference: string; created_at: string }[]>([]);
-  const [loans, setLoans] = useState<{ id: string; amount: number; reason: string; reference: string; created_at: string }[]>([]);
-
   const c = useMemo(() => ({ ...initialC, balance: customerBalance } as any), [initialC, customerBalance]);
 
   const reload = async () => {
@@ -1630,26 +1622,6 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     if (!payMethod && realMethods.length) setPayMethod(realMethods[0].id);
 
     const salesIds = ss.map(s => s.id);
-    const [{ data: prepays }, { data: avoirRows }, { data: adjRows }, { data: withdrawalRows }, { data: loanRows }] = await Promise.all([
-      supabase.from('customer_prepayments').select('id, amount, amount_used, method_name, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }),
-      supabase.from('sale_returns').select('id, return_number, total, credit_used, created_at, refunded_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('status', 'approved').eq('refund_method', 'avoir').order('created_at', { ascending: false }),
-      supabase.from('balance_adjustments').select('id, amount, note, kind, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'customer').eq('entity_id', c.id).order('created_at', { ascending: false }),
-      supabase.from('cash_movements').select('id, amount, reason, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('kind', 'customer_withdrawal').order('created_at', { ascending: false }),
-      supabase.from('cash_movements').select('id, amount, reason, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('kind', 'customer_loan').order('created_at', { ascending: false }),
-    ]);
-    setPrepayments(prepays || []);
-    try {
-      const ppMap = await fetchPrepayAvailable([c.id]);
-      setPrepayAvailable(ppMap[c.id] || 0);
-    } catch (e: any) {
-      setPrepayAvailable(0);
-      error(`Acompte disponible indisponible : ${e.message}`);
-    }
-    setAvoirs(avoirRows || []);
-    setBalanceAdjs(adjRows || []);
-    setWithdrawals(withdrawalRows || []);
-    setLoans(loanRows || []);
-
     if (salesIds.length) {
       const [{ data: pays }, { data: items }] = await Promise.all([
         supabase.from('sale_payments').select('id, sale_id, payment_method_id, method_name, amount, reference, created_at, affects_balance').in('sale_id', salesIds).order('created_at', { ascending: false }),
@@ -1667,18 +1639,6 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     () => payments.filter(p => !creditMethodIds.has(p.payment_method_id)),
     [payments, creditMethodIds]
   );
-
-  const totals = useMemo(() => {
-    const valid = sales.filter(s => s.status !== 'cancelled');
-    const total = valid.reduce((a, s) => a + Number(s.total), 0);
-    const validIds = new Set(valid.map(s => s.id));
-    const paid = realPayments
-      .filter(p => validIds.has(p.sale_id))
-      .reduce((a, p) => a + Number(p.amount), 0);
-    const unusedPrepay = prepayAvailable;
-    const unusedAvoir = avoirs.reduce((a, av) => a + Math.max(0, Number(av.total) - Number(av.credit_used)), 0);
-    return { total, paid, due: total - paid - unusedPrepay, unusedPrepay, unusedAvoir };
-  }, [sales, realPayments, prepayAvailable, avoirs]);
 
   const unpaidSales = useMemo(() => {
     const paidBySale: Record<string, number> = {};
@@ -1701,72 +1661,6 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
 
     return result;
   }, [sales, realPayments, c]);
-
-  const ledger = useMemo(() => {
-    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' | 'adjustment' | 'withdrawal' | 'loan' | 'avoir' | 'allocation'; affectsBalance: boolean };
-    const rows: Row[] = [];
-    balanceAdjs.forEach(adj => {
-      const amt = Number(adj.amount);
-      const isReconciliation = adj.kind === 'reconciliation';
-      // Une contre-passation d'annulation est une trace visible, jamais un crédit
-      // autonome : elle n'affecte pas le solde (déjà reflétée par la vente annulée).
-      const isReversal = adj.kind === 'cancel_reversal';
-      const excluded = isReconciliation || isReversal;
-      if (isReversal) {
-        const rev = Math.abs(amt);
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Contre-passation annulation', ref: '', debit: amt > 0 ? rev : 0, credit: amt < 0 ? rev : 0, kind: 'cancel', affectsBalance: false });
-      } else if (amt > 0) {
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: amt, credit: 0, kind: isReconciliation ? 'allocation' : 'adjustment', affectsBalance: !excluded });
-      } else if (amt < 0) {
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Règlement solde', ref: '', debit: 0, credit: Math.abs(amt), kind: isReconciliation ? 'allocation' : 'payment', affectsBalance: !excluded });
-      }
-    });
-    sales.forEach(s => {
-      if (s.status === 'cancelled') {
-        rows.push({ id: 'c-' + s.id, ts: s.created_at, label: 'Facture annulée', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'cancel', affectsBalance: false });
-        return;
-      }
-      if (s.status === 'deleted') {
-        // Pièce numérotée conservée : facture d'origine au débit puis suppression
-        // au crédit, même numéro de pièce, net nul. Aucune ligne de réconciliation.
-        rows.push({ id: 's-' + s.id, ts: s.created_at, label: 'Facture', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'cancel', affectsBalance: false });
-        rows.push({ id: 'del-' + s.id, ts: (s as any).deleted_at || s.created_at, label: 'Suppression facture ' + s.sale_number, ref: s.sale_number, debit: 0, credit: Number(s.total), kind: 'cancel', affectsBalance: false });
-        return;
-      }
-      rows.push({ id: 's-' + s.id, ts: s.created_at, label: 'Vente', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'sale', affectsBalance: true });
-    });
-    realPayments.forEach(p => {
-      const isAllocation = p.affects_balance === false;
-      if (!isAllocation && p.method_name && p.method_name.startsWith('Acompte ·')) return;
-      if (!isAllocation && p.method_name && p.method_name.startsWith('Avoir ')) return;
-      if (isAllocation) {
-        const s = sales.find(x => x.id === p.sale_id);
-        rows.push({ id: 'p-' + p.id, ts: p.created_at, label: p.method_name || 'Règlement par crédit', ref: s?.sale_number || '', debit: 0, credit: Number(p.amount), kind: 'allocation', affectsBalance: false });
-      } else {
-        const s = sales.find(x => x.id === p.sale_id);
-        rows.push({ id: 'p-' + p.id, ts: p.created_at, label: `Règlement${p.method_name ? ' · ' + p.method_name : ''}`, ref: s?.sale_number || '', debit: 0, credit: Number(p.amount), kind: 'payment', affectsBalance: true });
-      }
-    });
-    prepayments.forEach(pp => {
-      const credit = Number(pp.amount);
-      if (credit > 0) {
-        rows.push({ id: 'pp-' + pp.id, ts: pp.created_at, label: `Acompte${pp.method_name ? ' · ' + pp.method_name : ''}`, ref: pp.reference || '', debit: 0, credit, kind: 'payment', affectsBalance: true });
-      }
-    });
-    avoirs.forEach(av => {
-      const ts = av.refunded_at || av.created_at;
-      rows.push({ id: 'av-' + av.id, ts, label: 'Avoir', ref: av.return_number, debit: 0, credit: Number(av.total), kind: 'avoir', affectsBalance: true });
-    });
-    withdrawals.forEach(w => {
-      rows.push({ id: 'wd-' + w.id, ts: w.created_at, label: 'Retrait caisse' + (w.reason ? ' · ' + w.reason : ''), ref: w.reference || '', debit: Number(w.amount), credit: 0, kind: 'withdrawal', affectsBalance: true });
-    });
-    loans.forEach(l => {
-      rows.push({ id: 'ln-' + l.id, ts: l.created_at, label: 'Prêt client' + (l.reason ? ' · ' + l.reason : ''), ref: l.reference || '', debit: Number(l.amount), credit: 0, kind: 'loan', affectsBalance: true });
-    });
-    rows.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
-    let running = 0;
-    return rows.map(r => { if (r.affectsBalance) running += r.debit - r.credit; return { ...r, running }; });
-  }, [sales, realPayments, prepayments, avoirs, balanceAdjs, withdrawals, loans]);
 
   const filteredDocs = useMemo(() => sales.filter(s => {
     if (dateFrom && new Date(s.created_at) < new Date(dateFrom)) return false;

@@ -367,7 +367,7 @@ export function OnlineOrders() {
           <span>Tous</span>
           <span className={`num font-extrabold ${statusFilter === 'all' ? 'text-brand-700' : 'text-slate-800'}`}>{orders.length}</span>
         </button>
-        {STATUS_ORDER.map((st, i) => {
+        {STATUS_ORDER.map(st => {
           const meta = STATUS_META[st];
           return (
             <div key={st} className="flex items-stretch">

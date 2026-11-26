@@ -178,7 +178,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
   const [services, setServices] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [todayOps, setTodayOps] = useState<any[]>([]);
-  const [profiles, setProfiles] = useState<any[]>([]);
+  const [, setProfiles] = useState<any[]>([]);
   const [pointServices, setPointServices] = useState<any[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
 

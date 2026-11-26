@@ -57,12 +57,7 @@ export type QuoteEditorInstanceProps = {
 const tenantForPrint = (t: any, site?: any): PrintTenant => buildPrintTenantForSite(t, site);
 const EMPTY_ITEM: QuoteItem = { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 };
 
-export function QuoteEditorInstance({
-  descriptor, articles, customers, articleTiers,
-  docSettings, autoMode, isPharmacy, activeReps, profileNames,
-  onClose, onSaved, onCreated, onConvert,
-  onVehiclePicker, onCreateArticle, onCreateCustomer, onTierPicker,
-}: QuoteEditorInstanceProps) {
+export function QuoteEditorInstance({ descriptor, articles, customers, docSettings, autoMode, isPharmacy, activeReps, profileNames, onClose, onSaved, onCreated, onConvert, onVehiclePicker, onCreateArticle, onCreateCustomer }: QuoteEditorInstanceProps) {
   const { tenant, currentSite, profile, user } = useApp();
   const { can } = usePermissions();
   const { success, error } = useToast();

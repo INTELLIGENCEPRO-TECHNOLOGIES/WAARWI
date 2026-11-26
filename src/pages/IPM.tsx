@@ -1387,7 +1387,7 @@ function IpmFactures({ tenantId }: { tenantId: string }) {
     const fmtN = (n: number) => n.toLocaleString('fr-FR');
     const fmtD = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR') : '-';
 
-    const bordereauRows = linkedBordereaux.map((b, i) => `
+    const bordereauRows = linkedBordereaux.map(b => `
       <tr>
         <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;font-size:10px;font-weight:600;color:#1e293b">${b.numero}</td>
         <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;font-size:10px;color:#475569">${fmtD(b.periode_debut)} au ${fmtD(b.periode_fin)}</td>
@@ -2480,7 +2480,7 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
 /* ═══════════════════════════════════════════════════════════════════
  * PARAMÈTRES IPM
  * ═══════════════════════════════════════════════════════════════════ */
-function IpmParametres({ tenantId }: { tenantId: string }) {
+function IpmParametres(_props: { tenantId: string }) {
   return (
     <div className="space-y-5">
       <div className="bg-white rounded-2xl border border-neutral-200 p-5">

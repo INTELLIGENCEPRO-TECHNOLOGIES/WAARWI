@@ -987,11 +987,6 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
     return (a as any)[field];
   };
 
-  const parents = categories.filter(c => !c.parent_id);
-  const categoryOptions = parents.flatMap(c => [
-    { value: c.id, label: c.name },
-    ...categories.filter(s => s.parent_id === c.id).map(s => ({ value: s.id, label: `  ↳ ${s.name}` })),
-  ]);
 
   const SortIcon = ({ col }: { col: string }) => {
     if (!onSort) return null;

@@ -12,7 +12,7 @@ import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
-import { printTicket80, printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
+import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
 import { createPortal } from 'react-dom';
 import { DocSectionTitle } from '../components/DocLayout';

@@ -29,9 +29,6 @@ jobs:
       - name: Compilation Vite
         id: build
         run: npm run build
-      - name: Plan de nettoyage TypeScript (lecture seule)
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: node scripts/plan-unused-typescript.mjs
       - name: Contrôle TypeScript
         id: types
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}

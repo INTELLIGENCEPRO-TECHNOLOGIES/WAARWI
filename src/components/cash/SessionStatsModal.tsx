@@ -536,7 +536,7 @@ const load = async () => {
                   </button>
                   {statsExpanded === 'articles' && (
                     <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.topArticles.map((a, i) => (
+                      {statsData.topArticles.map(a => (
                         <div key={a.name} className="py-2 pl-1">
                           <div className="text-[11px] font-medium text-neutral-800 leading-snug">{a.name}</div>
                           <div className="flex items-center justify-between mt-0.5">

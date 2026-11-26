@@ -10,8 +10,8 @@ import { consumeNavContext } from '../lib/navHighlight';
 import { ConfirmDialog, Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import type { Article, Category, VehicleBrand } from '../lib/types';
-import { isAutoParts, BUSINESS_TYPE_LABELS } from '../lib/types';
-import { stockStatus, Field, PremiumSelect, ArticleCard, CategoryPickerModal, MasterCatalogGuide, DesktopListView, FullScreenArticleEdit, MobileArticleEdit } from './ArticlesComponents';
+import { isAutoParts } from '../lib/types';
+import { Field, PremiumSelect, ArticleCard, CategoryPickerModal, MasterCatalogGuide, DesktopListView, FullScreenArticleEdit, MobileArticleEdit } from './ArticlesComponents';
 
 type Form = Partial<Article> & { stock_init?: number };
 type Compat = { id?: string; brand_id: string; model_id: string; year_start: number; year_end: number; notes: string };
@@ -986,7 +986,6 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                   <tbody className="divide-y divide-neutral-100">
                     {paginated.map(a => {
                       const cat = categoryMap.get(a.category_id || '');
-                      const qty = stockMap[a.id] || 0;
                       const mg = a.sale_price > 0 ? ((a.sale_price - a.purchase_price) / a.sale_price) * 100 : 0;
                       const mgTone = mg >= 30 ? 'text-emerald-600' : mg >= 15 ? 'text-amber-600' : 'text-red-600';
                       const isSel = selectedIds.has(a.id);

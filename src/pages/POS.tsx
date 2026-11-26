@@ -119,10 +119,7 @@ function PosCardImage({ url, alt }: { url: string | null; alt: string }) {
 // ─── POS Landing Screens (Desktop-first) ──────────────────────────────────────
 
 type LandingSite = { id: string; name: string } | null;
-type RecentSession = {
-  id: string; opened_at: string; closed_at: string | null;
-  opening_amount: number; closing_amount: number | null; status: string;
-};
+
 type DaySummary = {
   salesCount: number; salesTotal: number;
   byMethod: { method_name: string; amount: number }[];
