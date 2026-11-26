@@ -29,7 +29,7 @@ export function bankRows(matrix,mode='signed'){
  const col=(aliases,required=true)=>{const hits=h.map((x,i)=>aliases.includes(x)?i:-1).filter(i=>i>=0);if(hits.length>1||required&&!hits.length)throw Error('Colonne absente ou ambiguë : '+aliases[0]);return hits[0]??-1;};
  const date=col(['date','date operation','date d\'operation','date comptable']),ref=col(['reference','ref','numero de piece'],false),label=col(['libelle','description','operation','motif']);
  const amount=mode==='signed'?col(['montant','montant signe']):-1;
- const debit=mode==='signed'?-1:col(['debit','decaissement']),credit=mode==='signed'?-1:col(['credit','encaissement']);
+ const debit=mode==='signed'?-1:col(['debit']),credit=mode==='signed'?-1:col(['credit']);
  if(!['signed','bank','company'].includes(mode))throw Error('Convention de signe inconnue.');
  return clean.slice(1).map((r,i)=>{try{
   const val=k=>k<0?'':r[k]??'';
