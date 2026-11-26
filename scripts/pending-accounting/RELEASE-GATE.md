@@ -56,3 +56,6 @@ Aucune étape n'est réputée réussie sans preuve issue du commit et de l'envir
 
 ### Phase 10.11 — intégration commerciale
 Recettes synthétiques des RPC : 8 pièces équilibrées (325900 FCFA par côté), facture d'achat TVA partiellement récupérable, avoir et remboursement atomiques, refus des incohérences et des doublons. Correctif 41 / migration 20261126042544 rejoué avec succès sur exercice antérieur ouvert et période clôturée. Voir PHASE-10-11-COMMERCIAL-RECIPE.md pour les résultats et limites. Les parcours POS/stock ne sont pas encore validés.
+
+### Phase 10.12 — reprise et concurrence
+Reprise transactionnelle, compteur, répétition intersession et jeton de clôture obsolète vérifiés. Correction préventive de l'ordre de verrouillage mois/journal (migration 20261126045014), cinq recettes rejouées avec succès. Les appels du connecteur ne se chevauchent pas : concurrence réelle non validée ; voir PHASE-10-12-CONCURRENCY-RECIPE.md. Aucun déploiement.
