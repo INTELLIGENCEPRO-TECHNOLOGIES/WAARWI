@@ -20,7 +20,7 @@ CREATE TABLE public.accounting_analytic_allocations(
 CREATE TABLE public.accounting_analytic_budgets(
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid NOT NULL,axis_id uuid NOT NULL,center_id uuid NOT NULL,
  month_start date NOT NULL CHECK(isfinite(month_start) AND extract(day FROM month_start)=1),
- account_code text NOT NULL CHECK(account_code ~ '^[678]'),amount numeric(18,2) NOT NULL CHECK(amount>=0 AND amount<=90071992547409),
+ account_code text NOT NULL CHECK(account_code ~ '^[67]'),amount numeric(18,2) NOT NULL CHECK(amount>=0 AND amount<=90071992547409),
  revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),reason text NOT NULL CHECK(length(btrim(reason)) BETWEEN 1 AND 500),
  updated_at timestamptz NOT NULL DEFAULT now(),updated_by uuid NOT NULL,history jsonb NOT NULL DEFAULT '[]'::jsonb,
  UNIQUE(tenant_id,axis_id,center_id,month_start,account_code),
@@ -93,7 +93,7 @@ DECLARE old public.accounting_analytic_budgets%ROWTYPE;
 BEGIN
  PERFORM public._bank_reconciliation_access(p_tenant_id,true);
  IF p_month IS NULL OR NOT isfinite(p_month) OR extract(day FROM p_month)<>1 OR p_month<date '2000-01-01' OR p_month>date '2099-12-01' OR p_amount IS NULL OR p_amount IN ('NaN','Infinity','-Infinity') OR p_amount<0 OR p_amount>90071992547409 OR round(p_amount,2)<>p_amount OR p_reason IS NULL OR length(btrim(p_reason)) NOT BETWEEN 1 AND 500 OR p_revision IS NULL OR p_revision<0 THEN RAISE EXCEPTION 'Budget invalide.';END IF;
- IF NOT EXISTS(SELECT 1 FROM public.accounts WHERE tenant_id=p_tenant_id AND code=p_account AND is_active AND code ~ '^[678]') THEN RAISE EXCEPTION 'Compte de gestion actif requis.';END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.accounts WHERE tenant_id=p_tenant_id AND code=p_account AND is_active AND code ~ '^[67]') THEN RAISE EXCEPTION 'Compte de charge ou produit actif requis.';END IF;
  PERFORM public._assert_accounting_month_open(p_tenant_id,p_month);
  PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant_id::text||':budget:'||p_center_id::text||':'||p_month::text||':'||p_account,0));
  SELECT * INTO old FROM public.accounting_analytic_budgets WHERE tenant_id=p_tenant_id AND axis_id=p_axis_id AND center_id=p_center_id AND month_start=p_month AND account_code=p_account FOR UPDATE;
