@@ -121,7 +121,7 @@
 }
 
 /* Recherche et consultation : dimensions de la fenêtre, pas du viewport. */
-.accounting-workspace .acc-search-workspace,.accounting-workspace .acc-piece-workspace{min-width:0;container-type:inline-size}
+.accounting-workspace .acc-search-workspace,.accounting-workspace.acc-piece-workspace{min-width:0;container-type:inline-size}
 .accounting-workspace .acc-search-form{padding:4px 0 0;background:var(--w-bg);border-bottom:1px solid var(--w-separator)}
 .accounting-workspace .acc-search-fields{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:7px 12px;padding:6px 0}
 .accounting-workspace .acc-search-field{grid-column:span 3;display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -141,8 +141,8 @@
 .accounting-workspace .acc-piece-meta dt{font-size:11px;color:var(--w-text-sec)}
 .accounting-workspace .acc-piece-meta dd{font-size:13px;font-weight:500;overflow-wrap:anywhere;margin:2px 0}
 .accounting-workspace .acc-piece-description{grid-column:1/-1}
-.accounting-workspace .acc-piece-workspace{padding-bottom:8px}
-.accounting-workspace .acc-piece-workspace .acc-table-frame{margin-top:10px}
+.accounting-workspace.acc-piece-workspace{padding-bottom:8px}
+.accounting-workspace.acc-piece-workspace .acc-table-frame{margin-top:10px}
 @container (max-width: 760px){
  .accounting-workspace .acc-search-fields{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px 8px}
  .accounting-workspace .acc-search-field{grid-column:span 2}
@@ -160,3 +160,6 @@
  .accounting-workspace .acc-search-workspace table td,.accounting-workspace .acc-search-workspace table th{padding:6px 4px;font-size:11px}
  .accounting-workspace .acc-piece-meta dd{font-size:12px}
 }
+
+.accounting-workspace .acc-search-form{position:sticky;top:0;z-index:11}
+@container (max-width:760px){.accounting-workspace .acc-search-form{position:static}}
