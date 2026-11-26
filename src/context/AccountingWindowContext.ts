@@ -7,6 +7,6 @@ export function mayCloseAccountingWindow(event:Event,id:string|null){
 }
 
 export type AccountingPieceRequest={entryId?:string;entryNumber:string;reverse?:boolean};
-export type AccountingWorkActions={openPiece:(request:AccountingPieceRequest)=>void;openAccount:(code:string)=>void;revision:number};
+export type AccountingWorkActions={openPiece:(request:AccountingPieceRequest)=>void;openAccount:(code:string)=>void;openPlanImport:()=>void;revision:number};
 export const AccountingWorkContext=createContext<AccountingWorkActions|null>(null);
 export const useAccountingWork=()=>useContext(AccountingWorkContext);
