@@ -163,3 +163,6 @@
 
 .accounting-workspace .acc-search-form{position:sticky;top:0;z-index:11}
 @container (max-width:760px){.accounting-workspace .acc-search-form{position:static}}
+
+.accounting-workspace .acc-search-compact-meta{display:none}
+@container (max-width:760px){.accounting-workspace .acc-search-compact-meta{display:block;font-size:10px;color:var(--w-text-muted)}}
