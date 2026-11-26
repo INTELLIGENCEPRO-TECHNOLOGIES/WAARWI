@@ -275,7 +275,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [returnDetail, setReturnDetail] = useState<SaleReturn | null>(null);
   const [returnItemsDetail, setReturnItemsDetail] = useState<any[]>([]);
   const [returnEditorOpen, setReturnEditorOpen] = useState(false);
-  const vatReturnAttempt = useRef<{ payload: string; key: string } | null>(null);
+  const vatReturnAttempt = useRef<{ payload: string; key: string; uncertain: boolean } | null>(null);
   const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', restock: true });
   const [returnOrigin, setReturnOrigin] = useState<Invoice | null>(null);
   const [returnLoad, setReturnLoad] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
@@ -1828,18 +1828,27 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       showError('Une demande précédente reste à confirmer. Réessayez avec les mêmes données avant de créer un autre retour.');
       return null;
     }
-    if (!vatReturnAttempt.current) vatReturnAttempt.current = { payload, key: newIdempotencyKey() };
-    const { data, error: failure } = await supabase.rpc('prepare_invoice_return', {
-      p_sale_id: saleId, p_site_id: siteId, p_items: items,
-      p_reason: reason, p_restock: restock, p_request_id: vatReturnAttempt.current.key, p_issue_credit: issueCredit,
-    });
-    if (failure) {
-      if (/^(22|23|42|55|P0)/.test(failure.code||'') && failure.code!=='23505') vatReturnAttempt.current=null;
-      showError(failure.message); return null;
+    if (!vatReturnAttempt.current) vatReturnAttempt.current = { payload, key: newIdempotencyKey(), uncertain: false };
+    const attempt=vatReturnAttempt.current;
+    try {
+      const { data, error: failure } = await supabase.rpc('prepare_invoice_return', {
+        p_sale_id: saleId, p_site_id: siteId, p_items: items,
+        p_reason: reason, p_restock: restock, p_request_id: attempt.key, p_issue_credit: issueCredit,
+      });
+      if (failure) {
+        const definitive=/^(22|23|42|55|P0)/.test(failure.code||'') && failure.code!=='23505';
+        if (!attempt.uncertain && definitive) vatReturnAttempt.current=null;
+        else attempt.uncertain=true;
+        showError(failure.message); return null;
+      }
+      if (!data?.id) { attempt.uncertain=true;showError('Retour non confirmé. Réessayez sans modifier la demande.');return null; }
+      vatReturnAttempt.current=null;
+      return data as SaleReturn;
+    } catch (cause) {
+      attempt.uncertain=true;
+      showError(cause instanceof Error?cause.message:'Retour non confirmé. Réessayez sans modifier la demande.');
+      return null;
     }
-    if (!data?.id) { showError('Retour non confirmé. Réessayez sans modifier la demande.'); return null; }
-    vatReturnAttempt.current = null;
-    return data as SaleReturn;
   };
 
   const saveReturn = async () => {
