@@ -4,7 +4,7 @@ import { formatVatAmount } from '../lib/salesVat';
 import {returnLotAllocation,type ReturnLotLine} from '../lib/returnLotAllocation';
 import { loadInvoiceReturnLines } from '../lib/saleReturnLines';
 import { newIdempotencyKey } from '../lib/cashSession';
-import {submitReturnRequest,finishReturnRequest} from '../lib/returnRequestJournal';
+import {submitReturnRequest} from '../lib/returnRequestJournal';
 import {ReturnRecoveryPanel} from '../components/ReturnRecoveryPanel';
 import type { VatAmounts } from '../lib/salesVat';
 import { useRealtimeTick } from '../lib/useRealtimeData';
@@ -1825,13 +1825,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     reason: string, restock: boolean, issueCredit: boolean, showError: (message: string) => void = error) => {
     if(lines.some(line=>!returnLotAllocation(line,restock).valid)){showError('Vérifiez les quantités retournées par lot.');return null;}
     const items = lines.map(line => ({ sale_item_id: line.item_id, quantity: line.quantity, lots:returnLotAllocation(line,restock).lots }));
-    if(pendingReturnRequest!==false){showError('Vérifiez le panneau de reprise sur la liste Facturation avant un nouveau retour.');return null;}
+    if(pendingReturnRequest===true){showError('Vérifiez le panneau de reprise sur la liste Facturation avant un nouveau retour.');return null;}
     const key=newIdempotencyKey();
     setPendingReturnRequest(null);
     try{
       const data=await submitReturnRequest({key,flow:'invoice',saleId,siteId,sessionId:null,items,reason,restock,mode:issueCredit?'avoir':'deferred'});
       if(!data?.id)throw new Error('Retour non confirmé. Consultez le panneau de reprise.');
-      try{await finishReturnRequest(key,'ack');}catch{error('Retour enregistré. Une confirmation reste disponible dans le panneau de reprise.');}
+      setPendingReturnRequest(true);
       return data as SaleReturn;
     }catch(cause:any){
       showError(cause?.message||'Retour non confirmé. Consultez le panneau de reprise sur la liste Facturation.');
