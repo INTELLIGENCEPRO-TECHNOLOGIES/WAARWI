@@ -62,12 +62,12 @@ RETURNS numeric LANGUAGE sql IMMUTABLE STRICT SET search_path='' AS $$
 $$;
 REVOKE ALL ON FUNCTION public._asset_linear_cumulative(numeric,numeric,date,int,date) FROM PUBLIC,anon,authenticated;
 
-CREATE OR REPLACE FUNCTION public.register_accounting_asset(p_tenant_id uuid,p_code text,p_name text,p_location text,p_acquisition_line uuid,p_service date,p_months int,p_residual numeric,p_depreciation_account text,p_expense_account text,p_evidence text)
+CREATE OR REPLACE FUNCTION public.register_accounting_asset(p_tenant_id uuid,p_code text,p_name text,p_location text,p_acquisition_line uuid,p_service date,p_months int,p_residual numeric,p_depreciation_account text,p_expense_account text,p_evidence text,p_confirmed boolean)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE l record; a uuid; entry uuid; d date:=(now() AT TIME ZONE 'Africa/Dakar')::date;
 BEGIN
  PERFORM public._bank_reconciliation_access(p_tenant_id,true);
- IF p_code IS NULL OR length(btrim(p_code)) NOT BETWEEN 1 AND 40 OR p_name IS NULL OR length(btrim(p_name)) NOT BETWEEN 1 AND 200 OR length(coalesce(p_location,''))>200 OR p_evidence IS NULL OR length(btrim(p_evidence)) NOT BETWEEN 1 AND 500 OR p_service IS NULL OR NOT isfinite(p_service) OR p_months IS NULL OR p_months NOT BETWEEN 1 AND 600 OR p_residual IS NULL OR p_residual IN ('NaN','Infinity','-Infinity') OR p_residual<0 OR round(p_residual,2)<>p_residual THEN RAISE EXCEPTION 'Fiche, durée, valeur résiduelle et justificatif requis.';END IF;
+ IF p_confirmed IS DISTINCT FROM true OR p_code IS NULL OR length(btrim(p_code)) NOT BETWEEN 1 AND 40 OR p_name IS NULL OR length(btrim(p_name)) NOT BETWEEN 1 AND 200 OR length(coalesce(p_location,''))>200 OR p_evidence IS NULL OR length(btrim(p_evidence)) NOT BETWEEN 1 AND 500 OR p_service IS NULL OR NOT isfinite(p_service) OR p_months IS NULL OR p_months NOT BETWEEN 1 AND 600 OR p_residual IS NULL OR p_residual IN ('NaN','Infinity','-Infinity') OR p_residual<0 OR round(p_residual,2)<>p_residual THEN RAISE EXCEPTION 'Fiche, durée, valeur résiduelle et justificatif requis.';END IF;
  IF p_service>d OR p_service<date_trunc('year',d)::date THEN RAISE EXCEPTION 'Cette première version accepte les mises en service de l’exercice courant.';END IF;
  SELECT x.entry_id INTO entry FROM public.journal_lines x WHERE x.tenant_id=p_tenant_id AND x.id=p_acquisition_line;
  PERFORM 1 FROM public.journal_entries WHERE tenant_id=p_tenant_id AND id=entry FOR UPDATE;
@@ -129,10 +129,10 @@ BEGIN
  VALUES(p_tenant_id,p_asset_id,p.period_start,p.through_date,p.amount,(r->>'entry_id')::uuid,auth.uid());
  RETURN r;
 END;$$;
-REVOKE ALL ON FUNCTION public.register_accounting_asset(uuid,text,text,text,uuid,date,int,numeric,text,text,text) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.register_accounting_asset(uuid,text,text,text,uuid,date,int,numeric,text,text,text,boolean) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.accounting_asset_detail(uuid,uuid) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.post_accounting_asset_depreciation(uuid,uuid,date,numeric) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.register_accounting_asset(uuid,text,text,text,uuid,date,int,numeric,text,text,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.register_accounting_asset(uuid,text,text,text,uuid,date,int,numeric,text,text,text,boolean) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.accounting_asset_detail(uuid,uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.post_accounting_asset_depreciation(uuid,uuid,date,numeric) TO authenticated;
 
@@ -177,12 +177,12 @@ END;$$;
 -- Disposal: complementary depreciation + derecognition, in one transaction.
 -- Sale proceeds (and taxes, if applicable) are posted separately before selection.
 -- No automatic impairment reversal, component splitting, exchange or lease treatment.
-CREATE OR REPLACE FUNCTION public.dispose_accounting_asset(p_tenant_id uuid,p_asset_id uuid,p_date date,p_kind text,p_value_account text,p_sale_line uuid,p_reason text,p_expected_net numeric)
+CREATE OR REPLACE FUNCTION public.dispose_accounting_asset(p_tenant_id uuid,p_asset_id uuid,p_date date,p_kind text,p_value_account text,p_sale_line uuid,p_reason text,p_expected_net numeric,p_confirmed boolean)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE a public.accounting_fixed_assets%ROWTYPE; p record; prior numeric; target numeric; delta numeric; net numeric; dep jsonb; outp jsonb; rows jsonb; sale record; sale_entry uuid;
 BEGIN
  PERFORM public._bank_reconciliation_access(p_tenant_id,true);
- IF p_date IS NULL OR NOT isfinite(p_date) OR p_date>(now() AT TIME ZONE 'Africa/Dakar')::date OR extract(year FROM p_date)<>extract(year FROM CURRENT_DATE) OR p_kind IS NULL OR p_kind NOT IN ('sale','scrap') OR p_reason IS NULL OR length(btrim(p_reason)) NOT BETWEEN 1 AND 500 THEN RAISE EXCEPTION 'Date, type et justification obligatoires.';END IF;
+ IF p_confirmed IS DISTINCT FROM true OR p_date IS NULL OR NOT isfinite(p_date) OR p_date>(now() AT TIME ZONE 'Africa/Dakar')::date OR extract(year FROM p_date)<>extract(year FROM CURRENT_DATE) OR p_kind IS NULL OR p_kind NOT IN ('sale','scrap') OR p_reason IS NULL OR length(btrim(p_reason)) NOT BETWEEN 1 AND 500 THEN RAISE EXCEPTION 'Date, type et justification obligatoires.';END IF;
  IF (p_kind='sale') IS DISTINCT FROM (p_sale_line IS NOT NULL) THEN RAISE EXCEPTION 'La cession nécessite la ligne de produit déjà comptabilisée.';END IF;
  IF p_value_account IS NULL OR p_value_account !~ '^(81|654)' THEN RAISE EXCEPTION 'Compte de valeur comptable 81 ou 654 requis.';END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant_id::text||':journal:OD',0));
@@ -205,7 +205,7 @@ BEGIN
   IF NOT FOUND OR p.entry_id IS NOT NULL OR p.amount IS DISTINCT FROM delta THEN RAISE EXCEPTION 'Plan de sortie incohérent.';END IF;
   dep:=public.create_manual_journal_entry(p_tenant_id,'OD',p_date,'Dotation complémentaire '+a.code,a.code,jsonb_build_array(jsonb_build_object('account_code',a.expense_account,'debit',delta,'credit',0,'label',a.name),jsonb_build_object('account_code',a.depreciation_account,'debit',0,'credit',delta,'label',a.name)));
   IF NOT coalesce((dep->>'success')::boolean,false) THEN RAISE EXCEPTION 'Dotation complémentaire non validée.';END IF;
-  INSERT INTO public.accounting_asset_depreciations(tenant_id,asset_id,period_start,through_date,amount,entry_id,created_by) VALUES(p_tenant_id,a.id,p.period_start,p_date,delta,(dep->>'entry_id')::uuid,auth.uid());
+  INSERT INTO public.accounting_asset_depreciations(tenant_id,asset_id,period_start,through_date,amount,entry_id,created_by) VALUES(p_tenant_id,a.id,p.period_start,p.through_date,delta,(dep->>'entry_id')::uuid,auth.uid());
  END IF;
  rows:=jsonb_build_array(jsonb_build_object('account_code',a.asset_account,'debit',0,'credit',a.cost,'label',a.name));
  IF target>0 THEN rows:=rows||jsonb_build_array(jsonb_build_object('account_code',a.depreciation_account,'debit',target,'credit',0,'label',a.name));END IF;
@@ -217,10 +217,10 @@ BEGIN
 END;$$;
 REVOKE ALL ON FUNCTION public.accounting_asset_source_lines(uuid,text,text,int,int) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.accounting_asset_register(uuid,text,text,int,int) FROM PUBLIC,anon,authenticated;
-REVOKE ALL ON FUNCTION public.dispose_accounting_asset(uuid,uuid,date,text,text,uuid,text,numeric) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.dispose_accounting_asset(uuid,uuid,date,text,text,uuid,text,numeric,boolean) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.accounting_asset_source_lines(uuid,text,text,int,int) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.accounting_asset_register(uuid,text,text,int,int) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.dispose_accounting_asset(uuid,uuid,date,text,text,uuid,text,numeric) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.dispose_accounting_asset(uuid,uuid,date,text,text,uuid,text,numeric,boolean) TO authenticated;
 
 -- Generic extourne must not break the asset register. Dedicated corrections are a separate scope.
 CREATE OR REPLACE FUNCTION public.reverse_manual_accounting_entry(p_tenant_id uuid, p_entry_id uuid, p_date date, p_reason text)
