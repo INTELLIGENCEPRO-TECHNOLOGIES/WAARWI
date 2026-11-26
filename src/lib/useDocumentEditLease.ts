@@ -26,7 +26,7 @@ export function useDocumentEditLease({tenantId,userId,kind,resource,enabled,dirt
  const markActivity=useCallback(()=>{inputRef.current=Date.now();},[]);
  useEffect(()=>{
   if(!scope||!tenantId||!userId){setSnapshot(null);return;}
-  const windowId=crypto.randomUUID();let alive=true,flight=false,token:string|null=null,observed:Result|null=null,released=false;
+  const windowId=crypto.randomUUID();let alive=true,flight=false,token:string|null=null,observed:Result|null=null,released=false,queued:Action|null=null;
   inputRef.current=Date.now();
   const publish=(result:Result|null,error='',checking=false)=>{
    if(!alive)return;
@@ -39,7 +39,8 @@ export function useDocumentEditLease({tenantId,userId,kind,resource,enabled,dirt
    return data as Result;
   };
   const run=async(action:Action)=>{
-   if(!alive||flight)return;
+   if(!alive)return;
+   if(flight){if(action!=='heartbeat'&&action!=='status')queued=action;return;}
    if(action==='release'&&latest.current.saving)return;
    flight=true;
    try{
@@ -55,7 +56,7 @@ export function useDocumentEditLease({tenantId,userId,kind,resource,enabled,dirt
     }
     publish(result);
    }catch(e){publish(observed,e&&typeof e==='object'&&'message' in e?String(e.message):'Connexion indisponible.');}
-   finally{flight=false;}
+   finally{flight=false;const next=queued;queued=null;if(next&&alive)void run(next);}
   };
   actionRef.current=run;publish(null,'',true);
   const tick=()=>{if(alive)void run(token&&!released?'heartbeat':'status');};
