@@ -208,3 +208,10 @@
  .accounting-workspace .acc-revision-cycles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-right:0;border-top:1px solid var(--w-separator)}
  .accounting-workspace .acc-revision-cycles>button{padding:6px}
 }
+
+/* Rapprochement : surface de travail continue, adaptation à la fenêtre réelle. */
+.accounting-workspace .acc-bank-workspace{container-type:inline-size;min-width:0}
+.accounting-workspace .acc-bank-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.accounting-workspace .acc-bank-import{border-top:1px solid var(--w-separator);border-bottom:1px solid var(--w-separator);padding:6px 0}
+.accounting-workspace .acc-bank-import select{max-width:100%;min-width:0}
+@container(max-width:880px){.accounting-workspace .acc-bank-panels{grid-template-columns:minmax(0,1fr);gap:8px}}
