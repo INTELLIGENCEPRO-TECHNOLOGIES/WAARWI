@@ -570,6 +570,17 @@ function BalanceTab() {
   const { can } = usePermissions();
   const canManage = can('manage_accounting');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkReport,setBulkReport]=useState<{label:string;posted:number;errors:number;details:{reference:string;error:string}[];skipped:string[]}|null>(null);
+  const showBulkReport=(label:string,r:any,client=false)=>{
+    if(r?.success!==true)throw new Error(r?.error??'Comptabilisation non confirmée.');
+    const posted=Number(r.accounted??0)+(client?Number(r.balance_payments_accounted??0):0);
+    const errors=Number(r.errors??0)+(client?Number(r.balance_payments_errors??0):0);
+    const details=(Array.isArray(r.error_details)?r.error_details:[]).map((x:any)=>({reference:String(x.sale??x.order??x.payment_id??x.customer_payment_id??'—'),error:String(x.error??'Erreur non précisée')}));
+    const skipped=[['skipped_no_balance','Sans effet sur le solde'],['skipped_overpaid','Trop-perçus'],['skipped_unconfirmed','Non confirmés'],['skipped_invalid','Données invalides'],['skipped_order_not_accounted','Achats non comptabilisés'],['skipped_vault_unconfigured','Coffre non configuré'],['skipped_treasury_unconfigured','Trésorerie non configurée']].filter(([k])=>Number(r[k]??0)>0).map(([k,l])=>l+' : '+Number(r[k]));
+    setBulkReport({label,posted,errors,details,skipped});
+    if(errors>0)toastError(posted+' pièce(s) comptabilisée(s), '+errors+' erreur(s). Consultez le compte rendu.');
+    else success(posted+' pièce(s) comptabilisée(s).');
+  };
   const [bulkPayBusy, setBulkPayBusy] = useState(false);
   const [showPurchaseInvoice, setShowPurchaseInvoice] = useState(false);
   const [bulkPayFournBusy, setBulkPayFournBusy] = useState(false);
@@ -578,39 +589,42 @@ function BalanceTab() {
   const load=()=>work?.refresh();
 
   const comptabiliserTout = async () => {
-    if (!tenant || bulkBusy) return;
+    if (!tenant || !canManage || bulkBusy || bulkPayBusy || bulkPayFournBusy) return;
+    setBulkReport(null);
     setBulkBusy(true);
     try {
       const { data: result, error } = await supabase.rpc('comptabiliser_ventes_en_masse', { p_tenant_id: tenant.id });
       if (error) throw error;
       const r = result as any;
-      success(`${r.accounted} vente${r.accounted > 1 ? 's' : ''} comptabilisée${r.accounted > 1 ? 's' : ''} ${r.errors > 0 ? `(${r.errors} erreur${r.errors > 1 ? 's' : ''})` : ''}`);
+      showBulkReport('Ventes',r);
       load();
     } catch (e: any) { toastError(e.message); }
     finally { setBulkBusy(false); }
   };
 
   const comptabiliserReglements = async () => {
-    if (!tenant || bulkPayBusy) return;
+    if (!tenant || !canManage || bulkBusy || bulkPayBusy || bulkPayFournBusy) return;
+    setBulkReport(null);
     setBulkPayBusy(true);
     try {
       const { data: result, error } = await supabase.rpc('comptabiliser_reglements_clients_en_masse', { p_tenant_id: tenant.id });
       if (error) throw error;
       const r = result as any;
-      success(`${r.accounted} règlement${r.accounted > 1 ? 's' : ''} client${r.accounted > 1 ? 's' : ''} comptabilisé${r.accounted > 1 ? 's' : ''} ${r.errors > 0 ? `(${r.errors} erreur${r.errors > 1 ? 's' : ''})` : ''}`);
+      showBulkReport('Règlements clients',r,true);
       load();
     } catch (e: any) { toastError(e.message); }
     finally { setBulkPayBusy(false); }
   };
 
   const comptabiliserReglFourn = async () => {
-    if (!tenant || bulkPayFournBusy) return;
+    if (!tenant || !canManage || bulkBusy || bulkPayBusy || bulkPayFournBusy) return;
+    setBulkReport(null);
     setBulkPayFournBusy(true);
     try {
       const { data: result, error } = await supabase.rpc('comptabiliser_reglements_fournisseurs_en_masse', { p_tenant_id: tenant.id });
       if (error) throw error;
       const r = result as any;
-      success(`${r.accounted} règlement${r.accounted > 1 ? 's' : ''} fournisseur${r.accounted > 1 ? 's' : ''} comptabilisé${r.accounted > 1 ? 's' : ''} ${r.errors > 0 ? `(${r.errors} erreur${r.errors > 1 ? 's' : ''})` : ''}`);
+      showBulkReport('Règlements fournisseurs',r);
       if (r.skipped_vault_unconfigured > 0) {
         const count = Number(r.skipped_vault_unconfigured);
         toastError(`${count} règlement${count > 1 ? 's' : ''} en attente. Renseignez le compte du coffre dans Mouvements de caisse.`);
@@ -625,18 +639,18 @@ function BalanceTab() {
     <div className="space-y-4">
       <div className="acc-toolbar acc-fixed">
         {canManage && <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={comptabiliserTout} disabled={bulkBusy} className="btn-secondary">
+          <button onClick={comptabiliserTout} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
             {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Ventes
           </button>
-          <button onClick={comptabiliserReglements} disabled={bulkPayBusy} className="btn-secondary">
+          <button onClick={comptabiliserReglements} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
             {bulkPayBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Rglts clients
           </button>
           <button type="button" className="btn btn-secondary" aria-expanded={showPurchaseInvoice} onClick={() => setShowPurchaseInvoice(show => !show)}>
             Factures fournisseurs
           </button>
-          <button onClick={comptabiliserReglFourn} disabled={bulkPayFournBusy} className="btn-secondary">
+          <button onClick={comptabiliserReglFourn} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
             {bulkPayFournBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Rglts fournisseurs
           </button>
@@ -654,6 +668,12 @@ function BalanceTab() {
         <AccountingCashReview key={tenant.id} tenantId={tenant.id} onPosted={() => void load()} />
       )}
 
+      {bulkReport&&<section className="acc-section-head space-y-2" aria-live="polite">
+        <div className="acc-toolbar"><strong className="text-sm">Compte rendu — {bulkReport.label}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>setBulkReport(null)}>Fermer</button></div>
+        <p className="text-xs">{bulkReport.posted} pièce(s) comptabilisée(s) · {bulkReport.errors} erreur(s)</p>
+        {bulkReport.skipped.length>0&&<p className="text-xs">{bulkReport.skipped.join(' · ')}</p>}
+        {bulkReport.details.length>0&&<details open><summary className="text-xs cursor-pointer">Détail des opérations en erreur ({bulkReport.details.length})</summary><div className="max-h-64 overflow-auto"><table className="w-full text-xs"><thead><tr><th>Référence</th><th>Motif</th></tr></thead><tbody>{bulkReport.details.map((d,i)=><tr key={i}><td className="break-all">{d.reference}</td><td>{d.error}</td></tr>)}</tbody></table></div></details>}
+      </section>}
       <AccountingPeriodBooks mode="balance"/>
     </div>
   );
