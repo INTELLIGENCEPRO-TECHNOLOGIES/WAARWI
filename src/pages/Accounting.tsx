@@ -88,12 +88,15 @@ function PlanTab() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
 
+  const planSequence=useRef(0);
+  const [planLoading,setPlanLoading]=useState(false),[planError,setPlanError]=useState('');
   const load = async () => {
-    if (!tenant) return;
-    const { data } = await supabase.from('accounts').select('*').eq('tenant_id', tenant.id).order('code');
-    setList(data || []);
+    if(!tenant)return;const seq=++planSequence.current;setPlanLoading(true);setPlanError('');
+    try{const all:any[]=[];for(let offset=0;;offset+=500){const {data,error:e}=await supabase.from('accounts').select('*').eq('tenant_id',tenant.id).order('code').range(offset,offset+499);if(e)throw e;if(seq!==planSequence.current)return;all.push(...(data??[]));if((data??[]).length<500)break;}if(seq===planSequence.current)setList(all);}
+    catch(e){if(seq===planSequence.current){setList([]);setPlanError(e&&typeof e==='object'&&'message'in e?String(e.message):'Plan comptable indisponible.');}}
+    finally{if(seq===planSequence.current)setPlanLoading(false);}
   };
-  useEffect(() => { load(); }, [tenant?.id]);
+  useEffect(() => { void load();return()=>{planSequence.current++;}; }, [tenant?.id,work?.revision]);
   useRealtimeRefresh(['accounts', 'accounting_accounts', 'accounting_account_mappings'], load);
 
   const filtered = useMemo(() => {
@@ -115,7 +118,7 @@ function PlanTab() {
     setSaving(false);
     if (e) { error(e.message); return; }
     if (!(data as any)?.success) { error((data as any)?.error || 'Erreur'); return; }
-    success(editing ? 'Modifié' : 'Créé'); setOpen(false); load();
+    success(editing ? 'Modifié' : 'Créé'); setOpen(false); work?.refresh();void load();
   };
 
   const [classFilter,setClassFilter]=useState('');
@@ -127,10 +130,11 @@ function PlanTab() {
       <div className="acc-toolbar acc-fixed">
         <input aria-label="Rechercher un compte" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Code ou intitulé…" className="input flex-1 min-w-0 sm:max-w-xs"/>
         <select aria-label="Classe" value={classFilter} onChange={e=>setClassFilter(e.target.value)} className="input w-auto"><option value="">Toutes les classes</option>{[1,2,3,4,5,6,7,8].map(c=><option key={c} value={c}>Classe {c}</option>)}</select>
-        <span className="acc-spacer"/><AccountingPlanIO accounts={list} onImportDone={load}/>
+        <span className="acc-spacer"/><AccountingPlanIO accounts={planLoading||planError?[]:list} onImportDone={()=>{work?.refresh();void load();}}/>
         {canManage&&<button type="button" onClick={()=>{setEditing(null);setForm({});setOpen(true);}} className="btn-primary"><Plus size={16}/>Nouveau compte</button>}
       </div>
-      <AccountingTable footer={<AccountingPagination {...paging}/>}>
+      {planError&&<p role="alert" className="text-xs text-red-700">{planError}</p>}{planLoading&&<p role="status" className="text-xs">Chargement du plan comptable…</p>}
+      <AccountingTable footer={<AccountingPagination {...paging} disabled={planLoading}/>}>
         <table><thead><tr><th className="text-left">Compte</th><th className="text-left">Intitulé</th><th className="text-left hidden sm:table-cell">Classe</th><th className="text-right">Actions</th></tr></thead>
           <tbody>{paging.rows.map(a=><tr key={a.id}><td className="font-medium whitespace-nowrap"><button type="button" className="hover:underline" onClick={()=>work?.openAccount(a.code)}>{a.code}</button></td><td>{a.name}</td><td className="hidden sm:table-cell">{a.class}</td><td className="text-right">{canManage&&<button type="button" className="acc-icon" aria-label={'Modifier '+a.code} onClick={()=>{setEditing(a);setForm({...a});setOpen(true);}}><Edit2 size={16}/></button>}</td></tr>)}
           {!visible.length&&<tr><td colSpan={4} className="text-center text-neutral-500">Aucun compte correspondant.</td></tr>}</tbody>
