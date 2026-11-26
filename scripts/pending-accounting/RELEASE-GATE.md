@@ -46,3 +46,10 @@ Aucune étape n'est réputée réussie sans preuve issue du commit et de l'envir
 - Script 39 / migration 20261126041824 exécuté exclusivement sur la branche Supabase de recette. Les appels publics passent par la nouvelle RPC avec UUID obligatoire ; anciennes recettes adaptées.
 - 12 contrôles SQL réussis : réessai identique, saisie volontaire distincte, collision de contenu, échec atomique, reprise après rejet, clé absente, ancienne RPC, anon, isolation et comptage exact. Fixtures annulées.
 - Restent bloquants : concurrence réelle à deux sessions, compilation et scénario navigateur après coupure, contrôle de la restauration des nouvelles colonnes, fidélité de la branche SQL (migrations en échec), autres recettes et non-régressions.
+
+### Rejeu après le correctif (26/11/2026)
+- Recettes transactionnelles 03,05,07,10,15,18,20,22,24,26,28,36,38 et 40 exécutées sans exception sur la branche de recette. 05,07,10 adaptées au deuxième tenant fictif par sélection indépendante du nom ; aucune mutation conservée.
+- Audits 30,32,34 exécutés sans exception. Les audits commerciaux/retours sont diagnostiques, non une recette de création réelle des documents commerciaux ; le benchmark volumétrique reste à faire.
+- État du jeu d'essai après rejeu : 2 tenants, 2 profils, 61 pièces, 122 lignes, 0 pièce portant une clé de demande (rollbacks).
+- CI du commit c021245 : Vite et tests unitaires réussis, TypeScript échoué (299 diagnostics dont 20 dans le périmètre comptable). Corrections des deux familles comptables Navigation/Accounting en cours de vérification. CI : https://github.com/INTELLIGENCEPRO-TECHNOLOGIES/WAARWI/actions/runs/45754498498
+- Publication toujours interdite : fidélité du schéma, parcours commerciaux réels, concurrence multisession, restauration et validation navigateur non terminés.

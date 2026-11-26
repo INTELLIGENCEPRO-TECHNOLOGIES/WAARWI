@@ -1,9 +1,9 @@
-import {useEffect,useLayoutEffect,useRef,useState,type KeyboardEvent,type ComponentType} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState,type KeyboardEvent} from 'react';
 import {ArrowLeft,BookOpen,ChevronDown,ChevronRight,Check,LayoutDashboard,Plus,FileText,Search,ArrowRightLeft,Lock,TrendingUp,Users,Menu} from './Icons';
 import type {Route} from './Shell';
 import './accounting-navigation.css';
 
-type Leaf={route:Route;label:string;icon:ComponentType<{size?:number;className?:string}>};
+type Leaf={route:Route;label:string;icon:typeof BookOpen};
 type Group={label:string;items:(Leaf|{label:string;children:Leaf[]})[]};
 const groups:Group[]=[
  {label:'Fichier',items:[{route:'acc_overview',label:'Accueil comptable',icon:LayoutDashboard}]},

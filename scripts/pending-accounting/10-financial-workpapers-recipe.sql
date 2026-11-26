@@ -4,7 +4,7 @@ DO $test$
 DECLARE t uuid;u uuid;other uuid;r jsonb;rev bigint;blocked boolean;yr int:=2026;
 BEGIN
  SELECT id INTO STRICT t FROM public.tenants WHERE name='TEST COMPTA';
- SELECT id INTO STRICT other FROM public.tenants WHERE name='INTELLIGENCEPRO';
+ SELECT id INTO STRICT other FROM public.tenants WHERE id<>t ORDER BY id LIMIT 1;
  SELECT id INTO u FROM public.profiles WHERE tenant_id=t AND role='admin' ORDER BY id LIMIT 1;
  IF u IS NULL OR EXISTS(SELECT 1 FROM public.accounting_financial_workpapers WHERE tenant_id=t AND fiscal_year=yr) THEN RAISE EXCEPTION 'Dossier de recette non vierge.';END IF;
  PERFORM set_config('request.jwt.claim.sub',u::text,true);

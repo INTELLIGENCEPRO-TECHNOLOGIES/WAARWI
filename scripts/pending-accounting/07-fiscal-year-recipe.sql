@@ -5,7 +5,7 @@ DO $test$
 DECLARE t uuid;u uuid;other uuid;e1 uuid;e2 uuid;yr int:=2025;d date:='2025-12-15';r jsonb;s jsonb;r2 jsonb;blocked boolean;opening numeric;
 BEGIN
  SELECT id INTO STRICT t FROM public.tenants WHERE name='TEST COMPTA';
- SELECT id INTO STRICT other FROM public.tenants WHERE name='INTELLIGENCEPRO';
+ SELECT id INTO STRICT other FROM public.tenants WHERE id<>t ORDER BY id LIMIT 1;
  SELECT id INTO u FROM public.profiles WHERE tenant_id=t AND role='admin' ORDER BY id LIMIT 1;
  IF u IS NULL OR EXISTS(SELECT 1 FROM public.journal_entries WHERE tenant_id=t AND entry_date<'2026-01-01') OR EXISTS(SELECT 1 FROM public.accounting_fiscal_years WHERE tenant_id=t) OR EXISTS(SELECT 1 FROM public.accounting_month_closures WHERE tenant_id=t AND month_start BETWEEN '2025-01-01' AND '2025-12-31' AND closed_at IS NOT NULL) THEN RAISE EXCEPTION 'Préconditions de recette indisponibles : choisir un exercice fictif vierge.'; END IF;
  PERFORM set_config('request.jwt.claim.sub',u::text,true);

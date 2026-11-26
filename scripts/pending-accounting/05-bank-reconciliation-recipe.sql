@@ -6,7 +6,7 @@ DECLARE t uuid;u uuid;other uuid;bank text;contra text;dt date:=(now() AT TIME Z
 BEGIN
  SELECT id INTO STRICT t FROM public.tenants WHERE name='TEST COMPTA';
  SELECT id INTO u FROM public.profiles WHERE tenant_id=t AND role='admin' ORDER BY id LIMIT 1;
- SELECT id INTO STRICT other FROM public.tenants WHERE name='INTELLIGENCEPRO';
+ SELECT id INTO STRICT other FROM public.tenants WHERE id<>t ORDER BY id LIMIT 1;
  SELECT code INTO bank FROM public.accounts WHERE tenant_id=t AND code='5210000' AND is_active;
  SELECT code INTO contra FROM public.accounts WHERE tenant_id=t AND code='5710000' AND is_active;
  IF bank IS NULL OR contra IS NULL OR u IS NULL THEN RAISE EXCEPTION 'Préconditions de recette manquantes.'; END IF;
