@@ -64,3 +64,58 @@ BEGIN
 END;$$;
 REVOKE ALL ON FUNCTION public.accounting_period_books(uuid,date,date,text,text,text,int,int) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.accounting_period_books(uuid,date,date,text,text,text,int,int) TO authenticated;
+
+-- Preserve invoker/RLS behavior and reuse the last available opening snapshot.
+CREATE OR REPLACE FUNCTION public.accounting_account_statement(p_tenant_id uuid, p_account_code text, p_date_from date, p_date_to date, p_offset integer DEFAULT 0)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO ''
+AS $function$
+DECLARE v_account record; v_result jsonb; v_prior jsonb; v_year_start date; v_anchor date; v_prior_year integer; v_carry numeric:=0; v_mode text:='continuous';
+BEGIN
+ IF auth.uid() IS NULL OR p_tenant_id IS NULL THEN
+  RAISE EXCEPTION 'Accès refusé à la comptabilité.' USING ERRCODE='42501';
+ END IF;
+ IF p_date_from IS NULL OR p_date_to IS NULL OR NOT isfinite(p_date_from) OR NOT isfinite(p_date_to)
+ OR p_date_from>p_date_to OR p_date_to-p_date_from>366 OR p_offset IS NULL OR p_offset<0 THEN
+  RAISE EXCEPTION 'Choisissez une période de 367 jours au maximum.' USING ERRCODE='22023';
+ END IF;
+ -- RLS des comptes et journaux impose le tenant courant et view_accounting.
+ SELECT a.code,a.name,a.account_type,a.is_active INTO v_account FROM public.accounts a
+ WHERE a.tenant_id=p_tenant_id AND a.code=p_account_code;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Compte inaccessible ou introuvable.' USING ERRCODE='42501'; END IF;
+ v_year_start:=date_trunc('year',p_date_from)::date;
+ IF extract(year FROM p_date_from)<>extract(year FROM p_date_to) THEN
+  RAISE EXCEPTION 'Sélectionnez une période dans un seul exercice.' USING ERRCODE='22023';
+ END IF;
+ SELECT f.snapshot,f.fiscal_year INTO v_prior,v_prior_year FROM public.accounting_fiscal_years f WHERE f.tenant_id=p_tenant_id AND f.fiscal_year<extract(year FROM p_date_from) ORDER BY f.fiscal_year DESC LIMIT 1;
+ IF v_prior IS NOT NULL THEN
+  v_anchor:=make_date(v_prior_year+1,1,1);
+  SELECT coalesce(sum((x->>'balance')::numeric),0) INTO v_carry FROM jsonb_array_elements(v_prior->'carry') x WHERE x->>'account_code'=p_account_code;
+  v_mode:=CASE WHEN v_anchor=v_year_start THEN 'fiscal' ELSE 'provisional' END;
+ END IF;
+ WITH history AS MATERIALIZED (
+ SELECT l.id AS line_id,e.id AS entry_id,e.entry_date,e.entry_number,e.journal_type,e.reference,e.description,
+ e.source_type,e.source_id,e.status,l.label,m.group_id AS match_group_id,g.code AS match_code,coalesce(l.debit,0) AS debit,coalesce(l.credit,0) AS credit
+ FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id
+ LEFT JOIN public.accounting_match_lines m ON m.tenant_id=l.tenant_id AND m.line_id=l.id AND m.released_at IS NULL
+ LEFT JOIN public.accounting_match_groups g ON g.tenant_id=m.tenant_id AND g.group_id=m.group_id AND g.account_code=m.account_code
+ WHERE l.tenant_id=p_tenant_id AND l.account_code=v_account.code AND e.status='posted' AND e.entry_date<=p_date_to AND (v_anchor IS NULL OR e.entry_date>=v_anchor)
+ ), opening AS (
+ SELECT v_carry+coalesce(sum(debit-credit),0) AS balance FROM history WHERE entry_date<p_date_from
+ ), movements AS MATERIALIZED (
+ SELECT h.*,o.balance+sum(h.debit-h.credit) OVER(ORDER BY h.entry_date,h.entry_number,h.line_id ROWS UNBOUNDED PRECEDING) AS running_balance
+ FROM history h CROSS JOIN opening o WHERE h.entry_date>=p_date_from
+ ), totals AS (
+ SELECT count(*) AS row_count,coalesce(sum(debit),0) AS debit,coalesce(sum(credit),0) AS credit FROM movements
+ )
+ SELECT jsonb_build_object('account',to_jsonb(v_account),'opening_mode',v_mode,'opening_balance',o.balance,'total_debit',t.debit,
+ 'total_credit',t.credit,'closing_balance',o.balance+t.debit-t.credit,'row_count',t.row_count,
+ 'rows',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY r.entry_date,r.entry_number,r.line_id),'[]'::jsonb)
+ FROM (SELECT * FROM movements ORDER BY entry_date,entry_number,line_id LIMIT 50 OFFSET p_offset) r))
+ INTO v_result FROM opening o CROSS JOIN totals t;
+ RETURN v_result;
+END;
+$function$
+;
