@@ -10,20 +10,58 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.ref == 'refs/heads/codex/waarwi-comptabilite-suite'
+    permissions:
+      contents: read
+      statuses: write
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Installation verrouillée
+        id: install
         run: npm ci --no-audit --no-fund
       - name: Compilation Vite
+        id: build
         run: npm run build
       - name: Contrôle TypeScript
-        if: ${{ always() }}
+        id: types
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run typecheck
       - name: Tests unitaires
-        if: ${{ always() }}
+        id: tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: node --test tests/*.test.mjs
+      - name: Publier les résultats de contrôle (statuts du commit uniquement)
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          TYPES_OUTCOME: ${{ steps.types.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          node --input-type=module <<'JS'
+          const entries = [
+            ['install', process.env.INSTALL_OUTCOME],
+            ['build', process.env.BUILD_OUTCOME],
+            ['typecheck', process.env.TYPES_OUTCOME],
+            ['tests', process.env.TESTS_OUTCOME]
+          ];
+          const url = process.env.GITHUB_API_URL + '/repos/' + process.env.GITHUB_REPOSITORY + '/statuses/' + process.env.GITHUB_SHA;
+          const target = process.env.GITHUB_SERVER_URL + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID;
+          for (const [name, outcome] of entries) {
+            const state = outcome === 'success' ? 'success' : outcome === 'failure' ? 'failure' : 'error';
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {Authorization: 'Bearer ' + process.env.GH_TOKEN, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json'},
+              body: JSON.stringify({state, context: 'accounting-audit/' + name, description: outcome || 'not run', target_url: target})
+            });
+            if (!res.ok) throw new Error('Commit status ' + name + ': HTTP ' + res.status);
+          }
+          JS
