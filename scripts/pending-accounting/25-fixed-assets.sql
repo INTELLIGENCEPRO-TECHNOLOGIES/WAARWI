@@ -101,7 +101,11 @@ BEGIN
  SELECT * INTO a FROM public.accounting_fixed_assets WHERE tenant_id=p_tenant_id AND id=p_asset_id;
  IF NOT FOUND THEN RAISE EXCEPTION 'Immobilisation introuvable.';END IF;
  SELECT jsonb_build_object('asset',to_jsonb(a),'acquisition_entry_id',(SELECT entry_id FROM public.journal_lines WHERE tenant_id=p_tenant_id AND id=a.acquisition_line_id),
- 'plan',(SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY p.period_start),'[]'::jsonb) FROM public._asset_plan(p_tenant_id,p_asset_id) p),
+ 'acquisition_piece',(SELECT e.entry_number FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id WHERE l.tenant_id=p_tenant_id AND l.id=a.acquisition_line_id),
+ 'disposal_piece',(SELECT entry_number FROM public.journal_entries WHERE tenant_id=p_tenant_id AND id=a.disposal_entry_id),
+ 'sale_piece',(SELECT e.entry_number FROM public.journal_lines l JOIN public.journal_entries e ON e.tenant_id=l.tenant_id AND e.id=l.entry_id WHERE l.tenant_id=p_tenant_id AND l.id=a.sale_line_id),
+ 'sale_entry_id',(SELECT entry_id FROM public.journal_lines WHERE tenant_id=p_tenant_id AND id=a.sale_line_id),
+ 'plan',(SELECT coalesce(jsonb_agg(to_jsonb(p)||jsonb_build_object('entry_number',e.entry_number) ORDER BY p.period_start),'[]'::jsonb) FROM public._asset_plan(p_tenant_id,p_asset_id) p LEFT JOIN public.journal_entries e ON e.tenant_id=p_tenant_id AND e.id=p.entry_id),
  'posted',coalesce((SELECT sum(d.amount) FROM public.accounting_asset_depreciations d WHERE d.tenant_id=p_tenant_id AND d.asset_id=p_asset_id),0)) INTO result;
  RETURN result;
 END;$$;
@@ -274,3 +278,18 @@ END;
 $function$
 
 ;
+
+CREATE OR REPLACE FUNCTION public.preview_accounting_asset_disposal(p_tenant_id uuid,p_asset_id uuid,p_date date)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE a public.accounting_fixed_assets%ROWTYPE; posted numeric; target numeric; missing int; later int;
+BEGIN
+ PERFORM public._bank_reconciliation_access(p_tenant_id,false);
+ SELECT * INTO a FROM public.accounting_fixed_assets WHERE tenant_id=p_tenant_id AND id=p_asset_id;
+ IF NOT FOUND OR a.disposed_on IS NOT NULL OR p_date IS NULL OR NOT isfinite(p_date) OR p_date<a.service_date OR p_date>(now() AT TIME ZONE 'Africa/Dakar')::date OR extract(year FROM p_date)<>extract(year FROM CURRENT_DATE) THEN RAISE EXCEPTION 'Date de sortie ou immobilisation invalide.';END IF;
+ SELECT coalesce(sum(amount),0),count(*) FILTER(WHERE through_date>p_date) INTO posted,later FROM public.accounting_asset_depreciations WHERE tenant_id=p_tenant_id AND asset_id=a.id;
+ SELECT count(*) INTO missing FROM public._asset_plan(p_tenant_id,a.id,p_date) p WHERE p.period_start<date_trunc('month',p_date)::date AND p.amount>0 AND p.entry_id IS NULL;
+ target:=public._asset_linear_cumulative(a.cost,a.residual,a.service_date,a.life_months,p_date);
+ RETURN jsonb_build_object('date',p_date,'posted',posted,'cumulative',target,'complement',target-posted,'net',a.cost-target,'missing_prior',missing,'blocked',missing>0 OR later>0 OR posted>target);
+END;$$;
+REVOKE ALL ON FUNCTION public.preview_accounting_asset_disposal(uuid,uuid,date) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.preview_accounting_asset_disposal(uuid,uuid,date) TO authenticated;
