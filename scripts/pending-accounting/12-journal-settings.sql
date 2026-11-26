@@ -92,6 +92,7 @@ END IF;
 
 -- Validate journal type
 PERFORM public._bank_reconciliation_access(p_tenant_id,true);
+PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant_id::text||':journal:'||coalesce(p_journal_type,''),0));
 IF NOT public._accounting_journal_allowed(p_tenant_id,p_journal_type,true) THEN
 RAISE EXCEPTION 'Type de journal invalide: %', coalesce(p_journal_type, 'NULL');
 END IF;
