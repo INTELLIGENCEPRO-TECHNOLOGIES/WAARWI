@@ -40,6 +40,7 @@ export type SessionSale = {
   total: number;
   paid: number;
   created_at: string;
+  customer_id?: string | null;
   customer_name: string | null;
   customer_phone: string | null;
   customer_address: string | null;
