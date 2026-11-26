@@ -82,3 +82,5 @@ Recette 54 : suppression logique d’une facture non fiscale non réglée avec l
 
 ### Avoir fiscal des factures converties
 Recette 57 : historique TVA, retour au dépôt d’origine, imputation partielle puis totale, réessai identique, refus du payload modifié et du dépassement, blocage sur verrou actif. Les retours partiels sur une ligne multi-lots requièrent une sélection explicite (bloqués en attendant). Les remboursements caisse, retours non fiscaux, cas anciens sans trace, écritures comptables et concurrence réelle restent à recetter. Aucun déploiement.
+
+Recette 58 : comptabilisation de la facture convertie, du règlement réel par API de masse et des deux avoirs approuvés. Quatre pièces équilibrées, ventes et TVA neutralisées, caisse +1 200 et client créditeur 1 200 FCFA. Réessai de comptabilisation idempotent. Tests de remboursement, lots et concurrence restent ouverts.
