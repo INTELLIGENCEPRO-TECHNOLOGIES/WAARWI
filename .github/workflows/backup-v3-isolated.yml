@@ -8,9 +8,11 @@ on:
       - 'supabase/functions/backup-export-v3/**'
       - 'supabase/migrations_review/**'
       - 'scripts/pending-accounting/104-v2-restored-content-integrity-candidate.sql'
+      - 'scripts/pending-accounting/106-verified-staging-fingerprint-candidate.sql'
   workflow_dispatch:
 permissions:
   contents: read
+  statuses: write
 jobs:
   backup-recipes:
     if: github.ref == 'refs/heads/codex/waarwi-comptabilite-suite'
@@ -41,18 +43,42 @@ jobs:
       - name: Dépendance PostgreSQL de test (hors application)
         run: npm install --prefix /tmp/waarwi-backup-test --no-audit --no-fund --save-exact pg@8.16.3
       - name: Chaîne V3 chiffrée et reprise
+        id: lotc
         run: node --experimental-strip-types --test --test-concurrency=1 tests/backup-v3/lotc_export.test.mjs
       - name: Préparer Lot D avec contrôle V2
         if: ${{ !cancelled() }}
         run: |
-          cat supabase/migrations_review/20261112090000_lot_d_safe_restore_reset_inactive.sql scripts/pending-accounting/104-v2-restored-content-integrity-candidate.sql > /tmp/waarwi-lot-d.sql
+          cat supabase/migrations_review/20261112090000_lot_d_safe_restore_reset_inactive.sql scripts/pending-accounting/104-v2-restored-content-integrity-candidate.sql scripts/pending-accounting/106-verified-staging-fingerprint-candidate.sql > /tmp/waarwi-lot-d.sql
       - name: Restauration V2 et V3, concurrence et reset
+        id: lotd
         if: ${{ !cancelled() }}
         env:
           BR_LOT_D_SQL: /tmp/waarwi-lot-d.sql
         run: node --experimental-strip-types --test --test-concurrency=1 tests/backup-v3/lotd_restore.test.mjs
       - name: Chaîne serveur Lot E, sans secrets ni déploiement
+        id: lote
         if: ${{ !cancelled() }}
         env:
           BR_LOT_D_SQL: /tmp/waarwi-lot-d.sql
         run: node --experimental-strip-types --test --test-concurrency=1 tests/backup-v3/lote_chain.test.mjs
+      - name: Publier les statuts de recette (aucun déploiement)
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOTC: ${{ steps.lotc.outcome }}
+          LOTD: ${{ steps.lotd.outcome }}
+          LOTE: ${{ steps.lote.outcome }}
+        run: |
+          node --input-type=module <<'JS'
+          const url = process.env.GITHUB_API_URL + '/repos/' + process.env.GITHUB_REPOSITORY + '/statuses/' + process.env.GITHUB_SHA;
+          const target = process.env.GITHUB_SERVER_URL + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID;
+          for (const name of ['lotc', 'lotd', 'lote']) {
+            const outcome = process.env[name.toUpperCase()];
+            const state = outcome === 'success' ? 'success' : outcome === 'failure' ? 'failure' : 'error';
+            const res = await fetch(url, { method: 'POST',
+              headers: { Authorization: 'Bearer ' + process.env.GH_TOKEN, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ state, context: 'backup-v3-isolated/' + name, description: outcome || 'not run', target_url: target })
+            });
+            if (!res.ok) throw new Error('Commit status ' + name + ': HTTP ' + res.status);
+          }
+          JS
