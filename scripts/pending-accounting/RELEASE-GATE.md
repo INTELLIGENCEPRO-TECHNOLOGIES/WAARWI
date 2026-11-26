@@ -74,3 +74,6 @@ Les appels séparés sont remplacés par convert_quote_atomic. Recettes 48 et 50
 
 ### Autorisation du stock négatif
 Recettes 51 et 52 : six scénarios de conversion et modification facture, plus recette 44 rejouée. Alignement sur la règle de production : magasin parent prioritaire pour un dépôt, ancien paramètre tenant non prioritaire. Stock par lots strict, pas de lot fictif. Aucun changement de règle de production. Recette navigateur et concurrence restent ouvertes.
+
+### Cycle inverse des factures converties
+Recette 53 : restitution des lots et stock agrégé au dépôt réel, remboursement IPM, idempotence, verrou actif, refus fiscal sans mouvement résiduel. Le nouveau registre privé quote_conversion_stock_trace doit être intégré aux procédures de sauvegarde, restauration et purge avant publication. Les anciennes conversions sans trace conservent leur traitement historique (audit restant), les avoirs TVA, désimputation des crédits, autres cas de remboursement et suppression à compléter. Aucun déploiement.
