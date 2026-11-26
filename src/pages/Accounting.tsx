@@ -370,7 +370,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const dirtyEntry=!!(form.description.trim()||form.reference.trim()||usedLines.length);
   const editLease=useDocumentEditLease({tenantId:tenant?.id,userId:user?.id,kind:'accounting_journal',resource:form.journal_type+':'+form.entry_date.slice(0,7),enabled:canManage&&(entryOnly||open)&&/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(form.entry_date),dirty:dirtyEntry,saving});
   const savingLock=useRef(false);
-  const save = async () => {
+  const save = async (releaseAfter=false) => {
     if (!tenant || savingLock.current || !canManage) return;
     if(!editLease.held||!editLease.token){error('Vous ne détenez pas l’accès en modification de ce journal.');return;}
     if(journalCatalog.loading||journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)){error('Sélectionnez un journal actif.');return;}
@@ -402,11 +402,12 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
           sessionStorage.setItem(pendingKey,requestId);
         }
       }
-      const {data,error:e}=occurrence?await supabase.rpc('post_locked_template_occurrence',{...payload,p_template_id:occurrence.id,p_due_on:occurrence.due,p_window_id:editLease.windowId,p_lock_token:editLease.token}):await supabase.rpc('post_locked_manual_entry',{...manualPayload,p_request_id:requestId,p_window_id:editLease.windowId,p_lock_token:editLease.token});
+      const {data,error:e}=occurrence?await supabase.rpc(releaseAfter?'post_locked_template_and_release':'post_locked_template_occurrence',{...payload,p_template_id:occurrence.id,p_due_on:occurrence.due,p_window_id:editLease.windowId,p_lock_token:editLease.token}):await supabase.rpc(releaseAfter?'post_locked_manual_entry_and_release':'post_locked_manual_entry',{...manualPayload,p_request_id:requestId,p_window_id:editLease.windowId,p_lock_token:editLease.token});
       if(e){error(e.message+(!occurrence?' — En cas de réponse incertaine, réessayez la même saisie sans la modifier.':''));return;}
       if(!(data as any)?.success){error((data as any)?.error||'Erreur');return;}
       if(pendingKey&&sessionStorage.getItem(pendingKey)===requestId)sessionStorage.removeItem(pendingKey);
-      success('Écriture '+(data as any).piece_number+' enregistrée');
+      success('Écriture '+(data as any).piece_number+' enregistrée'+(releaseAfter&&(data as any).lock_released?' · accès libéré':''));
+      if(releaseAfter)void editLease.action('status');
       setOpen(false);
       setOccurrence(null);setEntryLines([newLine(),newLine()]);
       setForm(p=>({...p,entry_date:occurrence?new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'}):p.entry_date,description:'',reference:''}));
@@ -442,7 +443,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
               <input type="date" aria-label="Date comptable" min="2000-01-01" max={new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'})} value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} className="input" disabled={saving||!!occurrence} />
             </div>
           </div>
-        <DocumentEditLeaseBar lease={editLease} dirty={dirtyEntry} saving={saving} label={form.journal_type+" · "+form.entry_date.slice(0,7)}/>
+        <DocumentEditLeaseBar lease={editLease} dirty={dirtyEntry} saving={saving} label={form.journal_type+" · "+form.entry_date.slice(0,7)} onSaveAndRelease={dirtyEntry&&isBalanced&&readyLines&&!!form.description.trim()&&!accountLoading&&!accountError&&!journalCatalog.loading&&!journalCatalog.error?()=>void save(true):undefined}/>
         <fieldset disabled={saving||!editLease.held} className="space-y-2" onKeyDown={e=>{if((e.target as HTMLElement).closest('.acc-template-strip'))return;if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();void save();}else if(e.key==='F2'){e.preventDefault();addLine();}}}>
           {(journalCatalog.error||accountError)&&<p role="alert" className="text-xs text-red-700">{journalCatalog.error||accountError}</p>}
           {tenant&&<AccountingEntryTemplates tenantId={tenant.id} canSave={canManage&&isBalanced&&readyLines&&!!form.description.trim()&&journalOptions.some(j=>j.code===form.journal_type&&j.active)&&!accountLoading&&!accountError} journal={form.journal_type} description={form.description} lines={usedLines.map(({account_code,label,debit,credit})=>({account_code,label,debit,credit}))} onApply={applyTemplate}/>}
@@ -478,7 +479,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
           </div>
 
         </fieldset></div> );
-  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={save} className="btn-primary" disabled={saving||!editLease.held||!isBalanced||!readyLines||accountLoading||!!accountError||journalCatalog.loading||!!journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
+  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={()=>void save()} className="btn-primary" disabled={saving||!editLease.held||!isBalanced||!readyLines||accountLoading||!!accountError||journalCatalog.loading||!!journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
   if(entryOnly)return <section className="acc-entry-page">{entryForm}{entryFooter}</section>;
 
     return (
