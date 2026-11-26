@@ -3,6 +3,7 @@ import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Save, Pencil as Edit2, Search, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
 import {useAccountingJournals} from '../lib/accountingJournals';
+import {AccountingEntryTemplates,type EntryTemplate} from '../components/AccountingEntryTemplates';
 import {AccountingJournalSettings} from '../components/AccountingJournalSettings';
 import {AccountingOverview} from '../components/AccountingOverview';
 import { AccountingPagination, AccountingTable, AccountingRowActions, useAccountingPagination } from '../components/AccountingWorkspace';
@@ -28,11 +29,6 @@ import { sanitizeCsvValue } from '../lib/csvSanitize';
 
 type TabKey = 'journal_settings' | 'overview' | 'entry' | 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture' | 'vat' | 'statement' | 'bank' | 'fiscal' | 'financial';
 
-const JOURNAL_TYPES: Record<string, string> = {
-  VE: 'Journal des ventes', AC: 'Journal des achats',
-  CA: 'Journal de caisse', BQ: 'Journal de banque',
-  OD: 'Opérations diverses',
-};
 
 export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }: { section?: TabKey;onNavigate?:(route:string)=>void;inWindow?:boolean;onExit?:()=>void }) {
   const {tenant}=useApp();const {can}=usePermissions();
@@ -177,7 +173,11 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const [open, setOpen] = useState(false);
   const [journalType, setJournalType] = useState('');
   const [saving, setSaving] = useState(false);
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<{code:string;name:string}[]>([]);
+  const [accountLoading,setAccountLoading]=useState(false),[accountError,setAccountError]=useState('');
+  const gridRef=useRef<HTMLDivElement>(null);
+  const lineSeq=useRef(2);
+  const newLine=()=>({key:++lineSeq.current,account_code:'',account_name:'',debit:0,credit:0,label:''});
 
   const canView = can('view_accounting');
   const [exportOpen, setExportOpen] = useState(false);
@@ -191,9 +191,9 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const [exportError, setExportError] = useState('');
 
   const [form, setForm] = useState({ journal_type: 'OD', entry_date: new Date().toISOString().slice(0, 10), description: '', reference: '' });
-  const [entryLines, setEntryLines] = useState<{ account_code: string; account_name: string; debit: number; credit: number; label: string }[]>([
-    { account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
-    { account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
+  const [entryLines, setEntryLines] = useState<{key:number;account_code: string; account_name: string; debit: number; credit: number; label: string }[]>([
+    {key:1, account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
+    {key:2, account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
   ]);
 
   const load = async (silent = false) => {
@@ -214,10 +214,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   };
   useEffect(()=>{void load();return()=>{loadSequence.current++;};},[tenant?.id,journalType,journalPage,journalSize,fromDate,toDate,work?.revision]);
   useRealtimeRefresh(['journal_entries', 'journal_lines'], () => load(true));
-  useEffect(() => {
-    if (!tenant) return;
-    supabase.from('accounts').select('code, name').eq('tenant_id', tenant.id).eq('is_active',true).order('code').then(({ data }) => setAccounts(data || []));
-  }, [tenant?.id]);
+  useEffect(()=>{if(!tenant||(!entryOnly&&!open))return;let alive=true;setAccountLoading(true);setAccountError('');void(async()=>{try{const all:{code:string;name:string}[]=[];for(let offset=0;;offset+=500){const {data,error:e}=await supabase.from('accounts').select('code,name').eq('tenant_id',tenant.id).eq('is_active',true).order('code').range(offset,offset+499);if(e)throw e;if(!alive)return;all.push(...(data??[]));if((data??[]).length<500)break;}if(alive)setAccounts(all);}catch(e){if(alive){setAccounts([]);setAccountError(e&&typeof e==='object'&&'message'in e?String(e.message):'Plan comptable indisponible.');}}finally{if(alive)setAccountLoading(false);}})();return()=>{alive=false;};},[tenant?.id,entryOnly,open,work?.revision]);
   const openExportModal = () => {
     const now = new Date();
     setExportDateFrom(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
@@ -338,28 +335,25 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     }
   };
 
-  const totalDebit = entryLines.reduce((s, l) => s + Number(l.debit), 0);
-  const totalCredit = entryLines.reduce((s, l) => s + Number(l.credit), 0);
-  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
-
-  const updateLine = (idx: number, field: string, val: any) => {
-    setEntryLines(prev => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], [field]: val };
-      if (field === 'account_code') {
-        const acc = accounts.find(a => a.code === val);
-        if (acc) next[idx].account_name = acc.name;
-      }
-      return next;
-    });
+  const minor=(v:number)=>Number.isFinite(v)&&v>=0&&Number.isSafeInteger(Math.round(v*100))&&Math.abs(v*100-Math.round(v*100))<0.00001?Math.round(v*100):NaN;
+  const debitCents=entryLines.reduce((s,l)=>s+minor(l.debit),0),creditCents=entryLines.reduce((s,l)=>s+minor(l.credit),0);
+  const totalDebit=debitCents/100,totalCredit=creditCents/100;
+  const isBalanced=Number.isSafeInteger(debitCents)&&debitCents>0&&debitCents===creditCents;
+  const usedLines=entryLines.filter(l=>l.account_code||l.label.trim()||l.debit!==0||l.credit!==0);
+  const readyLines=usedLines.length>=2&&usedLines.every(l=>accounts.some(a=>a.code===l.account_code)&&Number.isFinite(minor(l.debit))&&Number.isFinite(minor(l.credit))&&(l.debit>0)!==(l.credit>0));
+  const updateLine=(idx:number,field:'account_code'|'label'|'debit'|'credit',val:string|number)=>{
+    setEntryLines(prev=>prev.map((l,i)=>{if(i!==idx)return l;const next={...l,[field]:val};if(field==='account_code'){next.account_name=accounts.find(a=>a.code===val)?.name??'';if(!next.label&&next.account_name)next.label=form.description;}if(field==='debit'&&Number(val)>0)next.credit=0;if(field==='credit'&&Number(val)>0)next.debit=0;return next;}));
   };
-
+  const focusCell=(key:number,col:string)=>requestAnimationFrame(()=>gridRef.current?.querySelector<HTMLInputElement>('[data-entry-key="'+key+'"][data-entry-col="'+col+'"]')?.focus());
+  const addLine=()=>{if(entryLines.length>=500)return;const l=newLine();setEntryLines(p=>[...p,l]);focusCell(l.key,'account');};
+  const balanceLine=(idx:number)=>{const l=entryLines[idx];if(!l||!l.account_code||!Number.isSafeInteger(debitCents)||!Number.isSafeInteger(creditCents))return;const diff=debitCents-creditCents-minor(l.debit)+minor(l.credit);if(!Number.isSafeInteger(diff)||!diff)return;setEntryLines(p=>p.map((row,i)=>i===idx?{...row,debit:Math.max(0,-diff)/100,credit:Math.max(0,diff)/100}:row));};
+  const applyTemplate=(t:EntryTemplate)=>{if((form.description.trim()||form.reference.trim()||usedLines.length)&&!window.confirm('Remplacer la saisie actuelle par ce modèle ?'))return;if(!journalOptions.some(j=>j.code===t.journal_code&&j.active)||t.lines.some(l=>!accounts.some(a=>a.code===l.account_code))){error('Le modèle comporte un journal ou un compte inactif.');return;}setForm(p=>({...p,journal_type:t.journal_code,description:t.description,reference:''}));setEntryLines(t.lines.map(l=>({...newLine(),...l,account_name:accounts.find(a=>a.code===l.account_code)?.name??''})));};
   const savingLock=useRef(false);
   const save = async () => {
     if (!tenant || savingLock.current || !canManage) return;
     if(journalCatalog.loading||journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)){error('Sélectionnez un journal actif.');return;}
     if (!form.description.trim()) { error('Description obligatoire'); return; }
-    if (!isBalanced) { error("L'écriture n'est pas équilibrée (débit ≠ crédit)"); return; }
+    if (!isBalanced||!readyLines||accountLoading||accountError) { error('Contrôlez les comptes, les montants et l’équilibre de la pièce.'); return; }
     const validLines=entryLines.filter(l=>l.account_code||l.label.trim()||l.debit!==0||l.credit!==0);
     if(validLines.length<2){error('Au moins 2 lignes sont nécessaires');return;}
     if(validLines.some(l=>!l.account_code||!Number.isFinite(l.debit)||!Number.isFinite(l.credit)||l.debit<0||l.credit<0||(l.debit>0)===(l.credit>0))){error('Chaque ligne renseignée doit comporter un compte et un seul montant positif au débit ou au crédit.');return;}
@@ -375,9 +369,9 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
       if(!(data as any)?.success){error((data as any)?.error||'Erreur');return;}
       success('Écriture '+(data as any).piece_number+' enregistrée');
       setOpen(false);
-      setEntryLines([{account_code:'',account_name:'',debit:0,credit:0,label:''},{account_code:'',account_name:'',debit:0,credit:0,label:''}]);
-      setForm({journal_type:'OD',entry_date:new Date().toISOString().slice(0,10),description:'',reference:''});
-      void load();
+      setEntryLines([newLine(),newLine()]);
+      setForm(p=>({...p,description:'',reference:''}));
+      work?.refresh();void load();
     }catch(e){error(e instanceof Error?e.message:'Impossible d’enregistrer l’écriture.');}
     finally{savingLock.current=false;setSaving(false);}
   };
@@ -396,8 +390,9 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     return()=>window.removeEventListener('waarwi:accounting-before-navigate',beforeNavigate);
   },[entryOnly,open,form,entryLines,windowId]);
   const closeEntry=()=>{if(saving)return;if(entryOnly&&windowId){onExit?.();return;}const dirty=!!(form.description.trim()||form.reference.trim()||entryLines.some(l=>l.account_code||l.label||l.debit||l.credit));if(dirty&&!window.confirm('Abandonner la saisie en cours ?'))return;if(entryOnly)onExit?.();else setOpen(false);};
-  const entryForm=( <fieldset disabled={saving} className="acc-entry-body space-y-4">
-          {journalCatalog.error&&<p role="alert" className="text-xs text-red-700">{journalCatalog.error}</p>}
+  const entryForm=( <fieldset disabled={saving} className="acc-entry-body space-y-2" onKeyDown={e=>{if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();void save();}else if(e.key==='F2'){e.preventDefault();addLine();}}}>
+          {(journalCatalog.error||accountError)&&<p role="alert" className="text-xs text-red-700">{journalCatalog.error||accountError}</p>}
+          {tenant&&<AccountingEntryTemplates tenantId={tenant.id} canSave={canManage&&isBalanced&&readyLines&&!!form.description.trim()&&journalOptions.some(j=>j.code===form.journal_type&&j.active)&&!accountLoading&&!accountError} journal={form.journal_type} description={form.description} lines={usedLines.map(({account_code,label,debit,credit})=>({account_code,label,debit,credit}))} onApply={applyTemplate}/>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="label">Journal *</label>
@@ -419,42 +414,27 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
             <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="input" />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="label mb-0">Lignes d'écriture</label>
-              <button onClick={() => setEntryLines(p => [...p, { account_code: '', account_name: '', debit: 0, credit: 0, label: '' }])} className="btn-icon" title="Ajouter une ligne"><Plus className="w-4 h-4" /></button>
-            </div>
-            <div className="acc-entry-lines space-y-2">
-              <div className="hidden sm:grid grid-cols-12 gap-2 text-xs text-neutral-500"><span className="col-span-3">Compte</span><span className="col-span-4">Libellé</span><span className="col-span-2">Débit (FCFA)</span><span className="col-span-2">Crédit (FCFA)</span><span/></div>
-              {entryLines.map((l, idx) => (
-                <div key={idx} className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-start">
-                  <div className="col-span-2 sm:col-span-3">
-                    <SearchableSelect
-                      options={accounts.map(a => ({ value: a.code, label: `${a.code} ${a.name}` }))}
-                      value={l.account_code}
-                      onChange={v => updateLine(idx, 'account_code', v)}
-                      placeholder="— Compte —"
-                    />
-                  </div>
-                  <div className="col-span-2 sm:col-span-4">
-                    <input value={l.label} onChange={e => updateLine(idx, 'label', e.target.value)} placeholder="Libellé" className="input text-xs" />
-                  </div>
-                  <div className="col-span-1 sm:col-span-2">
-                    <input type="number" step="0.01" aria-label={"Débit ligne "+(idx+1)} value={l.debit || ''} onChange={e => updateLine(idx, 'debit', Number(e.target.value))} placeholder="Débit" className="input text-xs" min="0" />
-                  </div>
-                  <div className="col-span-1 sm:col-span-2">
-                    <input type="number" step="0.01" aria-label={"Crédit ligne "+(idx+1)} value={l.credit || ''} onChange={e => updateLine(idx, 'credit', Number(e.target.value))} placeholder="Crédit" className="input text-xs" min="0" />
-                  </div>
-                  <div className="col-span-2 sm:col-span-1 flex items-center justify-end pt-1">
-                    <button onClick={() => setEntryLines(p => p.filter((_, i) => i !== idx))} disabled={entryLines.length <= 2} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 text-xs" aria-label="Retirer la ligne"><Trash2 size={16}/></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
+          <div className="acc-entry-grid" ref={gridRef}>
+            <div className="acc-toolbar"><strong className="text-xs">Lignes d'écriture</strong><span className="acc-spacer"/><span className="text-[11px] text-neutral-500 hidden md:inline">F2 Ajouter · F4 Contrepartie · Ctrl+Entrée Valider</span><button type="button" className="btn-secondary" onClick={addLine} disabled={entryLines.length>=500}><Plus size={15}/>Ligne</button></div>
+            {accountLoading&&<p className="text-xs">Chargement du plan comptable…</p>}
+            <datalist id={'acc-entry-accounts-'+windowId}>{accounts.map(a=><option key={a.code} value={a.code}>{a.name}</option>)}</datalist>
+            <div className="acc-entry-grid-head"><span>N°</span><span>Compte / intitulé</span><span>Libellé</span><span>Débit (FCFA)</span><span>Crédit (FCFA)</span><span>Actions</span></div>
+            {entryLines.map((l,idx)=><div className="acc-entry-grid-row" key={l.key} onKeyDown={e=>{
+              const col=(e.target as HTMLElement).dataset.entryCol;if(!col)return;
+              if(e.key==='F4'){e.preventDefault();balanceLine(idx);return;}
+              if(e.key==='Enter'&&!e.ctrlKey&&!e.altKey){e.preventDefault();const cols=['account','label','debit','credit'];const i=cols.indexOf(col);if(i>=0&&i<3)focusCell(l.key,cols[i+1]);else if(idx+1<entryLines.length)focusCell(entryLines[idx+1].key,'account');else addLine();}
+            }}>
+              <span className="acc-line-number">{idx+1}</span>
+              <div className="acc-entry-account"><input list={'acc-entry-accounts-'+windowId} aria-label={'Compte ligne '+(idx+1)} className="input" data-entry-key={l.key} data-entry-col="account" value={l.account_code} onChange={e=>updateLine(idx,'account_code',e.target.value)} placeholder="N° compte" autoComplete="off"/><span className="text-[10px] text-neutral-500">{l.account_name||(!l.account_code?'':accountLoading?'Chargement…':'Compte à vérifier')}</span></div>
+              <input aria-label={'Libellé ligne '+(idx+1)} className="input" data-entry-key={l.key} data-entry-col="label" value={l.label} onChange={e=>updateLine(idx,'label',e.target.value)} placeholder="Libellé"/>
+              <input type="number" inputMode="decimal" aria-label={'Débit ligne '+(idx+1)} className="input acc-entry-amount" min="0" step="0.01" data-entry-key={l.key} data-entry-col="debit" value={l.debit||''} onChange={e=>updateLine(idx,'debit',Number(e.target.value))} placeholder="Débit"/>
+              <input type="number" inputMode="decimal" aria-label={'Crédit ligne '+(idx+1)} className="input acc-entry-amount" min="0" step="0.01" data-entry-key={l.key} data-entry-col="credit" value={l.credit||''} onChange={e=>updateLine(idx,'credit',Number(e.target.value))} placeholder="Crédit"/>
+              <div className="acc-entry-line-actions"><button type="button" className="acc-icon" title="Calculer la contrepartie (F4)" aria-label={'Contrepartie ligne '+(idx+1)} disabled={!l.account_code} onClick={()=>balanceLine(idx)}><Check size={14}/></button><button type="button" className="acc-icon" aria-label={'Retirer ligne '+(idx+1)} disabled={entryLines.length<=2} onClick={()=>setEntryLines(p=>p.filter(row=>row.key!==l.key))}><Trash2 size={14}/></button></div>
+            </div>)}
           </div>
+
         </fieldset> );
-  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={save} className="btn-primary" disabled={saving||!isBalanced||journalCatalog.loading||!!journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
+  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={save} className="btn-primary" disabled={saving||!isBalanced||!readyLines||accountLoading||!!accountError||journalCatalog.loading||!!journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
   if(entryOnly)return <section className="acc-entry-page">{entryForm}{entryFooter}</section>;
 
     return (
@@ -540,7 +520,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-neutral-700">
                 <div><span className="font-medium">Période :</span> {exportDateFrom} au {exportDateTo}</div>
-                <div><span className="font-medium">Journal :</span> {exportJournal ? (JOURNAL_TYPES[exportJournal] || exportJournal) : 'Tous'}</div>
+                <div><span className="font-medium">Journal :</span> {exportJournal ? (journalLabels[exportJournal] || exportJournal) : 'Tous'}</div>
                 <div><span className="font-medium">Écritures :</span> {exportData.entryCount.toLocaleString('fr-FR')}</div>
                 <div><span className="font-medium">Lignes :</span> {exportData.totalCount.toLocaleString('fr-FR')}</div>
                 <div><span className="font-medium">Total débit :</span> {exportData.totalDebitSum.toLocaleString('fr-FR')}</div>
