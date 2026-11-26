@@ -12,6 +12,7 @@ const groups:Group[]=[
   {label:'Écritures',children:[{route:'acc_entry',label:'Saisie des écritures',icon:Plus},{route:'acc_journals',label:'Journaux comptables',icon:FileText}]},
   {label:'Consultation',children:[{route:'acc_search',label:'Recherche des écritures',icon:Search},{route:'acc_statement',label:'Interrogation et lettrage',icon:Search}]},
   {route:'acc_bank',label:'Rapprochement bancaire',icon:ArrowRightLeft},
+  {route:'acc_revision',label:'Révision comptable',icon:FileText},
   {label:'Clôtures',children:[{route:'acc_cloture',label:'Clôtures mensuelles',icon:Lock},{route:'acc_fiscal',label:'Exercices et reports à nouveau',icon:Lock}]}
  ]},
  {label:'État',items:[
