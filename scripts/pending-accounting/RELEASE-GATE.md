@@ -65,3 +65,6 @@ Socle et saisie comptable intégrés ; aucune publication tant que les recettes 
 
 ### Factures : verrouillage collaboratif
 Recette SQL 44 à rejouer ; vérifier les parcours réels (dont sortie de stock et cas spécifiques), droits RLS et accès direct, compatibilité des factures historiques, navigateur desktop/mobile et concurrence avant publication.
+
+### Devis — phase 10.12 bis (suite)
+Recettes 45 et 46 exécutées avec succès sur données synthétiques : édition et statut verrouillés, création atomique et idempotente, refus des écritures directes. Conversion : verrou et version obligatoires, sérialisation par le devis, ancienne RPC non publique, vérification du statut et des droits, test de création d’une facture et rejet de la seconde conversion. Les dépendances manquantes de la branche de recette ont été reconstituées en lecture de main (script 47, exclusivement recette). BLOCAGE PUBLICATION : stock, lots, commissions et IPM encore traités par appels séparés après conversion, triggers commerciaux/TVA absents de l’environnement isolé, droits de restauration des devis à recetter, tests simultanés et navigateur non exécutés. Aucune publication.

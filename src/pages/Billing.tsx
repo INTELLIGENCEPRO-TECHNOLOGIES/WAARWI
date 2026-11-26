@@ -223,6 +223,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [convertPayMethod, setConvertPayMethod] = useState('');
   const [convertPayAmount, setConvertPayAmount] = useState('');
   const [converting, setConverting] = useState(false);
+  const conversionSaving=useRef(false);
+  const [convertBaseline,setConvertBaseline]=useState<{id:string;token:string;version:string}|null>(null);
+  const [convertLoadError,setConvertLoadError]=useState('');
+  const [convertRetry,setConvertRetry]=useState(0);
+  const convertSite=useRef<string|null>(null);
+  const convertLease=useDocumentEditLease({tenantId:tenant?.id,userId:profile?.id||user?.id,kind:'quote',resource:convertFrom?.id||'',enabled:visible&&!!convertFrom&&convertSite.current===currentSite?.id&&can('edit_quotes')&&can('edit_invoices'),dirty:convertPayNow,saving:converting});
+  const convertReady=!!convertFrom&&convertLease.held&&!!convertLease.token&&convertBaseline?.id===convertFrom.id&&convertBaseline.token===convertLease.token&&!convertLoadError;
   const [convertItems, setConvertItems] = useState<(PriceLine & { name: string })[]>([]);
   const [lotPickerConvertOpen, setLotPickerConvertOpen] = useState(false);
   const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
@@ -475,7 +482,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const invoiceEditorSubtotalRaw = useMemo(() => invoiceEditorItems.filter(i => i.name.trim()).reduce((s, i) => s + Number(i.total), 0), [invoiceEditorItems]);
   const invoicePricing = useSalePrice(mobileInvoiceOpen && mobileInvoiceMode === 'create' ? currentSite?.id : null,
     invoiceEditorItems.filter(i => i.name.trim()));
-  const convertPricing = useSalePrice(convertFrom ? billSourceSiteId || currentSite?.id : null, convertItems, Number(convertFrom?.discount ?? 0));
+  const convertPricing = useSalePrice(convertReady ? currentSite?.id : null, convertItems, Number(convertFrom?.discount ?? 0));
   const convertTtc = convertPricing.price?.ttc ?? 0;
 
   useEffect(() => {
@@ -1459,39 +1466,40 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   };
 
   // ── Convert quote → sale ─────────────────────────────────────
-  const openConvert = async (q: Quote) => {
-    setConvertFrom(q); setConvertPayNow(false); setConvertPayMethod(paymentMethods[0]?.id || '');
-    setConvertItems([]);
-    setConvertPayAmount('');
-    setConvertIpmDocs({ numero_ordonnance: '', medecin: '', numero_bon: '' });
-    setConvertIpmBeneficiaire(null);
-    setConvertIpmConvention(null);
-    const { data } = await supabase.from('quote_items').select('article_id, name, quantity, unit_price, discount').eq('quote_id', q.id);
-    setConvertItems(data || []);
-    // IPM lookup for conversion
-    if (isPharmacy && q.customer_id && tenant) {
-      const { data: benef } = await supabase
-        .from('ipm_beneficiaires')
-        .select('*, ipm_organismes(nom), ipm_conventions(nom, taux_defaut, plafond_facture, mode_calcul, mode_arrondi, application_plafond, ordonnance_obligatoire, bon_prise_en_charge_obligatoire, numero_bon_obligatoire, numero_ordonnance_obligatoire, medecin_prescripteur_obligatoire, matricule_obligatoire)')
-        .eq('tenant_id', tenant.id)
-        .eq('customer_id', q.customer_id)
-        .eq('statut', 'actif')
-        .limit(1)
-        .maybeSingle();
-      if (benef) {
-        setConvertIpmBeneficiaire(benef);
-        setConvertIpmConvention(benef.ipm_conventions);
-        // Pre-fill payment amount with client part
-        const cfg = parseConvention(benef.ipm_conventions);
-        if (cfg) {
-          const calc = calculerIpm(cfg, [{ montant_ligne: q.total, ipm_eligible: true }], 0);
-          setConvertPayAmount(String(calc.part_client));
-        }
-      }
-    }
+  const openConvert = (q:Quote)=>{
+    if(!tenant||!currentSite||!can('edit_quotes')||!can('edit_invoices')){error('Vous n’avez pas les autorisations nécessaires pour convertir ce devis.');return;}
+    convertSite.current=currentSite.id;setConvertBaseline(null);setConvertLoadError('');setConvertFrom(q);
+    setConvertPayNow(false);setConvertPayMethod(paymentMethods[0]?.id||'');setConvertItems([]);setConvertPayAmount('');
+    setConvertIpmDocs({numero_ordonnance:'',medecin:'',numero_bon:''});setConvertIpmBeneficiaire(null);setConvertIpmConvention(null);
   };
+  useEffect(()=>{
+    const id=convertFrom?.id,token=convertLease.token,tid=tenant?.id;
+    if(!id||!token||!tid||!convertLease.held)return;
+    let alive=true;setConvertBaseline(null);setConvertLoadError('');
+    void(async()=>{
+      try{
+        const {data,error:e}=await supabase.rpc('load_locked_quote_edit',{p_tenant_id:tid,p_quote_id:id,p_window_id:convertLease.windowId,p_lock_token:token});
+        if(e)throw e;if(!alive)return;
+        const snap=data as LockedQuoteSnapshot;
+        if(!snap?.version||snap.quote?.id!==id||snap.quote.status!=='accepted'||snap.quote.converted_sale_id)throw new Error('Ce devis n’est plus convertible. Actualisez la liste.');
+        if(snap.quote.site_id!==convertSite.current)throw new Error('Revenez au magasin d’origine du devis.');
+        const customer=customers.find(c=>c.id===snap.quote.customer_id);
+        setConvertFrom(old=>old?.id===id?{...old,...snap.quote,customers:customer?{name:customer.name}:old.customers} as Quote:old);
+        setConvertItems(snap.items.map(i=>({article_id:i.article_id,name:i.name,quantity:Number(i.quantity),unit_price:Number(i.unit_price),discount:Number(i.discount||0)})));
+        setConvertIpmBeneficiaire(null);setConvertIpmConvention(null);
+        if(isPharmacy&&snap.quote.customer_id){
+          const {data:benef,error:ipmError}=await supabase.from('ipm_beneficiaires').select('*, ipm_organismes(nom), ipm_conventions(nom, taux_defaut, plafond_facture, mode_calcul, mode_arrondi, application_plafond, ordonnance_obligatoire, bon_prise_en_charge_obligatoire, numero_bon_obligatoire, numero_ordonnance_obligatoire, medecin_prescripteur_obligatoire, matricule_obligatoire)').eq('tenant_id',tid).eq('customer_id',snap.quote.customer_id).eq('statut','actif').limit(1).maybeSingle();
+          if(ipmError)throw ipmError;if(!alive)return;
+          if(benef){setConvertIpmBeneficiaire(benef);setConvertIpmConvention(benef.ipm_conventions);const cfg=parseConvention(benef.ipm_conventions);if(cfg)setConvertPayAmount(String(calculerIpm(cfg,[{montant_ligne:snap.quote.total,ipm_eligible:true}],0).part_client));}
+        }
+        if(alive)setConvertBaseline({id,token,version:snap.version});
+      }catch(e){if(alive)setConvertLoadError(e&&typeof e==='object'&&'message' in e?String(e.message):'Chargement impossible.');}
+    })();
+    return()=>{alive=false;};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[convertFrom?.id,convertLease.held,convertLease.token,convertLease.windowId,tenant?.id,convertRetry,isPharmacy]);
   const confirmConvert = async () => {
-    if (!convertFrom || !currentSite) return;
+    if (!convertFrom || !currentSite || !convertReady || conversionSaving.current) return;
 
     // IPM document validation
     if (convertIpmBeneficiaire && convertIpmConvention) {
@@ -1534,7 +1542,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   };
 
   const executeConvert = async (lotSelections: ArticleLotSelection[] | null) => {
-    if (!convertFrom || !currentSite) return;
+    if (!convertFrom || !currentSite || !tenant || !convertReady || !convertBaseline || !convertLease.token || conversionSaving.current) return;
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de convertir en facture'); return; }
     if (!convertPricing.price) {
       error(convertPricing.error || 'Le montant de la facture est en cours de calcul.');
@@ -1545,8 +1553,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
       return;
     }
-    setConverting(true);
-
+    conversionSaving.current=true;setConverting(true);
+    try {
     // Find active cash session for payment tracking
     let convertSessionId: string | null = null;
     if (currentSite && tenant) {
@@ -1567,13 +1575,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         reference: '',
       });
     }
-    const { data, error: e } = await supabase.rpc('convert_quote_to_sale', {
-      p_quote_id: convertFrom.id,
-      p_site_id: billSourceSiteId || currentSite.id,
-      p_cash_session_id: convertSessionId,
-      p_payments: payments,
+    const { data, error: e } = await supabase.rpc('convert_checked_quote_to_sale', {
+      p_tenant_id:tenant.id,p_quote_id:convertFrom.id,p_window_id:convertLease.windowId,p_lock_token:convertLease.token,p_expected_version:convertBaseline.version,
+      p_stock_site_id:billSourceSiteId||currentSite.id,p_cash_session_id:convertSessionId,p_payments:payments,
     });
-    if (e) { setConverting(false); convertPricing.refresh(); error(e.message); return; }
+    if (e) { if(e.code==='40001')setConvertRetry(n=>n+1);convertPricing.refresh();error(e.message);return; }
 
     if (lotSelections && lotSelections.length > 0) {
       for (const sel of lotSelections) {
@@ -1650,6 +1656,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     success(`Facture ${(data as any)?.sale_number || ''} créée`);
     setConvertFrom(null); setQuoteDetail(null);
     setTabRaw('invoices'); loadTab(billPage, true);
+    }catch(e){error(e&&typeof e==='object'&&'message' in e?String(e.message):'Conversion interrompue. Vérifiez le devis et la facture avant de réessayer.');}
+    finally{conversionSaving.current=false;setConverting(false);}
   };
 
   const reloadInvoice = async (id: string) => {
@@ -3175,14 +3183,16 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       <Modal open={!!convertFrom} onClose={() => !converting && setConvertFrom(null)} title="Convertir en facture" size="sm" layer="top"
         footer={<>
           <button onClick={() => setConvertFrom(null)} className="btn-icon" title="Annuler" disabled={converting}><X className="w-4 h-4" /></button>
-          <button onClick={confirmConvert} disabled={converting || !convertPricing.price || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-icon-primary" title="Créer facture">{converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}</button>
+          <button onClick={confirmConvert} disabled={converting || !convertReady || !convertPricing.price || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-icon-primary" title="Créer facture">{converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}</button>
         </>}>
         {convertFrom && (() => {
           const convertIpmCfg = parseConvention(convertIpmConvention);
           const convertIpmCalc = convertIpmBeneficiaire && convertIpmCfg ? calculerIpm(convertIpmCfg, [{ montant_ligne: convertFrom.total, ipm_eligible: true }], 0) : null;
           const convertDocValid = convertIpmCfg ? validerDocumentsIpm(convertIpmCfg, convertIpmDocs, convertIpmBeneficiaire?.matricule) : { valide: true, champs_manquants: [] };
           return (
-          <div className="space-y-4">
+          <div className="space-y-4" onPointerDownCapture={convertLease.markActivity} onKeyDownCapture={convertLease.markActivity} onInputCapture={convertLease.markActivity}>
+            <DocumentEditLeaseBar lease={convertLease} dirty={convertPayNow} saving={converting} label="ce devis"/>
+            {convertLoadError&&<div className="waarwi-edit-bar" role="alert"><span>{convertLoadError}</span><button type="button" className="btn-secondary" onClick={()=>setConvertRetry(n=>n+1)}>Réessayer</button></div>}
             <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Devis source</div>
