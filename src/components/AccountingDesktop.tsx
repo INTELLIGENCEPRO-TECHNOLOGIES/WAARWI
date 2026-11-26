@@ -1,9 +1,9 @@
-import {useEffect,useRef,useState,useCallback,type RefObject} from 'react';
+import {useEffect,useRef,useState,useCallback,type RefObject,type ReactNode} from 'react';
 import {WindowManagerProvider,useWindowManager} from '../context/WindowManagerContext';
 import {DesktopWindow} from './DesktopWindow';
 import {BookOpen,LayoutGrid,Minus,Check,X} from './Icons';
 import {Accounting} from '../pages/Accounting';
-import {AccountingWindowId as WindowId,AccountingWorkContext,type AccountingPieceRequest} from '../context/AccountingWindowContext';
+import {AccountingWindowId as WindowId,AccountingWorkContext,AccountingWindowVisible,type AccountingWorkActions,type AccountingPieceRequest,useAccountingWork} from '../context/AccountingWindowContext';
 import {AccountingPiece} from './AccountingPiece';
 import {AccountingPlanIO} from './AccountingPlanIO';
 import {AccountingAccountStatement} from './AccountingAccountStatement';
@@ -21,9 +21,17 @@ type WorkRoute=keyof typeof sections;
 const isWork=(r:string):r is WorkRoute=>Object.prototype.hasOwnProperty.call(sections,r);
 type Props={route:Route;onNavigate:(r:Route)=>void;canAccess:(r:Route)=>boolean};
 export function AccountingDesktop(props:Props){
- const area=useRef<HTMLDivElement>(null);
+ const area=useRef<HTMLDivElement>(null);const {tenant}=useApp();
  const getArea=useCallback(()=>({x:0,y:0,w:Math.max(1,area.current?.clientWidth??900),h:Math.max(1,area.current?.clientHeight??600)}),[]);
- return <WindowManagerProvider getArea={getArea}><Workspace {...props} area={area}/></WindowManagerProvider>;
+ return <WindowManagerProvider key={tenant?.id??'no-tenant'} getArea={getArea}><Workspace {...props} area={area}/></WindowManagerProvider>;
+}
+function WindowScope({visible,actions,children}:{visible:boolean;actions:AccountingWorkActions;children:ReactNode}){
+ const [last,setLast]=useState(actions.revision);
+ useEffect(()=>{if(visible)setLast(actions.revision);},[visible,actions.revision]);
+ return <AccountingWindowVisible.Provider value={visible}><AccountingWorkContext.Provider value={{...actions,revision:visible?actions.revision:last}}>{children}</AccountingWorkContext.Provider></AccountingWindowVisible.Provider>;
+}
+function AccountWork({tenantId,code,canManage,onView}:{tenantId:string;code:string;canManage:boolean;onView:React.ComponentProps<typeof AccountingAccountStatement>['onView']}){
+ const work=useAccountingWork();return <AccountingAccountStatement tenantId={tenantId} initialAccount={code} canManage={canManage} refreshRevision={work?.revision??0} onView={onView}/>;
 }
 type Work={id:string;title:string;kind:'section';route:WorkRoute}|{id:string;title:string;kind:'piece';request:AccountingPieceRequest}|{id:string;title:string;kind:'account';code:string}|{id:string;title:string;kind:'import'};
 function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLDivElement>}){
@@ -31,6 +39,8 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
  const [open,setOpen]=useState<Work[]>([]);
  const [active,setActive]=useState<string|null>(null);
  const [revision,setRevision]=useState(0);
+ const [compact,setCompact]=useState(()=>window.matchMedia('(max-width: 1023px)').matches);
+ useEffect(()=>{const mq=window.matchMedia('(max-width: 1023px)');const change=()=>setCompact(mq.matches);mq.addEventListener('change',change);return()=>mq.removeEventListener('change',change);},[]);
  const allowed=(w:Work)=>(w.kind!=='import'||can('manage_accounting'))&&canAccess(w.kind==='section'?w.route:w.kind==='account'?'acc_statement':w.kind==='import'?'acc_plan':'acc_journals');
  const openRoute=useCallback((r:Route)=>{
   if(r==='acc_overview'){wm.minimizeAll();setActive(null);return;}
@@ -69,25 +79,26 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
  };
  const minimize=(w:Work)=>{wm.minimize(w.id);if(active===w.id)nextWindow(w.id);};
  const visible=wm.windows.filter(w=>!w.minimized);
- const selected=active&&visible.some(w=>w.id===active)?active:(visible.slice().sort((a,b)=>b.zIndex-a.zIndex)[0]?.id??null);
- const tilePossible=visible.length>=2&&visible.length<=4&&wm.getArea().w>=680&&wm.getArea().h>=(visible.length>2?380:190);
+ const selected=active&&open.some(w=>w.id===active)&&!wm.windows.find(w=>w.id===active)?.minimized?active:(visible.slice().sort((a,b)=>b.zIndex-a.zIndex)[0]?.id??null);
+ const tilePossible=!compact&&visible.length>=2&&visible.length<=4&&wm.getArea().w>=680&&wm.getArea().h>=(visible.length>2?380:190);
  const tile=()=>{if(tilePossible)wm.tileVisibleWindows();};
  const cascade=()=>{const a=wm.getArea();visible.slice().sort((x,y)=>x.zIndex-y.zIndex).forEach((w,i)=>{const offset=16+(i%6)*22;wm.setMaximized(w.id,false);wm.updateRect(w.id,{x:Math.min(offset,Math.max(0,a.w-320)),y:Math.min(offset,Math.max(0,a.h-170)),w:Math.min(1100,Math.max(1,a.w-offset-18)),h:Math.min(730,Math.max(1,a.h-offset-18))});});};
  const closeAll=()=>{if(!window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{}})))return;setOpen([]);setActive(null);onNavigate('acc_overview');};
  useEffect(()=>{const h=(e:Event)=>{switch((e as CustomEvent<{action:string}>).detail?.action){case 'home':navigate('acc_overview');break;case 'tile':tile();break;case 'cascade':cascade();break;case 'closeAll':closeAll();break;}};window.addEventListener('waarwi:accounting-window-action',h);return()=>window.removeEventListener('waarwi:accounting-window-action',h);});
- return <AccountingWorkContext.Provider value={{openPiece,openAccount,openPlanImport,refresh:()=>setRevision(v=>v+1),revision}}><section className="acc-desktop" aria-label="Bureau comptable">
+ const actions={openPiece,openAccount,openPlanImport,refresh:()=>setRevision(v=>v+1),revision};
+ return <AccountingWorkContext.Provider value={actions}><section className="acc-desktop" aria-label="Bureau comptable">
   <div className="acc-desktop-area" ref={area}>
    <div className="acc-desktop-home"><Accounting section="overview" onNavigate={navigate}/></div>
    {open.filter(allowed).map((w,index)=>{
     const a=wm.getArea();const offset=18+(index%5)*22;const id=w.id;
     return <DesktopWindow key={id} id={id} title={w.title} icon={<BookOpen size={16}/>} contained active={selected===id} onActivate={()=>{setActive(id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);}} minW={320} minH={170} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(w.kind==='piece'?850:1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(w)} onMinimize={()=>minimize(w)}>
-      <WindowId.Provider value={id}><div className="acc-window-content">{w.kind==='section'?<Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={()=>close(w)}/>:w.kind==='piece'?<AccountingPiece request={w.request} onPosted={()=>setRevision(v=>v+1)}/>:w.kind==='import'?<div className="accounting-workspace"><AccountingPlanIO accounts={[]} importOnly onClose={()=>close(w)} onImportDone={()=>setRevision(v=>v+1)}/></div>:tenant&&<div className="accounting-workspace"><AccountingAccountStatement tenantId={tenant.id} initialAccount={w.code} canManage={can('manage_accounting')} refreshRevision={revision} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>}</div></WindowId.Provider>
+      <WindowId.Provider value={id}><WindowScope actions={actions} visible={!wm.windows.find(x=>x.id===id)?.minimized&&(!compact||selected===id)}><div className="acc-window-content">{w.kind==='section'?<Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={()=>close(w)}/>:w.kind==='piece'?<AccountingPiece request={w.request} onPosted={()=>setRevision(v=>v+1)}/>:w.kind==='import'?<div className="accounting-workspace"><AccountingPlanIO accounts={[]} importOnly onClose={()=>close(w)} onImportDone={()=>setRevision(v=>v+1)}/></div>:tenant&&<div className="accounting-workspace"><AccountWork tenantId={tenant.id} code={w.code} canManage={can('manage_accounting')} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>}</div></WindowScope></WindowId.Provider>
     </DesktopWindow>;
    })}
   </div>
   <div className="acc-desktop-taskbar" aria-label="Fenêtres ouvertes">
-   <button type="button" className="acc-task-action" title="Afficher le bureau comptable" onClick={()=>navigate('acc_overview')}><BookOpen size={16}/><span>Bureau</span></button>
-   <div className="acc-desktop-tasks">{open.filter(allowed).map(o=>{const w=wm.windows.find(w=>w.id===o.id);return <div className="acc-task" key={o.id} data-active={selected===o.id&&!w?.minimized}><button type="button" title={o.title} onClick={()=>activate(o)}>{w?.minimized?<Minus size={14}/>:selected===o.id?<Check size={14}/>:<BookOpen size={14}/>}<span>{o.title}</span></button><button type="button" aria-label={'Fermer '+o.title} onClick={()=>close(o)}><X size={13}/></button></div>;})}</div>
+   <button type="button" className="acc-task-action" title="Afficher le bureau comptable" aria-label="Afficher le bureau comptable" onClick={()=>navigate('acc_overview')}><BookOpen size={16}/><span>Bureau</span></button>
+   <div className="acc-desktop-tasks">{open.filter(allowed).map(o=>{const w=wm.windows.find(w=>w.id===o.id);return <div className="acc-task" key={o.id} data-active={selected===o.id&&!w?.minimized}><button type="button" title={o.title} aria-label={'Afficher '+o.title} aria-pressed={selected===o.id&&!w?.minimized} onClick={()=>activate(o)}>{w?.minimized?<Minus size={14}/>:selected===o.id?<Check size={14}/>:<BookOpen size={14}/>}<span>{o.title}</span></button><button type="button" aria-label={'Fermer '+o.title} onClick={()=>close(o)}><X size={13}/></button></div>;})}</div>
    {open.length>0&&<><button type="button" className="acc-task-action acc-tile-control" disabled={!tilePossible} title="Répartir les fenêtres" aria-label="Répartir les fenêtres" onClick={tile}><LayoutGrid size={16}/></button><button type="button" className="acc-task-action" title="Fermer toutes les fenêtres" aria-label="Fermer toutes les fenêtres" onClick={closeAll}><X size={16}/></button></>}
   </div>
  </section></AccountingWorkContext.Provider>;
