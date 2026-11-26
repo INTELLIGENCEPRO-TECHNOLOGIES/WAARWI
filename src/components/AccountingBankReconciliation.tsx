@@ -74,7 +74,7 @@ export function AccountingBankReconciliation({tenantId,canManage}:{tenantId:stri
   const a=minor(opening),b=minor(closing);
   if(!reference.trim()||!from||!to||from>to)throw Error('Référence et dates obligatoires.');
   const values=lines.map(l=>{if(!l.label.trim()||!l.date||l.date<from||l.date>to)throw Error('Vérifiez les dates et libellés du relevé.');const n=minor(l.amount);if(!n)throw Error('Montant nul interdit.');return {...l,amount:n/100};});
-  if(a+lines.reduce((sum,l)=>sum+minor(l.amount),0)!==b)throw Error('Le solde initial augmenté des mouvements doit correspondre au solde final.');
+  if(BigInt(a)+lines.reduce((sum,l)=>sum+BigInt(minor(l.amount)),0n)!==BigInt(b))throw Error('Le solde initial augmenté des mouvements doit correspondre au solde final.');
   const {data,error:err}=await supabase.rpc('create_bank_statement',{p_tenant_id:tenantId,p_account_code:account,p_reference:reference.trim(),p_from:from,p_to:to,p_opening:a/100,p_closing:b/100,p_rows:values});
   if(err)throw err;if(!data?.success||!data.id)throw Error('Création non confirmée.');setOpen(false);setSelected(data.id);setOffset(0);setNotice('Relevé enregistré.');
  });};
