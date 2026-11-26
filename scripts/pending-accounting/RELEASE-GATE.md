@@ -62,3 +62,6 @@ Reprise transactionnelle, compteur, répétition intersession et jeton de clôtu
 
 ### Verrouillage collaboratif — premier lot
 Socle et saisie comptable intégrés ; aucune publication tant que les recettes multi-utilisateurs et réseau, les parcours commerciaux, le reste des écrans et la compatibilité des anciennes recettes ne sont pas validés.
+
+### Factures : verrouillage collaboratif
+Recette SQL 44 à rejouer ; vérifier les parcours réels (dont sortie de stock et cas spécifiques), droits RLS et accès direct, compatibilité des factures historiques, navigateur desktop/mobile et concurrence avant publication.
