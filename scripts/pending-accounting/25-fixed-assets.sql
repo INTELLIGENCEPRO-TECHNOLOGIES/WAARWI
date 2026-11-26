@@ -121,7 +121,7 @@ BEGIN
  SELECT * INTO p FROM public._asset_plan(p_tenant_id,p_asset_id) x WHERE x.entry_id IS NULL AND x.amount>0 ORDER BY x.period_start LIMIT 1;
  IF NOT FOUND OR p.period_start IS DISTINCT FROM p_period OR p.amount IS DISTINCT FROM p_expected THEN RAISE EXCEPTION 'Échéance différente ou déjà traitée. Actualisez.' USING ERRCODE='40001';END IF;
  IF p.through_date>(now() AT TIME ZONE 'Africa/Dakar')::date THEN RAISE EXCEPTION 'Attendez la fin de la période.';END IF;
- r:=public.create_manual_journal_entry(p_tenant_id,'OD',p.through_date,'Dotation amortissement '+a.code,a.code,jsonb_build_array(
+ r:=public.create_manual_journal_entry(p_tenant_id,'OD',p.through_date,'Dotation amortissement '||a.code,a.code,jsonb_build_array(
  jsonb_build_object('account_code',a.expense_account,'debit',p.amount,'credit',0,'label',a.name),
  jsonb_build_object('account_code',a.depreciation_account,'debit',0,'credit',p.amount,'label',a.name)));
  IF NOT coalesce((r->>'success')::boolean,false) THEN RAISE EXCEPTION 'Dotation non validée.';END IF;
@@ -203,14 +203,14 @@ BEGIN
  IF delta>0 THEN
   SELECT * INTO p FROM public._asset_plan(p_tenant_id,a.id,p_date) x WHERE x.period_start=date_trunc('month',p_date)::date;
   IF NOT FOUND OR p.entry_id IS NOT NULL OR p.amount IS DISTINCT FROM delta THEN RAISE EXCEPTION 'Plan de sortie incohérent.';END IF;
-  dep:=public.create_manual_journal_entry(p_tenant_id,'OD',p_date,'Dotation complémentaire '+a.code,a.code,jsonb_build_array(jsonb_build_object('account_code',a.expense_account,'debit',delta,'credit',0,'label',a.name),jsonb_build_object('account_code',a.depreciation_account,'debit',0,'credit',delta,'label',a.name)));
+  dep:=public.create_manual_journal_entry(p_tenant_id,'OD',p_date,'Dotation complémentaire '||a.code,a.code,jsonb_build_array(jsonb_build_object('account_code',a.expense_account,'debit',delta,'credit',0,'label',a.name),jsonb_build_object('account_code',a.depreciation_account,'debit',0,'credit',delta,'label',a.name)));
   IF NOT coalesce((dep->>'success')::boolean,false) THEN RAISE EXCEPTION 'Dotation complémentaire non validée.';END IF;
   INSERT INTO public.accounting_asset_depreciations(tenant_id,asset_id,period_start,through_date,amount,entry_id,created_by) VALUES(p_tenant_id,a.id,p.period_start,p.through_date,delta,(dep->>'entry_id')::uuid,auth.uid());
  END IF;
  rows:=jsonb_build_array(jsonb_build_object('account_code',a.asset_account,'debit',0,'credit',a.cost,'label',a.name));
  IF target>0 THEN rows:=rows||jsonb_build_array(jsonb_build_object('account_code',a.depreciation_account,'debit',target,'credit',0,'label',a.name));END IF;
  IF net>0 THEN rows:=rows||jsonb_build_array(jsonb_build_object('account_code',p_value_account,'debit',net,'credit',0,'label',a.name));END IF;
- outp:=public.create_manual_journal_entry(p_tenant_id,'OD',p_date,'Sortie immobilisation '+a.code,a.code,rows);
+ outp:=public.create_manual_journal_entry(p_tenant_id,'OD',p_date,'Sortie immobilisation '||a.code,a.code,rows);
  IF NOT coalesce((outp->>'success')::boolean,false) THEN RAISE EXCEPTION 'Sortie non validée.';END IF;
  UPDATE public.accounting_fixed_assets SET disposed_on=p_date,disposal_kind=p_kind,disposal_entry_id=(outp->>'entry_id')::uuid,sale_line_id=p_sale_line,disposal_reason=btrim(p_reason) WHERE tenant_id=p_tenant_id AND id=a.id;
  RETURN outp||jsonb_build_object('net',net,'complementary_depreciation',delta,'depreciation_entry_id',dep->>'entry_id');
