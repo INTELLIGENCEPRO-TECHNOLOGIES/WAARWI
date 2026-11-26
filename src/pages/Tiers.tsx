@@ -45,7 +45,6 @@ const TIERS_PAGE_ID = 'tiers-page';
 const TIERS_GROUP = 'tiers';
 
 type LedgerWindowDescriptor = { windowId: string; customerId: string; customer: Customer; key: CustomerOptionKey };
-let ledgerWinCounter = 0;
 
 export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void } = {}) {
   const { tenant, currentSite, profile } = useApp();
@@ -142,65 +141,6 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
   const [saving, setSaving] = useState(false);
   const [toDeactivateCust, setToDeactivateCust] = useState<Customer | null>(null);
   const [toDeactivateSup, setToDeactivateSup] = useState<Supplier | null>(null);
-
-  // Create menu (top + button dropdown)
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
-  const createBtnRef = useRef<HTMLButtonElement>(null);
-  const [createMenuPos, setCreateMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const createDropdownRef = useRef<HTMLDivElement>(null);
-
-  const updateCreateMenuPos = useCallback(() => {
-    if (!createBtnRef.current) return;
-    const rect = createBtnRef.current.getBoundingClientRect();
-    setCreateMenuPos({ top: rect.bottom + 6, left: rect.right - 220 });
-  }, []);
-
-  useEffect(() => {
-    if (!createMenuOpen) return;
-    updateCreateMenuPos();
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
-      if (createBtnRef.current?.contains(target)) return;
-      if (createDropdownRef.current?.contains(target)) return;
-      setCreateMenuOpen(false);
-    }
-    window.addEventListener('scroll', updateCreateMenuPos, true);
-    window.addEventListener('resize', updateCreateMenuPos);
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      window.removeEventListener('scroll', updateCreateMenuPos, true);
-      window.removeEventListener('resize', updateCreateMenuPos);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [createMenuOpen, updateCreateMenuPos]);
-
-  const createMenuDropdown = createMenuOpen ? createPortal(
-    <div
-      ref={createDropdownRef}
-      style={{ position: 'fixed', top: createMenuPos.top, left: createMenuPos.left, width: 220, zIndex: 9999 }}
-      className="bg-white rounded-lg shadow-lg shadow-slate-200/40 overflow-hidden"
-    >
-      <button
-        onClick={() => { openCustCreate(); setCreateMenuOpen(false); }}
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-sm text-[var(--w-text)] hover:bg-[var(--w-hover)] transition-colors"
-      >
-        <Users className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
-        <span className="font-semibold text-[var(--w-text)] whitespace-nowrap">Nouveau client</span>
-      </button>
-      <button
-        onClick={() => { openSupCreate(); setCreateMenuOpen(false); }}
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-sm text-black hover:bg-neutral-100 transition-colors"
-      >
-        <Truck className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
-        <span className="font-semibold text-[var(--w-text)] whitespace-nowrap">Nouveau fournisseur</span>
-      </button>
-    </div>,
-    document.body
-  ) : null;
-
-  // Options sheet (click on a tier row/card)
-  const [optCust, setOptCust] = useState<Customer | null>(null);
-  const [optSup, setOptSup] = useState<Supplier | null>(null);
 
   // Sub-modal selection
   const [custView, setCustView] = useState<{ c: Customer; key: CustomerOptionKey } | null>(null);
@@ -354,7 +294,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       return next;
     });
   };
-  const openCustCreate = () => { setCustEdit(null); setCustForm({ customer_type: 'particulier', is_active: true }); setCustErrors({}); setCustTouched({}); setCustOpen(true); setCreateMenuOpen(false); };
+  const openCustCreate = () => { setCustEdit(null); setCustForm({ customer_type: 'particulier', is_active: true }); setCustErrors({}); setCustTouched({}); setCustOpen(true); };
   const openCustEdit = (c: Customer) => { setCustEdit(c); setCustForm(c); setCustErrors({}); setCustTouched({}); setCustOpen(true); };
   const saveCust = async () => {
     if (!validateCustAll()) { error(t('tiers.fixErrors')); return; }
@@ -436,7 +376,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       return next;
     });
   };
-  const openSupCreate = () => { setSupEdit(null); setSupForm({ country: 'Sénégal', is_active: true }); setSupErrors({}); setSupTouched({}); setSupOpen(true); setCreateMenuOpen(false); };
+  const openSupCreate = () => { setSupEdit(null); setSupForm({ country: 'Sénégal', is_active: true }); setSupErrors({}); setSupTouched({}); setSupOpen(true); };
   const openSupEdit = (s: Supplier) => { setSupEdit(s); setSupForm(s); setSupErrors({}); setSupTouched({}); setSupOpen(true); };
 
   const handleNavTarget = useCallback((target: string) => {
@@ -1950,11 +1890,8 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     });
   };
 
-  const ledgerNetBalance = ledger.length > 0 ? ledger[ledger.length - 1].running : 0;
   const netDebt = Math.max(0, customerBalance);
   const creditAvailable = Math.max(0, -customerBalance);
-  const excessPrepay = totals.unusedPrepay;
-  const excessAvoir = totals.unusedAvoir;
 
   const modalTitle = key === 'info' ? 'Interrogation client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
   const [infoTab, setInfoTab] = useState<'commerciale' | 'comptable' | 'statistiques'>('comptable');

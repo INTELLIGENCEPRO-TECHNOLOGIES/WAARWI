@@ -790,7 +790,6 @@ function MobileDashboard({
 
   // ── Web order notification (blink + sound) ──────────────────────────────
   const prevWebNew = useRef(stats.webNew);
-  const webCardRef = useRef<HTMLButtonElement>(null);
   const [, setWebBlink] = useState(false);
 
   // ── Share shop modal ─────────────────────────────────────────────────────
@@ -1440,7 +1439,6 @@ function KpiItem({ label, value, sub, negative, accent }: {
 
 function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, canViewMargin, viewMode, toggleViewMode }: any) {
   const { tenant, currentSite, sites, setCurrentSite, profile, signOut } = useApp();
-  const { can } = usePermissions();
 
   // ── Subscription info ─────────────────────────────────────────────────
   const [subInfo, setSubInfo] = useState<{ planName: string; status: string; startsAt: string | null; expiresAt: string | null; price: number; billingCycle: string } | null>(null);
@@ -1494,7 +1492,6 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
   // ── Multi-site overview ────────────────────────────────────────────────
   type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; todayDirectCash: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean; expenses: number };
   const [multiSiteStats, setMultiSiteStats] = useState<SiteStat[]>([]);
-  const [multiSiteView, setMultiSiteView] = useState<'all' | string>('current');
   const hasMultiSites = sites.length > 1;
 
   useEffect(() => {
