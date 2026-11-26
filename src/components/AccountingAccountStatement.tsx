@@ -100,9 +100,11 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   if(!request||!canMatch||changed||writeLock.current||busy||suggestionBusy||(!unmatch&&!ids&&!equal)||(unmatch&&!release?.reason.trim()))return;
   writeLock.current=true;setSaving(true);setWriteError('');setNotice('');
   try{
+   const proposal=ids?suggestions?.rows.find(x=>x.line_ids.length===ids.length&&x.line_ids.every((id,i)=>id===ids[i])):undefined;
+   if(ids&&!proposal)throw Error('Proposition périmée. Relancez l’analyse.');
    const response=unmatch&&release
     ?await supabase.rpc('unmatch_accounting_lines',{p_tenant_id:tenantId,p_account_code:request.code,p_group_id:release.group,p_reason:release.reason.trim()})
-    :await supabase.rpc('match_accounting_lines',{p_tenant_id:tenantId,p_account_code:request.code,p_line_ids:ids??selected.map(l=>l.line_id)});
+    :proposal?await supabase.rpc('confirm_accounting_matching_batch',{p_tenant_id:tenantId,p_account_code:request.code,p_date_to:request.to,p_groups:[{root:proposal.root,line_ids:proposal.line_ids}]}):await supabase.rpc('match_accounting_lines',{p_tenant_id:tenantId,p_account_code:request.code,p_line_ids:selected.map(l=>l.line_id)});
    if(response.error)throw response.error;
    if(!response.data?.success)throw new Error('Opération non confirmée.');
    setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);
