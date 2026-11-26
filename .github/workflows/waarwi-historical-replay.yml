@@ -153,7 +153,39 @@ jobs:
           set -euo pipefail
           db=$(cat /tmp/waarwi-replay-container.txt)
           test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 0
-          total=$(wc -l </tmp/waarwi-recipe_files.txt)
+          # Adapt only the synthetic tenant provisioning in the local copies, not the assertions.
+          python3 - <<'PY'
+          import pathlib, re
+          files=pathlib.Path('/tmp/waarwi-recipe_files.txt').read_text().splitlines()
+          targets={'44','50','51','52','94','95','111','112','114','117','119','129','139','142'}
+          seen=set()
+          out=pathlib.Path('/tmp/waarwi-local-recipes')
+          out.mkdir(exist_ok=False)
+          paths=[]
+          for filename in files:
+              p=pathlib.Path(filename)
+              number=p.name.split('-')[0]
+              if number not in targets:
+                  paths.append(filename)
+                  continue
+              s=p.read_text()
+              pattern=r'(?m)^(\s*INSERT INTO public\.tenants\(id,name,enabled_modules[^\n]*;)[ \t]*$'
+              def provision(m):
+                  line=m.group(1)
+                  tenant='control_t' if 'VALUES(control_t,' in line else 't'
+                  assert 'VALUES('+tenant+',' in line, p.name
+                  # The second tenant in 44/52 is only used for cross-tenant access checks.
+                  return line+'\n PERFORM waarwi_recipe.provision_enterprise('+tenant+');'
+              s,n=re.subn(pattern,provision,s)
+              assert n==(2 if number=='142' else 1), (p.name,n)
+              dest=out/p.name
+              dest.write_text(s)
+              paths.append(str(dest))
+              seen.add(number)
+          assert seen==targets, (seen,targets)
+          pathlib.Path('/tmp/waarwi-local-recipe-files.txt').write_text('\n'.join(paths)+'\n')
+          PY
+          total=$(wc -l </tmp/waarwi-local-recipe-files.txt)
           count=0
           failed=0
           while IFS= read -r file; do
@@ -166,7 +198,7 @@ jobs:
               grep -E 'ERROR:|DETAIL:' /tmp/waarwi-recipe-last.log | cut -c1-400 | tail -5 || true
               echo "ECHEC $(basename "$file")" | tee -a "$GITHUB_STEP_SUMMARY"
             fi
-          done </tmp/waarwi-recipe_files.txt
+          done </tmp/waarwi-local-recipe-files.txt
           echo "$count/$total recettes exécutées sans erreur SQL ; $failed échecs." | tee -a "$GITHUB_STEP_SUMMARY"
           test "$failed" -eq 0
       - name: Publier les statuts du commit (sans déploiement)
