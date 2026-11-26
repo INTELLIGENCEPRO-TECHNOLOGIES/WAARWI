@@ -4,6 +4,8 @@ import { formatVatAmount } from '../lib/salesVat';
 import {returnLotAllocation,type ReturnLotLine} from '../lib/returnLotAllocation';
 import { loadInvoiceReturnLines } from '../lib/saleReturnLines';
 import { newIdempotencyKey } from '../lib/cashSession';
+import {submitReturnRequest,finishReturnRequest} from '../lib/returnRequestJournal';
+import {ReturnRecoveryPanel} from '../components/ReturnRecoveryPanel';
 import type { VatAmounts } from '../lib/salesVat';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
@@ -275,7 +277,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [returnDetail, setReturnDetail] = useState<SaleReturn | null>(null);
   const [returnItemsDetail, setReturnItemsDetail] = useState<any[]>([]);
   const [returnEditorOpen, setReturnEditorOpen] = useState(false);
-  const vatReturnAttempt = useRef<{ payload: string; key: string; uncertain: boolean } | null>(null);
+  const [pendingReturnRequest,setPendingReturnRequest]=useState<boolean|null>(null);
   const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', restock: true });
   const [returnOrigin, setReturnOrigin] = useState<Invoice | null>(null);
   const [returnLoad, setReturnLoad] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
@@ -1823,30 +1825,16 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     reason: string, restock: boolean, issueCredit: boolean, showError: (message: string) => void = error) => {
     if(lines.some(line=>!returnLotAllocation(line,restock).valid)){showError('Vérifiez les quantités retournées par lot.');return null;}
     const items = lines.map(line => ({ sale_item_id: line.item_id, quantity: line.quantity, lots:returnLotAllocation(line,restock).lots }));
-    const payload = JSON.stringify({ saleId, siteId, items, reason, restock, issueCredit });
-    if (vatReturnAttempt.current && vatReturnAttempt.current.payload !== payload) {
-      showError('Une demande précédente reste à confirmer. Réessayez avec les mêmes données avant de créer un autre retour.');
-      return null;
-    }
-    if (!vatReturnAttempt.current) vatReturnAttempt.current = { payload, key: newIdempotencyKey(), uncertain: false };
-    const attempt=vatReturnAttempt.current;
-    try {
-      const { data, error: failure } = await supabase.rpc('prepare_invoice_return', {
-        p_sale_id: saleId, p_site_id: siteId, p_items: items,
-        p_reason: reason, p_restock: restock, p_request_id: attempt.key, p_issue_credit: issueCredit,
-      });
-      if (failure) {
-        const definitive=/^(22|23|42|55|P0)/.test(failure.code||'') && failure.code!=='23505';
-        if (!attempt.uncertain && definitive) vatReturnAttempt.current=null;
-        else attempt.uncertain=true;
-        showError(failure.message); return null;
-      }
-      if (!data?.id) { attempt.uncertain=true;showError('Retour non confirmé. Réessayez sans modifier la demande.');return null; }
-      vatReturnAttempt.current=null;
+    if(pendingReturnRequest!==false){showError('Vérifiez le panneau de reprise sur la liste Facturation avant un nouveau retour.');return null;}
+    const key=newIdempotencyKey();
+    setPendingReturnRequest(null);
+    try{
+      const data=await submitReturnRequest({key,flow:'invoice',saleId,siteId,sessionId:null,items,reason,restock,mode:issueCredit?'avoir':'deferred'});
+      if(!data?.id)throw new Error('Retour non confirmé. Consultez le panneau de reprise.');
+      try{await finishReturnRequest(key,'ack');}catch{error('Retour enregistré. Une confirmation reste disponible dans le panneau de reprise.');}
       return data as SaleReturn;
-    } catch (cause) {
-      attempt.uncertain=true;
-      showError(cause instanceof Error?cause.message:'Retour non confirmé. Réessayez sans modifier la demande.');
+    }catch(cause:any){
+      showError(cause?.message||'Retour non confirmé. Consultez le panneau de reprise sur la liste Facturation.');
       return null;
     }
   };
@@ -2146,6 +2134,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   const pageContent = (
     <div className={isDesktop ? "billing-workspace h-full overflow-y-auto px-4 lg:px-5 pb-6 space-y-3" : "space-y-3 pb-6"}>
+      <ReturnRecoveryPanel enabled={!!tenant&&!!profile&&can('edit_invoices')} onActiveChange={setPendingReturnRequest} onResolved={()=>{void loadTab(billPage,true);}}/>
       {isDesktop && pendingRecovery && pendingRecovery.length > 0 && (
         <div className="mt-3 mb-1 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-900">
           <RotateCcw className="w-3.5 h-3.5 shrink-0 mt-0.5" />
