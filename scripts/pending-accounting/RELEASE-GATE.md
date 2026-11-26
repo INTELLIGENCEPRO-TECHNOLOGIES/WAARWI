@@ -84,3 +84,15 @@ Recette 54 : suppression logique d’une facture non fiscale non réglée avec l
 Recette 57 : historique TVA, retour au dépôt d’origine, imputation partielle puis totale, réessai identique, refus du payload modifié et du dépassement, blocage sur verrou actif. Les retours partiels sur une ligne multi-lots requièrent une sélection explicite (bloqués en attendant). Les remboursements caisse, retours non fiscaux, cas anciens sans trace, écritures comptables et concurrence réelle restent à recetter. Aucun déploiement.
 
 Recette 58 : comptabilisation de la facture convertie, du règlement réel par API de masse et des deux avoirs approuvés. Quatre pièces équilibrées, ventes et TVA neutralisées, caisse +1 200 et client créditeur 1 200 FCFA. Réessai de comptabilisation idempotent. Tests de remboursement, lots et concurrence restent ouverts.
+
+
+### Règle de recette métier — aucun parcours normal laissé bloqué
+Un blocage défensif ne constitue pas une fonctionnalité terminée lorsqu'il empêche un cas métier légitime. Toute restriction introduite doit être recensée, accompagnée de sa solution et testée avant publication. Ne pas remplacer silencieusement un parcours de production par un refus. Vérifier aussi les documents historiques et les opérations inverses, avec les mêmes droits et paramètres métier.
+
+**Bloquant : retour partiel multi-lots (factures converties et autres ventes concernées).**
+- Afficher les lots réellement débités par ligne, le dépôt d'origine et les quantités encore retournables, en déduisant les retours précédents.
+- Affecter automatiquement le lot unique ou l'intégralité des lots restants si l'affectation est sans ambiguïté ; sinon permettre la saisie explicite des quantités par lot.
+- Valider exactement la quantité sélectionnée, sans lot étranger à la vente, dépassement, réintégration fictive ou double restitution. Conserver la traçabilité des retours sans réintégration pour ne pas réutiliser leur quantité retournable.
+- Enregistrer affectation, avoir/retour, stock, valorisation et audit dans une transaction ; intégrer la traçabilité aux sauvegardes et restaurations.
+- Recetter : 6 unités A + 4 unités B, retour 2 A + 1 B ; retour ultérieur du solde ; lot unique ; retour total ; retour financier sans stock ; lot erroné ; dépassement cumulé ; requête répétée ou modifiée ; deux sessions concurrentes ; perte réseau ; TVA historique et comptabilisation. Vérifier les parcours facturation desktop/mobile et POS applicables, y compris les ventes historiques sans trace exploitable (ne jamais inventer un lot).
+- État : solution approuvée, implémentation et recette non terminées. La publication reste interdite tant que le parcours normal n'est pas fonctionnel et vérifié.
