@@ -1,5 +1,5 @@
--- RECETTE EN COURS : pas de validation de restauration tant que tous les contrôles ne passent pas.
--- Exécuter exclusivement dans une transaction de la branche isolée après 64/67/68/71/73/80/93, drift, lot D et 98 ; jamais sur main.
+-- RECETTE RÉUSSIE : LOT_D_RESTORE_V2_OK, après chargement de _br_capture_order(regclass,text) depuis 20261110231312_lot_b_durable_capture_engine_inactive.sql.
+-- Exécuter exclusivement dans une transaction de la branche isolée après 64/67/68/71/73/80/93, drift, capture_order, lot D et 98 ; jamais sur main.
 BEGIN;
 SELECT public._br_lotd_install_hooks();
 DO $test$
