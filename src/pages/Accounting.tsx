@@ -28,7 +28,6 @@ import { useApp } from '../context/AppContext';
 import {useAccountingWindowId,mayCloseAccountingWindow,useAccountingWork} from '../context/AccountingWindowContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
-import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
 
