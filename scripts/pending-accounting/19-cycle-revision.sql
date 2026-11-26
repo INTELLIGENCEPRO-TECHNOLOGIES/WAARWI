@@ -131,3 +131,42 @@ BEGIN
 END;$$;
 REVOKE ALL ON FUNCTION public.save_accounting_cycle_review(uuid,date,text,text,jsonb,text,text,text,bigint) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.save_accounting_cycle_review(uuid,date,text,text,jsonb,text,text,text,bigint) TO authenticated;
+
+-- Full anomaly list, independently paginated by cycle.
+CREATE OR REPLACE FUNCTION public.accounting_revision_anomalies(p_tenant_id uuid,p_month_start date,p_cycle text,p_offset integer DEFAULT 0,p_size integer DEFAULT 20)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE stop_day date; result jsonb; lim int:=greatest(1,least(100,coalesce(p_size,20))); offst int:=greatest(0,coalesce(p_offset,0));
+BEGIN
+ PERFORM public._bank_reconciliation_access(p_tenant_id,false);
+ IF p_month_start IS NULL OR NOT isfinite(p_month_start) OR extract(day FROM p_month_start)<>1 OR p_month_start<date '2000-01-01' OR p_month_start>(now() AT TIME ZONE 'Africa/Dakar')::date OR p_cycle IS NULL OR p_cycle NOT IN ('integrity','financing','assets','stock','customers','suppliers','tax_social','treasury','income_expense','other') THEN RAISE EXCEPTION 'Critères invalides.';END IF;
+ stop_day:=least((p_month_start+interval '1 month')::date-1,(now() AT TIME ZONE 'Africa/Dakar')::date);
+ WITH entries AS MATERIALIZED (
+  SELECT e.* FROM public.journal_entries e WHERE e.tenant_id=p_tenant_id AND e.entry_date BETWEEN p_month_start AND stop_day
+ ), lines AS MATERIALIZED (
+  SELECT l.*,e.entry_date,e.entry_number,e.status,e.source_type,
+    CASE WHEN l.account_code LIKE '401%' OR l.account_code LIKE '40%' THEN 'suppliers'
+    WHEN l.account_code LIKE '41%' THEN 'customers'
+    WHEN l.account_code LIKE '4%' AND left(l.account_code,2) IN ('42','43','44') THEN 'tax_social'
+    WHEN l.account_code LIKE '1%' THEN 'financing'
+    WHEN l.account_code LIKE '2%' THEN 'assets'
+    WHEN l.account_code LIKE '3%' THEN 'stock'
+    WHEN l.account_code LIKE '5%' THEN 'treasury'
+    WHEN l.account_code ~ '^[678]' THEN 'income_expense' ELSE 'other' END cycle,
+    a.is_active account_active,a.id account_id
+  FROM entries e JOIN public.journal_lines l ON l.tenant_id=e.tenant_id AND l.entry_id=e.id
+  LEFT JOIN public.accounts a ON a.tenant_id=l.tenant_id AND a.code=l.account_code
+ ), anomalies AS (
+ SELECT l.id,l.entry_id,l.entry_number,l.entry_date,l.account_code,l.cycle,l.debit,l.credit,
+ CASE WHEN l.account_id IS NULL THEN 'Compte absent'
+ WHEN l.account_active IS NOT TRUE THEN 'Compte inactif'
+ WHEN (l.debit>0 AND l.credit>0) OR l.debit<0 OR l.credit<0 OR (l.debit=0 AND l.credit=0) THEN 'Montants de ligne incohérents'
+ WHEN l.account_code LIKE '411%' AND NOT EXISTS(SELECT 1 FROM public.customers c WHERE c.tenant_id=l.tenant_id AND c.id=l.third_party_id) THEN 'Tiers client non identifié'
+ WHEN l.account_code LIKE '401%' AND NOT EXISTS(SELECT 1 FROM public.suppliers s WHERE s.tenant_id=l.tenant_id AND s.id=l.third_party_id) THEN 'Tiers fournisseur non identifié' END reason
+ FROM lines l WHERE l.status='posted'
+
+ ), filtered AS MATERIALIZED (SELECT * FROM anomalies a WHERE a.reason IS NOT NULL AND (p_cycle='integrity' OR a.cycle=p_cycle))
+ SELECT jsonb_build_object('count',(SELECT count(*) FROM filtered),'rows',(SELECT coalesce(jsonb_agg(to_jsonb(q) ORDER BY q.entry_date,q.entry_number,q.id),'[]'::jsonb) FROM (SELECT * FROM filtered ORDER BY entry_date,entry_number,id LIMIT lim OFFSET offst) q)) INTO result;
+ RETURN result;
+END;$$;
+REVOKE ALL ON FUNCTION public.accounting_revision_anomalies(uuid,date,text,integer,integer) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.accounting_revision_anomalies(uuid,date,text,integer,integer) TO authenticated;
