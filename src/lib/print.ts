@@ -672,7 +672,8 @@ export function printReturnTicket80(
   cashier: string,
   returnNumber?: string,
   customerName?: string | null,
-  vat?: VatAmounts
+  vat?: VatAmounts,
+  settlement: 'cash' | 'avoir' | 'deferred' = 'cash'
 ) {
   const itemsHtml = items
     .map(i => `<div class="row"><span style="white-space:normal">${esc(i.name)} x${i.quantity}</span><span>${vat?.vat_net_amount != null ? '' : `- ${fmtMoney(i.quantity * i.unit_price)}`}</span></div>`)
@@ -690,7 +691,8 @@ ${itemsHtml}
 ${vat?.vat_net_amount != null ? `
 <div class="row"><span>Total HT</span><span>${fmtMoney(vat.vat_net_amount)} FCFA</span></div>
 <div class="row"><span>TVA</span><span>${fmtMoney(vat.vat_amount ?? 0)} FCFA</span></div>` : ''}
-<div class="row total"><span>REMBOURSEMENT</span><span>- ${fmtMoney(total)} FCFA</span></div>
+<div class="row total"><span>${settlement==='cash'?'REMBOURSEMENT':settlement==='avoir'?'AVOIR':'RETOUR À TRAITER'}</span><span>- ${fmtMoney(total)} FCFA</span></div>
+${settlement==='deferred'?'<div class="line">Aucun remboursement effectué à ce stade.</div>':settlement==='avoir'?'<div class="line">Crédit client — aucun décaissement.</div>':''}
 </body></html>`;
   printHtml(html);
 }
