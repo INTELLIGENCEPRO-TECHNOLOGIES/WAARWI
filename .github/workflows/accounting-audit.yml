@@ -1,0 +1,29 @@
+name: Recette comptable (sans déploiement)
+on:
+  push:
+    branches: [codex/waarwi-comptabilite-suite]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: accounting-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Installation verrouillée
+        run: npm ci --no-audit --no-fund
+      - name: Compilation Vite
+        run: npm run build
+      - name: Contrôle TypeScript
+        if: ${{ always() }}
+        run: npm run typecheck
+      - name: Tests unitaires
+        if: ${{ always() }}
+        run: node --test tests/*.test.mjs
