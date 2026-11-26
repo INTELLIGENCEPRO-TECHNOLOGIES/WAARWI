@@ -1,7 +1,7 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState } from 'react';
-import { HeartPulse, Building2, FileText, Users, Receipt, CreditCard, AlertTriangle, Plus, Search, CreditCard as Edit2, Check, X, Loader2, Wallet, BarChart3, Ban, RefreshCw, Settings2, CheckCircle2, Printer } from 'lucide-react';
+import { HeartPulse, Building2, FileText, Users, Receipt, CreditCard, AlertTriangle, Search, CreditCard as Edit2, Check, X, Loader2, Wallet, BarChart3, Ban, RefreshCw, Settings2, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDate } from '../lib/format';

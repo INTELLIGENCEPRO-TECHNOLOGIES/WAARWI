@@ -17,10 +17,7 @@ import {
   MetricStrip, SectionTitle, ReportTable, ReportSkeleton, DASH,
   thCls, thR, tdCls, tdR, tdMuted,
 } from '../components/reports/reportPrimitives';
-import {
-  a4Style, docHeader, docFooter, printDoc, esc, fmtMoney, labelRange,
-  type DateRange, type TenantMeta,
-} from '../components/reports/reportEngine';
+import { docHeader, docFooter, printDoc, esc, fmtMoney, labelRange, type DateRange, type TenantMeta } from '../components/reports/reportEngine';
 
 type Movement = {
   id: string;

@@ -1,7 +1,7 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight, Monitor } from 'lucide-react';
+import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, Check, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, Monitor } from 'lucide-react';
 import { SalesVatSettings } from '../components/SalesVatSettings';
 import { BackupTab } from '../components/BackupTab';
 import { SubscriptionPaymentPanel, useCanPaySubscription } from '../components/SubscriptionPaymentPanel';
@@ -31,7 +31,7 @@ type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites
 type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
 
 export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
-  const { refresh, profile, tenant, sites, isOwner } = useApp();
+  const { refresh, tenant, isOwner } = useApp();
   const { can } = usePermissions();
   const canManageRegisters = can('manage_cash_sessions') && can('manage_settings');
   const autoMode = (tenant?.business_type || 'auto_parts') === 'auto_parts';
@@ -1933,8 +1933,8 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
 
 /* ===================== STOCK RESET CARD ===================== */
 function StockResetCard() {
-  const { tenant, currentSite, sites, profile } = useApp();
-  const { success, error } = useToast();
+  const { currentSite, sites, profile } = useApp();
+  const { success } = useToast();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmText, setConfirmText] = useState('');
@@ -2093,7 +2093,7 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
     onRefresh();
   };
 
-  const RadioBlock = ({ value, selected, label, desc, onSelect }: { value: boolean; selected: boolean; label: string; desc: string; onSelect: () => void }) => (
+  const RadioBlock = ({ selected, label, desc, onSelect }: { value: boolean; selected: boolean; label: string; desc: string; onSelect: () => void }) => (
     <button
       onClick={onSelect}
       className="w-full text-left py-3 transition-all hover:bg-neutral-50">

@@ -8,12 +8,7 @@ import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useStickyOffset } from '../lib/useStickyOffset';
 import { createPortal } from 'react-dom';
-import {
-  Plus, FileText, Loader2, Printer, CheckCircle, X, Trash2, Car,
-  Receipt, RotateCcw, Wallet, Package, Filter, Check, Calendar, CalendarDays, User,
-  CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, FilePlus,
-  Tag, ShieldCheck, Smartphone, ChevronLeft, ChevronRight, RefreshCw, Ban, ClipboardList,
-} from 'lucide-react';
+import { Plus, FileText, Loader2, Printer, CheckCircle, X, Receipt, RotateCcw, Wallet, Filter, Calendar, User, CreditCard, ArrowRight, Coins, MessageCircle, Link2, Search, FilePlus, ShieldCheck, ChevronLeft, ChevronRight, RefreshCw, Ban, ClipboardList } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
 import { useApp } from '../context/AppContext';
@@ -32,12 +27,12 @@ import { consumeNavContext } from '../lib/navHighlight';
 import { DocItems, DocTotals, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments as IpmDocsType } from '../lib/ipm';
 import type { DocItem, DocStatusConfig } from '../components/DocLayout';
-import { MobileBillingWizard, type WizardHeaderField } from '../components/MobileBillingWizard';
+import { MobileBillingWizard } from '../components/MobileBillingWizard';
 import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
 import { BillingReturnFields, MobileReturnScreen, MobileReturnDetail, type ReturnLine } from '../components/billing/BillingReturnFlow';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
-import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
-import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
+import { type DocSettings, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
+import { QuickCreateArticleModal, QuickCreateCustomerModal } from '../components/QuickCreate';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 import { DocumentEditor } from '../components/DocumentEditor';
 import { DesktopWindow } from '../components/DesktopWindow';
@@ -130,7 +125,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export function Billing({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void }) {
-  const { tenant, currentSite, sites, depots, profile, user } = useApp();
+  const { tenant, currentSite, depots, profile, user } = useApp();
   const dataTick = useRealtimeTick(['sales', 'sale_items', 'sale_payments', 'sale_returns', 'quotes', 'quote_items', 'customers', 'articles', 'stock_levels', 'document_settings']);
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
@@ -171,7 +166,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [billCursors, setBillCursors] = useState<{ val: string | null; id: string | null }[]>([]);
   const [billTotalCount, setBillTotalCount] = useState(0);
   const [tabCounts, setTabCounts] = useState<Record<Tab, number>>({ invoices: 0, quotes: 0, returns: 0, credits: 0 });
-  const [billTotals, setBillTotals] = useState<any>({});
+  const [, setBillTotals] = useState<any>({});
   const billReqIdRef = useRef(0);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const billSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -192,7 +187,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   // Quote modals — mobile uses single state; desktop uses quoteWindows map
   const [quoteOpen, setQuoteOpen] = useState(false);
-  const [quoteEditorMode, setQuoteEditorMode] = useState<'create' | 'edit' | 'view'>('create');
+  const [, setQuoteEditorMode] = useState<'create' | 'edit' | 'view'>('create');
   const [quoteDetail, setQuoteDetail] = useState<Quote | null>(null);
   const [quoteItemsDetail, setQuoteItemsDetail] = useState<any[]>([]);
   const [quoteForm, setQuoteForm] = useState<{ customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', valid_until: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
@@ -419,7 +414,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [mobileInvoiceMode, setMobileInvoiceMode] = useState<'create' | 'edit' | 'view'>('create');
   const [mobileEditingInvoiceId, setMobileEditingInvoiceId] = useState<string | null>(null);
   const [invoiceForm, setInvoiceForm] = useState<{ customer_id: string; doc_date: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
-  const [invoicePostCreation, setInvoicePostCreation] = useState<{ saleNumber: string; createdAt: string; createdBy: string } | null>(null);
+  const [, setInvoicePostCreation] = useState<{ saleNumber: string; createdAt: string; createdBy: string } | null>(null);
   const [invoiceEditorItems, setInvoiceEditorItems] = useState<QuoteItem[]>([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
   const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [invoiceIsCredit, setInvoiceIsCredit] = useState(false);
@@ -439,7 +434,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const isPharmacy = (tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie';
   const [ipmBeneficiaire, setIpmBeneficiaire] = useState<any>(null);
   const [ipmConvention, setIpmConvention] = useState<any>(null);
-  const [ipmLoading, setIpmLoading] = useState(false);
+  const [, setIpmLoading] = useState(false);
 
   useEffect(() => {
     if (!isPharmacy || !invoiceForm.customer_id || !tenant) {
@@ -797,13 +792,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   };
 
   // ── Filtering helpers (now done server-side, these are no-ops for compatibility) ──
-  const matchesCommon = (
-    created_at: string,
-    customer_id: string | null | undefined,
-    amount: number
-  ) => {
-    return true;
-  };
+  
 
   const filteredQuotes = quotes;
 
@@ -893,17 +882,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       return next;
     });
   };
-  const finalizeQuoteItem = (idx: number, field: 'quantity' | 'unit_price' | 'discount') => {
-    setQuoteItems(prev => {
-      const next = [...prev];
-      if (field === 'quantity' && (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1)) next[idx].quantity = 1;
-      if (field === 'unit_price' && (!Number(next[idx].unit_price) || Number(next[idx].unit_price) < 0)) next[idx].unit_price = 0;
-      if (field === 'discount' && (!Number(next[idx].discount) || Number(next[idx].discount) < 0)) next[idx].discount = 0;
-      const it = next[idx];
-      next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
-      return next;
-    });
-  };
+  
   const quoteSubtotal = quoteItems.reduce((s, i) => s + Number(i.total), 0);
 
   // Quote IPM calculation
@@ -979,11 +958,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     }
   };
 
-  const autoSaveQuote = async () => {
-    if (!tenant || !currentSite) return;
-    if (quoteItems.every(i => !i.name.trim())) return;
-    await saveQuote({ silent: true });
-  };
+  
 
   const closeQuotePanel = () => {
     setQuoteOpen(false);
@@ -1010,41 +985,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     setQuoteWindows(prev => { const next = new Map(prev); next.delete(windowId); return next; });
   };
 
-  const openQuoteForEdit = async (q: Quote) => {
-    if (isDesktop) {
-      openDesktopQuoteWindow(q.id, q.status === 'draft' || q.status === 'sent' ? 'edit' : 'view');
-      return;
-    }
-    const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
-    setEditingQuoteId(q.id);
-    setEditingQuote(q);
-    setQuoteEditorMode('edit');
-    setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '', delivery_date: q.doc_header?.delivery_date || '', reference: q.doc_header?.reference || '', warranty: q.doc_header?.warranty || '', representative: (q as any).representative_id || '', imei: q.doc_header?.imei || '' });
-    setQuoteItems((data || []).map((i: any) => ({
-      article_id: i.article_id, name: i.name,
-      quantity: Number(i.quantity), unit_price: Number(i.unit_price),
-      discount: Number(i.discount || 0), total: Number(i.total),
-    })));
-    setQuoteOpen(true);
-  };
+  
 
-  const openQuoteForView = async (q: Quote) => {
-    if (isDesktop) {
-      openDesktopQuoteWindow(q.id, 'view');
-      return;
-    }
-    const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
-    setEditingQuoteId(q.id);
-    setEditingQuote(q);
-    setQuoteEditorMode('view');
-    setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '', delivery_date: q.doc_header?.delivery_date || '', reference: q.doc_header?.reference || '', warranty: q.doc_header?.warranty || '', representative: (q as any).representative_id || '', imei: q.doc_header?.imei || '' });
-    setQuoteItems((data || []).map((i: any) => ({
-      article_id: i.article_id, name: i.name,
-      quantity: Number(i.quantity), unit_price: Number(i.unit_price),
-      discount: Number(i.discount || 0), total: Number(i.total),
-    })));
-    setQuoteOpen(true);
-  };
+  
 
   const openQuoteDetail = async (q: Quote) => {
     if (isDesktop) {
@@ -1121,17 +1064,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       return next;
     });
   };
-  const finalizeInvoiceItem = (idx: number, field: 'quantity' | 'unit_price' | 'discount') => {
-    setInvoiceEditorItems(prev => {
-      const next = [...prev];
-      if (field === 'quantity' && (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1)) next[idx].quantity = 1;
-      if (field === 'unit_price' && (!Number(next[idx].unit_price) || Number(next[idx].unit_price) < 0)) next[idx].unit_price = 0;
-      if (field === 'discount' && (!Number(next[idx].discount) || Number(next[idx].discount) < 0)) next[idx].discount = 0;
-      const it = next[idx];
-      next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
-      return next;
-    });
-  };
+  
   const invoiceEditorSubtotal = invoicePricing.price?.ttc ?? invoiceEditorSubtotalRaw;
   const invoiceEditorPaid = invoicePayList.reduce((s, p) => s + p.amount, 0);
 

@@ -1,7 +1,7 @@
 import type { VatAmounts } from '../lib/salesVat';
 import { useRealtimeTick } from '../lib/useRealtimeData';
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Calculator, Loader2, Printer, Plus, X, Calendar, Filter, Check, BookOpen, Pencil, Trash2, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, Ban, Wallet, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Calculator, Loader2, Plus, X, Calendar, Filter, Check, Pencil, Trash2, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, Ban, Wallet, RotateCcw } from 'lucide-react';
 import { PageSearch } from '../components/PageSearch';
 import { supabase } from '../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
@@ -103,7 +103,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [selected, setSelected] = useState<Sale | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [pays, setPays] = useState<any[]>([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
+  const [, setItemsLoading] = useState(false);
   const [accounting, setAccounting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -367,31 +367,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
   const tenantForPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
 
-  const printTicket = () => {
-    if (!selected || !tenant) return;
-    printTicket80(
-      {
-        sale_number: selected.sale_number,
-        created_at: selected.created_at,
-        total: Number(selected.total),
-        discount: Number(selected.discount ?? 0),
-        vat: selected,
-        items: items.map(i => ({
-          name: i.name,
-          supplier_ref: null,
-          oem_ref: i.articles?.oem_ref ?? null, internal_ref: i.articles?.internal_ref ?? null,
-          quantity: Number(i.quantity),
-          unit_price: Number(i.unit_price),
-          discount: Number(i.discount ?? 0),
-        })),
-        payments: pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
-        customer: selected.customers ? { name: selected.customers.name, phone: (selected.customers as any).phone || undefined, address: (selected.customers as any).address || undefined } : null,
-        docHeader: (selected as any).doc_header ?? null,
-      },
-      tenantForPrint,
-      creatorName(selected.user_id)
-    );
-  };
+  
 
   const printInvoice = () => {
     if (!selected || !tenant) return;

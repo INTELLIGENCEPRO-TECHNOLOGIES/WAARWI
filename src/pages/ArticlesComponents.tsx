@@ -103,7 +103,7 @@ export function PriceInput({ value, onChange, placeholder }: { value: number | '
 
 // ── ArticleCard (mobile) ───────────────────────────────────
 
-export function ArticleCard({ article, category, qty, onEdit, onDelete, selectionMode, selected, onToggleSelect, showMargin: _showMargin, showStock }: {
+export function ArticleCard({ article, onEdit, selectionMode, selected, onToggleSelect, showMargin: _showMargin }: {
   article: Article; category?: Category; qty: number;
   onEdit: () => void; onDelete: () => void;
   selectionMode: boolean; selected: boolean; onToggleSelect: () => void;
@@ -415,7 +415,7 @@ export function CategoryPickerModal({ open, onClose, categories, onSelect, selec
 
 // ── InfosTab ───────────────────────────────────────────────
 
-export function InfosTab({ form, setForm, editing, categories, suppliers, onGenerateRef, autoMode, createCategory }: {
+export function InfosTab({ form, setForm, editing, categories, onGenerateRef, autoMode, createCategory }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: boolean; categories: Category[]; suppliers: any[];
   onGenerateRef: () => void; autoMode: boolean;
@@ -968,7 +968,7 @@ function ColumnSettingsDropdown({ visible, onToggle }: { visible: Set<ColumnKey>
   );
 }
 
-export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap, suppliers, categories, listEdits, onUpdateEdit, selectionMode, selectedIds, onToggleSelect, onSelectAll, allSelected, onOpenFullScreen, onDelete, showMargin: _showMargin, showStock, showPurchase: _showPurchase, sortCol, sortDir, onSort }: {
+export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap, categories, listEdits, onUpdateEdit, selectionMode, selectedIds, onToggleSelect, onSelectAll, allSelected, onOpenFullScreen, onDelete, showMargin: _showMargin, showStock, showPurchase: _showPurchase, sortCol, sortDir, onSort }: {
   articles: Article[]; categoryMap: Map<string, Category>; stockMap: Record<string, number>;
   suppliers: any[]; categories: Category[];
   listEdits: Map<string, Partial<Article>>; onUpdateEdit: (id: string, field: string, value: any) => void;

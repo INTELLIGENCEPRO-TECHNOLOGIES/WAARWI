@@ -15,7 +15,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { desktopAutoFocus } from '../lib/device';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { consumeNavContext } from '../lib/navHighlight';
-import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
+import { LotPickerModal } from '../components/LotPickerModal';
 import { printStockMovementA4, printStockMovement80, printInventoryBookA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 
 type Row = {
@@ -65,7 +65,7 @@ export function Stock() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [searchFocused, setSearchFocused] = useState(false);
+  const [, setSearchFocused] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [catPickerOpen, setCatPickerOpen] = useState(false);
@@ -2248,14 +2248,7 @@ function LotsView({ lots, stockMethod }: { lots: LotRow[]; stockMethod: StockMet
  * ════════════════════════════════════════════════════════════════════════════ */
 type ListEditEntry = { article_id: string; qty: number | ''; note: string; lot_number: string };
 
-function StockListEditView({
-  filtered, listEditMode, setListEditMode, listEdits, setListEdits,
-  listSaving, setListSaving, listInputRefs, saveBulkRef, currentSite,
-  canViewPrices, canManageStock, onSaved, successToast, errorToast, stockMethod,
-  sites, depots, listTransferTarget, setListTransferTarget,
-  listSourceSite, setListSourceSite, stockByLocation, tenantId,
-  sortCol, sortDir, onSort,
-}: {
+function StockListEditView({ filtered, listEditMode, listEdits, setListEdits, listSaving, setListSaving, listInputRefs, saveBulkRef, currentSite, canManageStock, onSaved, successToast, errorToast, stockMethod, sites, depots, listTransferTarget, setListTransferTarget, listSourceSite, setListSourceSite, stockByLocation, tenantId, sortCol, sortDir, onSort }: {
   filtered: Row[];
   listEditMode: 'in' | 'out' | 'inventory' | 'transfer';
   setListEditMode: (m: 'in' | 'out' | 'inventory' | 'transfer') => void;

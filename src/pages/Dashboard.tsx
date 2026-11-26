@@ -8,17 +8,7 @@ import { isSaleSettlementIncome } from '../lib/cashMovements';
 import { getOperationalCashContext } from '../lib/cashSession';
 import SubscriptionStatus from '../components/SubscriptionStatus';
 import { SubscriptionPaymentButton } from '../components/SubscriptionPaymentPanel';
-import {
-  TrendingUp, AlertTriangle, Package, Loader2,
-  Users, FileText, ExternalLink, Globe,
-  ShoppingCart, ChevronRight, Calendar,
-  CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowDownRight,
-  ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, X,
-  Share2, Copy, Check as CheckIcon, MessageCircle, RefreshCw,
-  ClipboardList, Coins, RotateCcw,
-  ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3, Store,
-  Network, Award, ChevronDown, Monitor, LogOut,
-} from 'lucide-react';
+import { TrendingUp, AlertTriangle, Package, Loader2, Users, FileText, ExternalLink, Globe, ShoppingCart, ChevronRight, Calendar, CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, X, Share2, Copy, Check as CheckIcon, MessageCircle, ClipboardList, Coins, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3, Store, Network, Award, ChevronDown, Monitor, LogOut } from 'lucide-react';
 
 type ShopInfo = { slug: string | null; isActive: boolean };
 
@@ -801,7 +791,7 @@ function MobileDashboard({
   // ── Web order notification (blink + sound) ──────────────────────────────
   const prevWebNew = useRef(stats.webNew);
   const webCardRef = useRef<HTMLButtonElement>(null);
-  const [webBlink, setWebBlink] = useState(false);
+  const [, setWebBlink] = useState(false);
 
   // ── Share shop modal ─────────────────────────────────────────────────────
   const [shareOpen, setShareOpen] = useState(false);
@@ -1444,176 +1434,9 @@ function KpiItem({ label, value, sub, negative, accent }: {
  *  DESKTOP DASHBOARD — Exact match to capture specification
  * ════════════════════════════════════════════════════════════════════════════ */
 
-function HeroChart({ data }: { data: number[] }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const currentHour = new Date().getHours();
-  const sliced = data.slice(0, Math.max(currentHour + 1, 1));
-  const max = Math.max(...sliced, 1000);
 
-  const w = 800;
-  const h = 150;
-  const padL = 38;
-  const padR = 20;
-  const padT = 10;
-  const padB = 22;
-  const chartW = w - padL - padR;
-  const chartH = h - padT - padB;
 
-  const points = sliced.map((v, i) => ({
-    x: padL + (i / 23) * chartW,
-    y: padT + (1 - v / max) * chartH,
-    value: v,
-    hour: i,
-  }));
 
-  const pathD = points.length < 2 ? '' : points.reduce((d, p, i) => {
-    if (i === 0) return `M ${p.x} ${p.y}`;
-    const prev = points[i - 1];
-    const cx1 = prev.x + (p.x - prev.x) * 0.4;
-    const cx2 = p.x - (p.x - prev.x) * 0.4;
-    return `${d} C ${cx1} ${prev.y}, ${cx2} ${p.y}, ${p.x} ${p.y}`;
-  }, '');
-
-  const areaD = pathD && points.length > 0
-    ? `${pathD} L ${points[points.length - 1].x} ${padT + chartH} L ${points[0].x} ${padT + chartH} Z`
-    : '';
-
-  const yTicks = [0, max * 0.33, max * 0.66, max].map(v => Math.round(v));
-  const xTicks = [0, 6, 12, 18, 24];
-
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!svgRef.current || points.length === 0) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const relX = ((e.clientX - rect.left) / rect.width) * w;
-    let closest = 0;
-    let minDist = Infinity;
-    for (let i = 0; i < points.length; i++) {
-      const dist = Math.abs(points[i].x - relX);
-      if (dist < minDist) { minDist = dist; closest = i; }
-    }
-    setHover(closest);
-  };
-
-  const hp = hover !== null && hover < points.length ? points[hover] : null;
-
-  return (
-    <svg
-      ref={svgRef}
-      viewBox={`0 0 ${w} ${h}`}
-      className="w-full h-full cursor-crosshair block"
-      preserveAspectRatio="xMidYMid meet"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setHover(null)}
-    >
-      <defs>
-        <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a3a3a3" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#a3a3a3" stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      {yTicks.map((v, i) => {
-        const y = padT + (1 - v / max) * chartH;
-        return (
-          <g key={i}>
-            <line x1={padL} y1={y} x2={w - padR} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
-            <text x={padL - 4} y={y + 3} textAnchor="end" fill="rgba(255,255,255,0.45)" fontSize="9" fontWeight="500">
-              {v >= 1000 ? `${Math.round(v / 1000)}K` : v}
-            </text>
-          </g>
-        );
-      })}
-      {xTicks.map((hr) => {
-        const x = padL + (hr / 24) * chartW;
-        return (
-          <text key={hr} x={x} y={h - 5} textAnchor="middle" fill="rgba(255,255,255,0.45)" fontSize="9" fontWeight="500">
-            {String(hr).padStart(2, '0')}:00
-          </text>
-        );
-      })}
-      {areaD && <path d={areaD} fill="url(#heroGrad)" />}
-      {pathD && <path d={pathD} fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />}
-      {hp && (
-        <>
-          <line x1={hp.x} y1={padT} x2={hp.x} y2={padT + chartH} stroke="#ffffff" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.7" />
-          <circle cx={hp.x} cy={hp.y} r="4" fill="#fff" stroke="#171717" strokeWidth="2" />
-          <rect x={Math.min(Math.max(hp.x - 40, 2), w - 82)} y={hp.y - 28} width="80" height="22" rx="4" fill="rgba(0,0,0,0.85)" />
-          <text x={Math.min(Math.max(hp.x, 42), w - 42)} y={hp.y - 14} textAnchor="middle" fill="#ffffff" fontSize="10" fontWeight="700">
-            {formatCompactFCFA(hp.value)} - {String(hp.hour).padStart(2, '0')}h
-          </text>
-        </>
-      )}
-    </svg>
-  );
-}
-
-function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(...data.map(d => d.total), 1);
-  const w = 280;
-  const h = 120;
-  const padL = 30;
-  const padB = 20;
-  const padT = 10;
-  const chartW = w - padL - 10;
-  const chartH = h - padB - padT;
-  const barGap = chartW / data.length;
-  const barW = barGap * 0.6;
-
-  const yTicks = [0, max * 0.33, max * 0.66, max];
-
-  return (
-    <div className="relative">
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 120 }}>
-        {yTicks.map((v, i) => {
-          const y = padT + (1 - v / max) * chartH;
-          return (
-            <g key={i}>
-              <line x1={padL} y1={y} x2={w - 10} y2={y} stroke="#e5e5e5" strokeWidth="0.5" />
-              <text x={padL - 4} y={y + 3} textAnchor="end" fill="#a3a3a3" fontSize="8" fontWeight="500">
-                {v >= 1000 ? `${Math.round(v / 1000)}K` : Math.round(v)}
-              </text>
-            </g>
-          );
-        })}
-        {data.map((d, i) => {
-          const barH = (d.total / max) * chartH;
-          const x = padL + i * barGap + (barGap - barW) / 2;
-          const y = padT + chartH - barH;
-          const isHov = hover === i;
-          return (
-            <g key={i}>
-              <rect
-                x={x} y={y} width={barW} height={barH}
-                rx="3" fill={isHov ? '#171717' : '#171717'}
-                opacity={isHov ? 1 : 0.75}
-                className="transition-opacity duration-150"
-              />
-              <rect
-                x={padL + i * barGap} y={0} width={barGap} height={h}
-                fill="transparent"
-                onMouseEnter={() => setHover(i)}
-                onMouseLeave={() => setHover(null)}
-                className="cursor-pointer"
-              />
-              <text x={x + barW / 2} y={h - 5} textAnchor="middle" fill="#737373" fontSize="8" fontWeight="600">
-                {d.day}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      {hover !== null && (
-        <div
-          className="absolute pointer-events-none z-10 px-2 py-1 rounded bg-neutral-900 text-white text-[10px] font-semibold shadow-lg"
-          style={{ left: `${((hover + 0.5) / data.length) * 100}%`, top: 0, transform: 'translateX(-50%)' }}
-        >
-          {formatCompactFCFA(data[hover].total)}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, canViewMargin, viewMode, toggleViewMode }: any) {
   const { tenant, currentSite, sites, setCurrentSite, profile, signOut } = useApp();

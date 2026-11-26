@@ -172,7 +172,7 @@ function BlockedMessage({ onGoInit }: { onGoInit: () => void }) {
 /* DASHBOARD                                    */
 /* ============================================ */
 function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGoInit: () => void }) {
-  const { tenant, profile } = useApp();
+  const { tenant } = useApp();
   const [loading, setLoading] = useState(true);
   const [points, setPoints] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -205,11 +205,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
   useEffect(() => { load(); }, [load]);
   useRealtimeRefresh(['mt_operations', 'mt_closures', 'mt_expenses', 'mt_accounts', 'mt_service_points', 'mt_services'], load);
 
-  const getUserName = (userId: string | null) => {
-    if (!userId) return 'Système';
-    const p = profiles.find(pr => pr.id === userId);
-    return p?.full_name || 'Utilisateur';
-  };
+  
 
   const getPointName = (pointId: string | null) => {
     if (!pointId) return '—';
@@ -2634,7 +2630,7 @@ function MTBalances() {
   const [points, setPoints] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [ops, setOps] = useState<any[]>([]);
-  const [pointServiceLinks, setPointServiceLinks] = useState<any[]>([]);
+  const [, setPointServiceLinks] = useState<any[]>([]);
   const [initBalances, setInitBalances] = useState<any[]>([]);
   const [reconciliations, setReconciliations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

@@ -182,29 +182,7 @@ function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
   return { summary, loading };
 }
 
-function useRecentSessions(tenantId?: string, siteId?: string, excludeId?: string) {
-  const [sessions, setSessions] = useState<RecentSession[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    if (!tenantId || !siteId) return;
-    (async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from('cash_sessions')
-        .select('id, opened_at, closed_at, opening_amount, closing_amount, status')
-        .eq('tenant_id', tenantId)
-        .eq('site_id', siteId)
-        .eq('status', 'closed')
-        .order('closed_at', { ascending: false, nullsFirst: false })
-        .limit(6);
-      let rows = (data || []) as RecentSession[];
-      if (excludeId) rows = rows.filter(r => r.id !== excludeId);
-      setSessions(rows.slice(0, 5));
-      setLoading(false);
-    })();
-  }, [tenantId, siteId, excludeId]);
-  return { sessions, loading };
-}
+
 
 type RecentSessionSale = {
   id: string;
@@ -244,7 +222,7 @@ function useRecentSessionSales(tenantId?: string, sessionId?: string) {
 
 const fmtDateShort = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 const fmtTimeLanding = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-const fmtDateFull = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+
 
 function sessionDuration(opened: string) {
   const ms = Date.now() - new Date(opened).getTime();
@@ -254,44 +232,9 @@ function sessionDuration(opened: string) {
   return `${m} min`;
 }
 
-function LandingActionBtn({ icon: Icon, label, onClick, disabled, variant, badge }: {
-  icon: typeof Wallet; label: string; onClick: () => void; disabled?: boolean;
-  variant?: 'primary' | 'dark'; badge?: number;
-}) {
-  const base = variant === 'primary'
-    ? 'bg-neutral-100 border-neutral-200 text-neutral-800 hover:bg-neutral-100'
-    : variant === 'dark'
-    ? 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
-    : 'bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50';
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`relative flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-md border text-center transition-all active:scale-[0.97] ${base} ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
-    >
-      <Icon className="w-4 h-4" />
-      <span className="text-[10px] font-semibold leading-tight">{label}</span>
-      {badge != null && badge > 0 && (
-        <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{badge}</span>
-      )}
-    </button>
-  );
-}
 
-function ActionIconBtn({ icon: Icon, label, onClick, disabled }: {
-  icon: typeof Wallet; label: string; onClick: () => void; disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex flex-col items-center justify-center gap-1.5 px-3 py-2.5 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-all active:scale-[0.97] ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
-    >
-      <Icon className="w-4.5 h-4.5" />
-      <span className="text-[10px] font-medium leading-tight text-neutral-600 whitespace-nowrap">{label}</span>
-    </button>
-  );
-}
+
+
 
 function POSLandingOpenMinimal({
   tenantName, tenantLogo, fundModalOpen, setFundModalOpen,
@@ -456,11 +399,7 @@ function POSLandingOpenMinimal({
   );
 }
 
-function POSLandingOpenInline({
-  tenantName, tenantLogo, fundModalOpen, setFundModalOpen,
-  openingAmount, setOpeningAmount, openingSubmitting, openSessionSubmit,
-  siteName, cashierName, onBack, registerSlot, openDisabled,
-}: {
+function POSLandingOpenInline({ fundModalOpen, setFundModalOpen, openingAmount, setOpeningAmount, openingSubmitting, openSessionSubmit, siteName, cashierName, onBack, registerSlot, openDisabled }: {
   registerSlot?: React.ReactNode;
   openDisabled?: boolean;
   tenantName?: string;
@@ -1142,7 +1081,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [payments, setPayments] = useState<SalePayment[]>([]);
   const [paying, setPaying] = useState(false);
   const [lastSale, setLastSale] = useState<PrintableSale | null>(null);
-  const [printInvoice, setPrintInvoice] = useState(false);
+  const [, setPrintInvoice] = useState(false);
   const [autoPrintTicket, setAutoPrintTicket] = useState(false);
   const [autoPrintInvoice, setAutoPrintInvoice] = useState(false);
 
@@ -1537,16 +1476,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     appendCartLine(a, exceptionPrices.get(a.id) ?? tierPrice, tierName || undefined);
   };
 
-  const updateQty = (id: string, delta: number) => {
-    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
-    setCart(c => c.flatMap(i => {
-      if (i.article_id !== id) return [i];
-      const q = i.quantity + delta;
-      if (q <= 0) return [];
-      if (!allowNeg && i.track_stock !== false && q > i.stock_available) { error(`Stock insuffisant (${i.stock_available})`); return [i]; }
-      return [{ ...i, quantity: q }];
-    }));
-  };
+  
 
   const setQty = (id: string, n: number) => {
     const allowNeg = !!(currentSite as any)?.allow_negative_stock;

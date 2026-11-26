@@ -1,9 +1,6 @@
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Plus, Loader2, Pencil, BarChart3, Users, Search, X, Power, Check,
-  BadgePercent, TrendingUp, Receipt, Wallet, UserCheck, Download, Printer, Trash2, Filter,
-} from 'lucide-react';
+import { Plus, Loader2, Pencil, BarChart3, Users, X, Power, Check, BadgePercent, Download, Printer, Trash2, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';

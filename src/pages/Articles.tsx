@@ -1,13 +1,6 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import {
-  Plus, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
-  Pencil, Filter, ChevronDown, ChevronUp,
-  Upload, Camera, CheckSquare, Square,
-  Lightbulb, Download, Search, AlertTriangle,
-  List, LayoutGrid, Save,
-  MoreHorizontal, Check, ChevronLeft, ChevronRight, RefreshCw, PackagePlus,
-} from 'lucide-react';
+import { Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info, Pencil, Filter, ChevronDown, ChevronUp, Upload, Camera, CheckSquare, Square, Lightbulb, Download, Search, AlertTriangle, List, LayoutGrid, Save, MoreHorizontal, Check, ChevronLeft, ChevronRight, RefreshCw, PackagePlus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -18,11 +11,7 @@ import { ConfirmDialog, Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 import { isAutoParts, BUSINESS_TYPE_LABELS } from '../lib/types';
-import {
-  stockStatus, Field, PremiumSelect,
-  ArticleCard, CategoryFilterSheet, CategoryPickerModal, MasterCatalogGuide,
-  DesktopListView, FullScreenArticleEdit, MobileArticleEdit,
-} from './ArticlesComponents';
+import { stockStatus, Field, PremiumSelect, ArticleCard, CategoryPickerModal, MasterCatalogGuide, DesktopListView, FullScreenArticleEdit, MobileArticleEdit } from './ArticlesComponents';
 
 type Form = Partial<Article> & { stock_init?: number };
 type Compat = { id?: string; brand_id: string; model_id: string; year_start: number; year_end: number; notes: string };

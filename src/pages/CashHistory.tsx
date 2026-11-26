@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, ChevronLeft, CreditCard, Package, HandCoins, RotateCcw, Search, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
-import { formatFCFA, formatDateTime } from '../lib/format';
+import { formatFCFA } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { CashModal } from '../components/CashModal';
 import { EmptyState } from '../components/EmptyState';

@@ -1,16 +1,12 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Search, Filter, Globe, Phone, MessageCircle, Printer, X, Clock, CheckCircle2,
-  Package, Truck, Ban, RefreshCw, ChevronRight, MapPin, CreditCard,
-  ShoppingBag, FileText,
-} from 'lucide-react';
+import { Filter, Globe, Phone, MessageCircle, Printer, X, Clock, CheckCircle2, Package, Truck, Ban, RefreshCw, ChevronRight, MapPin, CreditCard, ShoppingBag, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
-import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
+import { ConfirmDialog, DocPanel } from '../components/Modal';
 
 type OrderStatus = 'nouvelle' | 'confirmee' | 'en_preparation' | 'prete' | 'livree' | 'annulee';
 type PaymentStatus = 'non_paye' | 'en_attente' | 'paye' | 'rembourse';

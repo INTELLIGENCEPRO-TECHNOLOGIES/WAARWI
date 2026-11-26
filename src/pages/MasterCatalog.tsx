@@ -1,10 +1,7 @@
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Search, Loader2, Package, Check, Download, X, Filter,
-  ChevronRight, ChevronDown, AlertCircle, CheckCircle2, Layers, RefreshCw
-} from 'lucide-react';
+import { Search, Loader2, Package, Check, Download, X, Filter, ChevronDown, AlertCircle, CheckCircle2, Layers, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
