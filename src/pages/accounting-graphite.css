@@ -119,3 +119,44 @@
  .accounting-workspace .acc-flow-head{position:static}
  .accounting-workspace .acc-annex{break-inside:avoid}
 }
+
+/* Recherche et consultation : dimensions de la fenêtre, pas du viewport. */
+.accounting-workspace .acc-search-workspace,.accounting-workspace .acc-piece-workspace{min-width:0;container-type:inline-size}
+.accounting-workspace .acc-search-form{padding:4px 0 0;background:var(--w-bg);border-bottom:1px solid var(--w-separator)}
+.accounting-workspace .acc-search-fields{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:7px 12px;padding:6px 0}
+.accounting-workspace .acc-search-field{grid-column:span 3;display:flex;flex-direction:column;gap:2px;min-width:0}
+.accounting-workspace .acc-search-field>span{font-size:11px;color:var(--w-text-sec);white-space:normal}
+.accounting-workspace .acc-search-field .input{width:100%;min-width:0;height:30px;min-height:30px;font-size:12px;padding:3px 5px}
+.accounting-workspace .acc-search-description{grid-column:span 4}
+.accounting-workspace .acc-search-piece,.accounting-workspace .acc-search-reference{grid-column:span 3}
+.accounting-workspace .acc-search-account{grid-column:span 2}
+.accounting-workspace .acc-search-journal,.accounting-workspace .acc-search-status{grid-column:span 2}
+.accounting-workspace .acc-search-from,.accounting-workspace .acc-search-to,.accounting-workspace .acc-search-min,.accounting-workspace .acc-search-max{grid-column:span 2}
+.accounting-workspace .acc-search-field input[type=number]{appearance:textfield;text-align:right}
+.accounting-workspace .acc-search-field input[type=number]::-webkit-inner-spin-button,.accounting-workspace .acc-search-field input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.accounting-workspace .acc-search-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:7px 0}
+.accounting-workspace .acc-search-actions .acc-spacer{flex:1}
+.accounting-workspace .acc-search-result-label{padding:8px 0;font-size:11px;color:var(--w-text-sec)}
+.accounting-workspace .acc-piece-meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 14px;padding:8px 0;border-bottom:1px solid var(--w-separator)}
+.accounting-workspace .acc-piece-meta dt{font-size:11px;color:var(--w-text-sec)}
+.accounting-workspace .acc-piece-meta dd{font-size:13px;font-weight:500;overflow-wrap:anywhere;margin:2px 0}
+.accounting-workspace .acc-piece-description{grid-column:1/-1}
+.accounting-workspace .acc-piece-workspace{padding-bottom:8px}
+.accounting-workspace .acc-piece-workspace .acc-table-frame{margin-top:10px}
+@container (max-width: 760px){
+ .accounting-workspace .acc-search-fields{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px 8px}
+ .accounting-workspace .acc-search-field{grid-column:span 2}
+ .accounting-workspace .acc-search-description{grid-column:span 2}
+ .accounting-workspace .acc-search-account{grid-column:span 2}
+ .accounting-workspace .acc-search-journal-col,.accounting-workspace .acc-search-status-col{display:none}
+ .accounting-workspace .acc-piece-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@container (max-width: 480px){
+ .accounting-workspace .acc-search-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .accounting-workspace .acc-search-field{grid-column:span 1}
+ .accounting-workspace .acc-search-description{grid-column:1/-1}
+ .accounting-workspace .acc-search-field input[type=date]{max-width:100%}
+ .accounting-workspace .acc-search-actions .btn-primary,.accounting-workspace .acc-search-actions .btn-secondary{padding:5px 7px;font-size:11px}
+ .accounting-workspace .acc-search-workspace table td,.accounting-workspace .acc-search-workspace table th{padding:6px 4px;font-size:11px}
+ .accounting-workspace .acc-piece-meta dd{font-size:12px}
+}
