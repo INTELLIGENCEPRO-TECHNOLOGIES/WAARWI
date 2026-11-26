@@ -13,7 +13,7 @@ import type {Route} from './Shell';
 import './accounting-desktop.css';
 const sections={
  acc_journal_settings:['journal_settings','Codes journaux'],acc_entry:['entry','Saisie des écritures'],acc_plan:['plan','Plan comptable'],acc_journals:['journals','Journaux comptables'],
- acc_balance:['balance','Balance générale'],acc_grandlivre:['grandlivre','Grand livre'],acc_tiers:['tiers','Balance des tiers'],
+ acc_aging:['aging','Balance âgée et échéances'],acc_balance:['balance','Balance générale'],acc_grandlivre:['grandlivre','Grand livre'],acc_tiers:['tiers','Balance des tiers'],
  acc_search:['search','Recherche des écritures'],acc_statement:['statement','Interrogation et lettrage'],acc_bank:['bank','Rapprochement bancaire'],
  acc_vat:['vat','Situation de TVA'],acc_cloture:['cloture','Clôtures mensuelles'],acc_fiscal:['fiscal','Exercices et RAN'],acc_financial:['financial','États financiers']
 } as const;
