@@ -69,7 +69,7 @@ BEGIN
   SELECT b.line_id,b.entry_id,b.account_code,b.entry_number,b.entry_date,b.journal_type,b.label,b.amount,d.due_on,coalesce(d.revision,0) due_revision,
    coalesce(p.id,CASE WHEN b.third_party_id IS NULL THEN u.id END) party_id,
    coalesce(p.name,CASE WHEN b.third_party_id IS NULL THEN u.name END,b.account_name,'Compte non affecté') party_name,
-   CASE WHEN p.id IS NULL AND (b.third_party_id IS NOT NULL OR u.id IS NULL) THEN true ELSE false END unassigned,
+   CASE WHEN p.id IS NULL AND (b.third_party_id IS NOT NULL OR u.id IS NULL) THEN true WHEN p.id IS NOT NULL AND u.id IS NOT NULL AND p.id<>u.id THEN true ELSE false END unassigned,
    b.group_id IS NOT NULL matched,
    CASE WHEN b.amount<0 THEN 'credit' WHEN d.due_on IS NULL THEN 'unknown' WHEN d.due_on>=p_as_of THEN 'current' WHEN p_as_of-d.due_on<=30 THEN 'd30' WHEN p_as_of-d.due_on<=60 THEN 'd60' WHEN p_as_of-d.due_on<=90 THEN 'd90' ELSE 'older' END bucket
   FROM base b LEFT JOIN complete_groups g ON g.group_id=b.group_id
