@@ -45,6 +45,7 @@
     "supplierOrders": "Purchases",
     "accounting": "Accounting",
     "accountingPlan": "Chart of accounts",
+    "accountingJournalSettings":"Journal codes",
     "accountingOverview": "Accounting overview",
     "accountingEntry": "Journal entry",
     "vatReport": "VAT statement",
