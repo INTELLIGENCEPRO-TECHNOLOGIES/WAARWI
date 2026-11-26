@@ -1,5 +1,5 @@
 import { useEffect,useRef,useState } from 'react';
-import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
+import {useAccountingWindowId,mayCloseAccountingWindow,useAccountingWork} from '../context/AccountingWindowContext';
 import { supabase } from '../lib/supabase';
 import { AccountingTable } from './AccountingWorkspace';
 import { ChevronLeft, ChevronRight, Search, MoreHorizontal } from './Icons';
@@ -41,8 +41,13 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
  const [suggestions,setSuggestions]=useState<Suggestions|null>(null);
  const [suggestionBusy,setSuggestionBusy]=useState(false);
  const [confirmSuggestion,setConfirmSuggestion]=useState<string|null>(null);
- const windowId=useAccountingWindowId();
- useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(writeLock.current||((Object.keys(chosen).length>0||!!release||!!confirmSuggestion)&&!window.confirm('Un lettrage est en préparation. Fermer cette fenêtre ?')))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[windowId,chosen,release,confirmSuggestion]);
+ const windowId=useAccountingWindowId();const work=useAccountingWork();
+ const [batchRoots,setBatchRoots]=useState<string[]>([]);
+ const [gap,setGap]=useState<{account:string;date:string;reason:string}|null>(null);
+ const [gapAccounts,setGapAccounts]=useState<Account[]>([]),[gapAccountsBusy,setGapAccountsBusy]=useState(false);
+ const [localRefresh,setLocalRefresh]=useState(0);
+ const refresh=()=>{if(work)work.refresh();else setLocalRefresh(v=>v+1);};
+ useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(writeLock.current||((Object.keys(chosen).length>0||!!release||!!confirmSuggestion||batchRoots.length>0||!!gap)&&!window.confirm('Un lettrage est en préparation. Fermer cette fenêtre ?')))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[windowId,chosen,release,confirmSuggestion,batchRoots,gap]);
  useEffect(()=>{
   let live=true;setAccountBusy(true);setAccountError('');
   void (async()=>{try{
@@ -66,22 +71,26 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
    if(live)setResult(data as Statement);
   }catch(e){if(live)setError(msg(e));}finally{if(live)setBusy(false);}})();
   return()=>{live=false;};
- },[tenantId,request,refreshRevision]);
+ },[tenantId,request,refreshRevision,localRefresh]);
  const valid=!!code&&!!from&&!!to&&from<=to&&(Date.parse(to)-Date.parse(from))/86400000<=366;
  const changed=!!request&&(code!==request.code||from!==request.from||to!==request.to);
- useEffect(()=>{setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);},[refreshRevision]);
+ useEffect(()=>{setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);setBatchRoots([]);setGap(null);},[refreshRevision,localRefresh]);
  const canMatch=canManage&&result?.account.account_type==='auxiliary'&&/^(401|411)/.test(result.account.code);
  const selected=Object.values(chosen);
  const sumDebit=selected.reduce((n,l)=>n+Math.round(Number(l.debit)*100),0);
  const sumCredit=selected.reduce((n,l)=>n+Math.round(Number(l.credit)*100),0);
  const equal=selected.length>=2&&sumDebit>0&&sumDebit===sumCredit;
- const run=()=>{if(valid&&!saving&&!suggestionBusy){setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);setWriteError('');setNotice('');setRequest({code,from,to,offset:0,revision:(request?.revision??0)+1});}};
+ const diffCents=sumDebit-sumCredit;
+ const gapEligible=selected.length>=2&&selected.length<=99&&sumDebit>0&&sumCredit>0&&Number.isSafeInteger(diffCents)&&diffCents!==0&&Math.abs(diffCents)<=100000;
+ const gapPrefix=diffCents>0?'658':'758';
+ useEffect(()=>{if(!gap)return;let live=true;setGapAccountsBusy(true);setGapAccounts([]);void(async()=>{try{const rows:Account[]=[];for(let off=0;;off+=100){const {data,error:e}=await supabase.from('accounts').select('code,name,account_type,is_active').eq('tenant_id',tenantId).eq('is_active',true).eq('account_type','general').like('code',gapPrefix+'%').order('code').range(off,off+99);if(e)throw e;if(!live)return;rows.push(...((data??[]) as Account[]));if((data??[]).length<100)break;}if(live)setGapAccounts(rows);}catch(e){if(live)setWriteError(msg(e));}finally{if(live)setGapAccountsBusy(false);}})();return()=>{live=false;};},[tenantId,!!gap,gapPrefix]);
+ const run=()=>{if(valid&&!saving&&!suggestionBusy){setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);setBatchRoots([]);setGap(null);setWriteError('');setNotice('');setRequest({code,from,to,offset:0,revision:(request?.revision??0)+1});}};
  const toggle=(line:Line)=>{
-  setChosen(old=>{const next={...old};if(next[line.line_id])delete next[line.line_id];else if(Object.keys(next).length<100)next[line.line_id]=line;return next;});
+  setGap(null);setChosen(old=>{const next={...old};if(next[line.line_id])delete next[line.line_id];else if(Object.keys(next).length<100)next[line.line_id]=line;return next;});
  };
  const loadSuggestions=async()=>{
   if(!request||!canMatch||changed||suggestionBusy||saving)return;
-  setSuggestionBusy(true);setWriteError('');setConfirmSuggestion(null);
+  setSuggestionBusy(true);setWriteError('');setConfirmSuggestion(null);setBatchRoots([]);
   try{
    const {data,error:err}=await supabase.rpc('accounting_matching_suggestions',{p_tenant_id:tenantId,p_account_code:request.code,p_date_to:request.to});
    if(err)throw err;setSuggestions(data as Suggestions);
@@ -98,9 +107,22 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
    if(!response.data?.success)throw new Error('Opération non confirmée.');
    setChosen({});setRelease(null);setSuggestions(null);setConfirmSuggestion(null);
    setNotice(unmatch?'Lettrage annulé et motif enregistré.':'Lignes lettrées avec succès.');
-   setRequest(p=>p&&({...p,revision:p.revision+1}));
+   refresh();setRequest(p=>p&&({...p,revision:p.revision+1}));
   }catch(e){setWriteError(msg(e));}
   finally{setSaving(false);writeLock.current=false;}
+ };
+ const applyBatch=async()=>{
+  if(!request||!canMatch||changed||writeLock.current||saving||busy||suggestionBusy||release||gap||!suggestions||!batchRoots.length)return;
+  const groups=suggestions.rows.filter(x=>batchRoots.includes(x.root));if(groups.length!==batchRoots.length)return;
+  if(!window.confirm('Valider '+groups.length+' groupe(s) exact(s) liés aux pièces d’origine ?'))return;
+  writeLock.current=true;setSaving(true);setWriteError('');setNotice('');
+  try{const {data,error:e}=await supabase.rpc('confirm_accounting_matching_batch',{p_tenant_id:tenantId,p_account_code:request.code,p_date_to:request.to,p_groups:groups.map(x=>({root:x.root,line_ids:x.line_ids}))});if(e)throw e;if(!data?.success)throw Error('Lettrage non confirmé.');setChosen({});setSuggestions(null);setBatchRoots([]);setConfirmSuggestion(null);setNotice(data.groups+' groupe(s) lettré(s) : '+(data.codes??[]).join(', '));refresh();}catch(e){setWriteError(msg(e));}finally{writeLock.current=false;setSaving(false);}
+ };
+ const applyGap=async()=>{
+  if(!request||!canMatch||changed||writeLock.current||saving||busy||suggestionBusy||release||!gap||!gapEligible||!gap.reason.trim()||!gapAccounts.some(a=>a.code===gap.account)||gap.date>today()||selected.some(l=>l.entry_date>gap.date))return;
+  if(!window.confirm('Comptabiliser une OD de '+money(Math.abs(diffCents)/100)+' sur '+gap.account+' et lettrer les lignes ?'))return;
+  writeLock.current=true;setSaving(true);setWriteError('');setNotice('');
+  try{const {data,error:e}=await supabase.rpc('match_accounting_small_difference',{p_tenant_id:tenantId,p_account_code:request.code,p_line_ids:selected.map(l=>l.line_id),p_date:gap.date,p_offset_account:gap.account,p_expected_difference:diffCents/100,p_reason:gap.reason.trim()});if(e)throw e;if(!data?.success)throw Error('OD non confirmée.');setChosen({});setGap(null);setSuggestions(null);setBatchRoots([]);setNotice('OD '+data.piece_number+' validée · Lettrage '+data.match_code);refresh();}catch(e){setWriteError(msg(e));}finally{writeLock.current=false;setSaving(false);}
  };
  const download=()=>{
   if(!result||!request)return;
@@ -132,8 +154,8 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   {result&&request&&<div className="space-y-4">
    <div className="flex flex-wrap justify-between gap-2 items-center"><div><h2 className="text-sm font-semibold break-words">{result.account.code} · {result.account.name}</h2><p className="text-xs text-neutral-500">{formatDate(request.from)} au {formatDate(request.to)} · Écritures validées</p></div><button className="btn btn-secondary" onClick={download}>Exporter cette page (CSV)</button></div>
    <div className="acc-summary">{[['Solde initial',balance(result.opening_balance)],['Débit période',money(result.total_debit)],['Crédit période',money(result.total_credit)],['Solde final',balance(result.closing_balance)]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
-   <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. {result.opening_mode==='fiscal'?'Solde d’ouverture certifié de l’exercice, puis mouvements validés.':'Historique continu des écritures validées, sans arrêté précédent.'}</p>
-   {canMatch&&<div className="acc-toolbar"><button type="button" className="btn-secondary" aria-expanded={matchingOpen} onClick={()=>setMatchingOpen(v=>!v)}><MoreHorizontal size={16}/>Lettrage et propositions</button><span className="text-xs">{selected.length} ligne(s) · Écart : {money((sumDebit-sumCredit)/100)}</span><span className="acc-spacer"/><button type="button" className="btn-primary" disabled={!equal||saving||suggestionBusy||changed||!!release} onClick={()=>void apply()}>Lettrer</button></div>}
+   <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. {result.opening_mode==='fiscal'?'Solde d’ouverture arrêté de l’exercice, puis mouvements validés.':'Historique continu des écritures validées, sans arrêté précédent.'}</p>
+   {canMatch&&<div className="acc-toolbar"><button type="button" className="btn-secondary" aria-expanded={matchingOpen} onClick={()=>setMatchingOpen(v=>!v)}><MoreHorizontal size={16}/>Lettrage et propositions</button><span className="text-xs">{selected.length} ligne(s) · Écart : {money((sumDebit-sumCredit)/100)}</span><span className="acc-spacer"/><button type="button" className="btn-primary" disabled={!equal||saving||suggestionBusy||changed||!!release||!!gap} onClick={()=>void apply()}>Lettrer</button></div>}
    {canMatch&&(matchingOpen||!!release)&&<div className="space-y-3 border-b border-neutral-200 pb-3">
     <h3 className="text-sm font-semibold">Lettrage manuel</h3>
     <p className="text-xs text-neutral-600">Cochez les factures et règlements correspondants. Vous pouvez sélectionner des lignes sur plusieurs pages ; seuls les groupes exactement équilibrés sont acceptés.</p>
@@ -143,17 +165,15 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
      <div>Crédit <strong className="block text-sm break-words">{money(sumCredit/100)}</strong></div>
      <div>Écart <strong className="block text-sm break-words">{money((sumDebit-sumCredit)/100)}</strong></div>
     </div>
-    <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-primary" disabled={!equal||saving||suggestionBusy||changed||!!release} onClick={()=>void apply()}>Lettrer la sélection</button><button type="button" className="btn btn-secondary" disabled={!selected.length||saving} onClick={()=>setChosen({})}>Vider la sélection</button></div>
+    <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-primary" disabled={!equal||saving||suggestionBusy||changed||!!release} onClick={()=>void apply()}>Lettrer la sélection</button><button type="button" className="btn-secondary" disabled={!selected.length||saving} onClick={()=>{setChosen({});setGap(null);}}>Vider la sélection</button>{gapEligible&&<button type="button" className="btn-secondary" disabled={saving||changed||!!release} onClick={()=>{setGap({account:'',date:today(),reason:''});setBatchRoots([]);}}>Traiter le petit écart</button>}</div>
+    {gap&&<div className="acc-section-head space-y-2"><strong className="text-xs">OD d’écart : {money(Math.abs(diffCents)/100)} · {diffCents>0?'Charge':'Produit'}</strong><p className="text-xs text-neutral-500">Uniquement pour un écart justifié, non pour une créance à recouvrer ou un règlement partiel. Plafond de 1 000 FCFA. Aucun compte présélectionné.</p><div className="acc-toolbar"><label>Compte d’écart<select className="input" disabled={saving||gapAccountsBusy} value={gap.account} onChange={e=>setGap({...gap,account:e.target.value})}><option value="">Choisir un compte {gapPrefix}…</option>{gapAccounts.map(a=><option key={a.code} value={a.code}>{a.code} — {a.name}</option>)}</select></label><label>Date OD<input className="input" type="date" max={today()} value={gap.date} disabled={saving} onChange={e=>setGap({...gap,date:e.target.value})}/></label><label className="flex-1">Motif<input className="input w-full" maxLength={300} value={gap.reason} disabled={saving} onChange={e=>setGap({...gap,reason:e.target.value})}/></label></div><div className="acc-toolbar"><button className="btn-secondary" disabled={saving} onClick={()=>setGap(null)}>Annuler</button><button className="btn-primary" disabled={saving||!gapEligible||changed||!gap.account||!gap.date||!gap.reason.trim()} onClick={()=>void applyGap()}>Comptabiliser et lettrer</button></div></div>}
     {release&&<div className="space-y-2 border-t border-neutral-200 pt-3"><p className="text-sm font-medium">Délettrer le groupe {release.code} dans son intégralité</p><label className="block text-xs font-medium">Motif obligatoire<textarea className="input mt-1 w-full" maxLength={500} value={release.reason} disabled={saving} onChange={e=>setRelease(p=>p&&({...p,reason:e.target.value}))}/></label><div className="flex gap-2"><button type="button" className="btn btn-primary" disabled={saving||changed||!release.reason.trim()} onClick={()=>void apply(true)}>Confirmer le délettrage</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={()=>setRelease(null)}>Annuler</button></div></div>}
     <div className="border-t border-neutral-200 pt-3 space-y-2">
      <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold">Propositions automatiques</h4><button type="button" className="btn btn-secondary" disabled={suggestionBusy||saving||changed} onClick={()=>void loadSuggestions()}>{suggestionBusy?'Analyse…':'Rechercher les correspondances'}</button></div>
      <p className="text-xs text-neutral-500">Correspondances fondées sur les liens facture-règlement ou avoir existants, jusqu’au {formatDate(request.to)}, y compris les périodes antérieures. Aucune association par montant seul.</p>
      {suggestions&&<div className="space-y-2"><p className="text-xs text-neutral-600">{suggestions.total} groupe(s) proposé(s){suggestions.total>25?' · 25 premiers affichés':''}.</p>
-      {suggestions.rows.map(x=><div key={x.root} className="border border-neutral-200 rounded-lg p-3 space-y-2">
-       <div className="flex flex-wrap justify-between gap-2"><span className="text-sm font-medium">{x.root_piece} · {x.line_ids.length} lignes</span><strong className="text-sm tabular-nums">{money(x.amount)}</strong></div>
-       <p className="text-xs text-neutral-600 break-words">Pièces : {x.entries.join(' · ')}</p>
-       {confirmSuggestion===x.root?<div className="flex flex-wrap gap-2"><button type="button" className="btn btn-primary" disabled={saving||changed||!!release} onClick={()=>void apply(false,x.line_ids)}>Confirmer le groupe</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={()=>setConfirmSuggestion(null)}>Annuler</button></div>:<button type="button" className="btn btn-secondary" disabled={saving||changed||!!release} onClick={()=>setConfirmSuggestion(x.root)}>Lettrer ce groupe</button>}
-      </div>)}</div>}
+      <div className="acc-toolbar"><button className="btn-secondary" disabled={saving||!!gap||!!release} onClick={()=>setBatchRoots(suggestions.rows.map(x=>x.root))}>Tout sélectionner</button><button className="btn-secondary" disabled={saving||!batchRoots.length} onClick={()=>setBatchRoots([])}>Désélectionner</button><span className="acc-spacer"/><button className="btn-primary" disabled={!batchRoots.length||saving||changed||!!gap||!!release} onClick={()=>void applyBatch()}>Valider {batchRoots.length} groupe(s)</button></div>
+      <AccountingTable><table><thead><tr><th><span className="sr-only">Sélection</span></th><th className="text-left">Pièce d’origine / pièces liées</th><th className="text-right">Montant (FCFA)</th><th>Action</th></tr></thead><tbody>{suggestions.rows.map(x=><tr key={x.root}><td><input type="checkbox" aria-label={'Sélectionner '+x.root_piece} checked={batchRoots.includes(x.root)} disabled={saving||!!gap||!!release} onChange={()=>setBatchRoots(p=>p.includes(x.root)?p.filter(r=>r!==x.root):[...p,x.root])}/></td><td><strong>{x.root_piece}</strong><span className="block text-[11px] break-words">{x.entries.join(' · ')}</span></td><td className="text-right">{Number(x.amount).toLocaleString('fr-FR')}</td><td>{confirmSuggestion===x.root?<><button className="btn-primary" disabled={saving||changed||!!release||!!gap} onClick={()=>{setBatchRoots([]);void apply(false,x.line_ids);}}>Confirmer</button><button className="btn-secondary" disabled={saving} onClick={()=>setConfirmSuggestion(null)}>Annuler</button></>:<button className="btn-secondary" disabled={saving||changed||!!release||!!gap} onClick={()=>{setBatchRoots([]);setConfirmSuggestion(x.root);}}>Lettrer</button>}</td></tr>)}</tbody></table></AccountingTable></div>}
     </div>
     {writeError&&<p role="alert" className="text-xs text-red-700 break-words">{writeError}</p>}
     {notice&&<p role="status" className="text-xs text-neutral-700">{notice}</p>}
