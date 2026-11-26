@@ -1,0 +1,1 @@
+SET LOCAL lock_timeout = '1s'; SET LOCAL statement_timeout = '8s'; CREATE INDEX IF NOT EXISTS idx_perf_cash_control_lines_tenant_session ON public.cash_control_lines (tenant_id,cash_session_id); CREATE INDEX IF NOT EXISTS idx_perf_sale_items_tenant_sale ON public.sale_items (tenant_id,sale_id);
