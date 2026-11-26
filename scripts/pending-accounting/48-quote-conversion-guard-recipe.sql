@@ -1,0 +1,33 @@
+BEGIN;
+DO $test$
+DECLARE t uuid:=gen_random_uuid();u uuid:=gen_random_uuid();u2 uuid:=gen_random_uuid();site uuid:=gen_random_uuid();art uuid:=gen_random_uuid();cust uuid:=gen_random_uuid();w uuid:=gen_random_uuid();w2 uuid:=gen_random_uuid();qid uuid;tok uuid;tok2 uuid;v text;res jsonb;sid uuid;items jsonb;
+BEGIN
+ INSERT INTO public.tenants(id,name,enabled_modules) VALUES(t,'RECETTE CONVERSION DEVIS','[]');
+ INSERT INTO auth.users(id,email,aud,role) SELECT id,id::text||'@example.invalid','authenticated','authenticated' FROM unnest(ARRAY[u,u2]) id;
+ INSERT INTO public.profiles(id,tenant_id,role,site_access_mode,full_name,is_active) VALUES(u,t,'admin','all','Commercial A',true),(u2,t,'admin','all','Commercial B',true) ON CONFLICT(id) DO UPDATE SET tenant_id=excluded.tenant_id,role=excluded.role,site_access_mode=excluded.site_access_mode,full_name=excluded.full_name,is_active=true;
+ INSERT INTO public.sites(id,tenant_id,name,is_active) VALUES(site,t,'Magasin recette',true);
+ INSERT INTO public.articles(id,tenant_id,internal_ref,name,sale_price,purchase_price,track_stock) VALUES(art,t,'REC-001','Article recette',1000,500,false);
+ INSERT INTO public.customers(id,tenant_id,name) VALUES(cust,t,'Client recette');
+ items:=jsonb_build_array(jsonb_build_object('article_id',art,'name','Article recette','quantity',2,'unit_price',1000,'discount',0));
+ PERFORM set_config('request.jwt.claim.sub',u::text,true);EXECUTE 'SET LOCAL ROLE authenticated';
+ res:=public.create_quote_atomic(t,site,cust,NULL,'','{}',NULL,items,gen_random_uuid());qid:=(res->'quote'->>'id')::uuid;v:=res->>'version';
+ res:=public.document_edit_lease(t,'quote',qid::text,w,'acquire');tok:=(res->>'token')::uuid;
+ BEGIN PERFORM public.convert_checked_quote_to_sale(t,qid,w,tok,v,site,NULL,'[{"expected_ttc":2000}]');RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Brouillon converti';EXCEPTION WHEN SQLSTATE '55000' THEN NULL;END;
+ res:=public.change_locked_quote_status(t,qid,v,'accepted',w,tok);v:=res->>'version';
+ res:=public.document_edit_lease(t,'quote',qid::text,w,'acquire');tok:=(res->>'token')::uuid;
+ PERFORM set_config('request.jwt.claim.sub',u2::text,true);
+ res:=public.document_edit_lease(t,'quote',qid::text,w2,'acquire');
+ IF res->>'state' IS DISTINCT FROM 'busy' THEN RAISE EXCEPTION 'Double accès';END IF;
+ BEGIN PERFORM public.convert_checked_quote_to_sale(t,qid,w2,tok,v,site,NULL,'[{"expected_ttc":2000}]');RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Conversion concurrente acceptée';EXCEPTION WHEN SQLSTATE '55000' THEN NULL;END;
+ PERFORM set_config('request.jwt.claim.sub',u::text,true);
+ BEGIN PERFORM public.convert_checked_quote_to_sale(t,qid,w,tok,'ancienne-version',site,NULL,'[{"expected_ttc":2000}]');RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Version périmée acceptée';EXCEPTION WHEN serialization_failure THEN NULL;END;
+ res:=public.convert_checked_quote_to_sale(t,qid,w,tok,v,site,NULL,'[{"expected_ttc":2000}]');sid:=(res->>'sale_id')::uuid;
+ IF res->>'success' IS DISTINCT FROM 'true' OR sid IS NULL THEN RAISE EXCEPTION 'Conversion échouée';END IF;
+ PERFORM set_config('request.jwt.claim.sub',u2::text,true);
+ res:=public.document_edit_lease(t,'quote',qid::text,w2,'acquire');tok2:=(res->>'token')::uuid;
+ BEGIN PERFORM public.convert_checked_quote_to_sale(t,qid,w2,tok2,v,site,NULL,'[{"expected_ttc":2000}]');RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Double conversion';EXCEPTION WHEN SQLSTATE '55000' THEN NULL;END;
+ BEGIN PERFORM public.convert_quote_to_sale(qid,site,NULL,'[{"expected_ttc":2000}]');RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Ancienne API accessible';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ EXECUTE 'RESET ROLE';
+ IF (SELECT count(*) FROM public.sales WHERE tenant_id=t)<>1 OR (SELECT count(*) FROM public.sale_items WHERE tenant_id=t)<>1 OR (SELECT total FROM public.sales WHERE id=sid)<>2000 OR (SELECT converted_sale_id FROM public.quotes WHERE id=qid) IS DISTINCT FROM sid THEN RAISE EXCEPTION 'Résultat conversion incohérent';END IF;
+END $test$;
+ROLLBACK;
