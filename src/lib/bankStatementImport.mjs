@@ -3,7 +3,12 @@ export const normalizeBankHeader=v=>String(v??'').normalize('NFD').replace(/[\u0
 export function bankMinor(v){
  const s=String(v??'').trim().replace(/[\s\u00a0\u202f]/g,'').replace(',','.');
  if(!/^-?\d+(\.\d{1,2})?$/.test(s))throw Error('Montant invalide (deux décimales maximum).');
- const n=Math.round(Number(s)*100);if(!Number.isSafeInteger(n))throw Error('Montant hors limite.');return n;
+ const negative=s.startsWith('-');const [whole,fraction='']=s.replace(/^-/,'').split('.');
+ const cents=BigInt(whole)*100n+BigInt(fraction.padEnd(2,'0'));
+ // Below 2^46 currency units every cent remains distinguishable in a JS number.
+ // Refuse beyond this boundary instead of silently rounding input or RPC payloads.
+ if(cents>=7036874417766400n)throw Error('Montant hors limite de précision.');
+ return Number(negative?-cents:cents);
 }
 export function bankDate(v){
  let date;if(v instanceof Date&&Number.isFinite(v.getTime()))date=v.toISOString().slice(0,10);
