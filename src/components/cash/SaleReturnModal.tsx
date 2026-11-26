@@ -11,7 +11,7 @@ import { useToast } from '../../context/ToastContext';
 import { formatFCFA } from '../../lib/format';
 import { CashModal } from '../CashModal';
 import {ReturnRecoveryPanel} from '../ReturnRecoveryPanel';
-import {submitReturnRequest,finishReturnRequest} from '../../lib/returnRequestJournal';
+import {submitReturnRequest} from '../../lib/returnRequestJournal';
 import { printReturnTicket80 as printReturnTicket80Shared } from '../../lib/print';
 import { newIdempotencyKey } from '../../lib/cashSession';
 import { cashOpError, permsPendingMessage, type CashOpContext, type SessionSale } from './cashOpContext';
@@ -152,9 +152,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
       const retNum = result?.return_number || 'RET-?';
       try {printReturnTicket80Shared(returnSelected.sale_number, lines, refunded, bound.printTenant, bound.userName, retNum, returnSelected.customer_name, result, settledMode);} catch {error('Retour enregistré, mais impression du ticket impossible.');}
 
-      try{await finishReturnRequest(opKey,'ack');}catch{error('Retour enregistré. Une confirmation reste disponible dans le panneau de reprise.');}
-      setOpKey(newIdempotencyKey());
-      onClose();
+      setReturnSelected(null);setReturnLines([]);setPendingReturn(true);
       success(settledMode==='avoir'?`Avoir de ${formatFCFA(refunded)} enregistré`:settledMode==='cash'?`Retour effectué : ${formatFCFA(refunded)} remboursés`:`Retour enregistré : ${formatFCFA(refunded)} à traiter depuis la facturation`);
       onDone();
     } catch (e: any) {
