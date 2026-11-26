@@ -23,3 +23,12 @@ test('Import intégral ou refus, jamais de troncage',()=>{
  assert.throws(()=>bankCsv('Date;Libellé;Montant\n2026-11-26;OK;100\n2026-02-31;Erreur;10'));
  assert.throws(()=>bankCsv('Date;Libellé;Montant;Montant\n2026-11-26;OK;100;200'));
 });
+
+test('Conversion exacte des centimes et refus au-delà de la précision du transport numérique',()=>{
+ assert.equal(bankMinor('0,29'),29);
+ assert.equal(bankMinor('-0,01'),-1);
+ assert.equal(bankMinor('70368744177663.99'),7036874417766399);
+ assert.throws(()=>bankMinor('70368744177664.00'));
+ assert.throws(()=>bankMinor('90071992547409.01'));
+ assert.equal(bankRows([['Date','Libellé','Montant'],['2026-11-26','Virement','70368744177663.99']])[0].amount,'70368744177663.99');
+});
