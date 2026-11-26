@@ -1,6 +1,6 @@
 -- Phase 7 rollback recipe. Only run in a test database after pending migrations.
 DO $recipe$
-DECLARE t uuid;u uuid;other uuid;bank text;dt date:=(now() AT TIME ZONE 'Africa/Dakar')::date;svc date;last_month date;acq uuid;aid uuid;r jsonb;d jsonb;due jsonb;x jsonb;sale uuid;before_count int;fixture_code text:='RECETTE-'||gen_random_uuid()::text;
+DECLARE t uuid;u uuid;other uuid;bank text;dt date:=(now() AT TIME ZONE 'Africa/Dakar')::date;svc date;last_month date;acq uuid;aid uuid;r jsonb;d jsonb;due jsonb;x jsonb;sale uuid;before_count int;fixture_code text:='RECETTE-'||left(gen_random_uuid()::text,24);
 BEGIN
  SELECT id INTO STRICT t FROM public.tenants WHERE name='TEST COMPTA';
  SELECT id INTO u FROM public.profiles WHERE tenant_id=t AND role='admin' LIMIT 1;
@@ -36,7 +36,7 @@ BEGIN
  BEGIN PERFORM public.dispose_accounting_asset(t,aid,dt,'sale','8119999',sale,'Test',(x->>'net')::numeric+1,true);RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='VNC erronée acceptée';EXCEPTION WHEN SQLSTATE '40001' THEN NULL;END;
  r:=public.dispose_accounting_asset(t,aid,dt,'sale','8119999',sale,'Test',(x->>'net')::numeric,true);
  d:=public.accounting_asset_detail(t,aid);
- IF (d->'asset'->>'disposed_on')::date<>dt OR (d->>'posted')::numeric IS DISTINCT FROM (x->>'cumulative')::numeric OR r->>'net' IS DISTINCT FROM x->>'net' THEN RAISE EXCEPTION 'Sortie incohérente';END IF;
+ IF (d->'asset'->>'disposed_on')::date<>dt OR (d->>'posted')::numeric IS DISTINCT FROM (x->>'cumulative')::numeric OR (r->>'net')::numeric IS DISTINCT FROM (x->>'net')::numeric THEN RAISE EXCEPTION 'Sortie incohérente';END IF;
  IF EXISTS(SELECT 1 FROM public.journal_entries WHERE tenant_id=t AND id=(r->>'entry_id')::uuid AND total_debit<>total_credit) THEN RAISE EXCEPTION 'Sortie déséquilibrée';END IF;
  EXECUTE 'RESET ROLE';
  RAISE EXCEPTION USING ERRCODE='P9099',MESSAGE='RECETTE_OK_ROLLBACK';
