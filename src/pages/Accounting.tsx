@@ -77,6 +77,7 @@ export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }
 
 /* ===================== PLAN COMPTABLE ===================== */
 function PlanTab() {
+  const work=useAccountingWork();
   const { tenant } = useApp();
   const { success, error } = useToast();
   const { can } = usePermissions();
@@ -132,7 +133,7 @@ function PlanTab() {
       </div>
       <AccountingTable footer={<AccountingPagination {...paging}/>}>
         <table><thead><tr><th className="text-left">Compte</th><th className="text-left">Intitulé</th><th className="text-left hidden sm:table-cell">Classe</th><th className="text-right">Actions</th></tr></thead>
-          <tbody>{paging.rows.map(a=><tr key={a.id}><td className="font-medium whitespace-nowrap">{a.code}</td><td>{a.name}</td><td className="hidden sm:table-cell">{a.class}</td><td className="text-right">{canManage&&<button type="button" className="acc-icon" aria-label={'Modifier '+a.code} onClick={()=>{setEditing(a);setForm({...a});setOpen(true);}}><Edit2 size={16}/></button>}</td></tr>)}
+          <tbody>{paging.rows.map(a=><tr key={a.id}><td className="font-medium whitespace-nowrap"><button type="button" className="hover:underline" onClick={()=>work?.openAccount(a.code)}>{a.code}</button></td><td>{a.name}</td><td className="hidden sm:table-cell">{a.class}</td><td className="text-right">{canManage&&<button type="button" className="acc-icon" aria-label={'Modifier '+a.code} onClick={()=>{setEditing(a);setForm({...a});setOpen(true);}}><Edit2 size={16}/></button>}</td></tr>)}
           {!visible.length&&<tr><td colSpan={4} className="text-center text-neutral-500">Aucun compte correspondant.</td></tr>}</tbody>
         </table>
       </AccountingTable>
@@ -576,6 +577,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
 
 /* ===================== BALANCE GENERALE (via RPC) ===================== */
 function BalanceTab() {
+  const work=useAccountingWork();
   const { tenant } = useApp();
   const { success, error: toastError } = useToast();
   const { can } = usePermissions();
@@ -717,7 +719,7 @@ function BalanceTab() {
                 <tbody className="divide-y divide-neutral-100">
                   {balancePaging.rows.map((r: any) => (
                     <tr key={r.account_code} className="hover:bg-[var(--w-surface-el)]/60">
-                      <td className="px-1 md:px-4 py-2.5 font-mono text-xs text-brand-700">{r.account_code}</td>
+                      <td className="px-1 md:px-4 py-2.5 text-xs"><button type="button" className="font-medium hover:underline" onClick={()=>work?.openAccount(r.account_code)}>{r.account_code}</button></td>
                       <td className="px-1 md:px-4 py-2.5 text-neutral-700">{r.account_name}</td>
                       <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs">{Number(r.total_debit) > 0 ? Number(r.total_debit).toLocaleString('fr-FR') : '—'}</td>
                       <td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs">{Number(r.total_credit) > 0 ? Number(r.total_credit).toLocaleString('fr-FR') : '—'}</td>
