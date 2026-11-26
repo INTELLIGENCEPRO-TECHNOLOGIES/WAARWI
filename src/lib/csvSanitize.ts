@@ -1,4 +1,4 @@
-const FORMULA_PREFIX = /^[=+\-@]/;
+const FORMULA_PREFIX = /^[\s\u0000-\u001f]*[=+\-@]|^[\t\r\n]/;
 
 export function sanitizeCsvValue(value: string): string {
   if (typeof value !== 'string') return value;
