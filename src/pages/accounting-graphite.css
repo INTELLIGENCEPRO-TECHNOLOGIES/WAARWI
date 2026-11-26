@@ -230,3 +230,14 @@
 .accounting-workspace .acc-analytics-fields label{font-size:11px;min-width:0}
 .accounting-workspace .acc-analytics-fields .input{margin-top:3px;min-width:0}
 @container(max-width:680px){.accounting-workspace .acc-analytics-fields{grid-template-columns:minmax(0,1fr)}}
+
+/* Keep multi-row table headings together when scrolling. */
+.accounting-workspace .acc-table-scroll thead{position:sticky;top:0;z-index:2}
+.accounting-workspace .acc-table-scroll thead th{position:static}
+.accounting-workspace .acc-table-scroll:focus-visible{outline:2px solid var(--w-text);outline-offset:-2px}
+.accounting-workspace .acc-search-pending{font-size:11px;color:var(--w-text-sec);border-left:2px solid var(--w-text-muted);padding:4px 8px;margin-top:6px}
+.accounting-workspace .acc-entry-header{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.accounting-workspace .acc-entry-header>*{min-width:0}
+.accounting-workspace .acc-entry-header .input{width:100%;max-width:100%}
+@container (max-width:660px){.accounting-workspace .acc-entry-header{grid-template-columns:minmax(0,1fr)}}
+@media print{.accounting-workspace .acc-table-scroll thead{position:static}}
