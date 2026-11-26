@@ -1,7 +1,7 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Loader2, Save, Pencil as Edit2, Search, FileText, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
+import { Plus, Loader2, Save, Pencil as Edit2, Search, CheckCircle, PlayCircle, X, Check, Trash2, Download } from '../components/Icons';
 import {AccountingOverview} from '../components/AccountingOverview';
 import { AccountingPagination, AccountingTable, AccountingRowActions, useAccountingPagination } from '../components/AccountingWorkspace';
 import './accounting-graphite.css';
@@ -20,7 +20,6 @@ import { useApp } from '../context/AppContext';
 import {useAccountingWindowId,mayCloseAccountingWindow,useAccountingWork} from '../context/AccountingWindowContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
-import { Modal } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
 import { sanitizeCsvValue } from '../lib/csvSanitize';
@@ -138,17 +137,14 @@ function PlanTab() {
         </table>
       </AccountingTable>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le compte' : 'Nouveau compte'} size="sm"
-        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
+      {open&&<section className="acc-section-head space-y-2"><div className="acc-toolbar"><strong className="text-sm">{editing?'Modifier le compte':'Nouveau compte'}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={saving} onClick={()=>setOpen(false)}>Annuler</button><button type="button" className="btn-primary" disabled={saving} onClick={save}>{saving?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Enregistrer</button></div><div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
           <div>
             <label className="label">Code (7 chiffres) *</label>
             <input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="5710000" maxLength={7} disabled={!!editing} />
             {form.code?.length === 7 && <p className="text-xs text-slate-500 mt-1">Classe {form.code.charAt(0)}</p>}
           </div>
           <div><label className="label">Intitulé *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
-        </div>
-      </Modal>
+        </div></section>}
     </div>
   );
 }
@@ -477,23 +473,10 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
       </AccountingTable>
 
       {/* Create modal — retained fallback for embedded use */}
-      <Modal open={open} onClose={closeEntry} title="Nouvelle écriture comptable" size="xl" fullscreenMobile panelClassName="acc-entry-dialog" footer={entryFooter}>{entryForm}</Modal>
+      {open&&<section className="acc-section-head">{entryForm}{entryFooter}</section>}
 
       {/* Export modal */}
-      <Modal open={exportOpen} onClose={() => !exportLoading && setExportOpen(false)} title="Exporter les écritures comptables" size="lg"
-        footer={<>
-          <button onClick={() => setExportOpen(false)} disabled={exportLoading} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          {!exportData ? (
-            <button onClick={prepareExport} disabled={exportLoading || !exportDateFrom || !exportDateTo} className="btn-icon-primary disabled:opacity-50" title="Préparer l'export">
-              {exportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            </button>
-          ) : (
-            <button onClick={downloadExport} className="btn-icon-primary" title="Télécharger">
-              <Download className="w-4 h-4" />
-            </button>
-          )}
-        </>}>
-        <div className="space-y-4">
+      {exportOpen&&<section className="acc-section-head space-y-3"><div className="acc-toolbar"><strong className="text-sm">Export comptable</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={exportLoading} onClick={()=>setExportOpen(false)}>Fermer</button>{!exportData?<button type="button" className="btn-primary" disabled={exportLoading||!exportDateFrom||!exportDateTo} onClick={prepareExport}>{exportLoading?<Loader2 size={15} className="animate-spin"/>:<Search size={15}/>}Préparer</button>:<button type="button" className="btn-primary" onClick={downloadExport}><Download size={15}/>Télécharger</button>}</div><div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Date de début *</label>
@@ -522,7 +505,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
           </div>
 
           {exportError && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+            <div className="flex items-start gap-2 text-xs text-red-700">
               <X className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{exportError}</span>
             </div>
@@ -541,12 +524,12 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
           )}
 
           {exportData && (
-            <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
+            <div className="acc-section-head space-y-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
                 <CheckCircle className="w-4 h-4 shrink-0" />
                 <span>Export prêt — choisissez le format puis téléchargez</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-emerald-700">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-neutral-700">
                 <div><span className="font-medium">Période :</span> {exportDateFrom} au {exportDateTo}</div>
                 <div><span className="font-medium">Journal :</span> {exportJournal ? (JOURNAL_TYPES[exportJournal] || exportJournal) : 'Tous'}</div>
                 <div><span className="font-medium">Écritures :</span> {exportData.entryCount.toLocaleString('fr-FR')}</div>
@@ -561,14 +544,13 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
           )}
 
           {!exportData && (
-            <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 text-xs text-neutral-500 space-y-1">
+            <div className="text-xs text-neutral-500 space-y-1">
               <p>Seules les écritures <strong>validées</strong> (statut « Validé ») sont exportées.</p>
               <p>Un contrôle d'intégrité (équilibre débit/crédit) est effectué avant chaque export.</p>
               <p>Période maximale : 366 jours.</p>
             </div>
           )}
-        </div>
-      </Modal>
+        </div></section>}
 
 
     </div>
