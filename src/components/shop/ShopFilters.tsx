@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { X, CheckCircle2, ChevronDown, Tag } from 'lucide-react';
+import { X, CheckCircle2, ChevronDown } from 'lucide-react';
 import type { Category, VehicleBrand, VehicleModel } from '../../lib/shopTypes';
 
 type Props = {

@@ -9,10 +9,7 @@ type Props = {
   onScrollToProducts?: () => void;
 };
 
-export function ShopHero({
-  tenant,
-  settings,
-}: Props) {
+export function ShopHero({ settings }: Props) {
   const coverImage = settings?.cover_image_url;
 
   if (!coverImage) {

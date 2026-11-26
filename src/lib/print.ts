@@ -1,6 +1,6 @@
 import type { VatAmounts } from './salesVat';
 import { BUSINESS_TYPE_LABELS, mergeTicketHeaderConfig, mergeA4HeaderConfig } from './types';
-import type { TicketHeaderItem, TicketHeaderSize, A4HeaderConfig, A4LogoPosition } from './types';
+import type { TicketHeaderItem, TicketHeaderSize, A4HeaderConfig } from './types';
 import { cashMovementLabel, cashMovementSign } from './cashMovements';
 import { measurePageMetrics, paginateByHeight, estimatePageMetrics } from './printPaginate';
 import type { PageMetrics } from './printPaginate';
@@ -196,36 +196,9 @@ function tenantHeader80Compact(t: PrintTenant) {
   return parts.join('');
 }
 
-function tenantHeaderA4Lines(t: PrintTenant) {
-  const config = mergeTicketHeaderConfig(t.header_config);
-  const parts: string[] = [];
-  for (const item of config) {
-    if (item.key === 'logo') continue;
-    if (!item.show) continue;
-    const value = headerFieldValue(t, item.key);
-    if (!value) continue;
-    const sz = HEADER_SIZES_A4[item.size] || HEADER_SIZES_A4.sm;
-    const cls = item.key === 'name' ? 'h1' : item.key === 'activity' ? 'activity' : 'p';
-    const extraStyle = item.key === 'legal_name' ? 'font-weight:700;' : '';
-    const breakStyle = item.breakAfter ? 'margin-bottom:6px;' : '';
-    if (cls === 'h1') {
-      parts.push(`<h1 style="font-size:${sz.fs}px;font-weight:${sz.fw};line-height:1.1;${breakStyle}">${esc(value)}</h1>`);
-    } else if (cls === 'activity') {
-      parts.push(`<div class="activity" style="font-size:${sz.fs}px;font-weight:${sz.fw};${breakStyle}">${esc(value)}</div>`);
-    } else {
-      parts.push(`<p style="font-size:${sz.fs}px;font-weight:${sz.fw};${extraStyle}${breakStyle}">${esc(value)}</p>`);
-    }
-  }
-  return parts.join('');
-}
 
-function tenantLogoA4(t: PrintTenant) {
-  const config = mergeTicketHeaderConfig(t.header_config);
-  const item = config.find(c => c.key === 'logo');
-  if (!item || !item.show || !t.logo_url) return '';
-  const px = item.size === 'xl' ? 96 : item.size === 'lg' ? 76 : item.size === 'md' ? 60 : item.size === 'sm' ? 46 : 32;
-  return `<img src="${esc(t.logo_url)}" alt="" style="max-width:${px}px;max-height:${px}px;object-fit:contain;" onerror="this.style.display='none'"/>`;
-}
+
+
 
 // ── Shared A4 header (used by all A4 documents) ──────────────────────────────
 // One unified header component for reports, invoices, supplier orders,

@@ -2,12 +2,7 @@ import { clayTouchHandlers } from '../lib/clayTouch';
 import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  X, Check, Loader2, Lock, Trash2, Search, Package, Car,
-  Printer, Link2, MessageCircle, Pencil, ArrowRight, CreditCard,
-  Plus, Minus, ShieldCheck, Columns3, ChevronDown, RotateCcw,
-  CheckCircle, RefreshCw, Coins, BookOpen, Ban, ChevronLeft, ChevronRight, Wallet,
-} from 'lucide-react';
+import { X, Check, Loader2, Lock, Trash2, Search, Car, Printer, Link2, MessageCircle, Pencil, ArrowRight, CreditCard, Plus, Minus, ShieldCheck, Columns3, ChevronDown, RotateCcw, RefreshCw, Coins, BookOpen, Ban, ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { useTopLayer } from './modalStack';
 import { QtyInput } from './QtyInput';
 import { formatFCFA, formatNum } from '../lib/format';
@@ -779,7 +774,7 @@ const DOCUMENT_STATUS_LABELS: Record<string, string> = {
   converted: 'Converti', pending: 'En attente', approved: 'Approuvé', expired: 'Expiré',
 };
 
-function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onApplyCredit, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingBusy, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
+function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, onEdit, onPay, onApplyCredit, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingBusy, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
   tier: WidthTier;
   docType: DocType;
   mode: DocMode;
@@ -1083,7 +1078,7 @@ function ReturnConfigDialog({ lines, onConfirm, onClose }: {
 
 // ─── Validated Header (collapsed) ────────────────────────────────
 
-function ValidatedHeader({ headerForm, customers, docSettings, repLabel, onUnlock }: {
+function ValidatedHeader({ headerForm, customers, repLabel, onUnlock }: {
   headerForm: DocHeaderForm;
   customers: any[];
   docSettings: DocSettings;
@@ -1434,7 +1429,7 @@ function PaymentSection({ ipmBeneficiaire, ipmPartIpm, ipmPartClient, isCredit, 
 
 // ─── Article Search Modal ────────────────────────────────────────
 
-function ArticleSearchModal({ articles, initialQuery, onSelect, onClose, cols }: {
+function ArticleSearchModal({ articles, initialQuery, onSelect, onClose }: {
   articles: any[];
   initialQuery: string;
   onSelect: (article: any) => void;

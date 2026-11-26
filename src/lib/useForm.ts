@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
+import { useCallback, useMemo, useState, useRef } from 'react';
 
 export type ValidationRule<T> = {
   check: (value: any, allValues: T) => boolean | string;

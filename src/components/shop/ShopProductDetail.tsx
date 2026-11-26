@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { X, Plus, Minus, Car, Info, ShoppingCart } from 'lucide-react';
+import { X, Plus, Minus, Car, ShoppingCart } from 'lucide-react';
 import type { ShopArticle, Category } from '../../lib/shopTypes';
 import { stockBadge } from '../../lib/shopTypes';
 import { formatFCFA } from '../../lib/format';

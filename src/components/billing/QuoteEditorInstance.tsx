@@ -212,54 +212,9 @@ export function QuoteEditorInstance({
   }, [isPharmacy, quoteForm.customer_id, tenant?.id]);
 
   // ── Item helpers ──────────────────────────────────────────
-  const updateItem = (idx: number, field: keyof QuoteItem, val: any) => {
-    if (field === 'article_id') {
-      const art = articles.find((a: any) => a.id === val);
-      if (art) {
-        const tiers = articleTiers.filter(t => t.article_id === val);
-        if (tiers.length > 1) {
-          setItems(prev => {
-            const next = [...prev];
-            next[idx] = { ...next[idx], article_id: val, name: art.name };
-            if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
-            return next;
-          });
-          onTierPicker(art, idx);
-          return;
-        }
-      }
-    }
-    setItems(prev => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], [field]: val };
-      if (field === 'article_id') {
-        const art = articles.find((a: any) => a.id === val);
-        if (art) {
-          next[idx].name = art.name;
-          next[idx].ipm_eligible = (art as any).ipm_eligible !== false;
-          const tiers = articleTiers.filter(t => t.article_id === val);
-          next[idx].unit_price = tiers.length === 1 ? tiers[0].price : art.sale_price;
-          next[idx].tier_name = tiers.length === 1 ? tiers[0].tier_name : undefined;
-          if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
-        }
-      }
-      const it = next[idx];
-      next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
-      return next;
-    });
-  };
+  
 
-  const finalizeItem = (idx: number, field: 'quantity' | 'unit_price' | 'discount') => {
-    setItems(prev => {
-      const next = [...prev];
-      if (field === 'quantity' && (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1)) next[idx].quantity = 1;
-      if (field === 'unit_price' && (!Number(next[idx].unit_price) || Number(next[idx].unit_price) < 0)) next[idx].unit_price = 0;
-      if (field === 'discount' && (!Number(next[idx].discount) || Number(next[idx].discount) < 0)) next[idx].discount = 0;
-      const it = next[idx];
-      next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
-      return next;
-    });
-  };
+  
 
   // ── Save ──────────────────────────────────────────────────
   const saveQuote = async (opts?: { silent?: boolean }) => {
@@ -384,19 +339,10 @@ export function QuoteEditorInstance({
   };
 
   // ── Tier picker callback ──────────────────────────────────
-  const applyTier = (tierName: string, tierPrice: number, idx: number) => {
-    setItems(prev => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], unit_price: tierPrice, tier_name: tierName || undefined };
-      next[idx].total = Math.max(0, Number(next[idx].quantity || 1) * tierPrice - Number(next[idx].discount || 0));
-      return next;
-    });
-  };
+  
 
   // ── Vehicle picker callback ───────────────────────────────
-  const applyVehicleArticle = (art: any) => {
-    setItems(p => [...p, { article_id: art.id, name: art.name, quantity: 1, unit_price: art.sale_price, discount: 0, total: art.sale_price }]);
-  };
+  
 
   // Expose helpers to parent via ref-like pattern not needed — parent uses callbacks
 

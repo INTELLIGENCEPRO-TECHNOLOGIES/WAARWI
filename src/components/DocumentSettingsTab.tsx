@@ -1,9 +1,6 @@
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  Loader2, ChevronUp, ChevronDown, Eye, EyeOff, Lock,
-  Save, Check, GripVertical, Pencil, Trash2,
-} from 'lucide-react';
+import { Loader2, ChevronUp, ChevronDown, Eye, EyeOff, Lock, Save, GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';

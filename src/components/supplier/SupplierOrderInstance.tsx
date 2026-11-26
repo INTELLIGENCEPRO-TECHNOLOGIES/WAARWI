@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Lock, Truck, CheckCircle, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Lock, X, Loader2, AlertTriangle } from 'lucide-react';
 import { DispatchStep, type DispatchLineItem } from './DispatchStep';
 import { buildStockLevelMap, type StockLevelMap } from '../../lib/autoDistribute';
 import { supabase } from '../../lib/supabase';
@@ -9,7 +9,7 @@ import { useToast } from '../../context/ToastContext';
 import { loadFormDraft, clearFormDraft, saveFormDraft, scheduleSaveFormDraft, type OpInProgress } from '../../lib/draftRecovery';
 import { formatFCFA, formatDate } from '../../lib/format';
 import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../../lib/print';
-import { Modal, ConfirmDialog } from '../Modal';
+import { ConfirmDialog } from '../Modal';
 import { useSupplierOrderRights, revertSupplierOrderReception, deleteSupplierOrder, RECEIVED_STATUSES } from '../../lib/supplierOrderActions';
 import { VehicleArticlePicker } from '../VehicleArticlePicker';
 import {
@@ -402,17 +402,7 @@ export function SupplierOrderInstance({
     } else void submitReception(dd);
   };
 
-  const isDispatchValid = () => {
-    for (const [idx, item] of items.entries()) {
-      const itemId = item.id || `idx-${idx}`;
-      const addQty = Number(receiveQty[itemId] || 0);
-      if (addQty <= 0 || !item.article_id) continue;
-      const values = Object.values(dispatchData[itemId] || {}).map(v => Number(v || 0));
-      if (values.some(v => v < 0)) return false;
-      if (values.reduce((s, v) => s + v, 0) !== addQty) return false;
-    }
-    return true;
-  };
+  
 
   const loadStockForDispatch = async (lineItems: SOLineItem[], siteIds: string[]) => {
     setDispatchStockLoading(true);

@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Database, Download, RefreshCw, Trash2, Loader2, Clock,
-  ShieldCheck, AlertTriangle, Play, RotateCcw, Upload,
-  CheckCircle2, XCircle, Lock, Info, FileCheck
-} from 'lucide-react';
+import { Database, Download, RefreshCw, Trash2, Loader2, Clock, ShieldCheck, AlertTriangle, Play, RotateCcw, Upload, CheckCircle2, XCircle, Lock, FileCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';

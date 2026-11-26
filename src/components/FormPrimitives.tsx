@@ -1,4 +1,4 @@
-import { useState, type ReactNode, useEffect, useRef } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronDown, AlertCircle, Check, X, Loader2, Eye, EyeOff, Sparkles } from 'lucide-react';
 
 // ── FormField ───────────────────────────────────────────────────

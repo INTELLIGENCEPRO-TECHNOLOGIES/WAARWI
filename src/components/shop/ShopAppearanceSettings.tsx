@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Upload, Trash2, Eye, EyeOff, RotateCcw, Check, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Save, Upload, Trash2, RotateCcw, Check, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';

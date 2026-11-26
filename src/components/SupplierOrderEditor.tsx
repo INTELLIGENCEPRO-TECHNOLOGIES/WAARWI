@@ -1,10 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import {
-  X, Check, Loader2, Trash2, Search, Package, Car,
-  Printer, Link2, MessageCircle, Pencil, Plus, Minus,
-  CheckCircle, Truck, Ban, ChevronLeft, ChevronRight,
-  User, FileText, Calendar, Columns3,
-} from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { X, Check, Loader2, Trash2, Search, Car, Printer, Link2, MessageCircle, Pencil, CheckCircle, Truck, Ban, ChevronLeft, ChevronRight, User, FileText, Columns3 } from 'lucide-react';
 import { formatFCFA, formatNum } from '../lib/format';
 import { QtyInput } from './QtyInput';
 

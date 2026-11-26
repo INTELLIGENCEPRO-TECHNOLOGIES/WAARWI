@@ -85,18 +85,7 @@ export type InvoiceEditorInstanceProps = {
 
 const tenantForPrint = (t: any, site?: any): PrintTenant => buildPrintTenantForSite(t, site);
 
-export function InvoiceEditorInstance({
-  descriptor,
-  articles, customers, articleTiers, invoices, sales,
-  paymentMethods, docSettings, autoMode, isPharmacy,
-  activeReps, salesReps, repSettings, profileNames,
-  billSourceSiteId,
-  onClose, onSaved, onOpenNew, onInvoiceCreated, onOpenPay, onOpenCredit,
-  onCancelInvoice, onComptabiliser, accountingBusy, onCopyLink, onWhatsApp,
-  onReturnTransform, onSearchOpen, onVehiclePicker,
-  onCreateArticle, onCreateCustomer, onTierPicker,
-  onNavigateInvoice,
-}: InvoiceEditorInstanceProps) {
+export function InvoiceEditorInstance({ descriptor, articles, customers, invoices, paymentMethods, docSettings, autoMode, isPharmacy, activeReps, salesReps, repSettings, profileNames, billSourceSiteId, onClose, onSaved, onOpenNew, onInvoiceCreated, onOpenPay, onOpenCredit, onCancelInvoice, onComptabiliser, accountingBusy, onCopyLink, onWhatsApp, onReturnTransform, onSearchOpen, onVehiclePicker, onCreateArticle, onCreateCustomer }: InvoiceEditorInstanceProps) {
   const { tenant, currentSite, profile, user } = useApp();
   const { can } = usePermissions();
   const { success, error } = useToast();

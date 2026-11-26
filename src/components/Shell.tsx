@@ -1,14 +1,7 @@
 import { clayTouchHandlers } from '../lib/clayTouch';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  LayoutDashboard, ShoppingCart, Package, Boxes, Users,
-  BookOpen, Settings, LogOut, Menu, ChevronDown, Calculator,
-  Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library, Truck,
-  Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
-  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, ArrowRightLeft, UserCheck,
-  X, Monitor, Check, Activity,
-} from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Boxes, Users, BookOpen, Settings, LogOut, Menu, ChevronDown, Calculator, History, FileText, TrendingUp, Globe, Bell, Crown, Library, Truck, Plus, ChevronRight, BarChart3, ClipboardList, Star, PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, ArrowRightLeft, UserCheck, X, Monitor, Check, Activity } from 'lucide-react';
 import { AddressBook, CashRegister } from './Icons';
 import { AccountingNavigation } from './AccountingNavigation';
 import { useApp } from '../context/AppContext';
@@ -16,7 +9,7 @@ import { usePermissions, type PermissionKey } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { QuickActionsPanel } from './QuickActionsPanel';
-import { QuickActionProvider, useQuickAction } from '../context/QuickActionContext';
+import { QuickActionProvider } from '../context/QuickActionContext';
 import { CompactThemeToggle } from './ThemeToggle';
 import SubscriptionStatus from './SubscriptionStatus';
 import { SubscriptionPaymentButton } from './SubscriptionPaymentPanel';
@@ -458,7 +451,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
   // Sidebar search
   const [navSearch, setNavSearch] = useState('');
   const navSearchRef = useRef<HTMLInputElement | null>(null);
-  const [searchFocused, setSearchFocused] = useState(false);
+  const [, setSearchFocused] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
 
   const allNavItems = useMemo(() => NAV_GROUPS.flatMap(group =>
