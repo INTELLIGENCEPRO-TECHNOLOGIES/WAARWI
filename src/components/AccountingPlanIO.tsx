@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle, Loader2, ArrowRight, FileDown, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Download, Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle, Loader2, ArrowRight, FileDown, ChevronLeft, ChevronRight, FileText } from './Icons';
 import { sanitizeCsvValue, desanitizeCsvValue } from '../lib/csvSanitize';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
-import { Modal } from './Modal';
+import {useAccountingWork,useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
 
 interface AccountRow {
   code: string;
@@ -55,8 +55,9 @@ function isRowEmpty(row: Record<string, any>): boolean {
   return Object.values(row).every(v => v === undefined || v === null || String(v).trim() === '');
 }
 
-export function AccountingPlanIO({ accounts, onImportDone }: { accounts: AccountRow[]; onImportDone: () => void }) {
+export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onClose }: { accounts: AccountRow[]; onImportDone: () => void;importOnly?:boolean;onClose?:()=>void }) {
   const { tenant } = useApp();
+  const work=useAccountingWork();const windowId=useAccountingWindowId();
   const { success, error: showError } = useToast();
   const { can } = usePermissions();
   const canView = can('view_accounting');
@@ -67,7 +68,7 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  const [importOpen, setImportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(importOnly);
   const [importStep, setImportStep] = useState<'upload' | 'preview' | 'done'>('upload');
   const [importing, setImporting] = useState(false);
   const [preview, setPreview] = useState<ImportResult | null>(null);
@@ -255,14 +256,15 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
     if (file) handleFile(file);
   };
 
+  useEffect(()=>{const guard=(event:Event)=>{if(!mayCloseAccountingWindow(event,windowId)||event.defaultPrevented)return;if(importing||(importOpen&&importStep==='preview'&&!window.confirm('Un import est en préparation. Fermer cette fenêtre ?')))event.preventDefault();};window.addEventListener('waarwi:accounting-before-navigate',guard);return()=>window.removeEventListener('waarwi:accounting-before-navigate',guard);},[windowId,importing,importOpen,importStep]);
   if (!canView && !canManage) return null;
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case 'created': return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700"><CheckCircle2 className="w-3 h-3" />Nouveau</span>;
-      case 'renamed': return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700"><ArrowRight className="w-3 h-3" />Renommé</span>;
-      case 'unchanged': return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-neutral-100 text-neutral-500">Inchangé</span>;
-      case 'error': return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-50 text-red-700"><XCircle className="w-3 h-3" />Erreur</span>;
+      case 'created': return <span className="inline-flex items-center gap-1  text-[11px] font-medium text-emerald-700"><CheckCircle2 className="w-3 h-3" />Nouveau</span>;
+      case 'renamed': return <span className="inline-flex items-center gap-1  text-[11px] font-medium text-amber-700"><ArrowRight className="w-3 h-3" />Renommé</span>;
+      case 'unchanged': return <span className="inline-flex items-center gap-1  text-[11px] font-medium text-neutral-500">Inchangé</span>;
+      case 'error': return <span className="inline-flex items-center gap-1  text-[11px] font-medium text-red-700"><XCircle className="w-3 h-3" />Erreur</span>;
       default: return null;
     }
   };
@@ -274,7 +276,7 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
 
   return (
     <>
-      <div className="flex items-center gap-1.5">
+      {!importOnly&&<div className="flex items-center gap-1.5">
         {canView && (
           <div className="relative" ref={exportMenuRef}>
             <button
@@ -299,33 +301,18 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
         )}
 
         {canManage && (
-          <button onClick={openImport} className="btn-icon" title="Importer un plan comptable">
+          <button onClick={()=>work?work.openPlanImport():openImport()} className="btn-icon" title="Importer un plan comptable">
             <Upload className="w-4 h-4" />
           </button>
         )}
-      </div>
+      </div>}
 
-      {canManage && <Modal open={importOpen} onClose={() => !importing && setImportOpen(false)} title="Import du plan comptable" size="lg"
-        footer={
-          importStep === 'preview' && preview && !hasErrors && (preview.created > 0 || preview.renamed > 0) ? (
-            <div className="flex items-center gap-2">
-              <button onClick={() => { setImportStep('upload'); setPreview(null); setFileName(''); }} disabled={importing} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Retour</button>
-              <button onClick={confirmImport} disabled={importing} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">
-                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Valider l\'import'}
-              </button>
-            </div>
-          ) : importStep === 'preview' && preview && hasErrors ? (
-            <button onClick={() => { setImportStep('upload'); setPreview(null); setFileName(''); }} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Retour</button>
-          ) : importStep === 'done' ? (
-            <button onClick={() => setImportOpen(false)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]">Fermer</button>
-          ) : undefined
-        }
-      >
+      {canManage&&importOpen&&<section className="space-y-3 w-full min-w-0"><div className="acc-toolbar acc-fixed"><strong className="text-sm">Import du plan comptable</strong><span className="acc-spacer"/>{importStep==='preview'&&<button type="button" className="btn-secondary" disabled={importing} onClick={()=>{setImportStep('upload');setPreview(null);setFileName('');}}>Retour</button>}{importStep==='preview'&&preview&&!hasErrors&&(preview.created>0||preview.renamed>0)&&<button type="button" className="btn-primary" disabled={importing} onClick={confirmImport}>{importing?<Loader2 size={15} className="animate-spin"/>:<CheckCircle2 size={15}/>}Valider l’import</button>}<button type="button" className="btn-secondary" disabled={importing} onClick={()=>{if(onClose)onClose();else setImportOpen(false);}}>Fermer</button></div>
         {importStep === 'upload' && (
           <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-              <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-blue-800 space-y-1">
+            <div className="flex items-start gap-3 p-3 border-b border-neutral-200">
+              <AlertTriangle className="w-4 h-4 text-neutral-600 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-neutral-700 space-y-1">
                 <p className="font-medium">Formats acceptés : .xlsx, .xls, .csv</p>
                 <p>Le fichier doit contenir au minimum les colonnes <span className="font-mono font-medium">Code</span> et <span className="font-mono font-medium">Intitulé</span>.</p>
                 <p>Codes : exactement 7 chiffres, classe 1 à 8. Maximum {MAX_ROWS.toLocaleString('fr-FR')} lignes, {MAX_FILE_SIZE / 1024 / 1024} Mo.</p>
@@ -336,8 +323,8 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={onDrop}
-              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
-                dragOver ? 'border-blue-400 bg-blue-50/50' : 'border-neutral-200 hover:border-neutral-300'
+              className={`border border-dashed p-5 text-center transition-colors cursor-pointer ${
+                dragOver ? 'border-neutral-800 bg-neutral-50' : 'border-neutral-200 hover:border-neutral-300'
               }`}
               onClick={() => fileRef.current?.click()}
             >
@@ -371,7 +358,7 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
               </div>
             )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="acc-summary">
               <Stat label="Total" value={preview.total} />
               <Stat label="Nouveaux" value={preview.created} color="emerald" />
               <Stat label="Renommés" value={preview.renamed} color="amber" />
@@ -379,7 +366,7 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
             </div>
 
             {hasErrors && (
-              <div className="p-3 bg-red-50 rounded-lg flex items-start gap-2">
+              <div className="p-3 border-b border-neutral-200 flex items-start gap-2">
                 <XCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-red-800">
                   <p className="font-medium">{preview.error_count} erreur(s) détectée(s) — l'import ne peut pas être validé en l'état.</p>
@@ -389,7 +376,7 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
             )}
 
             {!hasErrors && preview.created === 0 && preview.renamed === 0 && (
-              <div className="p-3 bg-neutral-50 rounded-lg flex items-start gap-2">
+              <div className="p-3 border-b border-neutral-200 flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-neutral-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-neutral-600">Tous les comptes existent déjà avec le même intitulé. Aucune modification nécessaire.</p>
               </div>
@@ -399,7 +386,7 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
               <p className="text-xs font-semibold text-neutral-700">
                 Détail ({allRows.length} ligne{allRows.length > 1 ? 's' : ''})
               </p>
-              <div className="max-h-72 overflow-y-auto rounded-lg border border-neutral-100">
+              <div className="acc-table-scroll">
                 <table className="w-full text-xs">
                   <thead className="bg-neutral-50 sticky top-0">
                     <tr>
@@ -411,10 +398,10 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
                   </thead>
                   <tbody className="divide-y divide-neutral-50">
                     {pagedRows.map(r => (
-                      <tr key={r.line} className={r.status === 'error' ? 'bg-red-50/50' : ''}>
+                      <tr key={r.line} className={r.status === 'error' ? '' : ''}>
                         <td className="px-3 py-1.5 text-neutral-400">L{r.line}</td>
                         <td className="px-3 py-1.5 font-mono text-neutral-600">{r.code}</td>
-                        <td className="px-3 py-1.5 text-neutral-700 truncate max-w-[200px]" title={r.status === 'error' ? r.error : r.name}>
+                        <td className="px-3 py-1.5 text-neutral-700 break-words" title={r.status === 'error' ? r.error : r.name}>
                           {r.status === 'error' ? (
                             <span className="text-red-600">{r.error}</span>
                           ) : r.name}
@@ -443,7 +430,7 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
         {importStep === 'done' && finalResult && (
           <div className="space-y-4">
             {finalResult.success ? (
-              <div className="p-4 bg-emerald-50 rounded-lg flex items-start gap-3">
+              <div className="p-4 border-b border-neutral-200 flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-emerald-800">Import terminé avec succès</p>
@@ -453,7 +440,7 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
                 </div>
               </div>
             ) : (
-              <div className="p-4 bg-red-50 rounded-lg flex items-start gap-3">
+              <div className="p-4 border-b border-neutral-200 flex items-start gap-3">
                 <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-red-800">Import échoué</p>
@@ -463,19 +450,15 @@ export function AccountingPlanIO({ accounts, onImportDone }: { accounts: Account
             )}
           </div>
         )}
-      </Modal>}
+</section>}
     </>
   );
 }
 
 function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
-  const colors: Record<string, string> = {
-    emerald: 'text-emerald-700 bg-emerald-50',
-    amber: 'text-amber-700 bg-amber-50',
-    red: 'text-red-700 bg-red-50',
-  };
+  const colors: Record<string, string> = {emerald:'text-neutral-900',amber:'text-neutral-900',red:'text-red-700'};
   return (
-    <div className={`rounded-lg px-3 py-2 ${color ? colors[color] : 'bg-neutral-50 text-neutral-700'}`}>
+    <div className={`${color ? colors[color] : 'text-neutral-700'}`}>
       <p className="text-[10px] font-medium opacity-70">{label}</p>
       <p className="text-lg font-bold">{value}</p>
     </div>
