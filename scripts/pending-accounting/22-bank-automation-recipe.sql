@@ -1,3 +1,4 @@
+-- Recette actualisée : passage par le même verrou que l'application, sans contournement.
 -- Execute after pending migrations 12–21 on a test database; all mutations roll back.
 DO $recipe$
 DECLARE t uuid;u uuid;other uuid;bank text;contra text;fee text;dt date:=(now() AT TIME ZONE 'Africa/Dakar')::date;initial numeric;r jsonb;sid uuid;proposal jsonb;fee_id uuid;expected numeric;before_count int;
@@ -12,9 +13,9 @@ BEGIN
  SELECT coalesce(sum(l.debit-l.credit),0) INTO initial FROM public.journal_lines l JOIN public.journal_entries e ON e.id=l.entry_id AND e.tenant_id=l.tenant_id WHERE l.tenant_id=t AND l.account_code=bank AND e.status='posted' AND e.entry_date<dt;
  BEGIN
  PERFORM set_config('request.jwt.claim.sub',u::text,true);PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);EXECUTE 'SET LOCAL ROLE authenticated';
- PERFORM public.create_manual_journal_entry_idempotent(t,'BQ',dt,'RECETTE UNIQUE','REF-UNIQUE',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',98765.43,'credit',0),jsonb_build_object('account_code',contra,'debit',0,'credit',98765.43)),gen_random_uuid());
+ PERFORM public.post_locked_manual_entry(t,'BQ',dt,'RECETTE UNIQUE','REF-UNIQUE',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',98765.43,'credit',0),jsonb_build_object('account_code',contra,'debit',0,'credit',98765.43)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal','BQ'||':'||to_char(dt,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
  FOR i IN 1..2 LOOP
- PERFORM public.create_manual_journal_entry_idempotent(t,'BQ',dt,'RECETTE AMBIGUE','REF-DOUBLE',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',76543.21,'credit',0),jsonb_build_object('account_code',contra,'debit',0,'credit',76543.21)),gen_random_uuid());
+ PERFORM public.post_locked_manual_entry(t,'BQ',dt,'RECETTE AMBIGUE','REF-DOUBLE',jsonb_build_array(jsonb_build_object('account_code',bank,'debit',76543.21,'credit',0),jsonb_build_object('account_code',contra,'debit',0,'credit',76543.21)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal','BQ'||':'||to_char(dt,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
  END LOOP;
  r:=public.create_bank_statement(t,bank,'RECETTE AUTO',dt,dt,initial,initial+98765.43+76543.21-321.09,jsonb_build_array(
  jsonb_build_object('date',dt,'label','Unique','reference','REF-UNIQUE','amount',98765.43),

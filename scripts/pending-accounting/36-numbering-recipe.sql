@@ -1,3 +1,4 @@
+-- Recette actualisée : passage par le même verrou que l'application, sans contournement.
 -- Staging only, after installation of script 35. Entire fixture rolls back.
 DO $recipe$
 DECLARE t uuid;u uuid;dt date:=(now() AT TIME ZONE 'Africa/Dakar')::date;prev date;cur date;closed_month date;yr int;old_yr int;code text:='OD';debit_code text;credit_code text;r jsonb;n1 text;n2 text;n3 text;observed int;stored int;old_observed int;old_stored int;
@@ -16,11 +17,11 @@ BEGIN
  SELECT coalesce(max(last_number),0) INTO old_stored FROM public.accounting_sequences WHERE tenant_id=t AND journal_type=code AND fiscal_year=old_yr%100;
  IF greatest(observed,stored,old_observed,old_stored)>99996 THEN RAISE EXCEPTION 'Fixture numérotation insuffisante';END IF;
  EXECUTE 'SET LOCAL ROLE authenticated';
- r:=public.create_manual_journal_entry_idempotent(t,code,prev,'Recette exercice précédent','RECETTE-AN',jsonb_build_array(jsonb_build_object('account_code',debit_code,'debit',100,'credit',0),jsonb_build_object('account_code',credit_code,'debit',0,'credit',100)),gen_random_uuid());
+ r:=public.post_locked_manual_entry(t,code,prev,'Recette exercice précédent','RECETTE-AN',jsonb_build_array(jsonb_build_object('account_code',debit_code,'debit',100,'credit',0),jsonb_build_object('account_code',credit_code,'debit',0,'credit',100)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal',code||':'||to_char(prev,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
  IF NOT coalesce((r->>'success')::boolean,false) THEN RAISE EXCEPTION 'Saisie antérieure refusée : %',r;END IF;
  n1:=r->>'piece_number';
  IF n1 IS DISTINCT FROM code||to_char(prev,'YY')||lpad((greatest(old_observed,old_stored)+1)::text,5,'0') THEN RAISE EXCEPTION 'Millésime antérieur incorrect : %',n1;END IF;
- r:=public.create_manual_journal_entry_idempotent(t,code,cur,'Recette exercice courant','RECETTE-AN',jsonb_build_array(jsonb_build_object('account_code',debit_code,'debit',100,'credit',0),jsonb_build_object('account_code',credit_code,'debit',0,'credit',100)),gen_random_uuid());
+ r:=public.post_locked_manual_entry(t,code,cur,'Recette exercice courant','RECETTE-AN',jsonb_build_array(jsonb_build_object('account_code',debit_code,'debit',100,'credit',0),jsonb_build_object('account_code',credit_code,'debit',0,'credit',100)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal',code||':'||to_char(cur,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
  n2:=r->>'piece_number';
  IF n2 IS DISTINCT FROM code||to_char(cur,'YY')||lpad((greatest(observed,stored)+1)::text,5,'0') THEN RAISE EXCEPTION 'Numéro courant incorrect : %',n2;END IF;
  EXECUTE 'RESET ROLE';

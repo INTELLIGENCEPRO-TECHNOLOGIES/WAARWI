@@ -1,3 +1,4 @@
+-- Recette actualisée : passage par le même verrou que l'application, sans contournement.
 -- Run after 12–17, in test or explicit rollback recipe only.
 DO $recipe$
 DECLARE t uuid;u uuid;other uuid;aux text;bank text;expense text;dt date;r jsonb;r2 jsonb;report jsonb;line1 uuid;line2 uuid;before_net numeric;after_net numeric;tag text;cnt int;
@@ -17,8 +18,8 @@ BEGIN
   report:=public.accounting_open_items(t,'client',dt,'summary',aux);
   before_net:=(report->'totals'->>'net')::numeric;
   BEGIN PERFORM public.accounting_open_items(other,'client',dt);RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Fuite tenant';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
-  r:=public.create_manual_journal_entry_idempotent(t,'OD',dt,tag,'',jsonb_build_array(jsonb_build_object('account_code',aux,'debit',12345,'credit',0,'label',tag),jsonb_build_object('account_code',bank,'debit',0,'credit',12345,'label',tag)),gen_random_uuid());
-  r2:=public.create_manual_journal_entry_idempotent(t,'OD',dt,tag,'',jsonb_build_array(jsonb_build_object('account_code',aux,'debit',0,'credit',12245,'label',tag),jsonb_build_object('account_code',bank,'debit',12245,'credit',0,'label',tag)),gen_random_uuid());
+  r:=public.post_locked_manual_entry(t,'OD',dt,tag,'',jsonb_build_array(jsonb_build_object('account_code',aux,'debit',12345,'credit',0,'label',tag),jsonb_build_object('account_code',bank,'debit',0,'credit',12345,'label',tag)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal','OD'||':'||to_char(dt,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
+  r2:=public.post_locked_manual_entry(t,'OD',dt,tag,'',jsonb_build_array(jsonb_build_object('account_code',aux,'debit',0,'credit',12245,'label',tag),jsonb_build_object('account_code',bank,'debit',12245,'credit',0,'label',tag)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal','OD'||':'||to_char(dt,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
   SELECT id INTO STRICT line1 FROM public.journal_lines WHERE tenant_id=t AND entry_id=(r->>'entry_id')::uuid AND account_code=aux;
   SELECT id INTO STRICT line2 FROM public.journal_lines WHERE tenant_id=t AND entry_id=(r2->>'entry_id')::uuid AND account_code=aux;
   report:=public.accounting_open_items(t,'client',dt,'items',aux,tag);

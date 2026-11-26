@@ -1,3 +1,4 @@
+-- Recette actualisée : passage par le même verrou que l'application, sans contournement.
 -- À exécuter après le lot, uniquement après autorisation, puis ROLLBACK.
 -- Fixture 2025 sur TEST COMPTA : les écritures réelles commencent en 2026.
 BEGIN;
@@ -46,7 +47,7 @@ BEGIN
  IF (r->>'opening_balance')::numeric IS DISTINCT FROM 0 THEN RAISE EXCEPTION 'Compte de gestion non remis à zéro.';END IF;
  r:=public.accounting_account_statement(t,'1310000','2026-01-01','2026-01-01',0);
  IF (r->>'opening_balance')::numeric IS DISTINCT FROM -800 THEN RAISE EXCEPTION 'Résultat non reporté.';END IF;
- blocked:=false;BEGIN PERFORM public.create_manual_journal_entry_idempotent(t,'OD',d,'RECETTE VERROU','TEST',jsonb_build_array(jsonb_build_object('account_code','5210000','debit',1,'credit',0),jsonb_build_object('account_code','7010000','debit',0,'credit',1)),gen_random_uuid());EXCEPTION WHEN SQLSTATE '55000' THEN blocked:=true;END;
+ blocked:=false;BEGIN PERFORM public.post_locked_manual_entry(t,'OD',d,'RECETTE VERROU','TEST',jsonb_build_array(jsonb_build_object('account_code','5210000','debit',1,'credit',0),jsonb_build_object('account_code','7010000','debit',0,'credit',1)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal','OD'||':'||to_char(d,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);EXCEPTION WHEN SQLSTATE '55000' THEN blocked:=true;END;
  IF NOT blocked THEN RAISE EXCEPTION 'Écriture dans exercice clôturé acceptée.';END IF;
  EXECUTE 'RESET ROLE';
 END;$test$;

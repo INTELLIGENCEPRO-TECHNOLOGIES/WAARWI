@@ -1,3 +1,4 @@
+-- Recette actualisée : passage par le même verrou que l'application, sans contournement.
 -- Recette après application des deux scripts du lot, dans une transaction annulée.
 -- Ne pas lancer avant autorisation de publication. Rôle administrateur SQL requis.
 BEGIN;
@@ -17,7 +18,7 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub',u::text,true);
  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);
  EXECUTE 'SET LOCAL ROLE authenticated';
- created:=public.create_manual_journal_entry_idempotent(t,'OD',dt,'RECETTE EXT OURNE','TEST',jsonb_build_array(jsonb_build_object('account_code',acc1,'debit',12345,'credit',0),jsonb_build_object('account_code',acc2,'debit',0,'credit',12345)),gen_random_uuid());
+ created:=public.post_locked_manual_entry(t,'OD',dt,'RECETTE EXT OURNE','TEST',jsonb_build_array(jsonb_build_object('account_code',acc1,'debit',12345,'credit',0),jsonb_build_object('account_code',acc2,'debit',0,'credit',12345)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal','OD'||':'||to_char(dt,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
  original_id:=(created->>'entry_id')::uuid;
  reversed:=public.reverse_manual_accounting_entry(t,original_id,dt,'Recette annulée');
  reverse_id:=(reversed->>'entry_id')::uuid;

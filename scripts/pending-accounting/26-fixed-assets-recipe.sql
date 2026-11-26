@@ -1,3 +1,4 @@
+-- Recette actualisée : passage par le même verrou que l'application, sans contournement.
 -- Phase 7 rollback recipe. Only run in a test database after pending migrations.
 DO $recipe$
 DECLARE t uuid;u uuid;other uuid;bank text;dt date:=(now() AT TIME ZONE 'Africa/Dakar')::date;svc date;last_month date;acq uuid;aid uuid;r jsonb;d jsonb;due jsonb;x jsonb;sale uuid;before_count int;fixture_code text:='RECETTE-'||left(gen_random_uuid()::text,24);
@@ -14,7 +15,7 @@ BEGIN
  (t,'2449999','Recette matériel',2,'general',true),(t,'2849999','Recette amortissements',2,'general',true),(t,'6813999','Recette dotations',6,'general',true),(t,'8119999','Recette valeur de sortie',8,'general',true),(t,'8219999','Recette produit de cession',8,'general',true)
  ON CONFLICT(tenant_id,code) DO NOTHING;
  PERFORM set_config('request.jwt.claim.sub',u::text,true);PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);EXECUTE 'SET LOCAL ROLE authenticated';
- r:=public.create_manual_journal_entry_idempotent(t,'OD',svc,'Recette acquisition',fixture_code,jsonb_build_array(jsonb_build_object('account_code','2449999','debit',120000,'credit',0),jsonb_build_object('account_code',bank,'debit',0,'credit',120000)),gen_random_uuid());
+ r:=public.post_locked_manual_entry(t,'OD',svc,'Recette acquisition',fixture_code,jsonb_build_array(jsonb_build_object('account_code','2449999','debit',120000,'credit',0),jsonb_build_object('account_code',bank,'debit',0,'credit',120000)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal','OD'||':'||to_char(svc,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
  SELECT id INTO STRICT acq FROM public.journal_lines WHERE tenant_id=t AND entry_id=(r->>'entry_id')::uuid AND account_code='2449999';
  SELECT count(*) INTO before_count FROM public.journal_entries WHERE tenant_id=t;
  BEGIN PERFORM public.register_accounting_asset(t,fixture_code,'Recette','',acq,svc,12,0,'2849999','6813999','Facture test',false);RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Attestation absente acceptée';EXCEPTION WHEN raise_exception THEN NULL;END;
@@ -29,7 +30,7 @@ BEGIN
  r:=public.post_accounting_asset_depreciation(t,aid,(due->>'period_start')::date,(due->>'amount')::numeric);
  BEGIN PERFORM public.post_accounting_asset_depreciation(t,aid,(due->>'period_start')::date,(due->>'amount')::numeric);RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Double dotation';EXCEPTION WHEN SQLSTATE '40001' THEN NULL;END;
  BEGIN PERFORM public.reverse_manual_accounting_entry(t,(r->>'entry_id')::uuid,dt,'Recette');RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Extourne directe acceptée';EXCEPTION WHEN raise_exception THEN NULL;END;
- r:=public.create_manual_journal_entry_idempotent(t,'OD',dt,'Produit cession test',fixture_code,jsonb_build_array(jsonb_build_object('account_code',bank,'debit',100000,'credit',0),jsonb_build_object('account_code','8219999','debit',0,'credit',100000)),gen_random_uuid());
+ r:=public.post_locked_manual_entry(t,'OD',dt,'Produit cession test',fixture_code,jsonb_build_array(jsonb_build_object('account_code',bank,'debit',100000,'credit',0),jsonb_build_object('account_code','8219999','debit',0,'credit',100000)),gen_random_uuid(), md5('recette-verrou:'||auth.uid()::text)::uuid, (public.document_edit_lease(t,'accounting_journal','OD'||':'||to_char(dt,'YYYY-MM'),md5('recette-verrou:'||auth.uid()::text)::uuid,'acquire')->>'token')::uuid);
  SELECT id INTO STRICT sale FROM public.journal_lines WHERE tenant_id=t AND entry_id=(r->>'entry_id')::uuid AND account_code='8219999';
  x:=public.preview_accounting_asset_disposal(t,aid,dt);
  IF (x->>'blocked')::boolean THEN RAISE EXCEPTION 'Sortie test bloquée';END IF;
