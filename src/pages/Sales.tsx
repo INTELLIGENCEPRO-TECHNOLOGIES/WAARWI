@@ -142,7 +142,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       const el = document.querySelector(`[data-row-id="${highlightId}"]`);
       if (el) {
         el.classList.remove('waarwi-flash');
-        void el.offsetWidth;
+        if (el instanceof HTMLElement) void el.offsetWidth;
         el.classList.add('waarwi-flash');
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
@@ -204,7 +204,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             show_reference: data.show_reference ?? false,
             show_warranty: data.show_warranty ?? false,
             show_imei: data.show_imei ?? false,
-            show_representative: data.default_representative ?? '',
+            show_representative: data.show_representative ?? false,
+            default_representative: data.default_representative ?? '',
             warranty_terms: data.warranty_terms ?? '',
             require_header_lock: data.require_header_lock ?? false,
             allow_edit: data.allow_edit ?? false,

@@ -414,7 +414,9 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         if (!sharedArticles && currentSite) payload.site_id = currentSite.id;
         const { data, error: e } = await supabase.from('articles').insert(payload).select().single();
         if (e) throw e;
-        articleId = data.id;
+        if (!data?.id) throw new Error('La référence de l’article créé est introuvable.');
+        const createdArticleId: string = data.id;
+        articleId = createdArticleId;
 
         // Re-upload image to real path
         if (imageFile && articleId && finalImageUrl) {
@@ -438,7 +440,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         setCurrentArticleId(articleId);
         setFormMode('edit');
         setEditing(data as Article);
-        setForm(f => ({ ...f, id: articleId, stock_init: 0 }));
+        setForm(f => ({ ...f, id: createdArticleId, stock_init: 0 }));
         setImageFile(null);
         pendingReloadRef.current = true;
       } else if (articleId) {

@@ -39,6 +39,14 @@ export type ShopSettings = {
   card_density: 'compact' | 'comfortable' | 'spacious';
   section_order: string[];
   appearance_config: Record<string, unknown>;
+  hero_title: string | null;
+  hero_subtitle: string | null;
+  hero_cta_label: string | null;
+  promo_banner_text: string | null;
+  promo_banner_color: string | null;
+  promo_banner_active: boolean | null;
+  social_links: Record<string, string> | null;
+  show_waarwi_badge: boolean | null;
 };
 
 export type ShopArticle = {
@@ -49,6 +57,7 @@ export type ShopArticle = {
   brand: string;
   category_id: string | null;
   sale_price: number;
+  old_price?: number | null;
   image_url: string | null;
   description: string;
   unit: string;
@@ -165,4 +174,12 @@ export const DEFAULT_SHOP_SETTINGS: ShopSettings = {
   card_density: 'comfortable',
   section_order: ['hero', 'categories', 'products', 'perks', 'footer'],
   appearance_config: {},
+  hero_title: '',
+  hero_subtitle: '',
+  hero_cta_label: 'Découvrir les produits',
+  promo_banner_text: '',
+  promo_banner_color: '#dc2626',
+  promo_banner_active: false,
+  social_links: {},
+  show_waarwi_badge: true,
 };

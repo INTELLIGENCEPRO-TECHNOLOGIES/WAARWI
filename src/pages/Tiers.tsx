@@ -1847,7 +1847,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
   const [prepayments, setPrepayments] = useState<{ id: string; amount: number; amount_used: number; method_name: string; reference: string; created_at: string }[]>([]);
   const [prepayAvailable, setPrepayAvailable] = useState(0);
   const [avoirs, setAvoirs] = useState<{ id: string; return_number: string; total: number; credit_used: number; created_at: string; refunded_at?: string | null }[]>([]);
-  const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
+  const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string; kind: string }[]>([]);
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; reason: string; reference: string; created_at: string }[]>([]);
   const [loans, setLoans] = useState<{ id: string; amount: number; reason: string; reference: string; created_at: string }[]>([]);
 
@@ -3044,7 +3044,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const [soEditorOrderId, setSoEditorOrderId] = useState<string | null>(null);
 
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
-  const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
+  const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string; kind: string }[]>([]);
   const [supplierBalance, setSupplierBalance] = useState<number>(Number((s as any).balance || 0));
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
   useEffect(() => {

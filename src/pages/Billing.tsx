@@ -3153,6 +3153,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           customers={customers}
           headerForm={{
             customer_id: returnDetail.customer_id || '',
+            doc_date: returnDetail.created_at ? new Date(returnDetail.created_at).toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'}) : '',
             note: returnDetail.reason || '',
             delivery_date: '',
             reference: returnDetail.sales?.sale_number ? `Vente ${returnDetail.sales.sale_number}` : '',

@@ -96,6 +96,13 @@ export const PERMISSION_KEYS = [
   'mt_report_export',
   'mt_settings_manage',
   'mt_services_manage',
+  'mt_expense_view',
+  'mt_expense_manage',
+  'mt_expense_cancel',
+  'mt_customer_view',
+  'mt_customer_manage',
+  'mt_customer_credit',
+  'mt_customer_repay',
   // Commercial - Représentants
   'rep_view',
   'rep_manage',
@@ -200,6 +207,13 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   mt_report_export: 'Exporter les rapports transfert d\'argent',
   mt_settings_manage: 'Gérer les paramètres du module transfert',
   mt_services_manage: 'Gérer les services (Wave, Orange Money, etc.)',
+  mt_expense_view: 'Voir les dépenses du transfert d’argent',
+  mt_expense_manage: 'Gérer les dépenses du transfert d’argent',
+  mt_expense_cancel: 'Annuler une dépense du transfert d’argent',
+  mt_customer_view: 'Voir les comptes clients du transfert d’argent',
+  mt_customer_manage: 'Gérer les comptes clients du transfert d’argent',
+  mt_customer_credit: 'Effectuer une opération sur crédit client',
+  mt_customer_repay: 'Enregistrer un remboursement client',
   rep_view: 'Voir la liste des représentants',
   rep_manage: 'Créer / modifier / activer / désactiver les représentants',
   rep_stats_view: 'Voir les statistiques par représentant',
@@ -266,6 +280,10 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
   {
     label: 'Transfert d\'argent - Rapports & Configuration',
     keys: ['mt_report_view_site', 'mt_report_view_grossiste', 'mt_report_export', 'mt_settings_manage', 'mt_services_manage'],
+  },
+  {
+    label: 'Transfert d’argent - Dépenses et comptes clients',
+    keys: ['mt_expense_view', 'mt_expense_manage', 'mt_expense_cancel', 'mt_customer_view', 'mt_customer_manage', 'mt_customer_credit', 'mt_customer_repay'],
   },
   {
     label: 'Commercial - Représentants',

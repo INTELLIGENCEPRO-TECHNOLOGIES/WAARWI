@@ -206,6 +206,7 @@ export type Article = {
   image_url: string;
   is_active: boolean;
   ipm_eligible: boolean;
+  track_stock: boolean;
 };
 
 export type StockLevel = {

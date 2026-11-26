@@ -17,6 +17,8 @@ export type ShopThemeConfig = {
   searchBarInset: string;
   // Category bar
   showCategoryBar: boolean;
+  // Optional: absent in existing themes, preserving the current layout.
+  showFeaturedRow?: boolean;
   // Cards
   cardClassName: string;
   cardImageBg: string;

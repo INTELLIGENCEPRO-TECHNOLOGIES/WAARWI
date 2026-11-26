@@ -289,22 +289,22 @@ export function ShopAppearanceSettings({ settings, onSettingsChange }: Props) {
       {/* Commercial content */}
       <div className="py-4 border-t border-neutral-200 space-y-4">
         <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Contenu commercial</span>
-        <div><label className="label">Titre de couverture</label><input value={settings.hero_title} onChange={(e) => update({ hero_title: e.target.value })} placeholder="Titre accrocheur" className="bare-input text-sm py-1.5 w-full" /></div>
-        <div><label className="label">Sous-titre</label><input value={settings.hero_subtitle} onChange={(e) => update({ hero_subtitle: e.target.value })} placeholder="Description courte" className="bare-input text-sm py-1.5 w-full" /></div>
-        <div><label className="label">Bouton d'action</label><input value={settings.hero_cta_label} onChange={(e) => update({ hero_cta_label: e.target.value })} placeholder="Découvrir les produits" className="bare-input text-sm py-1.5 w-full" /></div>
+        <div><label className="label">Titre de couverture</label><input value={settings.hero_title ?? ''} onChange={(e) => update({ hero_title: e.target.value })} placeholder="Titre accrocheur" className="bare-input text-sm py-1.5 w-full" /></div>
+        <div><label className="label">Sous-titre</label><input value={settings.hero_subtitle ?? ''} onChange={(e) => update({ hero_subtitle: e.target.value })} placeholder="Description courte" className="bare-input text-sm py-1.5 w-full" /></div>
+        <div><label className="label">Bouton d'action</label><input value={settings.hero_cta_label ?? ''} onChange={(e) => update({ hero_cta_label: e.target.value })} placeholder="Découvrir les produits" className="bare-input text-sm py-1.5 w-full" /></div>
       </div>
 
       {/* Promo banner */}
       <div className="py-4 border-t border-neutral-200 space-y-3">
-        <SettingRow label="Bandeau promotionnel" desc="Bandeau défilant en haut" active={settings.promo_banner_active} onToggle={() => update({ promo_banner_active: !settings.promo_banner_active })} />
+        <SettingRow label="Bandeau promotionnel" desc="Bandeau défilant en haut" active={settings.promo_banner_active === true} onToggle={() => update({ promo_banner_active: !settings.promo_banner_active })} />
         {settings.promo_banner_active && (
           <div className="space-y-3 pt-2">
-            <div><label className="label">Texte</label><input value={settings.promo_banner_text} onChange={(e) => update({ promo_banner_text: e.target.value })} placeholder="Ex: Livraison gratuite dès 50 000 FCFA" className="bare-input text-sm py-1.5 w-full" /></div>
+            <div><label className="label">Texte</label><input value={settings.promo_banner_text ?? ''} onChange={(e) => update({ promo_banner_text: e.target.value })} placeholder="Ex: Livraison gratuite dès 50 000 FCFA" className="bare-input text-sm py-1.5 w-full" /></div>
             <div>
               <label className="label">Couleur</label>
               <div className="flex items-center gap-2">
-                <input type="color" value={settings.promo_banner_color} onChange={(e) => update({ promo_banner_color: e.target.value })} className="w-8 h-8 rounded border border-neutral-200 cursor-pointer" />
-                <input value={settings.promo_banner_color} onChange={(e) => update({ promo_banner_color: e.target.value })} className="input flex-1 font-mono text-xs" />
+                <input type="color" value={settings.promo_banner_color ?? '#dc2626'} onChange={(e) => update({ promo_banner_color: e.target.value })} className="w-8 h-8 rounded border border-neutral-200 cursor-pointer" />
+                <input value={settings.promo_banner_color ?? '#dc2626'} onChange={(e) => update({ promo_banner_color: e.target.value })} className="input flex-1 font-mono text-xs" />
               </div>
             </div>
           </div>
@@ -321,7 +321,7 @@ export function ShopAppearanceSettings({ settings, onSettingsChange }: Props) {
 
       {/* Badge */}
       <div className="py-4 border-t border-neutral-200">
-        <SettingRow label="Badge Waarwi" desc="Pied de page" active={settings.show_waarwi_badge} onToggle={() => update({ show_waarwi_badge: !settings.show_waarwi_badge })} />
+        <SettingRow label="Badge Waarwi" desc="Pied de page" active={settings.show_waarwi_badge !== false} onToggle={() => update({ show_waarwi_badge: settings.show_waarwi_badge === false })} />
       </div>
 
       {/* Actions */}

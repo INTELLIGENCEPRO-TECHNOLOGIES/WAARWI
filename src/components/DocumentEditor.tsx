@@ -956,7 +956,7 @@ function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint
       </button>
 
       {/* Save */}
-      {canEdit && (
+      {canEdit && onSave && (
         <button
           onClick={() => onSave()}
           disabled={saving || (ipmBeneficiaire && ipmDocValidation && !ipmDocValidation.valide)}

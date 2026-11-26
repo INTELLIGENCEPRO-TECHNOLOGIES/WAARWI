@@ -24,7 +24,7 @@ type Quote = {
   converted_sale_id: string | null; customer_id: string | null;
   user_id?: string | null; representative_id?: string | null;
   customers: { name: string } | null;
-  doc_header?: { delivery_date?: string; reference?: string; warranty?: string; representative?: string; imei?: string } | null;
+  doc_header?: { doc_date?: string; delivery_date?: string; reference?: string; warranty?: string; representative?: string; imei?: string } | null;
 };
 
 export type QuoteWindowDescriptor = {
@@ -82,10 +82,10 @@ export function QuoteEditorInstance({
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(descriptor.quoteId);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [quoteForm, setQuoteForm] = useState<{
-    customer_id: string; valid_until: string; note: string;
+    customer_id: string; valid_until: string; note: string; doc_date: string;
     delivery_date: string; reference: string; warranty: string;
     representative: string; imei: string;
-  }>({ customer_id: '', valid_until: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+  }>({ customer_id: '', valid_until: '', note: '', doc_date: new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'}), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
   const [items, setItems] = useState<QuoteItem[]>([{ ...EMPTY_ITEM }]);
   const [saving, setSaving] = useState(false);
 
@@ -164,7 +164,7 @@ export function QuoteEditorInstance({
       setEditingQuote(q as Quote);
       if (!hasRecoveredDraftRef.current) {
         setQuoteForm({
-          customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '',
+          customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '', doc_date: q.doc_header?.doc_date || new Date(q.created_at).toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'}),
           delivery_date: q.doc_header?.delivery_date || '', reference: q.doc_header?.reference || '',
           warranty: q.doc_header?.warranty || '', representative: (q as any).representative_id || '',
           imei: q.doc_header?.imei || '',
@@ -276,8 +276,8 @@ export function QuoteEditorInstance({
     const valid = items.filter(i => i.name.trim());
     const st = valid.reduce((s, i) => s + Number(i.total), 0);
     const quoteRepLabel = repLabelOf(quoteForm.representative);
-    const docHeader = (quoteForm.delivery_date || quoteForm.reference || quoteForm.warranty || quoteRepLabel || quoteForm.imei)
-      ? { delivery_date: quoteForm.delivery_date || null, reference: quoteForm.reference || null, warranty: quoteForm.warranty || null, representative: quoteRepLabel, imei: quoteForm.imei || null }
+    const docHeader = (quoteForm.doc_date || quoteForm.delivery_date || quoteForm.reference || quoteForm.warranty || quoteRepLabel || quoteForm.imei)
+      ? { doc_date: quoteForm.doc_date || null, delivery_date: quoteForm.delivery_date || null, reference: quoteForm.reference || null, warranty: quoteForm.warranty || null, representative: quoteRepLabel, imei: quoteForm.imei || null }
       : null;
 
     opInProgressRef.current = 'save';
@@ -427,7 +427,7 @@ export function QuoteEditorInstance({
         mode={mode}
         articles={articles}
         customers={customers}
-        headerForm={{ customer_id: quoteForm.customer_id, note: quoteForm.note, delivery_date: quoteForm.delivery_date, reference: quoteForm.reference, warranty: quoteForm.warranty, representative: quoteForm.representative, imei: quoteForm.imei, valid_until: quoteForm.valid_until }}
+        headerForm={{ doc_date: quoteForm.doc_date || '', customer_id: quoteForm.customer_id, note: quoteForm.note, delivery_date: quoteForm.delivery_date, reference: quoteForm.reference, warranty: quoteForm.warranty, representative: quoteForm.representative, imei: quoteForm.imei, valid_until: quoteForm.valid_until }}
         setHeaderForm={(fn: any) => setQuoteForm((prev: any) => typeof fn === 'function' ? fn(prev) : fn)}
         items={items}
         setItems={setItems}

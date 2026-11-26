@@ -3310,10 +3310,10 @@ function MTClosures() {
           <p className="text-xs text-neutral-500 mt-0.5">Clôturez la journée et ouvrez avec les nouveaux montants de départ.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowOpeningForm(false) || setShowForm(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800">
+          <button onClick={() => { setShowOpeningForm(false); setShowForm(true); }} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800">
             <Lock className="w-4 h-4" />Clôturer
           </button>
-          <button onClick={() => setShowForm(false) || setShowOpeningForm(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+          <button onClick={() => { setShowForm(false); setShowOpeningForm(true); }} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
             <PlayCircle className="w-4 h-4" />Ouvrir journée
           </button>
         </div>
@@ -3749,13 +3749,13 @@ function MTSettings({ onValidated }: { onValidated: () => void }) {
   const { can } = usePermissions();
   const [activeTab, setActiveTab] = useState<SettingsTab>('initialisation');
 
-  const tabs: { key: SettingsTab; label: string; icon: any; visible: boolean }[] = [
+  const tabs = ([
     { key: 'initialisation', label: 'Initialisation', icon: PlayCircle, visible: can('mt_balance_initialize') },
     { key: 'points', label: 'Points de service', icon: MapPin, visible: true },
     { key: 'services', label: 'Services', icon: ArrowRightLeft, visible: can('mt_services_manage') },
     { key: 'grossistes', label: 'Grossistes', icon: Users, visible: can('mt_wholesaler_view') },
     { key: 'config', label: 'Configuration', icon: Settings2, visible: true },
-  ].filter(t => t.visible);
+  ] satisfies { key: SettingsTab; label: string; icon: any; visible: boolean }[]).filter(t => t.visible);
 
   return (
     <div className="lg:max-w-[1100px] lg:mx-auto space-y-4 pb-28 lg:pb-0">
@@ -4073,7 +4073,7 @@ function MTExpenses() {
 /* CLIENTS & CRÉANCES                           */
 /* ============================================ */
 type MTCustomer = { id: string; code: string | null; name: string; phone: string | null; address: string | null; notes: string | null; status: string };
-type LedgerEntry = { id: string; customer_id: string; entry_type: string; amount: number; balance_delta: number; creance_delta: number; comment: string | null; operated_at: string; operation_id: string | null };
+type LedgerEntry = { id: string; customer_id: string; service_point_id: string | null; entry_type: string; amount: number; balance_delta: number; creance_delta: number; comment: string | null; operated_at: string; operation_id: string | null };
 type CustomerAgg = { balance: number; creance: number };
 
 function MTCustomers() {

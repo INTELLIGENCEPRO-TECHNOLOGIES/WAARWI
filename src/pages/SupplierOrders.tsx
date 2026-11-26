@@ -412,7 +412,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
       const el = document.querySelector(`[data-row-id="${highlightId}"]`);
       if (el) {
         el.classList.remove('waarwi-flash');
-        void el.offsetWidth;
+        if (el instanceof HTMLElement) void el.offsetWidth;
         el.classList.add('waarwi-flash');
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
