@@ -53,3 +53,6 @@ Aucune étape n'est réputée réussie sans preuve issue du commit et de l'envir
 - État du jeu d'essai après rejeu : 2 tenants, 2 profils, 61 pièces, 122 lignes, 0 pièce portant une clé de demande (rollbacks).
 - CI du commit c021245 : Vite et tests unitaires réussis, TypeScript échoué (299 diagnostics dont 20 dans le périmètre comptable). Corrections des deux familles comptables Navigation/Accounting en cours de vérification. CI : https://github.com/INTELLIGENCEPRO-TECHNOLOGIES/WAARWI/actions/runs/45754498498
 - Publication toujours interdite : fidélité du schéma, parcours commerciaux réels, concurrence multisession, restauration et validation navigateur non terminés.
+
+### Phase 10.11 — intégration commerciale
+Recettes synthétiques des RPC : 8 pièces équilibrées (325900 FCFA par côté), facture d'achat TVA partiellement récupérable, avoir et remboursement atomiques, refus des incohérences et des doublons. Correctif 41 / migration 20261126042544 rejoué avec succès sur exercice antérieur ouvert et période clôturée. Voir PHASE-10-11-COMMERCIAL-RECIPE.md pour les résultats et limites. Les parcours POS/stock ne sont pas encore validés.
