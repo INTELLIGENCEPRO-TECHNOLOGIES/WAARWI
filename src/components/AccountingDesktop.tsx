@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState,useCallback,type RefObject,type ReactNode} from 'react';
+import {useEffect,useRef,useState,useCallback,type RefObject,type ReactNode,type ComponentProps} from 'react';
 import {WindowManagerProvider,useWindowManager} from '../context/WindowManagerContext';
 import {DesktopWindow} from './DesktopWindow';
 import {BookOpen,LayoutGrid,Minus,Check,X} from './Icons';
@@ -30,7 +30,7 @@ function WindowScope({visible,actions,children}:{visible:boolean;actions:Account
  useEffect(()=>{if(visible)setLast(actions.revision);},[visible,actions.revision]);
  return <AccountingWindowVisible.Provider value={visible}><AccountingWorkContext.Provider value={{...actions,revision:visible?actions.revision:last}}>{children}</AccountingWorkContext.Provider></AccountingWindowVisible.Provider>;
 }
-function AccountWork({tenantId,code,canManage,onView}:{tenantId:string;code:string;canManage:boolean;onView:React.ComponentProps<typeof AccountingAccountStatement>['onView']}){
+function AccountWork({tenantId,code,canManage,onView}:{tenantId:string;code:string;canManage:boolean;onView:ComponentProps<typeof AccountingAccountStatement>['onView']}){
  const work=useAccountingWork();return <AccountingAccountStatement tenantId={tenantId} initialAccount={code} canManage={canManage} refreshRevision={work?.revision??0} onView={onView}/>;
 }
 type Work={id:string;title:string;kind:'section';route:WorkRoute}|{id:string;title:string;kind:'piece';request:AccountingPieceRequest}|{id:string;title:string;kind:'account';code:string}|{id:string;title:string;kind:'import'};
