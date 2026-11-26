@@ -13,11 +13,11 @@ import { AccountingAccountStatement } from '../components/AccountingAccountState
 import { AccountingBankReconciliation } from '../components/AccountingBankReconciliation';
 import { AccountingFiscalYear } from '../components/AccountingFiscalYear';
 import { AccountingFinancialReports } from '../components/AccountingFinancialReports';
-import { AccountingEntryReversal } from '../components/AccountingEntryReversal';
+import { AccountingSearch } from '../components/AccountingSearch';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
-import {useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
+import {useAccountingWindowId,mayCloseAccountingWindow,useAccountingWork} from '../context/AccountingWindowContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 import { Modal } from '../components/Modal';
@@ -155,6 +155,7 @@ function PlanTab() {
 /* ===================== JOURNAUX ===================== */
 function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:()=>void;onNew?:()=>void}={}) {
   const windowId=useAccountingWindowId();
+  const work=useAccountingWork();
   const { tenant } = useApp();
   const { success, error } = useToast();
   const { can } = usePermissions();
@@ -170,10 +171,6 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
   const loadSequence=useRef(0);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [reverseOnOpen,setReverseOnOpen]=useState(false);
-  const [selected, setSelected] = useState<any>(null);
-  const [lines, setLines] = useState<any[]>([]);
   const [journalType, setJournalType] = useState('');
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -211,7 +208,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     else{setJournalTotal(count??0);setEntries(data??[]);const max=Math.max(0,Math.ceil((count??0)/journalSize)-1);if(journalPage>max)setJournalPage(max);}
     setLoading(false);
   };
-  useEffect(()=>{void load();return()=>{loadSequence.current++;};},[tenant?.id,journalType,journalPage,journalSize,fromDate,toDate]);
+  useEffect(()=>{void load();return()=>{loadSequence.current++;};},[tenant?.id,journalType,journalPage,journalSize,fromDate,toDate,work?.revision]);
   useRealtimeRefresh(['journal_entries', 'journal_lines'], () => load(true));
   useEffect(() => {
     if (!tenant) return;
@@ -380,12 +377,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
     finally{savingLock.current=false;setSaving(false);}
   };
 
-  const openDetail = async (e: any,reverse=false) => {
-    if(!tenant)return;
-    setLines([]);setSelected(e);setReverseOnOpen(reverse);setDetailOpen(true);
-    const { data } = await supabase.from('journal_lines').select('*').eq('tenant_id',tenant.id).eq('entry_id', e.id).order('created_at');
-    setLines(data || []);
-  };
+  const openDetail = (e:any,reverse=false)=>work?.openPiece({entryId:e.id,entryNumber:e.entry_number,reverse});
 
   useEffect(()=>{
     if(!entryOnly&&!open)return;
@@ -577,41 +569,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
         </div>
       </Modal>
 
-      {/* Detail modal */}
-      <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title={selected ? `Écriture ${selected.entry_number}` : ''} size="lg"
-        footer={<button onClick={() => setDetailOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
-        {selected && (
-          <div className="space-y-4">
-            {tenant && <AccountingEntryReversal key={selected.id} tenantId={tenant.id} entryId={selected.id} canManage={canManage} initialOpen={reverseOnOpen} onPosted={()=>void load(true)} />}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <div className="card p-3"><div className="text-xs text-slate-500">Journal</div><div className="font-semibold mt-0.5">{JOURNAL_TYPES[selected.journal_type] || selected.journal_type}</div></div>
-              <div className="card p-3"><div className="text-xs text-slate-500">Date</div><div className="font-semibold mt-0.5">{formatDate(selected.entry_date)}</div></div>
-              <div className="card p-3"><div className="text-xs text-slate-500">Total débit</div><div className="font-bold mt-0.5">{Number(selected.total_debit).toLocaleString('fr-FR')} FCFA</div></div>
-              <div className="card p-3"><div className="text-xs text-slate-500">Total crédit</div><div className="font-bold mt-0.5">{Number(selected.total_credit).toLocaleString('fr-FR')} FCFA</div></div>
-            </div>
-            {selected.source_type && (
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <FileText className="w-3.5 h-3.5" />
-                <span>Source : {selected.source_type === 'reversal' ? 'Extourne' : selected.source_type === 'manual' ? 'Saisie manuelle' : selected.source_type} ({selected.reference})</span>
-              </div>
-            )}
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-[var(--w-surface-el)] text-xs uppercase text-slate-500">
-                  <tr><th className="px-1 md:px-4 py-2 text-left">Compte</th><th className="px-1 md:px-4 py-2 text-left">Libellé</th><th className="px-1 md:px-4 py-2 text-right">Débit</th><th className="px-1 md:px-4 py-2 text-right">Crédit</th></tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {lines.map(l => <tr key={l.id}><td className="px-1 md:px-4 py-2.5 font-mono text-xs text-brand-700">{l.account_code}</td><td className="px-1 md:px-4 py-2.5 text-slate-600">{l.label || l.account_name}</td><td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs">{l.debit > 0 ? Number(l.debit).toLocaleString('fr-FR') : '—'}</td><td className="px-1 md:px-4 py-2.5 text-right font-mono text-xs">{l.credit > 0 ? Number(l.credit).toLocaleString('fr-FR') : '—'}</td></tr>)}
-                </tbody>
-                <tfoot className="bg-[var(--w-surface-el)] border-t border-slate-200 text-xs font-semibold">
-                  <tr><td className="px-1 md:px-4 py-2" colSpan={2}>TOTAL</td><td className="px-1 md:px-4 py-2 text-right font-mono">{Number(selected.total_debit).toLocaleString('fr-FR')}</td><td className="px-1 md:px-4 py-2 text-right font-mono">{Number(selected.total_credit).toLocaleString('fr-FR')}</td></tr>
-                </tfoot>
-              </table>
-            </div>
-            
-          </div>
-        )}
-      </Modal>
+
     </div>
   );
 }
@@ -787,6 +745,7 @@ function BalanceTab() {
 /* ===================== GRAND LIVRE ===================== */
 function GrandLivreTab() {
   const { tenant } = useApp();
+  const work=useAccountingWork();
   const { error: toastError } = useToast();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -832,7 +791,7 @@ function GrandLivreTab() {
     <div className="acc-summary"><div><span>Mouvements de la sélection</span><strong>{data.length}</strong></div><div><span>Total débit (FCFA)</span><strong>{debit.toLocaleString('fr-FR')}</strong></div><div><span>Total crédit (FCFA)</span><strong>{credit.toLocaleString('fr-FR')}</strong></div></div>
     <AccountingTable footer={<AccountingPagination {...paging} disabled={loading}/>}>
       <table><thead><tr><th className="text-left">Compte</th><th className="text-left hidden md:table-cell">Date</th><th className="text-left">Pièce / libellé</th><th className="text-right">Débit</th><th className="text-right">Crédit</th></tr></thead>
-      <tbody>{loading?<tr><td colSpan={5} className="text-center"><Loader2 size={20} className="mx-auto animate-spin"/></td></tr>:paging.rows.map((l,i)=><tr key={l.line_id??l.id??i}><td><span className="font-medium">{l.account_code}</span><span className="block text-[11px] text-neutral-500">{l.account_name}</span></td><td className="hidden md:table-cell">{formatDate(l.entry_date)}</td><td><span className="font-medium">{l.entry_number}</span><span className="block text-[11px] text-neutral-500">{l.journal_type} · {l.label||l.reference||'—'}</span><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(l.entry_date)}</span></td><td className="text-right">{Number(l.debit)?Number(l.debit).toLocaleString('fr-FR'):'—'}</td><td className="text-right">{Number(l.credit)?Number(l.credit).toLocaleString('fr-FR'):'—'}</td></tr>)}
+      <tbody>{loading?<tr><td colSpan={5} className="text-center"><Loader2 size={20} className="mx-auto animate-spin"/></td></tr>:paging.rows.map((l,i)=><tr key={l.line_id??l.id??i}><td><button type="button" className="font-medium hover:underline" onClick={()=>work?.openAccount(l.account_code)}>{l.account_code}</button><span className="block text-[11px] text-neutral-500">{l.account_name}</span></td><td className="hidden md:table-cell">{formatDate(l.entry_date)}</td><td><button type="button" className="font-medium hover:underline" onClick={()=>work?.openPiece({entryId:l.entry_id,entryNumber:l.entry_number})}>{l.entry_number}</button><span className="block text-[11px] text-neutral-500">{l.journal_type} · {l.label||l.reference||'—'}</span><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(l.entry_date)}</span></td><td className="text-right">{Number(l.debit)?Number(l.debit).toLocaleString('fr-FR'):'—'}</td><td className="text-right">{Number(l.credit)?Number(l.credit).toLocaleString('fr-FR'):'—'}</td></tr>)}
       {!loading&&!paging.total&&<tr><td colSpan={5} className="text-center text-neutral-500">Aucun mouvement sur cette période.</td></tr>}</tbody></table>
     </AccountingTable>
   </div>;
@@ -841,6 +800,7 @@ function GrandLivreTab() {
 /* ===================== BALANCE DES TIERS ===================== */
 function TiersTab() {
   const { tenant } = useApp();
+  const work=useAccountingWork();
   const { error: toastError } = useToast();
   const [tiers, setTiers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -957,7 +917,7 @@ function TiersTab() {
                     {extraitPaging.rows.map((e: any, idx: number) => (
                       <tr key={idx} className="hover:bg-[var(--w-surface-el)]/40">
                         <td className="px-1 md:px-3 py-2 text-xs text-neutral-600">{formatDate(e.entry_date)}</td>
-                        <td className="px-1 md:px-3 py-2 font-mono text-xs text-neutral-500">{e.entry_number}</td>
+                        <td className="px-1 md:px-3 py-2 text-xs"><button type="button" className="font-medium hover:underline" onClick={()=>work?.openPiece({entryNumber:e.entry_number})}>{e.entry_number}</button></td>
                         <td className="px-1 md:px-3 py-2 text-neutral-700 text-xs">{e.label || '—'}</td>
                         <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(e.debit) > 0 ? Number(e.debit).toLocaleString('fr-FR') : ''}</td>
                         <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(e.credit) > 0 ? Number(e.credit).toLocaleString('fr-FR') : ''}</td>
@@ -978,211 +938,7 @@ function TiersTab() {
 }
 
 /* ===================== RECHERCHE ECRITURES ===================== */
-function SearchTab() {
-  const { tenant } = useApp();
-  const { error: toastError } = useToast();
-  const [results, setResults] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ text: '', journal: '', dateFrom: '', dateTo: '', amountMin: '', amountMax: '' });
-  const [detail, setDetail] = useState<any | null>(null);
-
-  const resultPaging=useAccountingPagination(results,JSON.stringify(filters));
-  function doSearch() {
-    if (!tenant) return;
-    setLoading(true);
-    const params: any = { p_tenant_id: tenant.id };
-    if (filters.text) params.p_search = filters.text;
-    if (filters.journal) params.p_journal_type = filters.journal;
-    if (filters.dateFrom) params.p_date_from = filters.dateFrom;
-    if (filters.dateTo) params.p_date_to = filters.dateTo;
-    if (filters.amountMin) params.p_amount_min = Number(filters.amountMin);
-    if (filters.amountMax) params.p_amount_max = Number(filters.amountMax);
-
-    supabase.rpc('recherche_ecritures', params)
-      .then(({ data, error }) => {
-        if (error) toastError(error.message);
-        else setResults(data || []);
-        setLoading(false);
-      });
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="acc-toolbar">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <input type="text" placeholder="Texte libre (libellé, pièce...)" value={filters.text} onChange={e => setFilters(f => ({ ...f, text: e.target.value }))} className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" />
-          <select value={filters.journal} onChange={e => setFilters(f => ({ ...f, journal: e.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none">
-            <option value="">Tous journaux</option>
-            {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
-          </select>
-          <input type="date" value={filters.dateFrom} onChange={e => setFilters(f => ({ ...f, dateFrom: e.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" placeholder="Date début" />
-          <input type="date" value={filters.dateTo} onChange={e => setFilters(f => ({ ...f, dateTo: e.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" placeholder="Date fin" />
-          <input type="number" placeholder="Montant min" value={filters.amountMin} onChange={e => setFilters(f => ({ ...f, amountMin: e.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" />
-          <input type="number" placeholder="Montant max" value={filters.amountMax} onChange={e => setFilters(f => ({ ...f, amountMax: e.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" />
-          <div className="sm:col-span-2 lg:col-span-2 flex items-end">
-            <button onClick={doSearch} disabled={loading} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-brand-700 text-white rounded-lg text-sm font-medium hover:bg-brand-800 transition disabled:opacity-50">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              Rechercher
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {results.length > 0 && (
-        <div className="min-w-0">
-          <div className="px-1 md:px-4 py-3 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-700">{results.length} résultat{results.length > 1 ? 's' : ''}</span>
-          </div>
-          <AccountingTable footer={<AccountingPagination {...resultPaging}/>}>
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 sticky top-0">
-                <tr className="text-xs text-slate-500 uppercase">
-                  <th className="px-1 md:px-4 py-2 text-left">Date</th>
-                  <th className="px-1 md:px-4 py-2 text-left">Pièce</th>
-                  <th className="px-1 md:px-4 py-2 text-left">Journal</th>
-                  <th className="px-1 md:px-4 py-2 text-left">Description</th>
-                  <th className="px-1 md:px-4 py-2 text-left hidden sm:table-cell">Référence</th>
-                  <th className="px-1 md:px-4 py-2 text-right">Débit</th>
-                  <th className="px-1 md:px-4 py-2 text-right">Crédit</th>
-                  <th className="px-1 md:px-4 py-2 text-center">Statut</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--w-separator-l)]">
-                {resultPaging.rows.map((r: any) => (
-                  <tr key={r.entry_id} onClick={() => setDetail(r)} className="hover:bg-neutral-50/60 cursor-pointer">
-                    <td className="px-1 md:px-4 py-2 text-xs text-neutral-600">{formatDate(r.entry_date)}</td>
-                    <td className="px-1 md:px-4 py-2 font-mono text-xs text-neutral-500">{r.entry_number}</td>
-                    <td className="px-1 md:px-4 py-2"><span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-neutral-100 text-neutral-600">{r.journal_type}</span></td>
-                    <td className="px-1 md:px-4 py-2 text-neutral-700 text-xs max-w-[200px] truncate">{r.description || '—'}</td>
-                    <td className="px-1 md:px-4 py-2 text-neutral-500 text-xs max-w-[140px] truncate hidden sm:table-cell">{r.reference || ''}</td>
-                    <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(r.total_debit) > 0 ? Number(r.total_debit).toLocaleString('fr-FR') : ''}</td>
-                    <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(r.total_credit) > 0 ? Number(r.total_credit).toLocaleString('fr-FR') : ''}</td>
-                    <td className="px-1 md:px-4 py-2 text-center">
-                      <span className={'acc-status '+(r.status==='posted'?'valid':r.status==='cancelled'?'cancelled':'draft')}>
-                        {r.status === 'posted' ? 'Validée' : r.status === 'cancelled' ? 'Annulée' : 'Brouillon'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </AccountingTable>
-        </div>
-      )}
-
-      {detail && <SearchDetailModal entry={detail} tenant={tenant!} onClose={() => setDetail(null)} />}
-    </div>
-  );
-}
-
-/* ===================== SEARCH DETAIL MODAL ===================== */
-function SearchDetailModal({ entry, tenant, onClose, onReversed }: { entry: any; tenant: { id: string }; onClose: () => void; onReversed?: () => void }) {
-  const { can } = usePermissions();
-  const [lines, setLines] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-
-  useEffect(() => {
-    supabase
-      .from('journal_lines')
-      .select('id, created_at, account_code, account_name, label, debit, credit')
-      .eq('tenant_id', tenant.id)
-      .eq('entry_id', entry.entry_id)
-      .order('created_at')
-      .order('id')
-      .then(({ data, error }) => {
-        if (error) {
-          setLoadError(true);
-        } else {
-          setLines(data || []);
-        }
-        setLoading(false);
-      });
-  }, [entry.entry_id, tenant.id]);
-
-  const totalD = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
-  const totalC = lines.reduce((s, l) => s + Number(l.credit || 0), 0);
-  const hasLines = lines.length > 0;
-  const isBalanced = hasLines && totalD > 0 && totalC > 0 && Math.abs(totalD - totalC) < 0.01;
-
-  return (
-    <Modal open onClose={onClose} title={`Écriture ${entry.entry_number}`} size="lg"
-      footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
-      <div className="space-y-4 text-sm">
-        <AccountingEntryReversal key={entry.entry_id} tenantId={tenant.id} entryId={entry.entry_id} canManage={can('manage_accounting')} onPosted={onReversed} />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div><span className="text-slate-500">Pièce :</span> <span className="font-mono font-semibold">{entry.entry_number}</span></div>
-          <div><span className="text-slate-500">Journal :</span> <span className="font-semibold">{entry.journal_type}</span></div>
-          <div><span className="text-slate-500">Date :</span> {formatDate(entry.entry_date)}</div>
-          <div>
-            <span className="text-slate-500">Statut :</span>{' '}
-            <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${entry.status === 'posted' ? 'bg-emerald-100 text-emerald-700' : entry.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-              {entry.status === 'posted' ? 'Validée' : entry.status === 'cancelled' ? 'Annulée' : 'Brouillon'}
-            </span>
-          </div>
-        </div>
-        {entry.description && <div><span className="text-slate-500">Description :</span> {entry.description}</div>}
-        {entry.reference && <div><span className="text-slate-500">Référence :</span> {entry.reference}</div>}
-
-        {loading ? (
-          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
-        ) : loadError ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center text-sm text-red-700">
-            Impossible de charger les lignes de cette écriture
-          </div>
-        ) : !hasLines ? (
-          <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4 text-center text-sm text-neutral-500">
-            Aucune ligne comptable
-          </div>
-        ) : (
-          <div className="overflow-x-auto border border-neutral-200 rounded-lg">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50">
-                <tr className="text-xs text-neutral-500 uppercase">
-                  <th className="px-3 py-2 text-left">Compte</th>
-                  <th className="px-3 py-2 text-left">Intitulé</th>
-                  <th className="px-3 py-2 text-left">Libellé</th>
-                  <th className="px-3 py-2 text-right">Débit</th>
-                  <th className="px-3 py-2 text-right">Crédit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {lines.map((l) => (
-                  <tr key={l.id}>
-                    <td className="px-3 py-2 font-mono text-xs text-brand-700">{l.account_code}</td>
-                    <td className="px-3 py-2 text-neutral-700 text-xs">{l.account_name || '—'}</td>
-                    <td className="px-3 py-2 text-neutral-600 text-xs">{l.label || '—'}</td>
-                    <td className="px-3 py-2 text-right font-mono text-xs">{Number(l.debit) > 0 ? Number(l.debit).toLocaleString('fr-FR') : ''}</td>
-                    <td className="px-3 py-2 text-right font-mono text-xs">{Number(l.credit) > 0 ? Number(l.credit).toLocaleString('fr-FR') : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-neutral-50 border-t border-neutral-200">
-                <tr className="text-xs font-semibold">
-                  <td colSpan={3} className="px-3 py-2 text-right">Total</td>
-                  <td className="px-3 py-2 text-right font-mono">{totalD.toLocaleString('fr-FR')}</td>
-                  <td className="px-3 py-2 text-right font-mono">{totalC.toLocaleString('fr-FR')}</td>
-                </tr>
-                {isBalanced ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-1 text-right text-xs font-semibold text-emerald-700">Équilibrée</td>
-                  </tr>
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-1 text-right text-xs font-semibold text-red-600">
-                      Écart : {(totalD - totalC).toLocaleString('fr-FR')}
-                    </td>
-                  </tr>
-                )}
-              </tfoot>
-            </table>
-          </div>
-        )}
-        
-      </div>
-    </Modal>
-  );
-}
+function SearchTab(){return <AccountingSearch/>;}
 
 /* ===================== CLOTURES ===================== */
 function ClotureTab() {
@@ -1197,12 +953,8 @@ function VatTab() {
 }
 
 function AccountStatementTab() {
-  const { tenant } = useApp();
-  const { can } = usePermissions();
-  const [detail,setDetail]=useState<any>(null);
-  const [statementRevision,setStatementRevision]=useState(0);
-  useEffect(()=>setDetail(null),[tenant?.id]);
-  return tenant ? <><AccountingAccountStatement key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} onView={setDetail} refreshRevision={statementRevision} />{detail&&<SearchDetailModal entry={detail} tenant={tenant} onClose={()=>setDetail(null)} onReversed={()=>setStatementRevision(v=>v+1)} />}</> : null;
+  const {tenant}=useApp();const {can}=usePermissions();const work=useAccountingWork();
+  return tenant?<AccountingAccountStatement key={tenant.id} tenantId={tenant.id} canManage={can('manage_accounting')} refreshRevision={work?.revision??0} onView={r=>work?.openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/>:null;
 }
 
 function BankReconciliationTab() {
