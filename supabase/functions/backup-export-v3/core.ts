@@ -404,14 +404,17 @@ export async function runExportInvocation(deps: ExportDeps, workerId: string): P
 export function webdavStore(baseUrl: string, username: string, password: string): RemoteStore {
   const base = baseUrl.replace(/\/+$/, "");
   const auth = "Basic " + btoa(`${username}:${password}`);
+  const directories = new Set<string>();
   return {
     async put(path, bytes) {
       let cur = "";
       for (const s of path.split("/").filter(Boolean).slice(0, -1)) {
         cur += "/" + s;
+        if (directories.has(cur)) continue;
         const r = await fetch(`${base}${cur}`, { method: "MKCOL", headers: { Authorization: auth } });
         await r.body?.cancel();
         if (!(r.ok || [301, 405, 409].includes(r.status))) throw new Error(`offsite MKCOL failed: ${r.status}`);
+        if (r.ok || r.status === 405) directories.add(cur);
       }
       const r = await fetch(`${base}/${path}`, {
         method: "PUT",
