@@ -6,6 +6,7 @@ import { backupCopyStatusLabels, backupStatusLabels, downloadBackupV3, requestBa
 import { formatDateTime, formatNum } from '../lib/format';
 import { usePermissions } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
+import { BackupLwsActions } from './BackupLwsActions';
 
 type BackupList = { backups: BackupV3Record[]; automatic: boolean; capture_enabled: boolean };
 
@@ -131,6 +132,9 @@ export function BackupTab({ companyId }: { companyId?: string }) {
               </div>
               {item.status === 'verified' && item.archive_id && (
                 <div className="flex flex-wrap gap-2">
+                  {view === 'copies' && item.copy_status === 'confirmed' && (companyId || canDownload) && (
+                    <BackupLwsActions archiveId={item.archive_id} />
+                  )}
                   {view === 'copies' && (!item.copy_status || item.copy_status === 'failed') && (
                     <button type="button" className="w-btn-ghost" disabled={busy} onClick={() => void run(async () => {
                       const { error } = await supabase.rpc('br_v3_backup_copy', { p_archive_id: item.archive_id });

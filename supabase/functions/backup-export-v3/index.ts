@@ -8,6 +8,7 @@ import {
   runExportInvocation,
   runOffsiteInvocation,
   runRestoreAction,
+  sha256hex,
   webdavStore,
 } from "./core.ts";
 
@@ -98,8 +99,8 @@ Deno.serve(async (req: Request) => {
       if (!token) return false;
       const { data: u, error } = await admin.auth.getUser(token);
       if (error || !u.user) return false;
-      const { data: p } = await admin.from("profiles").select("role").eq("id", u.user.id).maybeSingle();
-      return p?.role === "super_admin";
+      const { data: p } = await admin.from("profiles").select("role, is_active").eq("id", u.user.id).maybeSingle();
+      return p?.role === "super_admin" && p.is_active === true;
     }
 
     function isCron(): boolean {
@@ -154,11 +155,29 @@ Deno.serve(async (req: Request) => {
       return json({ outcome: r.outcome, status: r.status, error_code: r.error_code, runs });
     }
 
-    if (action === "download_list" || action === "download_entry") {
-      const archiveId = String(body.archive_id ?? "");
-      if (!/^[0-9a-f-]{36}$/i.test(archiveId)) return json({ error: "Sauvegarde introuvable" }, 404);
+    if (action === "download_list" || action === "download_entry" || action === "verify_lws_entry") {
+      const fromLws = body.source === "lws" || action === "verify_lws_entry";
+      const archiveId = String(body.archive_id ?? "").toLowerCase();
+      if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(archiveId)) {
+        return json({ error: "Sauvegarde introuvable" }, 404);
+      }
       const auth = await authorizeDownload(archiveId);
-      if (!auth) return json({ error: "Sauvegarde introuvable" }, 404);
+      if (!auth && !(fromLws && await isSuperAdmin())) return json({ error: "Sauvegarde introuvable" }, 404);
+
+      let copy: { tenant_id: string; remote_prefix: string; blocks_confirmed: number } | null = null;
+      if (fromLws) {
+        const { data, error } = await admin.from("_br_v3_offsite_transfers")
+          .select("tenant_id, remote_prefix, blocks_confirmed")
+          .eq("archive_id", archiveId).eq("status", "confirmed").eq("manifest_confirmed", true).maybeSingle();
+        if (error || !data || data.remote_prefix !== `v3/${data.tenant_id}/${archiveId}/`) {
+          return json({ error: "Copie LWS vérifiée introuvable." }, 404);
+        }
+        copy = data;
+      }
+
+      function matchesCopy(data: { tenant_id: string; total: number }) {
+        return !copy || (copy.tenant_id === data.tenant_id && copy.blocks_confirmed + 1 === data.total);
+      }
 
       if (action === "download_list") {
         const offset = Math.max(0, Number.parseInt(String(body.offset ?? 0), 10) || 0);
@@ -166,6 +185,7 @@ Deno.serve(async (req: Request) => {
           p_archive_id: archiveId, p_offset: offset, p_limit: 500,
         });
         if (error || !data) return json({ error: "Sauvegarde introuvable" }, 404);
+        if (!matchesCopy(data)) return json({ error: "La copie LWS est incomplète." }, 409);
         return json({
           archive_id: archiveId,
           format_version: 3,
@@ -185,17 +205,33 @@ Deno.serve(async (req: Request) => {
       });
       const entry = data?.entries?.[0];
       if (error || !entry) return json({ error: "Entrée introuvable" }, 404);
+      if (!matchesCopy(data)) return json({ error: "La copie LWS est incomplète." }, 409);
+      const headers = {
+        ...corsHeaders,
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "no-store",
+        "X-Entry-Name": String(entry.name),
+        "X-Entry-Sha256": String(entry.stored_sha256),
+      };
+      if (copy) {
+        const name = n === 0 ? "manifest.wbr3m" : `blocks/${String(n).padStart(6, "0")}.wbr3`;
+        if (entry.name !== name) return json({ error: "Nom du fichier de sauvegarde invalide." }, 409);
+        let bytes: Uint8Array;
+        try {
+          bytes = await webdavOf().get(copy.remote_prefix + name);
+        } catch {
+          return json({ error: "Fichier indisponible sur LWS." }, 502);
+        }
+        if (bytes.byteLength !== Number(entry.stored_bytes) || await sha256hex(bytes) !== entry.stored_sha256) {
+          return json({ error: "L’empreinte du fichier distant ne correspond pas." }, 409);
+        }
+        if (action === "verify_lws_entry") return json({ verified: true });
+        return new Response(bytes, { status: 200, headers });
+      }
+
       const { data: blob, error: dlErr } = await admin.storage.from(BUCKET).download(entry.object_path);
       if (dlErr || !blob) return json({ error: "Objet indisponible" }, 502);
-      return new Response(blob.stream(), {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/octet-stream",
-          "X-Entry-Name": String(entry.name),
-          "X-Entry-Sha256": String(entry.stored_sha256),
-        },
-      });
+      return new Response(blob.stream(), { status: 200, headers });
     }
 
     if ((RESTORE_ACTIONS as readonly string[]).includes(action)) {

@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 import { backupCopyStatusLabels, backupStatusLabels } from '../lib/backupV3';
 import { formatDateTime, formatNum } from '../lib/format';
 import { supabase } from '../lib/supabase';
+import { BackupLwsActions } from './BackupLwsActions';
 import { PlatformWorkPage } from './PlatformWorkPage';
 import { SearchableSelect } from './SearchableSelect';
 
@@ -218,6 +219,7 @@ export function BackupTransfers({ openCompany }: { openCompany: (id: string) => 
             </div>
             <div className="pa-inline">
               <ReportStatus alert={item.status === 'failed'}>{backupCopyStatusLabels[item.status] || item.status}</ReportStatus>
+              {item.status === 'confirmed' && <BackupLwsActions archiveId={item.archive_id} buttonClassName="pa-link" />}
               {item.status === 'failed' && <button type="button" className="pa-link" disabled={retrying !== null} onClick={() => void retry(item)}>
                 {retrying === item.id && <Loader2 size={14} className="animate-spin" />} Relancer
               </button>}

@@ -13,9 +13,12 @@ export type BackupV3Record = {
   error_code: string | null;
 };
 
+type BackupSource = 'storage' | 'lws';
+type BackupProgress = (done: number, total: number) => void;
+type DownloadEntry = { n: number; name: string; stored_bytes: number; stored_sha256: string };
 type DownloadPage = {
   total: number;
-  entries: { n: number; name: string; stored_bytes: number; stored_sha256: string }[];
+  entries: DownloadEntry[];
 };
 
 export const backupStatusLabels: Record<string, string> = {
@@ -49,42 +52,75 @@ export async function requestBackupV3(label: string, companyId?: string) {
   if (error) throw error;
 }
 
-export async function downloadBackupV3(archiveId: string, onProgress: (done: number, total: number) => void) {
+async function invokeBackupV3<T>(body: Record<string, unknown>, fallback: string): Promise<T> {
+  const result = await supabase.functions.invoke<T>('backup-export-v3', { body });
+  if (result.error || result.data === null) {
+    const response = result.error?.context;
+    const failure = response instanceof Response ? await response.json().catch(() => null) : null;
+    throw new Error(typeof failure?.error === 'string' ? failure.error : fallback);
+  }
+  return result.data;
+}
+
+async function visitBackupV3Entries(
+  archiveId: string,
+  source: BackupSource,
+  onProgress: BackupProgress,
+  visit: (entry: DownloadEntry) => Promise<void>,
+) {
+  let offset = 0;
+  let total: number | undefined;
+  do {
+    const page = await invokeBackupV3<DownloadPage>({
+      action: 'download_list', archive_id: archiveId, source, offset,
+    }, 'Liste des fichiers indisponible.');
+    total ??= page.total;
+    if (!Number.isSafeInteger(total) || page.total !== total || !page.entries.length || offset + page.entries.length > total) {
+      throw new Error('Liste de sauvegarde incomplète.');
+    }
+    for (const entry of page.entries) {
+      const name = offset === 0 ? 'manifest.wbr3m' : 'blocks/' + String(offset).padStart(6, '0') + '.wbr3';
+      if (entry.n !== offset || entry.name !== name) {
+        throw new Error('Ordre des fichiers de sauvegarde invalide.');
+      }
+      await visit(entry);
+      offset++;
+      onProgress(offset, total);
+    }
+  } while (offset < total);
+}
+
+export async function verifyLwsBackupV3(archiveId: string, onProgress: BackupProgress) {
+  await visitBackupV3Entries(archiveId, 'lws', onProgress, async entry => {
+    const result = await invokeBackupV3<{ verified: boolean }>({
+      action: 'verify_lws_entry', archive_id: archiveId, n: entry.n,
+    }, 'Vérification LWS indisponible.');
+    if (!result.verified) throw new Error('Fichier LWS non vérifié.');
+  });
+}
+
+export async function downloadBackupV3(archiveId: string, onProgress: BackupProgress, source: BackupSource = 'storage') {
   const { CFB } = await import('xlsx');
   const zip = CFB.utils.cfb_new();
-  let offset = 0;
-
-  for (;;) {
-    const page = await supabase.functions.invoke<DownloadPage>('backup-export-v3', {
-      body: { action: 'download_list', archive_id: archiveId, offset },
-    });
-    if (page.error || !page.data?.entries.length) throw new Error('Liste des blocs indisponible.');
-    for (const entry of page.data.entries) {
-      if (entry.n !== offset || !/^(manifest\.wbr3m|blocks\/\d{6,}\.wbr3)$/.test(entry.name)) {
-        throw new Error('Ordre des blocs invalide.');
-      }
-      const file = await supabase.functions.invoke<Blob>('backup-export-v3', {
-        body: { action: 'download_entry', archive_id: archiveId, n: entry.n },
-      });
-      if (file.error || !(file.data instanceof Blob)) throw new Error('Bloc chiffré indisponible.');
-      const buffer = await file.data.arrayBuffer();
-      const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', buffer));
-      const digest = Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');
-      if (buffer.byteLength !== entry.stored_bytes || digest !== entry.stored_sha256) {
-        throw new Error('Empreinte du bloc non conforme.');
-      }
-      CFB.utils.cfb_add(zip, entry.name, new Uint8Array(buffer));
-      offset++;
-      onProgress(offset, page.data.total);
+  await visitBackupV3Entries(archiveId, source, onProgress, async entry => {
+    const file = await invokeBackupV3<Blob>({
+      action: 'download_entry', archive_id: archiveId, source, n: entry.n,
+    }, 'Fichier de sauvegarde indisponible.');
+    if (!(file instanceof Blob)) throw new Error('Fichier de sauvegarde invalide.');
+    const buffer = await file.arrayBuffer();
+    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', buffer));
+    const digest = Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');
+    if (buffer.byteLength !== entry.stored_bytes || digest !== entry.stored_sha256) {
+      throw new Error('Empreinte du fichier non conforme.');
     }
-    if (offset >= page.data.total) break;
-  }
+    CFB.utils.cfb_add(zip, entry.name, new Uint8Array(buffer));
+  });
 
   const archive = CFB.write(zip, { fileType: 'zip', type: 'array', compression: false });
   const url = URL.createObjectURL(new Blob([archive], { type: 'application/zip' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'waarwi-v3-' + archiveId + '.zip';
+  link.download = (source === 'lws' ? 'waarwi-v3-lws-' : 'waarwi-v3-') + archiveId + '.zip';
   document.body.append(link);
   link.click();
   link.remove();
