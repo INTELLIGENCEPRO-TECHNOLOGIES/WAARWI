@@ -301,7 +301,7 @@
   overflow-wrap: anywhere;
 }
 
-.acc-bank-mobile-switch { display: none; }
+.acc-bank-mobile-switch, .acc-bank-short-label { display: none; }
 
 .acc-bank-review dl { margin: 5px 0 13px; }
 .acc-bank-review dl div {
@@ -337,6 +337,11 @@
   .acc-bank-table-panel .acc-bank-toolbar .input { width: auto; }
   .acc-bank-footer { gap: 4px; }
   .acc-bank-footer > .acc-bank-actions { flex: 1 1 100%; }
+  .acc-bank-manual-footer .acc-bank-selection { flex-basis: 100%; }
+  .acc-bank-manual-footer > .acc-bank-actions { flex: 0 1 auto; }
+  .acc-bank-manual-footer .btn-primary, .acc-bank-manual-footer .btn-secondary { padding-inline: 6px; }
+  .acc-bank-short-label { display: inline; }
+  .acc-bank-full-label { display: none; }
   .acc-bank-draft-row { padding-bottom: 9px; }
 }
 

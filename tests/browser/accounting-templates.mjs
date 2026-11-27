@@ -8,7 +8,12 @@ export async function verifyAccountingTemplates(page) {
   const globalModel = 'Frais bancaires · modèle commun';
   const journalModel = 'Frais bancaires · modèle BQ';
 
-  await button(page, 'Comptabilité').filter({ visible: true }).first().click();
+  await page.reload();
+  const accountingNav = button(page, 'Comptabilité').filter({ visible: true }).first();
+  const menu = button(page, 'Menu').filter({ visible: true }).first();
+  await accountingNav.or(menu).first().waitFor();
+  if (!await accountingNav.isVisible()) await menu.click();
+  await accountingNav.click();
   await button(page, 'Modèles de saisie').filter({ visible: true }).first().click();
   const catalogue = activeWindow('Modèles de saisie');
   await button(catalogue, 'Nouveau modèle').click();
@@ -27,7 +32,7 @@ export async function verifyAccountingTemplates(page) {
   await journals.getByLabel('Journal', { exact: true }).selectOption('BQ');
   await button(journals, 'Appeler un modèle').click();
   const chooser = page.getByRole('dialog', { name: 'Appeler un modèle', exact: true });
-  await chooser.getByLabel('Modèle de saisie', { exact: true }).selectOption({ label: globalModel + ' · Tous les journaux' });
+  await chooser.getByRole('combobox').selectOption({ label: globalModel + ' · Tous les journaux' });
   await button(chooser, 'Préparer le modèle').click();
   const prepare = page.getByRole('dialog', { name: 'Préparer le modèle', exact: true });
   await prepare.getByLabel('Libellé ligne 1', { exact: true }).fill('Frais mensuels fictifs');
@@ -58,7 +63,7 @@ export async function verifyAccountingTemplates(page) {
 
   const copied = activeWindow('Nouveau modèle de saisie');
   await copied.getByLabel('Intitulé du modèle', { exact: true }).fill(journalModel);
-  assert.equal(await copied.getByLabel('Journal', { exact: true }).inputValue(), 'BQ');
+  assert.equal(await copied.locator('select').first().inputValue(), 'BQ');
   await button(copied, 'Enregistrer le modèle').click();
   await copied.getByText('Modèle enregistré.', { exact: true }).waitFor();
   await button(copied, 'Modifier ' + journalModel).click();
@@ -70,7 +75,7 @@ export async function verifyAccountingTemplates(page) {
 
   await journals.getByLabel('Journal', { exact: true }).selectOption('OD');
   await button(journals, 'Appeler un modèle').click();
-  const select = chooser.getByLabel('Modèle de saisie', { exact: true });
+  const select = chooser.getByRole('combobox');
   await select.selectOption({ label: globalModel + ' · Tous les journaux' });
   assert.equal(await select.getByRole('option', { name: journalModel + ' révisé', exact: true }).count(), 0);
   await button(chooser, 'Fermer').last().click();

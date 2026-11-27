@@ -163,7 +163,11 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
   }, [tenantId]);
 
   useEffect(() => {
-    if (!account) return;
+    if (!account) {
+      setStatements([]);
+      setListLoading(false);
+      return;
+    }
     let live = true;
     setListLoading(true);
     void (async () => {
@@ -471,8 +475,8 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
           <button key={step.key} type="button" aria-current={phase === step.key ? 'step' : undefined}
             disabled={busy || importing || open || (step.key !== 'statements' && !selected)} onClick={() => go(step.key)}>{step.label}</button>
         ))}
-        <a className="acc-bank-help" href={'/guides/guide-comptabilite-waarwi.html#' + HELP[phase]} target="_blank" rel="noopener">
-          Consulter le guide
+        <a className="acc-bank-help" aria-label="Consulter le guide" href={'/guides/guide-comptabilite-waarwi.html#' + HELP[phase]} target="_blank" rel="noopener">
+          <span className="acc-bank-full-label">Consulter le guide</span><span className="acc-bank-short-label">Guide</span>
         </a>
       </nav>
 
@@ -534,7 +538,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
           <div className="acc-bank-form-body">
             <div className="acc-bank-fieldset">
               <h3>Informations du relevé</h3>
-              <p className="acc-bank-hint">{last ? 'La période commence le lendemain du dernier relevé validé avec son solde de clôture.' : 'Pour commencer, choisissez une date à laquelle le solde bancaire et le solde comptable concordent.'}</p>
+              <p className="acc-bank-hint">{last ? 'La période commence le lendemain du dernier relevé validé avec son solde de clôture.' : 'Pour le premier relevé, choisissez une date de début précédée d’un solde bancaire et comptable identique.'}</p>
               <label className="acc-bank-field">Référence du relevé
                 <input className="input" required maxLength={120} value={reference} disabled={busy} onChange={event => setReference(event.target.value)} />
               </label>
@@ -598,7 +602,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                 <button type="button" aria-pressed={mode === 'manual'} disabled={busy} onClick={() => setMode('manual')}>Manuel</button>
                 <button type="button" aria-pressed={mode === 'suggestions'} disabled={busy} onClick={() => setMode('suggestions')}>Suggestions</button>
               </div>
-              <p className="acc-bank-hint"><strong>{report.bank_pending_count}</strong> à pointer sur {bankRows.length} opération(s) du relevé.</p>
+              <p className="acc-bank-hint"><strong>{report.bank_pending_count}</strong> sur {bankRows.length} à pointer</p>
             </div>
           ) : <p className="acc-bank-hint acc-bank-guidance">Consultez les opérations et leurs pointages. {report.statement.status === 'draft' && 'Vous disposez d’un accès en lecture seule.'}</p>}
 
@@ -609,7 +613,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                   <h3>Correspondances proposées</h3>
                   <p className="acc-bank-hint">{suggestions
                     ? suggestions.suggested + ' unique(s) · ' + suggestions.ambiguous + ' ambiguë(s) · ' + Math.max(0, suggestions.pending - suggestions.suggested - suggestions.ambiguous) + ' sans proposition.'
-                    : 'Waarwi recherche les écritures de même montant et de même sens. Les correspondances ambiguës se traitent en pointage manuel.'}
+                    : 'Le montant et le sens doivent être identiques. Waarwi propose une même date ou une même référence à sept jours près. Traitez les ambiguïtés en mode manuel.'}
                   </p>
                 </div>
                 <button type="button" className="btn-secondary" disabled={busyOrLoading || !report.bank_pending_count} onClick={() => void analyze()}>
@@ -651,8 +655,8 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
           ) : (
             <>
               {editable && <p className="acc-bank-hint acc-bank-guidance">{bankChoice
-                ? 'Comparez la date et la référence, puis sélectionnez l’écriture comptable qui correspond à cette opération.'
-                : 'Choisissez une opération du relevé, puis recherchez son écriture comptable de même montant et de même sens.'}
+                ? 'Comparez la date et la référence avant de sélectionner l’écriture.'
+                : 'Choisissez une opération, puis son écriture de même montant et de même sens.'}
               </p>}
               <div className="acc-bank-switch acc-bank-mobile-switch" role="group" aria-label="Tableau affiché">
                 <button type="button" aria-pressed={mobilePanel === 'bank'} onClick={() => setMobilePanel('bank')}>Relevé</button>
@@ -730,7 +734,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                   </AccountingTable>
                 </section>
               </div>
-              <footer className="acc-bank-footer">
+              <footer className="acc-bank-footer acc-bank-manual-footer">
                 {editable && (
                   <>
                     <div className="acc-bank-selection" aria-live="polite">
@@ -740,15 +744,19 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                         : <span>Choisissez une opération à pointer.</span>}
                     </div>
                     <div className="acc-bank-actions">
-                      {bankChoice && !bankChoice.journal_line_id && <button type="button" className="acc-bank-link" disabled={busyOrLoading}
+                      {bankChoice && !bankChoice.journal_line_id && <button type="button" className="acc-bank-link" aria-label="Comptabiliser une opération absente" disabled={busyOrLoading}
                         onClick={() => { setError(''); setMissing({ id: bankChoice.id, label: bankChoice.label, amount: Number(bankChoice.amount), counter: '', reason: '' }); }}>
-                        Comptabiliser une opération absente
+                        <span className="acc-bank-full-label">Comptabiliser une opération absente</span><span className="acc-bank-short-label">Opération absente</span>
                       </button>}
-                      <button type="button" className="btn-primary" disabled={busyOrLoading || !matches} onClick={() => point(bankLine, bookLine)}>Pointer les opérations</button>
+                      <button type="button" className="btn-primary" aria-label="Pointer les opérations" disabled={busyOrLoading || !matches} onClick={() => point(bankLine, bookLine)}>
+                        <span className="acc-bank-full-label">Pointer les opérations</span><span className="acc-bank-short-label">Pointer</span>
+                      </button>
                     </div>
                   </>
                 )}
-                <button type="button" className="btn-secondary" disabled={busyOrLoading} onClick={() => go('review')}>Contrôler le rapprochement<ArrowRight size={15} /></button>
+                <button type="button" className="btn-secondary" aria-label="Contrôler le rapprochement" disabled={busyOrLoading} onClick={() => go('review')}>
+                  <span className="acc-bank-full-label">Contrôler le rapprochement</span><span className="acc-bank-short-label">Contrôler</span><ArrowRight size={15} />
+                </button>
               </footer>
             </>
           )}
