@@ -13,7 +13,7 @@ export type BackupV3Record = {
   error_code: string | null;
 };
 
-type BackupSource = 'storage' | 'lws';
+export type BackupSource = 'storage' | 'lws';
 type BackupProgress = (done: number, total: number) => void;
 type DownloadEntry = { n: number; name: string; stored_bytes: number; stored_sha256: string };
 type DownloadPage = {
@@ -43,9 +43,9 @@ export const backupCopyStatusLabels: Record<string, string> = {
   failed: 'En échec',
 };
 
-export async function requestBackupV3(label: string, companyId?: string) {
+export async function requestBackupV3(requestId: string, label: string, companyId?: string) {
   const { error } = await supabase.rpc('br_v3_backup_request', {
-    p_request_id: crypto.randomUUID(),
+    p_request_id: requestId,
     p_label: label.trim() || null,
     p_tenant_id: companyId ?? null,
   });
@@ -67,10 +67,12 @@ async function visitBackupV3Entries(
   source: BackupSource,
   onProgress: BackupProgress,
   visit: (entry: DownloadEntry) => Promise<void>,
+  signal?: AbortSignal,
 ) {
   let offset = 0;
   let total: number | undefined;
   do {
+    signal?.throwIfAborted();
     const page = await invokeBackupV3<DownloadPage>({
       action: 'download_list', archive_id: archiveId, source, offset,
     }, 'Liste des fichiers indisponible.');
@@ -79,15 +81,31 @@ async function visitBackupV3Entries(
       throw new Error('Liste de sauvegarde incomplète.');
     }
     for (const entry of page.entries) {
+      signal?.throwIfAborted();
       const name = offset === 0 ? 'manifest.wbr3m' : 'blocks/' + String(offset).padStart(6, '0') + '.wbr3';
       if (entry.n !== offset || entry.name !== name) {
         throw new Error('Ordre des fichiers de sauvegarde invalide.');
       }
       await visit(entry);
+      signal?.throwIfAborted();
       offset++;
       onProgress(offset, total);
     }
   } while (offset < total);
+}
+
+export async function verifyBackupV3ForRestore(
+  archiveId: string,
+  source: BackupSource,
+  onProgress: BackupProgress,
+  signal: AbortSignal,
+) {
+  await visitBackupV3Entries(archiveId, source, onProgress, async entry => {
+    const result = await invokeBackupV3<{ verified: boolean }>({
+      action: 'verify_restore_entry', archive_id: archiveId, source, n: entry.n,
+    }, 'Contrôle de l’archive indisponible.');
+    if (!result.verified) throw new Error('Fichier non vérifié.');
+  }, signal);
 }
 
 export async function verifyLwsBackupV3(archiveId: string, onProgress: BackupProgress) {

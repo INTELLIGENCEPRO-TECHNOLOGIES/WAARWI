@@ -201,6 +201,19 @@ export async function open(
   return { plain, header };
 }
 
+export async function verifyRestoreEntry(
+  stored: Uint8Array,
+  binding: Binding,
+  keyring: KeyRing,
+  plainSha256: string,
+  plainBytes?: number,
+): Promise<void> {
+  const { plain } = await open(stored, binding, keyring, plainBytes ?? MANIFEST_PLAIN_MAX);
+  if ((plainBytes !== undefined && plain.byteLength !== plainBytes) || await sha256hex(plain) !== plainSha256) {
+    throw new IntegrityError("BRV-032", "plaintext does not match the verified archive");
+  }
+}
+
 // Bloc clair : ligne d'en-tête JSON puis une ligne jsonb::text par ligne capturée, chaque ligne terminée par \n.
 export function splitBlock(plain: Uint8Array): { header: Record<string, unknown>; rows: number } {
   const nl = plain.indexOf(0x0a);

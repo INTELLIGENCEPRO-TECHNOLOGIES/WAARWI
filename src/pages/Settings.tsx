@@ -47,6 +47,7 @@ export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
         { k: 'permissions', label: 'Permissions', icon: Shield },
         { k: 'sites', label: 'Magasins', icon: Store },
         ...(canManageRegisters ? [{ k: 'cash_registers' as TabKey, label: 'Caisses', icon: Monitor }] : []),
+        ...(can('backup_create') ? [{ k: 'backup' as TabKey, label: 'Sauvegarde et restauration', icon: Database }] : []),
       ],
     },
     {
@@ -70,7 +71,6 @@ export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
         { k: 'documents', label: 'Paramètres documents', icon: FileText },
         { k: 'rep_commissions', label: 'Représentants & commissions', icon: Users },
         { k: 'ticket_header', label: 'En-tête tickets', icon: Printer },
-        { k: 'backup', label: 'Sauvegarde', icon: Database },
       ],
     },
   ];
@@ -129,7 +129,7 @@ export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
       {tab === 'stock' && <StockSettingsTab onRefresh={refresh} />}
       {tab === 'tiers' && <TiersSettingsTab onRefresh={refresh} />}
       {tab === 'pricing_tiers' && <PricingTiersTab />}
-      {tab === 'backup' && <BackupTab />}
+      {tab === 'backup' && can('backup_create') && <BackupTab key={tenant?.id} />}
       {tab === 'documents' && <DocumentSettingsTab />}
       {tab === 'rep_commissions' && <RepCommissionSettingsTab />}
       {tab === 'expense_types' && <ExpenseCategoriesTab />}

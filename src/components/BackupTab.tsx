@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Cloud, Download, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Cloud, Download, Loader2, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { backupCopyStatusLabels, backupStatusLabels, downloadBackupV3, requestBackupV3, type BackupV3Record } from '../lib/backupV3';
@@ -7,12 +7,16 @@ import { formatDateTime, formatNum } from '../lib/format';
 import { usePermissions } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
 import { BackupLwsActions } from './BackupLwsActions';
+import { BackupReset, BackupRestore, type BackupRecoveryTarget } from './BackupRecovery';
+import { Modal } from './Modal';
 
 type BackupList = { backups: BackupV3Record[]; automatic: boolean; capture_enabled: boolean };
 
 const views = [
   { id: 'archives', label: 'Archives' },
   { id: 'copies', label: 'Copie LWS' },
+  { id: 'restore', label: 'Restauration' },
+  { id: 'reset', label: 'Réinitialisation' },
   { id: 'schedule', label: 'Planification' },
 ] as const;
 
@@ -25,12 +29,19 @@ export function BackupTab({ companyId }: { companyId?: string }) {
   const [view, setView] = useState<typeof views[number]['id']>('archives');
   const [data, setData] = useState<BackupList | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [manualOpen, setManualOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
+  const [recoveryTarget, setRecoveryTarget] = useState<BackupRecoveryTarget | null>(null);
+  const manualRequest = useRef<string | null>(null);
+  const manualForm = useId();
   const tenantId = companyId ?? tenant?.id;
   const canCreate = !!companyId || can('backup_create');
   const canDownload = !companyId && can('backup_download');
+  const canRestore = !companyId && can('backup_restore');
+  const canReset = !companyId && can('backup_reset_operations');
+  const tabs = views.filter(item => (item.id !== 'restore' || canRestore) && (item.id !== 'reset' || canReset));
   const visibleBackups = (data?.backups ?? []).filter(item => view !== 'copies' || (item.status === 'verified' && item.archive_id));
 
   const load = useCallback(async () => {
@@ -63,40 +74,68 @@ export function BackupTab({ companyId }: { companyId?: string }) {
     }
   }
 
+  function closeManual() {
+    setManualOpen(false);
+    setLabel('');
+    manualRequest.current = null;
+  }
+
   return (
     <section className="grid min-w-0 gap-4" aria-label="Sauvegardes">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Sauvegardes V3</h2>
-        <button type="button" className="w-btn-ghost" aria-label="Actualiser les sauvegardes" onClick={() => void load()}><RefreshCw size={16} /></button>
-      </div>
-      <nav className="flex flex-wrap gap-x-4 border-b border-[var(--w-separator)]" aria-label="Rubriques de sauvegarde">
-        {views.map(item => (
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">{companyId ? 'Sauvegardes V3' : 'Sauvegarde et restauration'}</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          {canCreate && <button type="button" className="btn-primary min-h-11 text-sm" disabled={!data?.capture_enabled || busy}
+            onClick={() => {
+              manualRequest.current = crypto.randomUUID();
+              setManualOpen(true);
+            }}>
+            <Plus size={16} aria-hidden="true" /> Faire une sauvegarde
+          </button>}
+          <button type="button" className="btn-ghost min-h-11 text-sm disabled:opacity-50" aria-label="Actualiser les sauvegardes" onClick={() => void load()}>
+            <RefreshCw size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+      <nav className="flex flex-wrap gap-x-3 sm:gap-x-4 border-b border-[var(--w-separator)]" aria-label="Rubriques de sauvegarde">
+        {tabs.map(item => (
           <button key={item.id} type="button" aria-current={view === item.id ? 'page' : undefined}
             className="min-h-11 border-b-2 border-transparent px-1 text-sm font-medium text-[var(--w-text-sec)] aria-[current=page]:border-[var(--w-text)] aria-[current=page]:font-semibold aria-[current=page]:text-[var(--w-text)]"
             onClick={() => setView(item.id)}>{item.label}</button>
         ))}
       </nav>
-      {view === 'archives' && data?.capture_enabled && canCreate && (
-        <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
+      <Modal open={manualOpen && canCreate} onClose={() => { if (!busy) closeManual(); }} title="Faire une sauvegarde" size="sm" layer="top" focusOnOpen
+        footer={<>
+          <button type="button" className="btn-secondary min-h-11 text-sm disabled:opacity-50" disabled={busy} onClick={closeManual}>Annuler</button>
+          <button type="submit" form={manualForm} className="btn-primary min-h-11 text-sm" disabled={busy || !data?.capture_enabled}>
+            {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin" />}
+            Lancer la sauvegarde
+          </button>
+        </>}>
+        <form id={manualForm} className="grid gap-3" onSubmit={event => {
           event.preventDefault();
+          const requestId = manualRequest.current;
+          if (!requestId || !data?.capture_enabled) return;
           void run(async () => {
-            await requestBackupV3(label, companyId);
-            setLabel('');
-            toast.success('Sauvegarde ajoutée à la file.');
+            await requestBackupV3(requestId, label, companyId);
+            closeManual();
+            setView('archives');
+            toast.success('Sauvegarde demandée. Suivez son état dans Archives.');
           });
         }}>
-          <label className="grid min-w-0 flex-1 gap-1 text-sm sm:max-w-xs">
+          <p className="text-sm text-[var(--w-text-sec)]">La sauvegarde couvre l’ensemble des magasins de l’entreprise.</p>
+          <label className="grid min-w-0 gap-1 text-sm">
             Intitulé facultatif
-            <input className="w-input-ul" value={label} maxLength={120} onChange={event => setLabel(event.target.value)} />
+            <input className="w-input-ul" value={label} maxLength={120} disabled={busy} onChange={event => setLabel(event.target.value)} />
           </label>
-          <button type="submit" className="w-btn-primary" disabled={busy}>
-            <Plus size={16} /> Nouvelle sauvegarde
-          </button>
         </form>
-      )}
+      </Modal>
       {loadError && <p role="alert" className="text-sm text-red-700">{loadError}</p>}
       {!data && !loadError && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={16} className="animate-spin" /> Chargement…</p>}
+      {data && canCreate && !data.capture_enabled && <p className="text-sm text-[var(--w-text-sec)]">La création de sauvegardes est momentanément indisponible.</p>}
       {progress && <p role="status" className="text-sm">{progress}</p>}
+      {data && view === 'restore' && canRestore && <BackupRestore backups={data.backups} initialTarget={recoveryTarget} />}
+      {view === 'reset' && canReset && <BackupReset />}
       {data && view === 'schedule' && (
         <dl className="divide-y divide-[var(--w-separator)] text-sm">
           <div className="flex flex-wrap justify-between gap-2 py-3">
@@ -107,7 +146,7 @@ export function BackupTab({ companyId }: { companyId?: string }) {
           </div>}
         </dl>
       )}
-      {data && view !== 'schedule' && (visibleBackups.length === 0 ? (
+      {data && (view === 'archives' || view === 'copies') && (visibleBackups.length === 0 ? (
         <p className="py-4 text-sm text-[var(--w-text-sec)]">
           {view === 'copies' ? 'Aucune archive prête pour la copie LWS.' : 'Aucune sauvegarde V3.'}
         </p>
@@ -136,17 +175,26 @@ export function BackupTab({ companyId }: { companyId?: string }) {
                     <BackupLwsActions archiveId={item.archive_id} />
                   )}
                   {view === 'copies' && (!item.copy_status || item.copy_status === 'failed') && (
-                    <button type="button" className="w-btn-ghost" disabled={busy} onClick={() => void run(async () => {
+                    <button type="button" className="btn-ghost min-h-11 text-sm disabled:opacity-50" disabled={busy} onClick={() => void run(async () => {
                       const { error } = await supabase.rpc('br_v3_backup_copy', { p_archive_id: item.archive_id });
                       if (error) throw error;
                       toast.success('Copie LWS ajoutée à la file.');
                     })}><Cloud size={16} /> {item.copy_status ? 'Relancer la copie' : 'Copier sur LWS'}</button>
                   )}
-                  {view === 'archives' && canDownload && <button type="button" className="w-btn-ghost" disabled={busy} onClick={() => void run(async () => {
+                  {view === 'archives' && canDownload && <button type="button" className="btn-ghost min-h-11 text-sm disabled:opacity-50" disabled={busy} onClick={() => void run(async () => {
                     if (!item.archive_id) return;
                     setProgress('Préparation de l’archive…');
                     await downloadBackupV3(item.archive_id, (done, total) => setProgress(done + ' blocs téléchargés sur ' + total));
                   })}><Download size={16} /> Télécharger</button>}
+                  {canRestore && (view === 'archives' || item.copy_status === 'confirmed') && (
+                    <button type="button" className="btn-ghost min-h-11 text-sm disabled:opacity-50" onClick={() => {
+                      if (!item.archive_id) return;
+                      setRecoveryTarget({ archiveId: item.archive_id, source: view === 'copies' ? 'lws' : 'storage' });
+                      setView('restore');
+                    }}>
+                      <ShieldCheck size={16} aria-hidden="true" /> Contrôler avant restauration
+                    </button>
+                  )}
                 </div>
               )}
             </li>

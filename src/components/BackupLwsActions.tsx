@@ -3,7 +3,7 @@ import { Download, Loader2, ShieldCheck } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { downloadBackupV3, verifyLwsBackupV3 } from '../lib/backupV3';
 
-export function BackupLwsActions({ archiveId, buttonClassName = 'w-btn-ghost' }: {
+export function BackupLwsActions({ archiveId, buttonClassName = 'btn-ghost min-h-11 text-sm disabled:opacity-50' }: {
   archiveId: string;
   buttonClassName?: string;
 }) {

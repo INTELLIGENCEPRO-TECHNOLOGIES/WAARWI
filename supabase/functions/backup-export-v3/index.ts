@@ -9,6 +9,7 @@ import {
   runOffsiteInvocation,
   runRestoreAction,
   sha256hex,
+  verifyRestoreEntry,
   webdavStore,
 } from "./core.ts";
 
@@ -80,6 +81,47 @@ function webdavOf() {
   const pass = Deno.env.get("LWS_WEBDAV_PASSWORD");
   if (!url || !user || !pass) throw new Error("Offsite storage not configured");
   return webdavStore(url, user, pass);
+}
+
+async function inspectArchiveEntry(
+  admin: ReturnType<typeof createClient>,
+  archiveId: string,
+  tenantId: string,
+  n: number,
+  bytes: Uint8Array,
+) {
+  const [archive, block] = await Promise.all([
+    admin.from("_br_v3_archives").select("generation_id, key_id, manifest_plain_sha256")
+      .eq("id", archiveId).eq("tenant_id", tenantId).eq("status", "verified").single(),
+    n === 0 ? null : admin.from("_br_v3_archive_blocks").select("key_id, plain_bytes, plain_sha256")
+      .eq("archive_id", archiveId).eq("block_no", n).single(),
+  ]);
+  const metadata = archive.data;
+  const keyId = n === 0 ? metadata?.key_id : block?.data?.key_id;
+  const plainSha256 = n === 0 ? metadata?.manifest_plain_sha256 : block?.data?.plain_sha256;
+  const plainBytes = block?.data ? Number(block.data.plain_bytes) : undefined;
+  if (!metadata || !keyId || !plainSha256 ||
+      (n > 0 && (plainBytes === undefined || !Number.isSafeInteger(plainBytes) || plainBytes <= 0))) {
+    return json({ error: "Métadonnées de vérification indisponibles." }, 409);
+  }
+
+  const keyring = await loadKeyRing().catch(() => null);
+  if (!keyring || !keyring.keys.has(keyId)) {
+    return json({ error: "La clé de déchiffrement de cette archive est indisponible." }, 503);
+  }
+  try {
+    await verifyRestoreEntry(bytes, {
+      kind: n === 0 ? "manifest" : "block",
+      tenant_id: tenantId,
+      archive_id: archiveId,
+      generation_id: metadata.generation_id,
+      block_no: n,
+      key_id: keyId,
+    }, keyring, plainSha256, plainBytes);
+    return json({ verified: true });
+  } catch {
+    return json({ error: "Le contenu déchiffré ne correspond pas à l’archive vérifiée." }, 409);
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -155,7 +197,8 @@ Deno.serve(async (req: Request) => {
       return json({ outcome: r.outcome, status: r.status, error_code: r.error_code, runs });
     }
 
-    if (action === "download_list" || action === "download_entry" || action === "verify_lws_entry") {
+    if (action === "download_list" || action === "download_entry" || action === "verify_lws_entry" ||
+        action === "verify_restore_entry") {
       const fromLws = body.source === "lws" || action === "verify_lws_entry";
       const archiveId = String(body.archive_id ?? "").toLowerCase();
       if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(archiveId)) {
@@ -213,17 +256,20 @@ Deno.serve(async (req: Request) => {
         "X-Entry-Name": String(entry.name),
         "X-Entry-Sha256": String(entry.stored_sha256),
       };
-      if (copy) {
+      if (copy || action === "verify_restore_entry") {
         const name = n === 0 ? "manifest.wbr3m" : `blocks/${String(n).padStart(6, "0")}.wbr3`;
         if (entry.name !== name) return json({ error: "Nom du fichier de sauvegarde invalide." }, 409);
         let bytes: Uint8Array;
         try {
-          bytes = await webdavOf().get(copy.remote_prefix + name);
+          bytes = copy ? await webdavOf().get(copy.remote_prefix + name) : await storeOf(admin).get(entry.object_path);
         } catch {
-          return json({ error: "Fichier indisponible sur LWS." }, 502);
+          return json({ error: copy ? "Fichier indisponible sur LWS." : "Fichier indisponible dans les archives Waarwi." }, 502);
         }
         if (bytes.byteLength !== Number(entry.stored_bytes) || await sha256hex(bytes) !== entry.stored_sha256) {
-          return json({ error: "L’empreinte du fichier distant ne correspond pas." }, 409);
+          return json({ error: copy ? "L’empreinte du fichier distant ne correspond pas." : "L’empreinte du fichier ne correspond pas." }, 409);
+        }
+        if (action === "verify_restore_entry") {
+          return await inspectArchiveEntry(admin, archiveId, data.tenant_id, n, bytes);
         }
         if (action === "verify_lws_entry") return json({ verified: true });
         return new Response(bytes, { status: 200, headers });
