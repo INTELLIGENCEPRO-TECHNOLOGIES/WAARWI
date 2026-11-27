@@ -158,7 +158,7 @@ jobs:
           python3 - <<'PY'
           import pathlib, re
           files=pathlib.Path('/tmp/waarwi-recipe_files.txt').read_text().splitlines()
-          targets={'44','50','51','52','94','95','111','112','114','117','119','129','139','142','148'}
+          targets={'44','50','51','52','94','95','111','112','114','117','119','129','139','142','148','150'}
           seen=set()
           out=pathlib.Path('/tmp/waarwi-local-recipes')
           out.mkdir(exist_ok=False)
