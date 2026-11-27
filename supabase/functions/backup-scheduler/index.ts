@@ -615,8 +615,23 @@ Deno.serve(async (req: Request) => {
               succeeded++;
               succeededTenantIds.push(t.id);
             } catch (error: unknown) {
-              failed++;
               const message = error instanceof Error ? error.message : "Erreur inattendue";
+              if (message.includes("upstream request timeout")) {
+                // PostgreSQL may commit the archive after the HTTP gateway disconnects.
+                // Confirm the archive before treating this tenant as failed or retrying it.
+                for (let check = 0; check < 10; check++) {
+                  const { data: archiveId } = await admin.rpc("_br_reconcile_schedule_backup", {
+                    p_run_id: run.id, p_tenant_id: t.id,
+                  });
+                  if (archiveId) {
+                    succeeded++;
+                    succeededTenantIds.push(t.id);
+                    return;
+                  }
+                  if (check < 9) await new Promise(resolve => setTimeout(resolve, 6000));
+                }
+              }
+              failed++;
               errors.push({ tenant_id: t.id, tenant_name: t.name, error: message });
               const { error: failUpdErr } = await admin
                 .from("_br_schedule_run_items")

@@ -48,7 +48,8 @@ test('le planificateur reprend les tâches interrompues et publie les copies ext
         CREATE TABLE tenants(id uuid PRIMARY KEY);
         CREATE TABLE tenant_backups(
           id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id), kind text NOT NULL,
-          is_auto boolean NOT NULL, status text NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+          is_auto boolean NOT NULL, status text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+          label text NOT NULL DEFAULT 'Sauvegarde planifiée', size_bytes bigint, row_counts jsonb
         );
         CREATE TABLE _br_offsite_config(id int PRIMARY KEY, enabled boolean, auto_transfer boolean, root_folder text);
         CREATE TABLE _br_offsite_transfers(
@@ -61,6 +62,7 @@ test('le planificateur reprend les tâches interrompues et publie les copies ext
       const migrationPath = process.env.BR_SCHEDULER_SQL
         ?? new URL('../../supabase/migrations/20261127181752_backup_scheduler_recover_expired_runs.sql', import.meta.url);
       await dbClient.query(readFileSync(migrationPath, 'utf8'));
+      await dbClient.query(migration('20261127184400_backup_scheduler_reconcile_gateway_timeout.sql'));
 
       const [a, b, c, expired, running, next, backup, manual] = Array.from({ length: 8 }, randomUUID);
       await dbClient.query('INSERT INTO tenants(id) VALUES ($1), ($2), ($3)', [a, b, c]);
@@ -95,6 +97,23 @@ test('le planificateur reprend les tâches interrompues et publie les copies ext
       assert.deepEqual((await dbClient.query('SELECT source_backup_id, remote_path, status FROM _br_offsite_transfers')).rows, [{
         source_backup_id: backup, remote_path: `/Waarwi/${a}/2026/11/27_${backup}.waarwi.enc`, status: 'queued',
       }]);
+
+      const ended = randomUUID();
+      const archiveAfterTimeout = randomUUID();
+      await dbClient.query(`INSERT INTO _br_schedule_runs(id,status,finished_at,tenants_total,tenants_failed)
+        VALUES ($1,'failed',now(),1,1)`, [ended]);
+      await dbClient.query(`INSERT INTO _br_schedule_run_items(run_id,tenant_id,status,started_at,finished_at,error_message)
+        VALUES ($1,$2,'failed',now()-interval '5 minutes',now(),'Extended backup failed: upstream request timeout')`, [ended, b]);
+      const reconcile = () => dbClient.query(`SELECT _br_reconcile_schedule_backup($1,$2) AS archive`, [ended, b]);
+      assert.equal((await reconcile()).rows[0].archive, null);
+      await dbClient.query(`INSERT INTO tenant_backups(id,tenant_id,kind,is_auto,status,created_at,size_bytes,row_counts)
+        VALUES($1,$2,'auto',true,'verified',now()-interval '2 minutes',450000,'{"sales":3,"articles":7}')`, [archiveAfterTimeout, b]);
+      assert.equal((await reconcile()).rows[0].archive, archiveAfterTimeout);
+      assert.equal((await reconcile()).rows[0].archive, archiveAfterTimeout);
+      assert.deepEqual((await dbClient.query(`SELECT status,tenants_succeeded,tenants_failed FROM _br_schedule_runs WHERE id=$1`, [ended])).rows[0],
+        { status: 'completed', tenants_succeeded: 1, tenants_failed: 0 });
+      assert.deepEqual((await dbClient.query(`SELECT status, row_count FROM _br_schedule_run_items WHERE run_id=$1`, [ended])).rows[0],
+        { status: 'succeeded', row_count: 10 });
     } finally {
       await dbClient.end();
     }
