@@ -1,0 +1,7 @@
+# IPM — phase 1 : ventilation et préparation du cycle inverse
+
+Candidats 144/145 : primitives internes sans effet métier ni accès public. Allocation à partir de bases justifiées par le serveur et de la couverture finale approuvée, arrondis cumulatifs déterministes et plafonnement ; delta de retour selon quantité cumulée et parts originales. Le total des deux composantes est conservé à la dernière restitution. L'ordre stable par identifiant est une convention technique de ventilation des centimes, non une preuve historique.
+
+Ne pas déduire l'éligibilité, le plafond ou la part historique d'une demande client. Ne pas appliquer une nouvelle convention à une ancienne facture. L'intégration à la création serveur doit définir et conserver la base par ligne, la quantité, les parts, la règle et les preuves ; harmoniser la TVA et les arrondis fiscaux (la somme des deltas de composantes peut différer d'un centime d'un prorata du TTC). Aucun remboursement n'est autorisé par ces primitives seules.
+
+Restent : moteur de calcul de convention côté serveur (TVA, plafonds avant/après, période et bénéficiaire), conservation des ventilations, liens de sauvegarde/restauration, facture directe atomique idempotente, retour IPM avant/après bordereau/facture/règlement/rejet, écritures comptables séparées patient/organisme, interface mobile et desktop, POS, concurrence. Le parcours historique reste inchangé. Aucun déploiement.
