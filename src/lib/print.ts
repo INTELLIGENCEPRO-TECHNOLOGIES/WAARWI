@@ -1446,6 +1446,7 @@ export type CustomerStatementPrintOpts = {
   tenant: PrintTenant;
   siteName?: string;
   customer: { name: string; account_code?: string; phone?: string; address?: string };
+  accounting?: 'client' | 'fournisseur';
   periodLabel: string;
   openingBalance: number;
   closingBalance: number;
@@ -1457,7 +1458,10 @@ export type CustomerStatementPrintOpts = {
 
 export function printCustomerStatementA4(opts: CustomerStatementPrintOpts) {
   const t = opts.tenant;
-  const title = 'RELEVÉ DE COMPTE CLIENT';
+  const title = opts.accounting === 'fournisseur' ? 'GRAND LIVRE COMPTABLE FOURNISSEUR'
+    : opts.accounting === 'client' ? 'GRAND LIVRE COMPTABLE CLIENT' : 'RELEVÉ DE COMPTE CLIENT';
+  const partyLabel = opts.accounting === 'fournisseur' ? 'Fournisseur' : 'Client';
+  const closingLabel = opts.accounting ? 'Solde comptable' : 'Solde client';
   const fmtDate = (v: string) => new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   const dirLabel = (v: number) => v > 0 ? 'Débiteur' : v < 0 ? 'Créditeur' : 'Équilibré';
@@ -1515,7 +1519,7 @@ export function printCustomerStatementA4(opts: CustomerStatementPrintOpts) {
   <div class="title">${esc(title)}</div>
 
   <div class="meta-bar">
-    <div class="cell"><div class="lbl">Client</div><div class="val">${esc(opts.customer.name)}</div></div>
+    <div class="cell"><div class="lbl">${partyLabel}</div><div class="val">${esc(opts.customer.name)}</div></div>
     ${opts.customer.account_code ? `<div class="cell"><div class="lbl">Compte</div><div class="val">${esc(opts.customer.account_code)}</div></div>` : ''}
     ${opts.customer.phone ? `<div class="cell"><div class="lbl">Téléphone</div><div class="val">${esc(opts.customer.phone)}</div></div>` : ''}
     <div class="cell"><div class="lbl">Période</div><div class="val">${esc(opts.periodLabel)}</div></div>
@@ -1552,7 +1556,7 @@ export function printCustomerStatementA4(opts: CustomerStatementPrintOpts) {
 
   <div class="closing-box">
     <div class="inner">
-      <div class="lbl">Solde client — ${finalLabel}</div>
+      <div class="lbl">${closingLabel} — ${finalLabel}</div>
       <div class="val">${fmtMoney(finalValue)} FCFA</div>
     </div>
   </div>

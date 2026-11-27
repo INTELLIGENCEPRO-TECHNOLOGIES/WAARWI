@@ -27,9 +27,11 @@ import { FormField, ValidatedInput } from '../components/FormPrimitives';
 import { useTranslation } from 'react-i18next';
 import { DesktopWindow } from '../components/DesktopWindow';
 import { useWindowManager } from '../context/WindowManagerContext';
+import { TierAccountingLedger } from '../components/TierAccountingLedger';
 
 type Supplier = {
   id: string; tenant_id: string; name: string; contact: string;
+  account_code?: string | null;
   phone: string; whatsapp: string; email: string; address: string; country: string;
   delivery_days: number; payment_terms: string; credit_limit: number; credit_blocked: boolean; is_active: boolean;
   balance: number;
@@ -49,6 +51,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
   const { tenant, currentSite, profile } = useApp();
   const dataTick = useRealtimeTick(['customers', 'suppliers', 'customer_payments', 'supplier_payments', 'customer_prepayments', 'balance_adjustments', 'credit_allocations', 'sales', 'sale_payments', 'supplier_orders', 'customer_exception_prices']);
   const { can } = usePermissions();
+  const showAccounting = can('view_accounting') && (tenant?.enabled_modules?.includes('accounting') ?? true);
   const { t } = useTranslation();
   const { success, error } = useToast();
   const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
@@ -1287,6 +1290,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       {custView && !(isDesktop && custView.key === 'info') && (
         <CustomerDetailModal
           view={custView}
+          showAccounting={showAccounting}
           customerList={customers}
           onClose={() => { setCustView(null); load(); }}
         />
@@ -1301,6 +1305,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       {supView && supView.key !== 'payment' && (
         <SupplierDetailModal
           view={supView}
+          showAccounting={showAccounting}
           siteId={currentSite?.id || null}
           onClose={() => { setSupView(null); load(); }}
         />
@@ -1503,6 +1508,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
             initialRect={{ x: 80 + idx * 30, y: 40 + idx * 20, w: Math.min(1200, window.innerWidth - 120), h: Math.min(800, window.innerHeight - 80) }}>
             <CustomerDetailModal
               view={{ c: desc.customer, key: 'info' }}
+              showAccounting={showAccounting}
               customerList={customers}
               onClose={() => closeLedgerWindow(desc.windowId)}
               windowed
@@ -1538,7 +1544,14 @@ function Badge({ tone, children }: { tone: 'neutral' | 'emerald' | 'amber' | 're
 
 
 /* ───────────────────────── Customer detail modal ───────────────────────── */
-function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomerChange }: { view: { c: Customer; key: CustomerOptionKey }; customerList: Customer[]; onClose: () => void; windowed?: boolean; onCustomerChange?: (c: Customer) => void }) {
+function CustomerDetailModal({ view, customerList, showAccounting, onClose, windowed, onCustomerChange }: {
+  view: { c: Customer; key: CustomerOptionKey };
+  customerList: Customer[];
+  showAccounting: boolean;
+  onClose: () => void;
+  windowed?: boolean;
+  onCustomerChange?: (c: Customer) => void;
+}) {
   const { c: viewC, key } = view;
   const [activeCustomer, setActiveCustomer] = useState<Customer>(viewC);
   const initialC = activeCustomer;
@@ -1774,11 +1787,13 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
   const creditAvailable = Math.max(0, -customerBalance);
 
   const modalTitle = key === 'info' ? 'Interrogation client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
-  const [infoTab, setInfoTab] = useState<'commerciale' | 'comptable' | 'statistiques'>('comptable');
+  const [requestedTab, setInfoTab] = useState<TierStatementTab>('comptable');
+  const infoTab = requestedTab === 'comptable' && !showAccounting ? 'releve' : requestedTab;
 
   useEffect(() => {
-    if (key !== 'info' || infoTab !== 'comptable' || !tenant) return;
+    if (key !== 'info' || infoTab !== 'releve' || !tenant) return;
     let cancelled = false;
+    setStatement(null);
     setStatementLoading(true);
     supabase.rpc('get_customer_statement', {
       p_customer_id: c.id,
@@ -1862,36 +1877,26 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
               <SearchableSelect variant="underline" searchable menuWidth={380} wrapLabels options={custOptions} value={activeCustomer.id} onChange={(id) => goToCustomer(customerList.find(x => x.id === id) || null)} placeholder="Rechercher un client…" />
             </div>
             <button onClick={() => goToCustomer(nextCust)} disabled={!nextCust} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client suivant"><ChevronRight className="w-4 h-4" /></button>
-            <div className="text-right shrink-0">
-              {!loading && (
-                netDebt > 0 ? (
-                  <div className="text-[var(--w-text)]">
-                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Solde dû</div>
-                    <div className="text-sm font-bold num text-red-600">{formatFCFA(netDebt)}</div>
-                  </div>
-                ) : creditAvailable > 0 ? (
-                  <div className="text-emerald-700">
-                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-60">Crédit disponible</div>
-                    <div className="text-sm font-bold num">{formatFCFA(creditAvailable)}</div>
-                  </div>
-                ) : (
-                  <div className="text-[var(--w-text)]">
-                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Solde</div>
-                    <div className="text-sm font-bold num">0 FCFA</div>
-                  </div>
-                )
-              )}
-            </div>
+            {!loading && <dl aria-label="Solde commercial" className="shrink-0 text-right">
+              <dt className="text-[10px] font-semibold text-[var(--w-text-muted)]">Solde commercial</dt>
+              <dd title={netDebt > 0 ? 'Solde dû' : creditAvailable > 0 ? 'Crédit disponible' : undefined}
+                className={['num text-sm font-semibold', netDebt > 0 ? 'text-red-600' : creditAvailable > 0 ? 'text-emerald-700' : ''].join(' ')}>
+                {formatFCFA(customerBalance)}
+              </dd>
+            </dl>}
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-            <TierStatementTabs active={infoTab} onChange={setInfoTab} />
+            <TierStatementTabs active={infoTab} showAccounting={showAccounting} documentLabel="Ventes" onChange={setInfoTab} />
             <div className="min-w-0 flex-1 overflow-auto px-3 pb-4 pt-3 sm:px-4">
               {loading ? (
                 <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>
               ) : (
                 <>
                   {infoTab === 'comptable' && (
+                    <TierAccountingLedger key={[tenant?.id, initialC.id, initialC.account_code].join(':')} kind="client" party={initialC} />
+                  )}
+                  {infoTab === 'releve' && (
                     <LedgerView customerName={c.name} statement={statement} statementLoading={statementLoading}
                       dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} onPrint={printStatement} />
                   )}
@@ -2211,7 +2216,7 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
 
   const balanceSummary = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--w-text)] px-1">
-      <span className="font-semibold">Solde client :</span>
+      <span className="font-semibold">Solde commercial</span>
       <span className={`font-bold num ${dirColor(Number(statement?.balance || 0))}`}>
         {formatFCFA(Math.abs(Number(statement?.balance || 0)))} {dirLabel(Number(statement?.balance || 0))}
       </span>
@@ -2525,18 +2530,24 @@ function DocsView({ kpis, docs, dateFrom, dateTo, onOpenPicker, onClearDates, on
   );
 }
 
-type TierStatementTab = 'comptable' | 'commerciale' | 'statistiques';
+type TierStatementTab = 'comptable' | 'releve' | 'commerciale' | 'statistiques';
 
-function TierStatementTabs({ active, onChange }: { active: TierStatementTab; onChange: (tab: TierStatementTab) => void }) {
+function TierStatementTabs({ active, showAccounting, documentLabel, onChange }: {
+  active: TierStatementTab;
+  showAccounting: boolean;
+  documentLabel: 'Ventes' | 'Achats';
+  onChange: (tab: TierStatementTab) => void;
+}) {
   const tabs = [
-    { key: 'comptable', label: 'Comptable', Icon: FileText },
-    { key: 'commerciale', label: 'Commerciale', Icon: ShoppingBag },
-    { key: 'statistiques', label: 'Statistiques', Icon: TrendingUp },
+    { key: 'comptable', label: 'Grand livre', accessibleLabel: 'Grand livre', Icon: FileText },
+    { key: 'releve', label: 'Relevé', accessibleLabel: 'Relevé commercial', Icon: Wallet },
+    { key: 'commerciale', label: documentLabel, accessibleLabel: documentLabel, Icon: ShoppingBag },
+    { key: 'statistiques', label: 'Statistiques', accessibleLabel: 'Statistiques', Icon: TrendingUp },
   ] as const;
   return (
     <nav aria-label="Rubriques du compte" className="flex shrink-0 flex-wrap gap-1 border-b border-[var(--w-separator)] px-2 py-1.5 md:w-40 md:flex-col md:flex-nowrap md:border-b-0 md:border-r md:py-2">
-      {tabs.map(({ key, label, Icon }) => (
-        <button type="button" key={key} aria-pressed={active === key} onClick={() => onChange(key)}
+      {tabs.filter(tab => showAccounting || tab.key !== 'comptable').map(({ key, label, accessibleLabel, Icon }) => (
+        <button type="button" key={key} aria-label={accessibleLabel} aria-pressed={active === key} onClick={() => onChange(key)}
           className="flex min-h-9 items-center gap-2 rounded-sm px-2 text-left text-xs font-medium text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] aria-pressed:bg-[var(--w-active)] aria-pressed:font-semibold aria-pressed:text-[var(--w-text)]">
           <Icon aria-hidden="true" className="hidden h-4 w-4 shrink-0 md:block" /> {label}
         </button>
@@ -2623,7 +2634,12 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
 
 
 /* ───────────────────────── Supplier detail modal ───────────────────────── */
-function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: SupplierOptionKey }; siteId: string | null; onClose: () => void }) {
+function SupplierDetailModal({ view, showAccounting, onClose }: {
+  view: { s: Supplier; key: SupplierOptionKey };
+  showAccounting: boolean;
+  siteId: string | null;
+  onClose: () => void;
+}) {
   const { s, key } = view;
   const { tenant, currentSite } = useApp();
   const [loading, setLoading] = useState(true);
@@ -2788,7 +2804,8 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   };
 
   const modalTitle = key === 'info' ? 'Interrogation fournisseur' : key === 'articles' ? 'Articles liés' : 'Documents d\'achats';
-  const [infoTab, setInfoTab] = useState<'comptable' | 'commerciale' | 'statistiques'>('comptable');
+  const [requestedTab, setInfoTab] = useState<TierStatementTab>('comptable');
+  const infoTab = requestedTab === 'comptable' && !showAccounting ? 'releve' : requestedTab;
   const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
   const commercialeSummary = useMemo(() => {
@@ -2821,20 +2838,23 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
               <div className="text-sm font-semibold text-[var(--w-text)]">{s.name}</div>
               {(s as any).account_code && <div className="font-mono text-xs text-[var(--w-text-muted)]">{(s as any).account_code}</div>}
             </div>
-            <div className="shrink-0 text-right">
-              <div className="text-xs text-[var(--w-text-muted)]">Solde</div>
-              <div className="num text-sm font-semibold">{loading ? '…' : formatFCFA(supplierBalance)}</div>
-            </div>
+            <dl aria-label="Solde commercial" className="shrink-0 text-right">
+              <dt className="text-[10px] font-semibold text-[var(--w-text-muted)]">Solde commercial</dt>
+              <dd className="num text-sm font-semibold">{loading ? '…' : formatFCFA(supplierBalance)}</dd>
+            </dl>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-            <TierStatementTabs active={infoTab} onChange={setInfoTab} />
+            <TierStatementTabs active={infoTab} showAccounting={showAccounting} documentLabel="Achats" onChange={setInfoTab} />
             <div className="min-w-0 flex-1 overflow-auto px-3 pb-4 pt-3 sm:px-4">
               {loading ? (
                 <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>
               ) : (
                 <>
                   {infoTab === 'comptable' && (
+                    <TierAccountingLedger key={[tenant?.id, s.id, s.account_code].join(':')} kind="fournisseur" party={s} />
+                  )}
+                  {infoTab === 'releve' && (
                     <SupplierLedgerView supplierName={s.name} ledger={ledger} totalCredit={totals.total} totalDebit={totals.paid} due={totals.due}
                       dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} />
                   )}

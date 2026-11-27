@@ -6,6 +6,8 @@ DECLARE
  actor uuid:=current_setting('waarwi_recipe.browser_actor')::uuid;
  t uuid:=gen_random_uuid(); site uuid:=gen_random_uuid(); article uuid:=gen_random_uuid();
  patient uuid:=gen_random_uuid(); regular_customer uuid:=gen_random_uuid(); org uuid:=gen_random_uuid(); convention uuid:=gen_random_uuid();
+ ledger_customer uuid:=gen_random_uuid(); ledger_code text; ledger_window uuid:=gen_random_uuid(); ledger_token uuid;
+ ledger_date date:=(now() AT TIME ZONE 'Africa/Dakar')::date;
  beneficiary uuid:=gen_random_uuid(); register_id uuid:=gen_random_uuid(); session_id uuid:=gen_random_uuid();
  method uuid:=gen_random_uuid(); sale uuid; result jsonb;
  token text:=replace(gen_random_uuid()::text,'-','');
@@ -13,7 +15,7 @@ DECLARE
  article_name text:='Article recette navigateur ' || repeat('DésignationDeCatalogueSansEspaces', 4);
 BEGIN
  INSERT INTO public.tenants(id,name,enabled_modules,settings,approval_status)
- VALUES(t,'RECETTE NAVIGATEUR IPM','["dashboard","billing","articles","stock","sales","pos","ipm","accounting"]','{"stock_method":"none"}','approved');
+ VALUES(t,'RECETTE NAVIGATEUR IPM','["dashboard","billing","articles","stock","sales","pos","ipm","accounting","tiers"]','{"stock_method":"none"}','approved');
  PERFORM waarwi_recipe.provision_enterprise(t);
  INSERT INTO public.profiles(id,tenant_id,role,site_access_mode,full_name,is_active)
  VALUES(actor,t,'admin','all','Recette navigateur',true)
@@ -26,7 +28,9 @@ BEGIN
  VALUES(t,'invoice',true) ON CONFLICT(tenant_id,doc_type) DO UPDATE SET allow_edit=excluded.allow_edit;
  INSERT INTO public.sites(id,tenant_id,name,is_active,allow_negative_stock) VALUES(site,t,'Pharmacie de recette',true,false);
  INSERT INTO public.customers(id,tenant_id,name)
- VALUES(patient,t,'Patient recette navigateur'),(regular_customer,t,'Client fictif du journal');
+ VALUES(patient,t,'Patient recette navigateur'),(regular_customer,t,'Client fictif du journal'),
+       (ledger_customer,t,'Client recette grand livre');
+ SELECT account_code INTO STRICT ledger_code FROM public.customers WHERE id=ledger_customer;
  INSERT INTO public.articles(id,tenant_id,internal_ref,name,sale_price,purchase_price,track_stock,ipm_eligible)
  VALUES(article,t,'NAV-001',article_name,2500,500,true,true);
  INSERT INTO public.articles(id,tenant_id,internal_ref,name,sale_price,purchase_price,track_stock,ipm_eligible)
@@ -61,12 +65,22 @@ BEGIN
      jsonb_build_array(jsonb_build_object('article_id',next_article,'name','Article recette voisin','quantity',1,'unit_price',1500,'discount',0)),
      '[]'::jsonb,site,'{}',gen_random_uuid());
  END LOOP;
+ ledger_token:=(public.document_edit_lease(t,'accounting_journal','OD:'||to_char(ledger_date,'YYYY-MM'),ledger_window,'acquire')->>'token')::uuid;
+ result:=public.post_locked_manual_entry_and_release(t,'OD',ledger_date,'Créance comptable de recette','RECETTE-GRAND-LIVRE',
+   jsonb_build_array(
+     jsonb_build_object('account_code',ledger_code,'debit',1500000,'credit',0,'label','Créance comptable de recette'),
+     jsonb_build_object('account_code','5210000','debit',0,'credit',1500000,'label','Contrepartie de recette')
+   ),gen_random_uuid(),ledger_window,ledger_token);
+ IF (result->>'success') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Écriture de recette absente'; END IF;
  EXECUTE 'RESET ROLE';
  UPDATE public.sales SET public_code=token WHERE id=sale;
 END $fixture$;
 COMMIT;
-SELECT jsonb_build_object('id',s.id,'number',s.sale_number,'token',s.public_code,'method',m.id)
+SELECT jsonb_build_object('id',s.id,'number',s.sale_number,'token',s.public_code,'method',m.id,
+  'ledgerCustomer',c.id,'ledgerName',c.name,'ledgerCode',c.account_code,'ledgerPiece',e.entry_number)
 FROM public.sales s
 JOIN public.tenants t ON t.id=s.tenant_id AND t.name='RECETTE NAVIGATEUR IPM'
 JOIN public.payment_methods m ON m.tenant_id=t.id AND m.code='CASH-REC'
+JOIN public.customers c ON c.tenant_id=t.id AND c.name='Client recette grand livre'
+JOIN public.journal_entries e ON e.tenant_id=t.id AND e.reference='RECETTE-GRAND-LIVRE' AND e.status='posted'
 WHERE s.ipm_patient_total=900 AND s.total=2500 AND s.paid=400;

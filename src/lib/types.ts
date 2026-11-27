@@ -231,6 +231,7 @@ export type Customer = {
   id: string;
   tenant_id: string;
   name: string;
+  account_code?: string | null;
   phone: string;
   email: string;
   address: string;

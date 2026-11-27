@@ -8,6 +8,7 @@ import { verifyArticleNavigation } from './article-navigation.mjs';
 import { verifyCalendarActions } from './calendar-layout.mjs';
 import { verifyAccountingTemplates } from './accounting-templates.mjs';
 import { verifyAccountingMobile } from './accounting-mobile.mjs';
+import { verifyTierAccountingLedger } from './tier-accounting-ledger.mjs';
 
 const api = new URL(process.env.VITE_SUPABASE_URL);
 const app = new URL('http://127.0.0.1:4173');
@@ -27,7 +28,7 @@ const output = execFileSync('docker', [
   '-v', 'ON_ERROR_STOP=1', '-v', `browser_actor=${data.user.id}`, '-f', '-',
 ], { input: readFileSync(new URL('./billing-fixture.sql', import.meta.url)), encoding: 'utf8' });
 const fixture = JSON.parse(output.trim().split('\n').at(-1));
-assert.ok(fixture.id && fixture.token && fixture.number && fixture.method);
+assert.ok(fixture.id && fixture.token && fixture.number && fixture.method && fixture.ledgerCode && fixture.ledgerPiece);
 
 async function visible(locator, label) {
   try {
@@ -200,6 +201,17 @@ try {
   const accountingMobile = await browserPage(browser, { width: 320, height: 670 }, true);
   await signIn(accountingMobile);
   await verifyAccountingMobile(accountingMobile);
+  const tierMobile = await browserPage(browser, { width: 320, height: 670 }, true);
+  await signIn(tierMobile);
+  await verifyTierAccountingLedger(tierMobile, fixture);
+  const [{ data: tier, error: tierError }, { count: tierSales, error: tierSalesError }] = await Promise.all([
+    localAdmin.from('customers').select('balance').eq('id', fixture.ledgerCustomer).single(),
+    localAdmin.from('sales').select('id', { count: 'exact', head: true }).eq('customer_id', fixture.ledgerCustomer),
+  ]);
+  assert.equal(tierError, null);
+  assert.equal(tierSalesError, null);
+  assert.equal(Number(tier?.balance), 0);
+  assert.equal(tierSales, 0);
 } finally {
   await browser.close();
 }

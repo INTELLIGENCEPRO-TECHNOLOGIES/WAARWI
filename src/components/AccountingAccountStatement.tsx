@@ -4,12 +4,10 @@ import { supabase } from '../lib/supabase';
 import { AccountingTable } from './AccountingWorkspace';
 import { ChevronLeft, ChevronRight, Search, MoreHorizontal } from './Icons';
 import { formatDate } from '../lib/format';
+import { readAccountingAccountStatement, type StatementAccount as Account, type AccountStatementLine as Line, type AccountStatement as Statement } from '../lib/accountingAccountStatement';
 
-type Account={code:string;name:string;account_type:string;is_active:boolean};
-type Line={line_id:string;entry_id:string;entry_date:string;entry_number:string;journal_type:string;reference:string|null;description:string;source_type:string|null;source_id:string|null;status:string;label:string|null;debit:number;credit:number;running_balance:number;match_group_id:string|null;match_code:string|null};
 type Suggestion={root:string;root_piece:string;first_date:string;last_date:string;amount:number;line_ids:string[];entries:string[]};
 type Suggestions={total:number;rows:Suggestion[]};
-type Statement={opening_mode?:'fiscal'|'continuous'|'provisional';account:Account;opening_balance:number;total_debit:number;total_credit:number;closing_balance:number;row_count:number;rows:Line[]};
 const money=(n:number)=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(Number(n))+' FCFA';
 const balance=(n:number)=>Number(n)===0?'0 FCFA':money(Math.abs(Number(n)))+(Number(n)>0?' D':' C');
 const today=()=>new Date().toISOString().slice(0,10);
@@ -66,9 +64,8 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   if(!request){setBusy(false);return;}
   setBusy(true);
   void(async()=>{try{
-   const {data,error:err}=await supabase.rpc('accounting_account_statement',{p_tenant_id:tenantId,p_account_code:request.code,p_date_from:request.from,p_date_to:request.to,p_offset:request.offset});
-   if(err)throw err;
-   if(live)setResult(data as Statement);
+   const data=await readAccountingAccountStatement(tenantId,request);
+   if(live)setResult(data);
   }catch(e){if(live)setError(msg(e));}finally{if(live)setBusy(false);}})();
   return()=>{live=false;};
  },[tenantId,request,refreshRevision,localRefresh]);
