@@ -61,7 +61,7 @@ export function AccountingVatReport({tenantId}:{tenantId:string}) {
   downloadCsv([header,...rows],'page-'+(query.offset/50+1));
  };
  return <section className="space-y-4 min-w-0">
-  <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end print:hidden" onSubmit={e=>{e.preventDefault();if(valid)setQuery({...dates,offset:0,revision:query.revision+1});}}>
+  <form className="acc-fields acc-fields-with-action print:hidden" onSubmit={e=>{e.preventDefault();if(valid)setQuery({...dates,offset:0,revision:query.revision+1});}}>
    <label className="min-w-0 text-xs font-medium">Du<input className="input mt-1 w-full" type="date" required value={dates.from} onChange={e=>setDates(p=>({...p,from:e.target.value}))}/></label>
    <label className="min-w-0 text-xs font-medium">Au<input className="input mt-1 w-full" type="date" required value={dates.to} onChange={e=>setDates(p=>({...p,to:e.target.value}))}/></label>
    <button className="btn btn-primary" type="submit" disabled={!valid||loading}>Actualiser</button>
@@ -75,14 +75,14 @@ export function AccountingVatReport({tenantId}:{tenantId:string}) {
    <div className="acc-summary">
     {[['TVA collectée nette (ventes et avoirs)',report.output_sales],['TVA récupérable sur achats',report.input_purchases],['Différence sur opérations commerciales',report.net_trade]].map(([label,amount])=><div key={String(label)}><span>{label}</span><strong>{money(Number(amount))}</strong></div>)}
    </div>
-   <div className="card p-4 space-y-2"><h2 className="text-sm font-semibold">Autres mouvements comptables</h2>
+   <div className="acc-section-head space-y-2"><h2 className="text-sm font-semibold">Autres mouvements comptables</h2>
     <div className="flex flex-wrap justify-between gap-2 text-sm"><span>TVA collectée · autres mouvements</span><strong className="tabular-nums">{money(report.output_adjustments)}</strong></div>
     <div className="flex flex-wrap justify-between gap-2 text-sm"><span>TVA récupérable · autres mouvements</span><strong className="tabular-nums">{money(report.input_adjustments)}</strong></div>
     <div className="border-t border-neutral-200 pt-2 flex flex-wrap justify-between gap-2 text-sm"><span>Solde des mouvements des deux comptes affectés</span><strong className="tabular-nums">{money(report.net_movements)}</strong></div>
     <p className="text-xs text-neutral-500">Comptes : {report.output_account} et {report.input_account}. Ce solde de période ne constitue pas une déclaration de TVA ni un montant définitif à payer : reports antérieurs et traitements fiscaux restent à vérifier.</p>
    </div>
-   <div className="card p-4 space-y-2"><h2 className="text-sm font-semibold">Contrôles avant déclaration</h2>
-    <div className="grid gap-2 sm:grid-cols-2 text-sm">
+   <div className="acc-section-head space-y-2"><h2 className="text-sm font-semibold">Contrôles avant déclaration</h2>
+    <div className="acc-fields acc-fields-2 text-sm">
      <div>Ventes avec TVA non comptabilisées : <strong>{report.pending_sales}</strong><p className="text-xs text-neutral-600">{money(report.pending_sales_vat)} de TVA</p></div>
      <div>Avoirs avec TVA non comptabilisés : <strong>{report.pending_returns}</strong><p className="text-xs text-neutral-600">{money(report.pending_returns_vat)} de TVA</p></div>
      <div>Commandes reçues non comptabilisées : <strong>{report.pending_purchases}</strong></div>

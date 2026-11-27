@@ -131,9 +131,9 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white">
+    <div className="flex-1 overflow-y-auto bg-[var(--w-surface)]">
       <div className="w-full px-3 sm:px-6 lg:px-8 py-4">
-        <div className="flex items-center gap-2 pb-3 border-b border-neutral-200">
+        <div className="flex items-center gap-2 pb-3 border-b border-[var(--w-separator)]">
           {selected && (
             <button onClick={() => { setSelectedId(null); setActionError(''); }} className="p-1.5 -ml-1.5 text-neutral-700 hover:text-black" title="Retour à la liste">
               <ArrowLeft className="w-4 h-4" />
@@ -149,32 +149,32 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
               </>
             ) : (
               <>
-                <p className="text-sm sm:text-base font-semibold text-black">Superviser les caisses</p>
+                <h1 className="text-base font-semibold text-[var(--w-text)]">Supervision des caisses</h1>
                 <p className="text-xs text-neutral-500">Sessions de vos collaborateurs. Aucune vente ne peut être créée en supervision.</p>
               </>
             )}
           </div>
-          <button onClick={() => loadSessions(scope)} className="shrink-0 p-1.5 text-neutral-600 hover:text-black" title="Actualiser">
+          <button onClick={() => loadSessions(scope)} className="btn-icon shrink-0" aria-label="Actualiser">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={onExit} className="shrink-0 flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-neutral-700 hover:text-black">
+          <button onClick={onExit} className="btn-secondary shrink-0 text-xs">
             <LogOut className="w-3.5 h-3.5" />Quitter
           </button>
         </div>
 
         {selected ? (
           <>
-            <div className="flex flex-wrap items-center gap-x-1 gap-y-1 py-2 border-b border-neutral-200">
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-1 py-2 border-b border-[var(--w-separator)]">
               {actions.filter(a => a.show).map(a => (
                 <button key={a.kind} onClick={() => openModal(a.kind)} disabled={!!opening}
-                  className="flex items-center gap-1.5 px-2.5 py-2 text-sm text-neutral-800 hover:text-black hover:underline underline-offset-4 transition-colors disabled:opacity-50">
+                  className="btn-secondary text-xs disabled:opacity-50">
                   {opening === a.kind ? <Loader2 className="w-4 h-4 animate-spin" /> : <a.icon className="w-4 h-4" />}{a.label}
                 </button>
               ))}
             </div>
             {actionError && <p className="py-2 text-xs text-red-700">{actionError}</p>}
             {!isOpen && <p className="py-2 text-xs text-neutral-500">Session clôturée : consultation uniquement.</p>}
-            <dl className="divide-y divide-neutral-200">
+            <dl className="divide-y divide-[var(--w-separator-l)]">
               <Row label="Magasin" value={selected.site_name} />
               <Row label="Opérateur" value={selected.operator_name} />
               <Row label="État" value={isOpen ? 'Ouverte' : 'Clôturée'} />
@@ -188,7 +188,7 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
           </>
         ) : (
           <>
-            <div className="flex flex-wrap items-end gap-4 border-b border-neutral-200">
+            <div className="flex flex-wrap items-end gap-4 border-b border-[var(--w-separator)]">
               {(['open', 'closed'] as const).map(s => (
                 <button key={s} onClick={() => changeScope(s)}
                   className={`py-2.5 text-sm -mb-px border-b-2 transition-colors ${scope === s ? 'border-black text-black font-semibold' : 'border-transparent text-neutral-500 hover:text-black'}`}>
@@ -215,7 +215,7 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
               </p>
             ) : (
               <>
-                <ul className="sm:hidden divide-y divide-neutral-200">
+                <ul className="sm:hidden divide-y divide-[var(--w-separator-l)]">
                   {visible.map(s => (
                     <li key={s.id}>
                       <button onClick={() => { setSelectedId(s.id); setActionError(''); }}
@@ -235,7 +235,7 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
                 </ul>
               <table className="hidden sm:table w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-neutral-500 border-b border-neutral-200">
+                  <tr className="w-thead border-b border-[var(--w-separator)] text-left text-xs">
                     <th className="py-2 pr-3 font-medium">Magasin</th>
                     <th className="py-2 pr-3 font-medium">Caisse</th>
                     <th className="py-2 pr-3 font-medium">Opérateur</th>
@@ -243,11 +243,17 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
                     <th className="py-2 font-medium text-right">{scope === 'open' ? 'Ouverture' : 'Clôture'}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-200">
+                <tbody className="divide-y divide-[var(--w-separator-l)]">
                   {visible.map(s => (
-                    <tr key={s.id} onClick={() => { setSelectedId(s.id); setActionError(''); }} className="cursor-pointer hover:bg-neutral-50 transition-colors">
+                    <tr key={s.id} onClick={() => { setSelectedId(s.id); setActionError(''); }} className="w-tr-hover cursor-pointer transition-colors">
                       <td className="py-2.5 pr-3 text-neutral-700">{s.site_name}</td>
-                      <td className="py-2.5 pr-3 font-medium text-black">{registerText(s.register_code, s.register_name)}</td>
+                      <td className="py-2.5 pr-3">
+                        <button type="button" className="btn-ghost p-0 text-left" onClick={event => {
+                          event.stopPropagation();
+                          setSelectedId(s.id);
+                          setActionError('');
+                        }}>{registerText(s.register_code, s.register_name)}</button>
+                      </td>
                       <td className="py-2.5 pr-3 text-neutral-800">{s.operator_name}</td>
                       <td className="py-2.5 pr-3 text-neutral-600">{s.status === 'open' ? 'Ouverte' : 'Clôturée'}</td>
                       <td className="py-2.5 text-right text-neutral-600 tabular-nums whitespace-nowrap">{formatDateTime(scope === 'open' ? s.opened_at : (s.closed_at || s.opened_at))}</td>

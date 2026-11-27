@@ -1,8 +1,9 @@
-import { clayTouchHandlers } from '../lib/clayTouch';
-import { ReactNode, useEffect, useId, useLayoutEffect, useRef, useCallback, useState } from 'react';
+import { type ReactNode, type RefObject, type PointerEvent, type CSSProperties, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, GripVertical, Check, Trash2 } from 'lucide-react';
-import { useTopLayer } from './modalStack';
+import { clayTouchHandlers } from '../lib/clayTouch';
+import { useBaseLayer, useBodyScrollLock, useTopLayer } from './modalStack';
+import './window-surfaces.css';
 
 type Props = {
   open: boolean;
@@ -20,79 +21,103 @@ type Props = {
   clayPreviewActions?: boolean;
 };
 
-export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false, variant = 'default', panelClassName = '', focusOnOpen = false, clayPreviewActions = false }: Props) {
-  const isTopLayer = layer === 'top';
-  const { isTop, zIndex } = useTopLayer(open && isTopLayer);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const titleId = useId();
+const dialogWidths = {
+  sm: 'sm:max-w-md',
+  md: 'sm:max-w-xl',
+  lg: 'sm:max-w-3xl',
+  xl: 'sm:max-w-5xl',
+};
 
-  useEffect(() => {
-    if (!open) return;
-    if (isTopLayer) {
-      returnFocusRef.current = document.activeElement as HTMLElement | null;
-    }
-    if (focusOnOpen) closeButtonRef.current?.focus();
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-      if (isTopLayer && returnFocusRef.current && document.body.contains(returnFocusRef.current)) {
-        try { returnFocusRef.current.focus(); } catch { /* noop */ }
-      }
-    };
-  }, [open, isTopLayer, focusOnOpen]);
-
+function useDialogKeys(open: boolean, isTop: boolean, onClose: () => void, panelRef: RefObject<HTMLDivElement>, trapFocus = false) {
   useLayoutEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => {
-      if (isTopLayer && !isTop) return;
-      if (e.key === 'Escape') onClose();
-      if (e.key !== 'Tab' || !focusOnOpen || !panelRef.current) return;
-      const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), select:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]',
-      )).filter(element => element.getClientRects().length > 0);
+    if (!open || !isTop) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      const panel = panelRef.current;
+      if (event.key !== 'Tab' || !trapFocus || !panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]',
+      )).filter(element => element.getClientRects().length > 0 && element.tabIndex >= 0);
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (!panelRef.current.contains(document.activeElement) || document.activeElement === (e.shiftKey ? first : last)) {
-        e.preventDefault();
-        (e.shiftKey ? last : first)?.focus();
+      const active = document.activeElement;
+      if (!panel.contains(active) || active === (event.shiftKey ? first : last)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
       }
     };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [open, onClose, isTopLayer, isTop, focusOnOpen]);
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, isTop, onClose, panelRef, trapFocus]);
+}
+
+function WindowHeading({ title, titleId, onClose, closeButtonRef, clayPreviewActions = false }: {
+  title: string;
+  titleId: string;
+  onClose: () => void;
+  closeButtonRef?: RefObject<HTMLButtonElement>;
+  clayPreviewActions?: boolean;
+}) {
+  return (
+    <div className="waarwi-window-bar">
+      <h3 id={titleId} className="waarwi-window-title">{title}</h3>
+      <button ref={closeButtonRef} type="button" aria-label="Fermer" title="Fermer" onClick={onClose}
+        className={clayPreviewActions ? 'clay-action grid h-9 w-9 shrink-0 place-items-center' : 'waarwi-window-button'}>
+        <X aria-hidden="true" className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false, variant = 'default', panelClassName = '', focusOnOpen = false, clayPreviewActions = false }: Props) {
+  const topLayer = layer === 'top';
+  const front = useTopLayer(open && topLayer);
+  const base = useBaseLayer(open && !topLayer);
+  const { isTop, zIndex } = topLayer ? front : base;
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+
+  useBodyScrollLock(open);
+  useDialogKeys(open, isTop, onClose, panelRef, focusOnOpen);
+
+  useEffect(() => {
+    if (!open || (!topLayer && !focusOnOpen)) return;
+    const previousFocus = document.activeElement;
+    const panel = panelRef.current;
+    if (focusOnOpen) closeButtonRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected &&
+        (document.activeElement === document.body || panel?.contains(document.activeElement))) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    };
+  }, [open, topLayer, focusOnOpen]);
 
   if (!open) return null;
-  const wBase = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' }[size];
-  const w = fullscreenMobile ? wBase.replace('max-w-', 'sm:max-w-') : wBase;
-  const zCls = isTopLayer ? '' : 'z-50';
-  const zStyle = isTopLayer ? { zIndex } : undefined;
-  const handleScrim = () => {
-    if (isTopLayer && !isTop) return;
-    onClose();
-  };
 
   const node = (
-    <div data-app-overlay className={`fixed inset-0 ${zCls} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`} style={zStyle}>
-      <div className="scrim" onClick={handleScrim} />
-      <div ref={panelRef} {...(clayPreviewActions ? clayTouchHandlers : {})} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`relative w-full ${w} bg-[var(--w-surface)] ${variant === 'flat' ? 'flat-modal' : ''} ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col ${panelClassName}`}>
-        {!fullMobile && !fullscreenMobile && <div className="sm:hidden sheet-handle" />}
-        <div className={`flex items-center justify-between border-b border-[var(--w-separator)] bg-[var(--w-surface-el)] ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : 'px-4 py-3 sm:px-5 sm:py-4 rounded-t-xl'}`}>
-          <h3 id={titleId} className={`font-bold text-[var(--w-text)] tracking-tight ${fullscreenMobile ? 'text-base sm:text-lg' : fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>
-          <button ref={closeButtonRef} type="button" aria-label="Fermer" onClick={onClose} className={clayPreviewActions
-            ? 'clay-action grid h-9 w-9 shrink-0 place-items-center'
-            : 'p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors'}>
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className={`flex-1 overflow-y-auto ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4' : fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-4' : 'px-3 py-3 sm:px-5 sm:py-4'}`}>{children}</div>
-        {footer && <div className={`border-t border-[var(--w-separator-l)] bg-[var(--w-surface-el)] sm:rounded-b-xl flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full pb-safe ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-3' : fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-3' : 'px-4 sm:px-5 py-3'}`}>{footer}</div>}
+    <div data-app-overlay className="waarwi-overlay" style={{ zIndex }}>
+      <div className="waarwi-overlay-scrim" aria-hidden="true" onClick={() => { if (isTop) onClose(); }} />
+      <div ref={panelRef} role="dialog" aria-modal={isTop || undefined} aria-labelledby={titleId}
+        data-mobile-layout={fullMobile || fullscreenMobile ? 'screen' : 'sheet'}
+        {...(clayPreviewActions ? clayTouchHandlers : {})}
+        className={`waarwi-window-surface waarwi-dialog ${dialogWidths[size]} ${variant === 'flat' ? 'flat-modal' : ''} ${panelClassName}`}>
+        <WindowHeading title={title} titleId={titleId} onClose={onClose} closeButtonRef={closeButtonRef} clayPreviewActions={clayPreviewActions} />
+        <div className="waarwi-window-body">{children}</div>
+        {footer && <div className="waarwi-window-footer">{footer}</div>}
       </div>
     </div>
   );
 
-  return isTopLayer && typeof document !== 'undefined' ? createPortal(node, document.body) : node;
+  return topLayer && typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 }
 
 export function DocPanel({ open, onClose, title, children, footer, fullscreen = false, fullscreenMobile = false }: {
@@ -105,66 +130,58 @@ export function DocPanel({ open, onClose, title, children, footer, fullscreen = 
   fullscreenMobile?: boolean;
 }) {
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
+  const areaRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const resizing = useRef(false);
-  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const titleId = useId();
+  const { isTop, zIndex } = useBaseLayer(open);
 
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = 'hidden';
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
-  }, [open, onClose]);
-
-  const startResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    resizing.current = true;
-    const startX = e.clientX;
-    const startWidth = panelRef.current?.offsetWidth || window.innerWidth - 256;
-    const onMove = (ev: MouseEvent) => {
-      if (!resizing.current) return;
-      const diff = startX - ev.clientX;
-      setPanelWidth(Math.max(500, Math.min(window.innerWidth - 64, startWidth + diff)));
-    };
-    const onUp = () => { resizing.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, []);
+  useBodyScrollLock(open);
+  useDialogKeys(open, isTop, onClose, panelRef);
 
   if (!open) return null;
 
-  if (!isDesktop) {
-    return (
-      <Modal open={open} onClose={onClose} title={title} size={fullscreenMobile ? 'xl' : 'lg'} footer={footer} fullscreenMobile={fullscreenMobile}>
-        {children}
-      </Modal>
-    );
-  }
+  const resize = (width: number) => {
+    const limit = Math.max(0, (areaRef.current?.clientWidth ?? window.innerWidth) - 8);
+    setPanelWidth(Math.min(limit, Math.max(500, width)));
+  };
+
+  const startResize = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    dragRef.current = { startX: event.clientX, startWidth: panelRef.current?.offsetWidth ?? 0 };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const dragResize = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (drag) resize(drag.startWidth + drag.startX - event.clientX);
+  };
 
   return (
-    <div className={`fixed inset-0 ${fullscreen ? '' : 'lg:left-64'} z-50 flex animate-fade-in`}>
-      <div
-        className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-teal-100 transition-colors group flex-shrink-0 relative z-10"
-        style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
-        onMouseDown={startResize}
-      >
-        <GripVertical className="w-3 h-3 text-[var(--w-text-disabled)] group-hover:text-teal-500 transition-colors" />
-      </div>
-
-      <div
-        ref={panelRef}
-        className="bg-[var(--w-surface)] h-full flex flex-col shadow-2xl flex-1 w-full"
-        style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}
-      >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--w-separator)] bg-[var(--w-surface-el)] flex-shrink-0">
-          <h3 className="text-base font-bold text-[var(--w-text)] tracking-tight">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+    <div ref={areaRef} data-app-overlay className="waarwi-overlay waarwi-doc-overlay" data-docked={!fullscreen} style={{ zIndex }}>
+      <div className="waarwi-overlay-scrim" aria-hidden="true" onClick={() => { if (isTop) onClose(); }} />
+      <div ref={panelRef} role="dialog" aria-modal={isTop || undefined} aria-labelledby={titleId}
+        data-mobile-layout={fullscreenMobile ? 'screen' : 'sheet'}
+        className={`waarwi-window-surface waarwi-dialog waarwi-doc-panel ${dialogWidths[fullscreenMobile ? 'xl' : 'lg']}`}
+        style={panelWidth == null ? undefined : { '--waarwi-doc-width': `${panelWidth}px` } as CSSProperties}>
+        <div role="separator" aria-orientation="vertical" aria-label="Largeur du document" tabIndex={0}
+          aria-valuenow={panelWidth == null ? 100 : Math.round(panelWidth / Math.max(1, (areaRef.current?.clientWidth ?? panelWidth) - 8) * 100)}
+          aria-valuetext={panelWidth == null ? 'Pleine largeur disponible' : `${panelWidth} pixels`}
+          className="waarwi-window-resizer"
+          onPointerDown={startResize}
+          onPointerMove={dragResize}
+          onLostPointerCapture={() => { dragRef.current = null; }}
+          onKeyDown={event => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            resize((panelRef.current?.offsetWidth ?? 0) + (event.key === 'ArrowLeft' ? 32 : -32));
+          }}>
+          <GripVertical aria-hidden="true" className="h-3.5 w-2" />
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="px-5 py-3 border-t border-[var(--w-separator)] bg-[var(--w-surface-el)] flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full">{footer}</div>}
+        <WindowHeading title={title} titleId={titleId} onClose={onClose} />
+        <div className="waarwi-window-body">{children}</div>
+        {footer && <div className="waarwi-window-footer">{footer}</div>}
       </div>
     </div>
   );
@@ -177,13 +194,16 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm" layer={layer}
       footer={<>
-        <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-        <button onClick={() => { onConfirm(); onClose(); }} className={danger ? 'btn-icon-danger-solid' : 'btn-icon-primary'} title={confirmLabel}>
-          {danger ? <Trash2 className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+        <button type="button" onClick={onClose} className="btn-secondary text-xs">
+          <X aria-hidden="true" className="h-4 w-4" /> Annuler
+        </button>
+        <button type="button" onClick={() => { onConfirm(); onClose(); }} className={`${danger ? 'btn-danger' : 'btn-primary'} text-xs`}>
+          {danger ? <Trash2 aria-hidden="true" className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" />}
+          {confirmLabel}
         </button>
       </>}
     >
-      <p className="text-[var(--w-text-sec)]">{message}</p>
+      <p className="text-sm text-[var(--w-text-sec)]">{message}</p>
     </Modal>
   );
 }

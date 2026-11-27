@@ -97,7 +97,9 @@ function ModeDropdown({ value, onChange, compact }: {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`inline-flex items-center gap-1 border border-[var(--w-separator)] rounded px-1.5 bg-[var(--w-surface)] text-[var(--w-text)] hover:bg-[var(--w-hover)] transition-colors select-none ${compact ? 'h-6 text-[10px]' : 'h-6 text-[10px]'}`}
+        aria-expanded={open}
+        aria-label={`Mode de répartition, ${selected.label}`}
+        className={`btn-secondary px-2 py-0 text-xs ${compact ? 'min-h-10' : 'min-h-8'}`}
       >
         <span className="truncate">{selected.label}</span>
         <ChevronDown className={`w-3 h-3 text-[var(--w-text-muted)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -106,7 +108,7 @@ function ModeDropdown({ value, onChange, compact }: {
         <div
           ref={menuRef}
           style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 2147483000 }}
-          className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg shadow-lg overflow-hidden"
+          className="overflow-hidden rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]"
         >
           {MODE_OPTIONS.map(opt => {
             const active = opt.value === value;
@@ -114,11 +116,12 @@ function ModeDropdown({ value, onChange, compact }: {
               <button
                 key={opt.value}
                 type="button"
+                aria-pressed={active}
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left text-[11px] transition-colors ${active ? 'bg-[var(--w-active)] font-semibold text-[var(--w-text)]' : 'text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)]'}`}
               >
                 <span className="flex-1">{opt.label}</span>
-                {active && <Check className="w-3.5 h-3.5 shrink-0 text-emerald-500" />}
+                {active && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
               </button>
             );
           })}
@@ -233,29 +236,18 @@ export function DispatchStep({
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Step indicator + back ── */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--w-separator)]">
-        <button onClick={onBack} className="p-1 rounded hover:bg-[var(--w-surface)] transition-colors text-[var(--w-text-muted)]">
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="flex items-center gap-1 text-[var(--w-text-muted)]">
-            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-            1. Réception
-          </span>
-          <span className="text-[var(--w-text-muted)]">/</span>
-          <span className="font-semibold text-[var(--w-text)]">2. Dispatching</span>
-        </div>
+      <div className="waarwi-window-bar min-h-11 px-4">
+        <h2 className="waarwi-window-title">Répartition des articles reçus</h2>
       </div>
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto">
         {/* Destination selection */}
         <div className="px-4 py-3 border-b border-[var(--w-separator)]">
-          <div className="text-[10px] uppercase tracking-wider text-[var(--w-text-muted)] font-semibold mb-2">Destinations</div>
-          <div className="flex flex-wrap gap-2">
+          <h3 className="text-xs font-semibold">Destinations</h3>
+          <div className="flex flex-wrap gap-x-4">
             {destinations.map(d => (
-              <label key={d.id} className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+              <label key={d.id} className="inline-flex min-h-9 cursor-pointer select-none items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={selectedSites.has(d.id)}
@@ -270,18 +262,18 @@ export function DispatchStep({
         </div>
 
         {/* Global apply-all shortcut */}
-        <div className="px-4 py-2.5 border-b border-[var(--w-separator)] flex items-center justify-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-[var(--w-separator)] px-4 py-2.5">
           <button
             onClick={applyAll}
             disabled={!canAutoDistribute}
-            className="inline-flex items-center gap-1.5 h-7 px-3.5 text-[11px] font-semibold text-[var(--w-accent-text)] bg-[var(--w-accent)] border border-[var(--w-accent-border)] rounded hover:bg-[var(--w-accent-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-secondary min-h-10 text-xs disabled:opacity-40"
           >
             <Split className="w-3.5 h-3.5" />
             Répartir tous les articles
           </button>
           {stockLoading && (
             <span className="flex items-center gap-1 text-[11px] text-[var(--w-text-muted)]">
-              <Loader2 className="w-3 h-3 animate-spin" /> Chargement stock...
+              <Loader2 className="w-3 h-3 animate-spin" /> Chargement du stock…
             </span>
           )}
           {!stockLevels && !stockLoading && (
@@ -292,7 +284,7 @@ export function DispatchStep({
         </div>
 
         {/* ── Dispatch table (desktop) ── */}
-        <div className="hidden sm:block">
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[var(--w-separator)]">
@@ -325,6 +317,7 @@ export function DispatchStep({
                         <td key={d.id} className="text-center px-2 py-1.5">
                           <input
                             type="number" min={0} value={val}
+                            aria-label={`${item.name}, quantité pour ${d.name}`}
                             onChange={e => updateCell(item.itemId, d.id, Number(e.target.value) || 0)}
                             className={ulInput}
                           />
@@ -382,8 +375,9 @@ export function DispatchStep({
                     <button
                       onClick={() => applyForItem(item)}
                       disabled={!canAutoDistribute}
-                      className="inline-flex items-center gap-1 h-6 px-2 text-[10px] font-medium text-[var(--w-text)] border border-[var(--w-separator)] rounded hover:bg-[var(--w-hover)] transition-colors disabled:opacity-30"
+                      className="waarwi-window-button !h-10 !w-10 disabled:opacity-30"
                       title="Répartir"
+                      aria-label={`Répartir ${item.name}`}
                     >
                       <Split className="w-3 h-3" />
                     </button>
@@ -399,8 +393,9 @@ export function DispatchStep({
                         <span className="text-xs text-[var(--w-text-secondary)] flex-1 truncate">{d.name}</span>
                         <input
                           type="number" min={0} value={val}
+                          aria-label={`${item.name}, quantité pour ${d.name}`}
                           onChange={e => updateCell(item.itemId, d.id, Number(e.target.value) || 0)}
-                          className={ulInput + ' w-20'}
+                          className={ulInput + ' min-h-10 w-20'}
                         />
                         {stock !== null && (
                           <span className="text-[9px] text-[var(--w-text-muted)] tabular-nums w-16 text-right shrink-0">
@@ -427,17 +422,17 @@ export function DispatchStep({
       </div>
 
       {/* ── Fixed footer ── */}
-      <div className="border-t border-[var(--w-separator)] px-4 py-2 flex items-center justify-between gap-2 flex-shrink-0">
+      <div className="waarwi-window-footer">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--w-text-muted)] hover:text-[var(--w-text)] hover:bg-[var(--w-surface)] rounded transition-colors"
+          className="btn-secondary text-xs"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Retour
+          <ArrowLeft className="w-3.5 h-3.5" /> Retour à la réception
         </button>
         <button
           onClick={onConfirm}
           disabled={saving || !validation.allValid}
-          className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-[var(--w-accent-text)] bg-[var(--w-accent)] border border-[var(--w-accent-border)] rounded hover:bg-[var(--w-accent-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="btn-primary text-xs"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
           Confirmer la réception

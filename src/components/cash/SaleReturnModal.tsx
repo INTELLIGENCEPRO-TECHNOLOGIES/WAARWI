@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronRight, Loader2, Minus, Plus, RefreshCw, Search } from 'lucide-react';
+import { ChevronRight, Loader2, Minus, Plus, RefreshCw, Search } from 'lucide-react';
 import {loadReturnLots,returnLotAllocation,type ReturnLotLine} from '../../lib/returnLotAllocation';
 import {ReturnLotFields} from '../billing/ReturnLotFields';
 import {HistoricalLotMatchPanel} from './HistoricalLotMatchPanel';
@@ -172,11 +172,11 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   return (
       <CashModal open={true} onClose={() => {if(!inFlight.current)onClose();}} title="Ticket de retour"
         footer={!returnSelected ? (
-          <button onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Fermer</button>
+          <button onClick={() => { onClose(); setReturnSelected(null); }} className="btn-secondary text-xs">Fermer</button>
         ) : (
-          <div className="flex items-center justify-end gap-3 w-full">
-            <button disabled={returnProcessing} onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors disabled:opacity-40">{pendingReturn?'Fermer':'Annuler'}</button>
-            <button onClick={processReturn} disabled={returnProcessing || pendingReturn!==false || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || !!matchArticle || returnLines.filter(l => l.selected && l.quantity>0).length === 0 || (restock&&returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)) || (!restock&&financialReason.trim().length<8) || (refundMode==='avoir'&&!returnSelected.customer_id)} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
+            <button disabled={returnProcessing} onClick={() => { onClose(); setReturnSelected(null); }} className="btn-secondary text-xs disabled:opacity-40">{pendingReturn?'Fermer':'Annuler'}</button>
+            <button onClick={processReturn} disabled={returnProcessing || pendingReturn!==false || lotLoad.busy || !!lotLoad.error || !!permsPending || !returnsAllowed || !!matchArticle || returnLines.filter(l => l.selected && l.quantity>0).length === 0 || (restock&&returnLines.some(l=>l.selected&&!returnLotAllocation(l,true).valid)) || (!restock&&financialReason.trim().length<8) || (refundMode==='avoir'&&!returnSelected.customer_id)} className="btn-primary text-xs">
               {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : 'Valider le retour'}
             </button>
           </div>
@@ -242,17 +242,17 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
             {lotLoad.error&&<div role="alert" className="py-2 text-sm"><p>{lotLoad.error}</p><button type="button" className="underline" onClick={()=>selectReturnSale(returnSelected)}>Réessayer</button></div>}
             {matchArticle&&<HistoricalLotMatchPanel key={matchArticle} saleId={returnSelected.id} articleId={matchArticle} onCancel={()=>setMatchArticle(null)} onDone={()=>{setMatchArticle(null);selectReturnSale(returnSelected);}}/>}
             <fieldset disabled={returnProcessing||pendingReturn!==false||!!matchArticle} className="min-w-0">
-              <div className="mt-3 space-y-2 border border-neutral-200 rounded-lg p-3">
+              <div className="space-y-2 border-b border-[var(--w-separator)] py-3">
                 <p className="text-xs font-semibold">Traitement du stock</p>
                 <label className="flex items-center gap-2 text-xs"><input type="radio" name="return-stock-mode" checked={restock} onChange={()=>setRestock(true)}/>Retour avec remise en stock</label>
                 <label className="flex items-center gap-2 text-xs"><input type="radio" name="return-stock-mode" checked={!restock} onChange={()=>setRestock(false)}/>Retour sans remise en stock</label>
-                {!restock&&<><p className="text-xs text-amber-800">Le retour sera enregistré sans réintégrer les articles au stock. Ne choisissez ce mode que si le retour est uniquement financier ou la marchandise n'est pas remise en stock.</p><label className="block text-xs">Motif obligatoire<textarea className="mt-1 w-full rounded border border-neutral-300 p-2 text-sm" rows={2} maxLength={500} value={financialReason} onChange={e=>setFinancialReason(e.target.value)}/></label></>}
+                {!restock&&<><p className="text-xs text-amber-800">Le retour sera enregistré sans réintégrer les articles au stock. Ne choisissez ce mode que si le retour est uniquement financier ou la marchandise n'est pas remise en stock.</p><label className="block text-xs">Motif obligatoire<textarea className="w-textarea-ul mt-1 w-full py-2 text-sm" rows={2} maxLength={500} value={financialReason} onChange={e=>setFinancialReason(e.target.value)}/></label></>}
               </div>
-              <div className="mt-3 border border-neutral-200 rounded-lg p-3">
+              <div className="border-b border-[var(--w-separator)] py-3">
                 <p className="text-xs font-semibold mb-2">Traitement du montant</p>
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="space-y-0.5">
                   {([{value:'cash',label:'Rembourser en espèces',hint:'Décaissement immédiat'},{value:'avoir',label:'Émettre un avoir',hint:returnSelected.customer_id?'Crédit du client':'Client identifié requis'},{value:'deferred',label:'Traiter plus tard',hint:'Depuis la facturation'}] as const).map(option=>
-                    <label key={option.value} className={`flex gap-2 items-start rounded-md border p-2.5 text-xs ${refundMode===option.value?'border-neutral-900 bg-neutral-50':'border-neutral-200'} ${option.value==='avoir'&&!returnSelected.customer_id?'opacity-50':''}`}>
+                    <label key={option.value} className={`w-option flex items-start gap-2 rounded-md p-2 text-xs ${refundMode === option.value ? 'w-option-selected' : ''} ${option.value === 'avoir' && !returnSelected.customer_id ? 'opacity-50' : ''}`}>
                       <input type="radio" name="return-refund-mode" value={option.value} checked={refundMode===option.value} disabled={option.value==='avoir'&&!returnSelected.customer_id} onChange={()=>setRefundMode(option.value)} />
                       <span className="min-w-0"><span className="block font-semibold">{option.label}</span><span className="block mt-1 text-neutral-500">{option.hint}</span></span>
                     </label>)}
@@ -270,11 +270,10 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
                 return (
                   <div key={i} className="py-4 border-b border-neutral-100 last:border-b-0">
                     <div className="flex items-start gap-3">
-                      <button type="button" disabled={l.maxQty<=0} onClick={() => toggle(!l.selected)} className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-neutral-300'}`}>
-                        {l.selected && <Check className="w-3 h-3 text-white" />}
-                      </button>
+                      <input type="checkbox" checked={l.selected} disabled={l.maxQty <= 0} onChange={event => toggle(event.target.checked)}
+                        aria-label={`Retourner ${l.name}`} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--w-accent)]" />
                       <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-bold text-neutral-900 leading-snug break-words uppercase">{l.name}</div>
+                        <div className="break-words text-sm font-semibold leading-snug text-[var(--w-text)]">{l.name}</div>
                         <div className="text-[12px] text-neutral-500 mt-1 num">{formatFCFA(l.unit_price)} · Qté achetée : {l.maxQty}</div>
                         {l.selected && (
                           <div className="text-[12px] text-red-600 font-medium mt-0.5 num">Montant du retour : -{formatFCFA(l.quantity * l.unit_price)}</div>

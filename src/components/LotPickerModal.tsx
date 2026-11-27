@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Loader2, PackageOpen, Calendar, Zap, AlertTriangle, Check, X } from 'lucide-react';
+import { Loader2, Calendar, Check, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { Modal } from './Modal';
@@ -30,7 +30,7 @@ type Props = {
   strict?: boolean;
 };
 
-export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selection des lots', confirmLabel = 'Confirmer', siteId, strict=false }: Props) {
+export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Sélection des lots', confirmLabel = 'Confirmer', siteId, strict=false }: Props) {
   const { tenant, currentSite } = useApp();
   const [loading, setLoading] = useState(true);
   const [selections, setSelections] = useState<ArticleLotSelection[]>([]);
@@ -88,67 +88,67 @@ export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selec
     });
   }, [selections,loading,loadError,items.length,strict]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Dakar' });
 
   return (
-    <Modal open={open} onClose={onClose} title={title} size="lg"
+    <Modal open={open} onClose={onClose} title={title} size="lg" layer="top"
       footer={<>
-        <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-        <button onClick={autoFEFO} className="btn-icon" title="Auto (FEFO)"><Zap className="w-4 h-4" /></button>
-        <button onClick={() => onConfirm(selections)} disabled={!allValid} className="btn-icon-primary" title={confirmLabel}>
-          <Check className="w-4 h-4" />
+        <button type="button" onClick={onClose} className="btn-secondary text-xs">
+          <X aria-hidden="true" className="h-4 w-4" /> Annuler
+        </button>
+        <button type="button" onClick={autoFEFO} className="btn-secondary text-xs" disabled={loading || !!loadError || !selections.length}
+          title="Attribuer en priorité les lots dont la péremption est la plus proche">
+          <Calendar aria-hidden="true" className="h-4 w-4" /> Répartir
+        </button>
+        <button type="button" onClick={() => onConfirm(selections)} disabled={!allValid} className="btn-primary text-xs">
+          <Check aria-hidden="true" className="h-4 w-4" /> {confirmLabel}
         </button>
       </>}
     >
-      {loadError ? <div className="p-4 text-xs text-[var(--w-text)]" role="alert">{loadError}</div> : loading ? (
-        <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+      {loadError ? <p className="py-2 text-sm text-[var(--w-error)]" role="alert">{loadError}</p> : loading ? (
+        <p className="flex items-center gap-2 py-3 text-sm text-[var(--w-text-sec)]" role="status">
+          <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> Chargement des lots…
+        </p>
       ) : (
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-          {selections.map((s, si) => {
-            const totalAssigned = s.assignments.reduce((sum, a) => sum + a.quantity, 0);
-            const shortage = s.needed - totalAssigned;
+        <div className="space-y-4">
+          {selections.map((selection, articleIndex) => {
+            const assigned = selection.assignments.reduce((sum, lot) => sum + lot.quantity, 0);
             return (
-              <div key={s.article_id} className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-3 py-2 bg-[var(--w-surface-el)] border-b border-slate-200 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-slate-800">{s.article_name}</span>
-                    <span className="text-[10px] text-slate-500 ml-2">Besoin: {s.needed}</span>
-                  </div>
-                  <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${shortage <= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {totalAssigned} / {s.needed}
-                  </div>
-                </div>
+              <section key={selection.article_id} className="border-b border-[var(--w-separator)]">
+                <header className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-[var(--w-separator)] pb-2">
+                  <h4 className="min-w-0 break-words text-sm font-semibold">{selection.article_name}</h4>
+                  <p className="text-xs num text-[var(--w-text-sec)]">
+                    Attribué <strong className="text-[var(--w-text)]">{assigned} / {selection.needed}</strong>
+                  </p>
+                </header>
 
-                {s.assignments.length === 0 ? (
-                  <div className="px-3 py-3 text-xs text-amber-600 flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Aucun lot disponible pour cet article
-                  </div>
+                {selection.assignments.length === 0 ? (
+                  <p className="py-2 text-xs text-[var(--w-text-sec)]">Aucun lot disponible pour cet article.</p>
                 ) : (
-                  <div className="divide-y divide-[var(--w-separator)]">
-                    {s.assignments.map((a, li) => {
-                      const isExpired = a.expiry_date && a.expiry_date <= today;
+                  <div className="divide-y divide-[var(--w-separator-l)]">
+                    {selection.assignments.map((lot, lotIndex) => {
+                      const expired = lot.expiry_date !== null && lot.expiry_date < today;
                       return (
-                        <div key={a.lot_id} className={`px-3 py-2 flex items-center gap-3 ${isExpired ? 'bg-red-50/50' : ''}`}>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 text-xs">
-                              <PackageOpen className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span className="font-semibold text-slate-700">{a.batch_number}</span>
-                              {a.expiry_date && (
-                                <span className={`inline-flex items-center gap-1 ${isExpired ? 'text-red-600' : 'text-slate-500'}`}>
-                                  <Calendar className="w-3 h-3" />
-                                  {new Date(a.expiry_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}
-                                </span>
-                              )}
-                              <span className="text-slate-400 ml-auto">Dispo: {a.available}</span>
+                        <div key={lot.lot_id} className="grid grid-cols-[minmax(0,1fr)_4.5rem] items-center gap-3 py-2">
+                          <div className="min-w-0">
+                            <span className="block break-words text-sm font-medium">{lot.batch_number}</span>
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[var(--w-text-muted)]">
+                              <span>Disponible <strong className="font-medium num text-[var(--w-text-sec)]">{lot.available}</strong></span>
+                              {lot.expiry_date && <span className={expired ? 'text-[var(--w-error)]' : undefined}>
+                                {expired ? 'Périmé le' : 'Péremption le'}{' '}
+                                <time dateTime={lot.expiry_date}>{new Date(lot.expiry_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Dakar' })}</time>
+                              </span>}
                             </div>
                           </div>
                           <input
                             type="number"
+                            inputMode="decimal"
                             min={0}
-                            max={a.available}
-                            value={a.quantity || ''}
-                            onChange={e => setQty(si, li, Number(e.target.value) || 0)}
-                            className="w-16 text-center text-xs font-bold num border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                            max={lot.available}
+                            value={lot.quantity || ''}
+                            onChange={event => setQty(articleIndex, lotIndex, Number(event.target.value) || 0)}
+                            aria-label={`Quantité pour le lot ${lot.batch_number} de ${selection.article_name}`}
+                            className="w-input-ul h-9 min-w-0 text-center num [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             placeholder="0"
                           />
                         </div>
@@ -156,7 +156,7 @@ export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selec
                     })}
                   </div>
                 )}
-              </div>
+              </section>
             );
           })}
         </div>

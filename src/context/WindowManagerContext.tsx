@@ -154,7 +154,7 @@ export function WindowManagerProvider({ children, getArea = getWorkArea }: { chi
       return prev.map(w => {
         if (bg.includes(w.id)) return { ...w, minimized: true };
         const t = idToRect.get(w.id);
-        return t ? { ...w, rect: t.rect, zIndex: t.zIndex, minimized: false, ...(getArea!==getWorkArea?{maximized:false}:{}) } : w;
+        return t ? { ...w, rect: t.rect, zIndex: t.zIndex, minimized: false, maximized: false } : w;
       });
     });
   }, [getArea]);

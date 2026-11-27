@@ -1,5 +1,88 @@
-.waarwi-edit-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--w-separator,#ddd);border-radius:8px;padding:10px 12px;margin:0 0 8px;background:var(--w-surface,#fff);color:inherit}
-.waarwi-edit-main{display:flex;align-items:flex-start;gap:10px;min-width:0}.waarwi-edit-icon{display:grid;place-items:center;flex:0 0 30px;height:30px;border:1px solid var(--w-separator,#ddd);border-radius:6px}.waarwi-edit-main strong{font-size:12px;font-weight:600}.waarwi-edit-main p{font-size:11px;line-height:1.4;margin:2px 0 0;overflow-wrap:anywhere}.waarwi-edit-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.waarwi-edit-actions button{font-size:11px;white-space:normal;min-height:32px}.waarwi-edit-countdown{display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
-@media(max-width:640px){.waarwi-edit-bar{align-items:stretch;flex-direction:column;gap:8px}.waarwi-edit-actions{justify-content:flex-end}.waarwi-edit-main{max-width:100%}}
+.waarwi-edit-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .25rem .75rem;
+  min-width: 0;
+  padding: .35rem .5rem;
+  color: var(--w-text);
+  background: var(--w-surface);
+  border-bottom: 1px solid var(--w-separator);
+  font-size: .75rem;
+  line-height: 1.35;
+}
 
-.waarwi-edit-bar{flex-wrap:wrap}.waarwi-edit-main{flex:1 1 210px}.waarwi-edit-confirm{flex:1 0 100%;border-top:1px solid var(--w-separator,#ddd);padding-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px}.waarwi-edit-confirm span{flex:1 1 190px}.waarwi-edit-confirm button{font-size:11px}
+.waarwi-edit-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+}
+
+.waarwi-edit-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.waarwi-edit-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--w-text-sec);
+}
+
+.waarwi-edit-copy strong {
+  font-weight: 650;
+}
+
+.waarwi-edit-copy p {
+  margin: .125rem 0 0;
+  color: var(--w-text-sec);
+}
+
+.waarwi-edit-actions,
+.waarwi-edit-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem .5rem;
+}
+
+.waarwi-edit-actions:empty {
+  display: none;
+}
+
+.waarwi-edit-actions button,
+.waarwi-edit-confirm button {
+  min-height: 2rem;
+  max-width: 100%;
+  padding: .2rem .55rem;
+  font-size: inherit;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.waarwi-edit-countdown {
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--w-text-sec);
+  font-variant-numeric: tabular-nums;
+}
+
+.waarwi-edit-confirm {
+  flex: 1 0 100%;
+  padding-top: .25rem;
+  border-top: 1px solid var(--w-separator);
+}
+
+.waarwi-edit-confirm span {
+  flex: 1 1 10rem;
+}
+
+@media (pointer: coarse) {
+  .waarwi-edit-actions button,
+  .waarwi-edit-confirm button {
+    min-height: 2.5rem;
+  }
+}

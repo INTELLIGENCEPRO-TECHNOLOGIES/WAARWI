@@ -1232,7 +1232,7 @@ export function Stock() {
                     <div className="flex-1" />
                     {can('manage_stock') && (
                     <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openAdj(r, 'in')} className="p-1.5 rounded-lg hover:bg-emerald-50 text-neutral-500 hover:text-emerald-700 transition-colors" title="Entrée"><Plus className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => openAdj(r, 'in')} className="btn-icon" title="Entrée" aria-label="Entrée"><Plus className="w-3.5 h-3.5" /></button>
                       <button onClick={() => openAdj(r, 'out')} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-500 hover:text-red-700 transition-colors" title="Sortie"><Minus className="w-3.5 h-3.5" /></button>
                       {canTransfer && <button onClick={() => openAdj(r, 'transfer')} className="p-1.5 rounded-lg hover:bg-amber-50 text-neutral-400 hover:text-amber-700 transition-colors" title="Transfert"><ArrowRightLeft className="w-3.5 h-3.5" /></button>}
                       <button onClick={() => openAdj(r, 'inventory')} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-800 transition-colors" title="Inventaire"><ClipboardList className="w-3.5 h-3.5" /></button>
@@ -1603,15 +1603,11 @@ export function Stock() {
         )}
       >
         {adjDone && adjDoneData ? (
-          <div className="py-4 text-center space-y-3">
-            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
-              <Check className="w-7 h-7 text-emerald-600" />
-            </div>
+          <div className="space-y-2">
             <div>
               <div className="text-sm font-bold text-slate-900">{adjDoneData.articleName}</div>
               <div className="text-xs text-slate-500 mt-0.5">{adjDoneData.label} : {adjDoneData.qty} unité{adjDoneData.qty > 1 ? 's' : ''}</div>
             </div>
-            <p className="text-[11px] text-slate-400">Vous pouvez imprimer le bon de mouvement.</p>
           </div>
         ) : adjRow && (
           <div className="space-y-4">
@@ -1776,10 +1772,7 @@ export function Stock() {
           </div>
         }
       >
-        <div className="py-4 text-center space-y-3">
-          <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
-            <Check className="w-7 h-7 text-emerald-600" />
-          </div>
+        <div className="space-y-2">
           <div>
             <div className="text-sm font-bold text-slate-900">
               {bulkDoneItems.length} article{bulkDoneItems.length > 1 ? 's' : ''} mis à jour
@@ -1789,16 +1782,15 @@ export function Stock() {
             </div>
           </div>
           {bulkDoneItems.length <= 10 && (
-            <div className="text-left mt-3 space-y-1 max-h-40 overflow-y-auto">
+            <div className="divide-y divide-[var(--w-separator)] border-y border-[var(--w-separator)]">
               {bulkDoneItems.map((item, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[var(--w-surface-el)] text-[11px]">
-                  <span className="font-semibold text-slate-800 truncate mr-2">{item.name}</span>
+                <div key={i} className="flex items-baseline justify-between gap-2 py-2 text-xs">
+                  <span className="min-w-0 break-words font-semibold text-[var(--w-text)]">{item.name}</span>
                   <span className="shrink-0 font-bold text-slate-600 num">{item.quantity}</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[11px] text-slate-400">Vous pouvez imprimer le bon de mouvement groupé.</p>
         </div>
       </Modal>
 

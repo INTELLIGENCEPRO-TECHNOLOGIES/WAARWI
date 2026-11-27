@@ -1,0 +1,361 @@
+.rep-page {
+  container: representatives / inline-size;
+  min-inline-size: 0;
+  padding-block-end: 1.25rem;
+  color: var(--w-text);
+}
+
+.rep-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  gap: .55rem;
+  padding-block: .2rem 0;
+  background: var(--w-surface);
+  border-bottom: 1px solid var(--w-separator);
+}
+
+.rep-header-top,
+.rep-toolbar,
+.rep-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .45rem .7rem;
+}
+
+.rep-header-top,
+.rep-toolbar {
+  justify-content: space-between;
+}
+
+.rep-header-top h1 {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.rep-header-top:last-child {
+  padding-block-end: .55rem;
+}
+
+.rep-tabs {
+  display: flex;
+  gap: 1.3rem;
+}
+
+.rep-tabs button {
+  position: relative;
+  padding: .55rem 0 .6rem;
+  font-size: .8125rem;
+  font-weight: 600;
+  color: var(--w-text-sec);
+}
+
+.rep-tabs button[aria-pressed="true"] {
+  color: var(--w-text);
+}
+
+.rep-tabs button[aria-pressed="true"]::after {
+  position: absolute;
+  inset: auto 0 -1px;
+  block-size: 2px;
+  background: var(--w-accent);
+  content: "";
+}
+
+.rep-section {
+  display: grid;
+  gap: .75rem;
+  min-inline-size: 0;
+  padding-block-start: .8rem;
+}
+
+.rep-toolbar {
+  align-items: flex-start;
+}
+
+.rep-period,
+.rep-note {
+  color: var(--w-text-sec);
+  font-size: .8125rem;
+  overflow-wrap: anywhere;
+}
+
+.rep-period {
+  flex: 1 1 13rem;
+  padding-block: .35rem;
+}
+
+.rep-tools {
+  gap: .45rem;
+}
+
+.rep-tools .rep-button,
+.rep-header .rep-button,
+.rep-sheet .rep-button {
+  gap: .4rem;
+  min-block-size: 2.2rem;
+  padding: .35rem .68rem;
+  font-size: .8125rem;
+  white-space: nowrap;
+}
+
+.rep-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  gap: .8rem 1.1rem;
+  padding: .9rem 0;
+  border-block: 1px solid var(--w-separator);
+}
+
+.rep-kpis dt,
+.rep-cell-label,
+.rep-row-meta {
+  font-size: .75rem;
+  font-weight: 500;
+  color: var(--w-text-sec);
+}
+
+.rep-kpis dd {
+  margin: .1rem 0 0;
+  font-size: .9375rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rep-loading {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .65rem 0;
+  color: var(--w-text-sec);
+  font-size: .8125rem;
+}
+
+.rep-table {
+  display: block;
+  inline-size: 100%;
+  border-block-start: 1px solid var(--w-separator);
+  font-size: .8125rem;
+}
+
+.rep-table thead {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.rep-table tbody {
+  display: block;
+}
+
+.rep-table tbody tr {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: .8rem;
+  row-gap: .55rem;
+  padding: .75rem 0;
+  border-block-end: 1px solid var(--w-separator);
+}
+
+.rep-table tbody td,
+.rep-table tbody th {
+  min-inline-size: 0;
+  font-weight: 500;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.rep-table .rep-status {
+  justify-self: end;
+  align-self: start;
+  white-space: nowrap;
+  font-size: .75rem;
+}
+
+.rep-status-active {
+  font-weight: 650;
+  color: var(--w-text);
+}
+
+.rep-status-muted {
+  color: var(--w-text-sec);
+}
+
+.rep-row-title,
+.rep-row-meta,
+.rep-cell-label {
+  display: block;
+}
+
+.rep-row-title {
+  font-weight: 650;
+}
+
+.rep-amount {
+  white-space: nowrap;
+}
+
+.rep-actions {
+  grid-column: 1 / -1;
+}
+
+.rep-actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem .4rem;
+}
+
+.rep-row-action {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  min-block-size: 2.15rem;
+  padding: .25rem .3rem;
+  color: var(--w-text-sec);
+  font-size: .75rem;
+  font-weight: 600;
+  border-radius: .25rem;
+}
+
+.rep-row-action:hover,
+.rep-tabs button:hover {
+  color: var(--w-text);
+}
+
+.rep-row-action:hover {
+  background: var(--w-hover);
+}
+
+.rep-row-action-danger:hover {
+  color: var(--w-error);
+}
+
+.rep-row-action:focus-visible,
+.rep-tabs button:focus-visible {
+  outline: 2px solid var(--w-text-sec);
+  outline-offset: 2px;
+}
+
+.rep-filter-fields,
+.rep-form {
+  display: grid;
+  gap: .8rem;
+}
+
+.rep-form .input {
+  min-block-size: 2.2rem;
+  padding-block: .3rem;
+  font-size: .875rem;
+}
+
+.rep-name-fields,
+.rep-commission-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem .85rem;
+}
+
+.rep-name-fields label,
+.rep-commission-fields label {
+  min-inline-size: 0;
+}
+
+.rep-code-field,
+.rep-commission-fields > :first-child,
+.rep-commission-fields > label {
+  grid-column: 1 / -1;
+}
+
+.rep-check-row {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  min-block-size: 2.1rem;
+  font-size: .875rem;
+  color: var(--w-text);
+}
+
+.rep-check-row input {
+  inline-size: 1rem;
+  block-size: 1rem;
+  flex-shrink: 0;
+  accent-color: var(--w-accent);
+}
+
+.rep-sheet button:disabled {
+  opacity: .5;
+}
+
+.rep-confirm {
+  color: var(--w-text-sec);
+  font-size: .875rem;
+  overflow-wrap: anywhere;
+}
+
+.rep-confirm strong {
+  color: var(--w-text);
+}
+
+@media (min-width: 36rem) {
+  .rep-name-fields {
+    grid-template-columns: .85fr 1fr 1fr;
+  }
+
+  .rep-code-field {
+    grid-column: auto;
+  }
+}
+
+@container representatives (min-width: 57rem) {
+  .rep-table { display: table; }
+
+  .rep-table thead {
+    position: static;
+    display: table-header-group;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .rep-table tbody { display: table-row-group; }
+
+  .rep-table thead tr,
+  .rep-table tbody tr {
+    display: table-row;
+    padding: 0;
+  }
+
+  .rep-table thead th,
+  .rep-table tbody th,
+  .rep-table tbody td {
+    padding: .55rem .6rem;
+    vertical-align: middle;
+  }
+
+  .rep-table thead th {
+    font-weight: 600;
+    font-size: .75rem;
+    color: var(--w-text-sec);
+    text-align: start;
+    background: var(--w-surface-el);
+    border-bottom: 1px solid var(--w-separator);
+  }
+
+  .rep-table .rep-number { text-align: end; }
+  .rep-cell-label { display: none; }
+  .rep-actions > div { justify-content: end; gap: .15rem; flex-wrap: nowrap; }
+  .rep-row-action { justify-content: center; inline-size: 2rem; }
+  .rep-row-action > span { display: none; }
+}

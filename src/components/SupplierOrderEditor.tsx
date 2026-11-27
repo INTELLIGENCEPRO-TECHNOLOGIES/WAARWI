@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Check, Loader2, Trash2, Search, Car, Printer, Link2, MessageCircle, Pencil, CheckCircle, Truck, Ban, ChevronLeft, ChevronRight, User, FileText, Columns3 } from 'lucide-react';
 import { formatFCFA, formatNum } from '../lib/format';
 import { QtyInput } from './QtyInput';
+import { Modal } from './Modal';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -146,8 +147,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
   useEffect(() => {
     if (embedded) return;
     const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (articleSearchOpen) { setArticleSearchOpen(false); return; }
+      if (e.key === 'Escape' && !e.defaultPrevented && !articleSearchOpen) {
         if (editingIdx !== null) { cancelEdit(); return; }
         onClose();
       }
@@ -252,8 +252,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
   const onLocalKeyDown = (e: React.KeyboardEvent) => {
     if (!embedded) return;
-    if (e.key === 'Escape') {
-      if (articleSearchOpen) { setArticleSearchOpen(false); e.stopPropagation(); return; }
+    if (e.key === 'Escape' && !e.defaultPrevented && !articleSearchOpen) {
       if (editingIdx !== null) { cancelEdit(); e.stopPropagation(); return; }
       onClose();
       e.stopPropagation();
@@ -267,21 +266,21 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
       )}
 
       {/* ═══ Title bar ═══ */}
-      <div className="flex items-center justify-between px-4 h-11 border-b border-[var(--w-separator)] flex-shrink-0">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="waarwi-window-bar min-h-11 flex-wrap px-4 py-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {(onPrev || onNext) && (
             <div className="flex items-center gap-0.5 mr-1">
-              <button onClick={onPrev} disabled={!hasPrev} className="p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Précédent">
+              <button onClick={onPrev} disabled={!hasPrev} className="waarwi-window-button disabled:opacity-25" title="Précédent">
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button onClick={onNext} disabled={!hasNext} className="p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Suivant">
+              <button onClick={onNext} disabled={!hasNext} className="waarwi-window-button disabled:opacity-25" title="Suivant">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           )}
-          <h2 className="text-sm font-bold text-neutral-900 tracking-tight truncate">{title}</h2>
+          <h2 className="waarwi-window-title">{title}</h2>
           {documentStatus && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 uppercase tracking-wider">
+            <span className="text-xs font-medium text-[var(--w-text-sec)]">
               {STATUS_LABELS[documentStatus] || documentStatus}
             </span>
           )}
@@ -344,7 +343,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
       {/* ═══ View-mode header summary ═══ */}
       {(isView || isReceive) && (
-        <div className="px-4 py-1.5 border-b border-neutral-100 bg-neutral-50/50 flex-shrink-0">
+        <div className="shrink-0 border-b border-[var(--w-separator)] px-4 py-2">
           <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
             {selectedSupplier && <span className="font-medium text-neutral-700">{selectedSupplier.name}</span>}
             {headerForm.expected_date && <span className="text-neutral-500">Livraison: {headerForm.expected_date}</span>}
@@ -357,9 +356,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
       {isReceive && (
         <div className="px-4 py-2 border-b border-[var(--w-separator)] flex-shrink-0">
           <div className="flex items-center gap-2">
-            <Truck className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span className="text-xs font-semibold text-[var(--w-text)]">Mode réception</span>
-            <span className="text-[10px] text-[var(--w-text-muted)]">Saisissez les quantités reçues pour chaque ligne</span>
+            <h3 className="text-xs font-semibold">Quantités à réceptionner</h3>
           </div>
         </div>
       )}
@@ -589,16 +586,16 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
   const isReceive = mode === 'receive';
   const canEdit = mode === 'create' || mode === 'edit';
 
-  const btnCls = 'p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition-colors';
+  const btnCls = 'waarwi-window-button';
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex flex-wrap items-center justify-end gap-0.5">
       {/* View mode actions */}
       {isView && (
         <>
           {onPrint && <button onClick={onPrint} className={btnCls} title="Imprimer"><Printer className="w-4 h-4" /></button>}
           {onCopyLink && <button onClick={onCopyLink} className={btnCls} title="Copier le lien"><Link2 className="w-4 h-4" /></button>}
-          {onWhatsApp && <button onClick={onWhatsApp} className={`${btnCls} !text-[#25D366]`} title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>}
+          {onWhatsApp && <button onClick={onWhatsApp} className={btnCls} title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>}
           {onEdit && (
             <button onClick={onEdit} className={btnCls} title="Modifier"><Pencil className="w-4 h-4" /></button>
           )}
@@ -606,15 +603,15 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
             <button onClick={() => onChangeStatus('sent')} className={btnCls} title="Marquer envoyée"><CheckCircle className="w-4 h-4" /></button>
           )}
           {['sent', 'confirmed', 'partial'].includes(documentStatus || '') && onStartReceive && (
-            <button onClick={onStartReceive} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-emerald-500 transition-colors" title="Réceptionner">
+            <button onClick={onStartReceive} className={btnCls} title="Réceptionner">
               <Truck className="w-4 h-4" />
             </button>
           )}
           {['draft', 'sent'].includes(documentStatus || '') && onCancel && (
-            <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-red-500 transition-colors" title="Annuler"><Ban className="w-4 h-4" /></button>
+            <button onClick={onCancel} className={`${btnCls} !text-red-600`} title="Annuler"><Ban className="w-4 h-4" /></button>
           )}
           {onDelete && (
-            <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
+            <button onClick={onDelete} className={`${btnCls} !text-red-600`} title="Supprimer"><Trash2 className="w-4 h-4" /></button>
           )}
         </>
       )}
@@ -625,10 +622,10 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
             <button
               onClick={onConfirmReceive}
               disabled={saving}
-              className="ml-1 h-7 px-2 text-xs font-bold text-[var(--w-text)] hover:bg-[var(--w-hover)] rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+              className="btn-primary px-3 py-1.5 text-xs"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
-              Confirmer réception
+              Confirmer la réception
             </button>
           )}
         </>
@@ -647,7 +644,7 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
             <button
               onClick={onSave}
               disabled={saving}
-              className="ml-1 h-7 px-3 rounded-lg bg-neutral-900 text-white text-xs font-semibold hover:bg-neutral-800 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
+              className="btn-primary px-3 py-1.5 text-xs"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               {editingId ? 'Enregistrer' : 'Créer'}
@@ -655,7 +652,7 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
           )}
         </>
       )}
-      <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors ml-0.5" title="Fermer">
+      <button onClick={onClose} className={btnCls} title="Fermer">
         <X className="w-4 h-4" />
       </button>
     </div>
@@ -826,12 +823,12 @@ function ReceiveRows({ items, articles, receiveQty, setReceiveQty, receiveLotDat
 // ─── Article Search Modal (matches DocumentEditor exactly) ──────
 
 const SEARCH_COLS = [
-  { key: 'ref', label: 'Référence', align: 'left', w: 'w-[18%]' },
-  { key: 'name', label: 'Désignation', align: 'left', w: 'flex-1 min-w-0' },
-  { key: 'category', label: 'Catégorie', align: 'left', w: 'w-[14%]' },
-  { key: 'salePrice', label: 'Prix vente', align: 'right', w: 'w-[12%]' },
-  { key: 'purchasePrice', label: "Prix d'achat", align: 'right', w: 'w-[12%]' },
-  { key: 'stock', label: 'Stock', align: 'right', w: 'w-[10%]' },
+  { key: 'ref', label: 'Référence', align: 'left', w: 'sm:w-[18%]' },
+  { key: 'name', label: 'Désignation', align: 'left', w: 'sm:flex-1' },
+  { key: 'category', label: 'Catégorie', align: 'left', w: 'sm:w-[14%]' },
+  { key: 'salePrice', label: 'Prix de vente', align: 'right', w: 'sm:w-[12%]' },
+  { key: 'purchasePrice', label: "Prix d’achat", align: 'right', w: 'sm:w-[12%]' },
+  { key: 'stock', label: 'Stock', align: 'right', w: 'sm:w-[10%]' },
 ];
 
 function ArticleSearchModal({ articles, initialQuery, onSelect, onClose }: {
@@ -881,112 +878,102 @@ function ArticleSearchModal({ articles, initialQuery, onSelect, onClose }: {
   }, [highlighted]);
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, Math.max(0, filtered.length - 1))); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
     else if (e.key === 'Enter') { e.preventDefault(); if (filtered[highlighted]) onSelect(filtered[highlighted]); }
-    else if (e.key === 'Escape') { onClose(); }
   };
 
   const activeCols = SEARCH_COLS.filter(c => visibleCols[c.key]);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/20" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white w-full max-w-4xl h-[80vh] flex flex-col rounded-lg shadow-xl mx-4" onClick={e => e.stopPropagation()}>
-        {/* Search header */}
-        <div className="flex items-center gap-2 px-4 h-12 border-b border-neutral-200 flex-shrink-0">
-          <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+    <Modal open onClose={onClose} title="Sélectionner un article" size="xl" layer="top" fullscreenMobile focusOnOpen
+      footer={<div className="flex w-full flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-[var(--w-text-sec)]" aria-live="polite">{filtered.length} résultat{filtered.length !== 1 ? 's' : ''}</span>
+        <button type="button" onClick={() => { if (filtered[highlighted]) onSelect(filtered[highlighted]); }} disabled={filtered.length === 0} className="btn-primary text-sm">
+          Sélectionner
+        </button>
+      </div>}
+    >
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Search className="h-4 w-4 shrink-0 text-[var(--w-text-muted)]" aria-hidden="true" />
           <input
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Rechercher par référence ou désignation..."
-            className="flex-1 text-sm outline-none bg-transparent"
+            placeholder="Référence ou désignation"
+            aria-label="Rechercher un article"
+            className="w-input-ul min-w-0 flex-1 text-sm"
             autoComplete="off"
           />
           {/* Column toggle */}
           <div className="relative" ref={colMenuRef}>
-            <button onClick={() => setShowColMenu(!showColMenu)} className="p-1.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] hover:text-[var(--w-text-secondary)] transition-colors" title="Colonnes">
-              <Columns3 className="w-4 h-4" />
+            <button type="button" onClick={() => setShowColMenu(show => !show)} className="waarwi-window-button" title="Colonnes" aria-label="Colonnes" aria-expanded={showColMenu}>
+              <Columns3 className="w-4 h-4" aria-hidden="true" />
             </button>
             {showColMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg py-1 w-44 z-10">
+              <div className="absolute end-0 top-full z-10 mt-1 w-44 rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] py-1">
                 {SEARCH_COLS.map(col => (
-                  <label key={col.key} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-neutral-50 cursor-pointer">
+                  <label key={col.key} className="flex min-h-9 cursor-pointer items-center gap-2 px-3 text-xs text-[var(--w-text)] hover:bg-[var(--w-hover)]">
                     <input
                       type="checkbox"
                       checked={visibleCols[col.key]}
                       onChange={e => setVisibleCols(prev => ({ ...prev, [col.key]: e.target.checked }))}
                       className="w-3.5 h-3.5 rounded"
                     />
-                    <span className="text-neutral-700">{col.label}</span>
+                    <span>{col.label}</span>
                   </label>
                 ))}
               </div>
             )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] hover:text-[var(--w-text-secondary)] transition-colors">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
-        {/* Table header */}
-        <div className="flex items-center px-4 h-7 border-b border-neutral-200 bg-neutral-50/70 flex-shrink-0">
-          {activeCols.map(col => (
-            <div key={col.key} className={`px-2 text-[10px] font-bold text-neutral-500 uppercase tracking-wider ${col.w} ${col.align === 'right' ? 'text-right' : 'text-left'}`}>
-              {col.label}
-            </div>
-          ))}
-        </div>
-
-        {/* Results */}
-        <div className="flex-1 overflow-y-auto min-h-0" ref={listRef}>
-          {filtered.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-neutral-400 text-xs">Aucun article trouvé</div>
-          ) : (
-            filtered.map((a, i) => (
-              <div
-                key={a.id}
-                onClick={() => setHighlighted(i)}
-                onDoubleClick={() => onSelect(a)}
-                className={`flex items-center px-4 border-b border-[var(--w-separator-l)] cursor-pointer transition-colors ${
-                  i === highlighted ? 'bg-neutral-100' : 'hover:bg-neutral-50'
-                }`}
-                style={{ height: '30px' }}
-              >
-                {activeCols.map(col => {
-                  const base = `px-2 text-xs truncate ${col.w} ${col.align === 'right' ? 'text-right' : 'text-left'}`;
-                  switch (col.key) {
-                    case 'ref': return <div key="ref" className={`${base} text-neutral-500 num`}>{a.internal_ref || '—'}</div>;
-                    case 'name': return <div key="name" className={`${base} font-medium text-neutral-800`}>{a.name}</div>;
-                    case 'category': return <div key="category" className={`${base} text-neutral-400`}>{a.categories?.name || '—'}</div>;
-                    case 'salePrice': return <div key="salePrice" className={`${base} text-neutral-700 num`}>{formatNum(a.sale_price)}</div>;
-                    case 'purchasePrice': return <div key="purchasePrice" className={`${base} text-neutral-700 num font-semibold`}>{formatNum(a.purchase_price)}</div>;
-                    case 'stock': return <div key="stock" className={`${base} num ${(a.stock_quantity || 0) <= 0 ? 'text-red-400' : 'text-neutral-700'}`}>{a.stock_quantity ?? '—'}</div>;
-                    default: return null;
-                  }
-                })}
+        <div className="max-h-[min(60dvh,28rem)] overflow-auto">
+          <div className="sticky top-0 hidden min-h-9 min-w-[35rem] items-center border-y border-[var(--w-separator)] bg-[var(--w-surface-el2)] px-2 sm:flex">
+            {activeCols.map(col => (
+              <div key={col.key} className={`px-2 text-xs font-semibold text-[var(--w-text-sec)] ${col.w} ${col.align === 'right' ? 'text-right' : 'text-left'}`}>
+                {col.label}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-4 h-10 border-t border-neutral-200 flex-shrink-0">
-          <span className="text-[11px] text-neutral-500">{filtered.length} résultat{filtered.length !== 1 ? 's' : ''}</span>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-3 py-1 text-[11px] font-medium text-[var(--w-text-muted)] hover:text-[var(--w-text)] hover:bg-[var(--w-hover)] rounded transition-colors">Annuler</button>
-            <button
-              onClick={() => { if (filtered[highlighted]) onSelect(filtered[highlighted]); }}
-              disabled={filtered.length === 0}
-              className="px-3 py-1 text-[11px] font-semibold bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-40 transition-colors"
-            >
-              Sélectionner
-            </button>
+          <div ref={listRef}>
+            {filtered.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-[var(--w-text-sec)]">Aucun article trouvé.</p>
+            ) : (
+              filtered.map((a, i) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  aria-pressed={i === highlighted}
+                  onClick={() => setHighlighted(i)}
+                  onDoubleClick={() => onSelect(a)}
+                  className={`grid w-full grid-cols-3 gap-y-1.5 border-b border-[var(--w-separator-l)] px-2 py-2 text-left transition-colors sm:flex sm:min-h-10 sm:min-w-[35rem] sm:items-center sm:py-1 ${
+                    i === highlighted ? 'bg-[var(--w-active)]' : 'hover:bg-[var(--w-hover)]'
+                  }`}
+                >
+                  {activeCols.map(col => {
+                    const base = `min-w-0 px-1 text-xs sm:truncate sm:px-2 ${col.w} ${col.align === 'right' ? 'sm:text-right' : ''}`;
+                    const label = <span className="block font-normal text-[var(--w-text-sec)] sm:hidden">{col.label}</span>;
+                    switch (col.key) {
+                      case 'ref': return <span key="ref" className={`${base} num break-words text-[var(--w-text-sec)]`}>{a.internal_ref || '—'}</span>;
+                      case 'name': return <span key="name" className={`${base} order-first col-span-3 break-words font-semibold sm:order-none`}>{a.name}</span>;
+                      case 'category': return <span key="category" className={`${base} col-span-2 break-words text-[var(--w-text-sec)]`}>{a.categories?.name || '—'}</span>;
+                      case 'salePrice': return <span key="salePrice" className={`${base} num`}>{label}{formatNum(a.sale_price)}</span>;
+                      case 'purchasePrice': return <span key="purchasePrice" className={`${base} num font-semibold`}>{label}{formatNum(a.purchase_price)}</span>;
+                      case 'stock': return <span key="stock" className={`${base} num ${(a.stock_quantity || 0) <= 0 ? 'text-red-600' : ''}`}>{label}{a.stock_quantity ?? '—'}</span>;
+                      default: return null;
+                    }
+                  })}
+                </button>
+              ))
+            )}
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1024,7 +1011,7 @@ function SupplierSearchDropdown({ suppliers, value, onSelect }: {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open) { if (e.key === 'ArrowDown') setOpen(true); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, Math.max(0, filtered.length - 1))); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
     else if (e.key === 'Enter' && filtered[highlighted]) { e.preventDefault(); e.stopPropagation(); onSelect(filtered[highlighted]); setOpen(false); setQuery(''); }
     else if (e.key === 'Escape') { setOpen(false); }
@@ -1045,13 +1032,13 @@ function SupplierSearchDropdown({ suppliers, value, onSelect }: {
         />
       </div>
       {open && (
-        <div className="absolute z-50 left-0 top-full mt-1 bg-white border border-neutral-200 rounded-xl shadow-lg max-h-56 overflow-y-auto min-w-[260px]">
+        <div className="absolute start-0 top-full z-50 mt-1 max-h-56 min-w-52 overflow-y-auto rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]">
           {filtered.map((s: any, i: number) => (
             <button
               key={s.id}
               onMouseDown={e => { e.preventDefault(); onSelect(s); setOpen(false); setQuery(''); }}
               onMouseEnter={() => setHighlighted(i)}
-              className={`w-full text-left px-3 py-2 flex items-center gap-2 text-xs transition-colors ${i === highlighted ? 'bg-neutral-100 text-neutral-900' : 'hover:bg-neutral-50 text-neutral-700'}`}
+              className={`flex min-h-9 w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${i === highlighted ? 'bg-[var(--w-active)] text-[var(--w-text)]' : 'text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]'}`}
             >
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{s.name}</p>

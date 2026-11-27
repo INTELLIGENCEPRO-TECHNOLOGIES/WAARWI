@@ -1,6 +1,6 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info, Pencil, Filter, ChevronDown, ChevronUp, Upload, Camera, CheckSquare, Square, Lightbulb, Download, Search, AlertTriangle, List, LayoutGrid, Save, MoreHorizontal, Check, ChevronLeft, ChevronRight, RefreshCw, PackagePlus } from 'lucide-react';
+import { Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info, Pencil, Filter, ChevronDown, ChevronUp, Upload, Camera, CheckSquare, Square, Lightbulb, Download, AlertTriangle, List, LayoutGrid, Save, MoreHorizontal, Check, ChevronLeft, ChevronRight, RefreshCw, PackagePlus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -9,6 +9,7 @@ import { formatFCFA } from '../lib/format';
 import { consumeNavContext } from '../lib/navHighlight';
 import { ConfirmDialog, Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { PageSearch } from '../components/PageSearch';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 import { isAutoParts } from '../lib/types';
 import { Field, PremiumSelect, ArticleCard, CategoryPickerModal, MasterCatalogGuide, DesktopListView, FullScreenArticleEdit, MobileArticleEdit } from './ArticlesComponents';
@@ -28,6 +29,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const dataTick = useRealtimeTick(['articles', 'part_categories', 'stock_levels', 'stock_lots', 'article_pricing_tiers', 'vehicle_brands', 'vehicle_models', 'article_compatibilities']);
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
+  const isPharmacy = (tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie' || (tenant?.enabled_modules || []).includes('ipm');
   const { success, error } = useToast();
   const [articles, setArticles] = useState<Article[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -839,105 +841,87 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   }, []);
 
   return (
-    <div className="space-y-3 pb-6">
-      {/* ── Header premium unifié ────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
-        <div className="flex items-start justify-between">
-          <h1 className="text-lg font-bold text-neutral-900 leading-tight">Articles</h1>
-          <button onClick={openCreate} className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors">
-            <PackagePlus className="w-4 h-4" /><span className="hidden sm:inline">Nouvel article</span>
+    <div className="article-page space-y-3">
+      <header className="article-page-header">
+        <div className="article-page-title">
+          <h1>Articles</h1>
+          <button type="button" onClick={openCreate} className="btn-primary article-button">
+            <PackagePlus size={16} aria-hidden="true" />Nouvel article
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Search className="w-4 h-4 text-neutral-400 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <input
-              value={searchInput}
-              onChange={e => handleSearchInput(e.target.value)}
-              placeholder="Rechercher par N°, référence, désignation…"
-              className="w-input-ul w-full text-sm py-1.5"
-            />
-          </div>
-          {search && (
-            <button onClick={() => { setSearch(''); setSearchInput(''); }} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600">
-              <X className="w-4 h-4" />
+        <PageSearch value={searchInput} onChange={handleSearchInput} placeholder="Référence ou désignation…" />
+        <div className="article-toolbar" aria-label="Actions du catalogue">
+          <button type="button" onClick={() => setFilterOpen(true)} className="btn-secondary article-button">
+            <Filter size={15} aria-hidden="true" />
+            {categoryFilter ? selectedCategoryName : 'Catégorie'}
+          </button>
+          <button type="button" onClick={toggleSelectionMode} aria-pressed={selectionMode} className="btn-secondary article-button">
+            <CheckSquare size={15} aria-hidden="true" />{selectionMode ? 'Quitter la sélection' : 'Sélectionner'}
+          </button>
+          <div className="hidden md:block">
+            <button type="button" onClick={() => setViewMode(viewMode === 'list' ? 'cards' : 'list')} className="btn-secondary article-button">
+              {viewMode === 'list' ? <LayoutGrid size={15} aria-hidden="true" /> : <List size={15} aria-hidden="true" />}
+              {viewMode === 'list' ? 'Liste de consultation' : 'Édition en liste'}
             </button>
-          )}
-        </div>
-        <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
-          <button onClick={() => setFilterOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 transition-colors ${categoryFilter ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
-            <Filter className="w-3.5 h-3.5" />
-            <span className="max-w-[120px] truncate">{categoryFilter ? selectedCategoryName : 'Catégorie'}</span>
-          </button>
-          <button onClick={toggleSelectionMode} className={`shrink-0 inline-flex items-center gap-1.5 transition-colors ${selectionMode ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
-            <CheckSquare className="w-3.5 h-3.5" />
-            <span>{selectionMode ? 'Quitter' : 'Sélect.'}</span>
-          </button>
-          <button onClick={() => setViewMode(viewMode === 'list' ? 'cards' : 'list')} className="shrink-0 inline-flex items-center gap-1.5 text-neutral-500 hover:text-neutral-700 transition-colors">
-            {viewMode === 'list' ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
-            <span>{viewMode === 'list' ? 'Cartes' : 'Liste'}</span>
-          </button>
-          <button onClick={() => { if (!sharedArticles && currentSite) setImportTargetSite(currentSite.id); setImportExportOpen(true); }} className="shrink-0 inline-flex items-center gap-1.5 text-neutral-500 hover:text-neutral-700 transition-colors">
-            <Download className="w-3.5 h-3.5" /><span>Excel</span>
+          </div>
+          <button type="button" onClick={() => { if (!sharedArticles && currentSite) setImportTargetSite(currentSite.id); setImportExportOpen(true); }} className="btn-secondary article-button">
+            <Download size={15} aria-hidden="true" />Excel
           </button>
         </div>
-      </div>
+      </header>
 
       {/* ── Guide interactif ─────────────────────── */}
       {!guideDismissed && <MasterCatalogGuide step={guideStep} articleCount={totalCount} onStep={setGuideStep} onDismiss={dismissGuide} onGo={goToMasterCatalog} />}
       {guideDismissed && (
-        <button onClick={reopenGuide} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-brand-700 transition-colors px-1">
+        <button onClick={reopenGuide} className="btn-ghost article-button">
           <Lightbulb className="w-3.5 h-3.5" />Revoir le guide d'ajout depuis le catalogue maître
         </button>
       )}
 
       {/* ── Barre de sélection en masse ────── */}
       {selectionMode && (
-        <div className="flex items-center gap-2 py-2.5 border-y border-neutral-100 animate-fade-in flex-wrap">
-          <button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold text-brand-700 hover:text-brand-800 transition-colors">
+        <div className="article-toolbar article-separator">
+          <button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="btn-ghost article-button">
             {allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
             {allFilteredSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
           </button>
-          <div className="text-[11px] font-semibold text-neutral-600 truncate">
-            <span className="num font-bold text-brand-700">{selectedIds.size}</span> sélectionné{selectedIds.size > 1 ? 's' : ''}
+          <div className="article-muted">
+            <span className="num font-semibold">{selectedIds.size}</span> sélectionné{selectedIds.size > 1 ? 's' : ''}
           </div>
           <div className="flex-1" />
-          <button onClick={() => { setBulkAction(''); setBulkActionValue(''); setBulkActionOpen(true); }} disabled={selectedIds.size === 0} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-neutral-900 text-white hover:bg-neutral-800 active:scale-95 transition-all disabled:opacity-50">
+          <button onClick={() => { setBulkAction(''); setBulkActionValue(''); setBulkActionOpen(true); }} disabled={selectedIds.size === 0} className="btn-primary article-button">
             <MoreHorizontal className="w-3.5 h-3.5" />Action en masse
           </button>
-          <button onClick={() => setBulkConfirmOpen(true)} disabled={selectedIds.size === 0} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-600 text-white hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50">
+          <button onClick={() => setBulkConfirmOpen(true)} disabled={selectedIds.size === 0} className="btn-danger article-button">
             <Trash2 className="w-3.5 h-3.5" />Supprimer
           </button>
         </div>
       )}
 
       {/* Stats chips */}
-      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+      <div className="article-toolbar text-xs font-semibold">
         <button onClick={() => setStockFilter('all')} className={`shrink-0 py-1 num transition-all ${stockFilter === 'all' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>{totalCount} article{totalCount > 1 ? 's' : ''}</button>
         {refreshing && <RefreshCw className="w-3 h-3 animate-spin text-neutral-400 shrink-0" />}
-        {stats.inStock > 0 && <button onClick={() => setStockFilter(f => f === 'in' ? 'all' : 'in')} className={`shrink-0 py-1 inline-flex items-center gap-1 transition-all cursor-pointer ${stockFilter === 'in' ? 'text-emerald-700' : 'text-emerald-500/70 hover:text-emerald-700'}`}><span className={`w-1.5 h-1.5 rounded-full ${stockFilter === 'in' ? 'bg-emerald-600' : 'bg-emerald-400'}`} />{stats.inStock} en stock</button>}
-        {stats.low > 0 && <button onClick={() => setStockFilter(f => f === 'low' ? 'all' : 'low')} className={`shrink-0 py-1 transition-all cursor-pointer ${stockFilter === 'low' ? 'text-amber-700' : 'text-amber-500/70 hover:text-amber-700'}`}>{stats.low} stock bas</button>}
-        {stats.out > 0 && <button onClick={() => setStockFilter(f => f === 'out' ? 'all' : 'out')} className={`shrink-0 py-1 transition-all cursor-pointer ${stockFilter === 'out' ? 'text-red-700' : 'text-red-500/70 hover:text-red-700'}`}>{stats.out} rupture{stats.out > 1 ? 's' : ''}</button>}
+        {stats.inStock > 0 && <button type="button" aria-pressed={stockFilter === 'in'} onClick={() => setStockFilter(f => f === 'in' ? 'all' : 'in')} className={`shrink-0 py-1 inline-flex items-center gap-1 transition-all cursor-pointer ${stockFilter === 'in' ? 'text-emerald-700' : 'text-emerald-500/70 hover:text-emerald-700'}`}><span className={`w-1.5 h-1.5 rounded-full ${stockFilter === 'in' ? 'bg-emerald-600' : 'bg-emerald-400'}`} />{stats.inStock} en stock</button>}
+        {stats.low > 0 && <button type="button" aria-pressed={stockFilter === 'low'} onClick={() => setStockFilter(f => f === 'low' ? 'all' : 'low')} className={`shrink-0 py-1 transition-all cursor-pointer ${stockFilter === 'low' ? 'text-amber-700' : 'text-amber-500/70 hover:text-amber-700'}`}>{stats.low} stock bas</button>}
+        {stats.out > 0 && <button type="button" aria-pressed={stockFilter === 'out'} onClick={() => setStockFilter(f => f === 'out' ? 'all' : 'out')} className={`shrink-0 py-1 transition-all cursor-pointer ${stockFilter === 'out' ? 'text-red-700' : 'text-red-500/70 hover:text-red-700'}`}>{stats.out} rupture{stats.out > 1 ? 's' : ''}</button>}
         {categoryFilter && <button onClick={() => setCategoryFilter('')} className="shrink-0 py-1 text-brand-700 inline-flex items-center gap-1">{selectedCategoryName} <X className="w-3 h-3" /></button>}
         {stockFilter !== 'all' && <button onClick={() => setStockFilter('all')} className="shrink-0 py-1 text-slate-400 inline-flex items-center gap-1 hover:text-slate-600 transition-all"><X className="w-3 h-3" /> Effacer filtre</button>}
       </div>
 
       {/* ── Liste ─────────────────────────────── */}
-      {loadError && (
-        <div className="py-10 flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center"><AlertTriangle className="w-6 h-6 text-red-500" /></div>
-          <p className="text-sm font-semibold text-neutral-800">Erreur de chargement</p>
-          <p className="text-xs text-neutral-500 text-center max-w-sm">{loadError}</p>
-          <button onClick={() => { setLoadError(null); loadPage(page); }} className="mt-1 px-4 py-2 bg-neutral-900 text-white text-xs font-semibold rounded-lg hover:bg-neutral-800 transition-colors">Réessayer</button>
+      {loadError ? (
+        <div className="article-status-line" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <div><strong>Chargement des articles impossible</strong><p className="article-muted">{loadError}</p></div>
+          <button type="button" onClick={() => { setLoadError(null); loadPage(page); }} className="btn-secondary article-button">Réessayer</button>
         </div>
-      )}
-      {!loadError && !initialLoaded && loading ? (
-        <div className="py-20 flex items-center justify-center opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+      ) : !initialLoaded && loading ? (
+        <div className="article-status-line" role="status"><Loader2 size={16} className="animate-spin" aria-hidden="true" />Chargement des articles…</div>
       ) : paginated.length === 0 ? (
-        <div className="">
-          <EmptyState icon={Package} title={search || categoryFilter ? 'Aucun article trouvé' : 'Aucun article'} description={search || categoryFilter ? 'Essayez d\'autres critères.' : 'Créez votre premier article.'}
-            action={!search && !categoryFilter ? <button onClick={openCreate} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><PackagePlus className="w-4 h-4" />Nouvel article</button> : undefined} />
-        </div>
+        <EmptyState icon={Package} title={search || categoryFilter || stockFilter !== 'all' ? 'Aucun article trouvé' : 'Aucun article'}
+          description={search || categoryFilter || stockFilter !== 'all' ? 'Modifiez la recherche ou les filtres.' : undefined}
+          action={!search && !categoryFilter && stockFilter === 'all' ? <button type="button" onClick={openCreate} className="btn-primary article-button"><PackagePlus size={16} aria-hidden="true" />Nouvel article</button> : undefined} />
       ) : (
         <>
           {/* Mobile: lignes */}
@@ -967,10 +951,10 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
               <div className="overflow-hidden">
                 <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                 <table className="w-full text-sm">
-                  <thead className="text-[10px] uppercase text-slate-500 tracking-wider border-b border-neutral-200 sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
+                  <thead className="text-[11px] text-[var(--w-text-sec)] border-b border-[var(--w-separator)] sticky top-0 z-10 bg-[var(--w-surface-el)]">
                     <tr>
                       {selectionMode && <th className="px-3 py-3 w-10"><button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="text-brand-700">{allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}</button></th>}
-                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors min-w-[480px]" onClick={() => { setSortCol('name'); setSortDir(d => sortCol === 'name' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors min-w-0" onClick={() => { setSortCol('name'); setSortDir(d => sortCol === 'name' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
                         <span className="inline-flex items-center gap-1">Article {sortCol === 'name' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
                       </th>
                       <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => { setSortCol('category'); setSortDir(d => sortCol === 'category' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
@@ -983,16 +967,16 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                       <th className="px-4 py-3 text-right font-semibold"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-100">
+                  <tbody className="divide-y divide-[var(--w-separator)]">
                     {paginated.map(a => {
                       const cat = categoryMap.get(a.category_id || '');
                       const mg = a.sale_price > 0 ? ((a.sale_price - a.purchase_price) / a.sale_price) * 100 : 0;
                       const mgTone = mg >= 30 ? 'text-emerald-600' : mg >= 15 ? 'text-amber-600' : 'text-red-600';
                       const isSel = selectedIds.has(a.id);
                       return (
-                        <tr key={a.id} className={`group transition-colors ${isSel ? 'bg-brand-50/60' : 'hover:bg-brand-50/30'} ${selectionMode ? 'cursor-pointer' : ''}`} onClick={selectionMode ? () => toggleSelected(a.id) : undefined}>
+                        <tr key={a.id} className={`group transition-colors ${isSel ? 'bg-[var(--w-active)]' : 'hover:bg-[var(--w-hover)]'} ${selectionMode ? 'cursor-pointer' : ''}`} onClick={selectionMode ? () => toggleSelected(a.id) : undefined}>
                           {selectionMode && <td className="px-3 py-3 w-10"><span className="text-brand-700">{isSel ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-400" />}</span></td>}
-                          <td className="px-4 py-3"><div className="min-w-0"><div className="font-semibold text-slate-900 truncate">{a.name}</div>{a.oem_ref && <div className="text-[11px] text-slate-400 font-mono truncate">OEM: {a.oem_ref}</div>}</div></td>
+                          <td className="px-4 py-3"><div className="min-w-0"><div className="font-semibold text-[var(--w-text)] break-words">{a.name}</div>{a.oem_ref && <div className="text-[11px] text-slate-400 font-mono truncate">OEM: {a.oem_ref}</div>}</div></td>
                           <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[160px]">{cat?.name || '—'}</td>
                           <td className="px-4 py-3 text-right font-bold text-slate-900 num">{formatFCFA(a.sale_price)}</td>
                           {can('view_margins') && <td className="px-4 py-3 text-right"><span className={`text-[10px] font-bold num ${mgTone}`}>{mg.toFixed(0)}%</span></td>}
@@ -1008,12 +992,12 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
             {/* List edit save bar */}
             {viewMode === 'list' && listEditCount > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-brand-50 border border-brand-200 animate-fade-in">
+              <div className="article-toolbar article-separator">
                 <Save className="w-4 h-4 text-brand-600" />
-                <span className="text-xs font-semibold text-brand-800">{listEditCount} modification{listEditCount > 1 ? 's' : ''} en attente</span>
+                <span className="text-xs font-semibold text-[var(--w-text)]">{listEditCount} modification{listEditCount > 1 ? 's' : ''} en attente</span>
                 <div className="flex-1" />
                 <button onClick={() => setListEdits(new Map())} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-                <button onClick={saveListEdits} disabled={listSaving} className="px-4 py-1.5 text-[11px] font-bold bg-brand-600 text-white rounded-xl shadow-glow hover:bg-brand-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+                <button onClick={saveListEdits} disabled={listSaving} className="btn-primary article-button">
                   {listSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Enregistrer
                 </button>
               </div>
@@ -1022,12 +1006,12 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
           {/* Pagination */}
           {totalCount > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-4 py-3 mt-3">
+            <div className="article-pagination">
               <div className="text-xs text-slate-500">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} sur {totalCount} articles</div>
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">&laquo;&laquo;</button>
                 <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                <span className="px-3 py-1 rounded-lg text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200">{page + 1} / {totalPages}</span>
+                <span className="article-page-number num">{page + 1} / {totalPages}</span>
                 <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronRight className="w-3.5 h-3.5" /></button>
                 <button onClick={() => setPage(totalPages - 1)} disabled={!hasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">&raquo;&raquo;</button>
               </div>
@@ -1054,7 +1038,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           onDeleteImage={() => { setImageFile(null); setImagePreview(null); setImageDeletePending(true); userTouchedRef.current = true; }}
           marginValue={marginValue} marginStr={marginStr}
           showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')}
-          stockMap={stockMap} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions}
+          stockMap={stockMap} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy}
           onClose={saveAndClose}
           onPrev={editingIndex > 0 ? () => navigateArticle(-1) : undefined}
           onNext={editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
@@ -1083,7 +1067,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')}
           stockMap={stockMap}
           formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions}
-          isPharmacy={(tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie' || (tenant?.enabled_modules || []).includes('ipm')}
+          isPharmacy={isPharmacy}
           onClose={saveAndClose}
           onPrev={editing && editingIndex > 0 ? () => navigateArticle(-1) : undefined}
           onNext={editing && editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
@@ -1095,8 +1079,13 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       <ConfirmDialog open={bulkConfirmOpen} onClose={() => { if (!bulkDeleting) setBulkConfirmOpen(false); }} onConfirm={bulkDelete} title={`Supprimer ${selectedIds.size} article${selectedIds.size > 1 ? 's' : ''} ?`} message="Les articles sélectionnés seront supprimés ou désactivés. Cette action ne peut pas être annulée." confirmLabel={bulkDeleting ? 'Suppression…' : 'Supprimer la sélection'} danger />
 
       {/* ── Bulk action modal ────── */}
-      <Modal open={bulkActionOpen} onClose={() => setBulkActionOpen(false)} title={`Action en masse (${selectedIds.size} articles)`} size="sm"
-        footer={<><button onClick={() => setBulkActionOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={applyBulkAction} disabled={!bulkAction || bulkDeleting} className="btn-icon-primary" title="Appliquer">{bulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
+      <Modal open={bulkActionOpen} onClose={() => !bulkDeleting && setBulkActionOpen(false)} title={`Modifier ${selectedIds.size} article${selectedIds.size === 1 ? '' : 's'}`} size="sm" variant="flat" focusOnOpen
+        footer={<>
+          <button type="button" onClick={() => setBulkActionOpen(false)} disabled={bulkDeleting} className="btn-secondary article-button"><X size={15} aria-hidden="true" />Annuler</button>
+          <button type="button" onClick={applyBulkAction} disabled={!bulkAction || bulkDeleting} className="btn-primary article-button">
+            {bulkDeleting ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}Appliquer
+          </button>
+        </>}>
         <div className="space-y-3">
           <Field label="Action">
             <PremiumSelect value={bulkAction} onChange={v => { setBulkAction(v); setBulkActionValue(''); }}
@@ -1135,8 +1124,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       </Modal>
 
       {/* ── Import / Export Modal ────── */}
-      <Modal open={importExportOpen} onClose={() => { setImportExportOpen(false); resetImport(); }} title="Import / Export Excel" size="md"
-        footer={importRows.length > 0 ? (<><button onClick={resetImport} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={runArticleImport} disabled={importingArticles} className="btn-icon-primary" title={importingArticles ? 'Import...' : `Importer ${importRows.length} article${importRows.length > 1 ? 's' : ''}`}>{importingArticles ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}</button></>) : <button onClick={() => { setImportExportOpen(false); resetImport(); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
+      <Modal open={importExportOpen} onClose={() => { if (!importingArticles) { setImportExportOpen(false); resetImport(); } }} title="Import et export Excel" size="md" variant="flat" focusOnOpen
+        footer={importRows.length > 0 ? <>
+          <button type="button" onClick={resetImport} disabled={importingArticles} className="btn-secondary article-button"><X size={15} aria-hidden="true" />Effacer le fichier</button>
+          <button type="button" onClick={runArticleImport} disabled={importingArticles} className="btn-primary article-button">
+            {importingArticles ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Upload size={15} aria-hidden="true" />}
+            Importer <span className="num">{importRows.length}</span>
+          </button>
+        </> : <button type="button" onClick={() => { setImportExportOpen(false); resetImport(); }} className="btn-secondary article-button">Fermer</button>}>
         <div className="space-y-4">
           {(() => {
             const ownDepots = depots.filter((d: any) => d.parent_site_id === currentSite?.id);
@@ -1145,12 +1140,13 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             const hasAlternatives = ownDepots.length > 0 || otherSites.length > 0 || otherDepots.length > 0;
             if (!hasAlternatives) return null;
             return (
-              <div className="p-3 rounded-xl border border-brand-200 bg-brand-50/40">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-brand-700">Emplacement (stock initial)</label>
+              <div className="space-y-1.5">
+                <label htmlFor="article-import-location" className="label">Emplacement du stock initial</label>
                 <select
+                  id="article-import-location"
                   value={importTargetSite}
                   onChange={e => setImportTargetSite(e.target.value)}
-                  className="mt-1.5 w-full text-xs font-semibold px-2.5 py-2 rounded-lg border border-brand-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  className="w-input-ul min-h-9"
                 >
                   {sharedArticles && <option value="">Tous les emplacements (export agrégé)</option>}
                   {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin actuel)</option>}
@@ -1164,7 +1160,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                     <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
                   ))}
                 </select>
-                <p className="text-[10px] text-brand-700/80 mt-1.5 leading-relaxed">
+                <p className="article-muted">
                   {sharedArticles
                     ? 'À l\'import, le stock initial sera affecté à cet emplacement. À l\'export, la colonne « Stock initial » reflétera le stock de cet emplacement.'
                     : 'Le stock initial sera affecté à l\'emplacement sélectionné (magasin actuel ou ses dépôts rattachés).'
@@ -1173,36 +1169,30 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
               </div>
             );
           })()}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button onClick={downloadArticleTemplate} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-neutral-300 hover:bg-neutral-50/50 transition text-left">
-              <div className="w-9 h-9 rounded-xl bg-neutral-100 flex items-center justify-center shrink-0"><Download className="w-4 h-4 text-neutral-700" /></div>
-              <div><div className="text-xs font-bold text-slate-900">Modèle Excel</div><div className="text-[10px] text-slate-500">Fichier vierge avec un exemple</div></div>
-            </button>
-            <button onClick={exportArticles} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition text-left">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0"><Upload className="w-4 h-4 text-emerald-600" /></div>
-              <div><div className="text-xs font-bold text-slate-900">Exporter mes articles</div><div className="text-[10px] text-slate-500">{totalCount} articles</div></div>
-            </button>
+          <div className="article-toolbar">
+            <button type="button" onClick={downloadArticleTemplate} className="btn-secondary article-button"><Download size={15} aria-hidden="true" />Télécharger le modèle</button>
+            <button type="button" onClick={exportArticles} className="btn-secondary article-button"><Upload size={15} aria-hidden="true" />Exporter les articles</button>
           </div>
-          <div className="bg-[var(--w-surface-el)] rounded-xl p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Colonnes attendues</div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-              {TENANT_IMPORT_HEADERS.map(h => (<div key={h.key} className={`text-[10px] px-2 py-1 rounded-md ${h.required ? 'bg-brand-50 border border-brand-200 font-bold text-brand-800' : 'bg-white border border-[var(--w-separator)] text-slate-600'}`}>{h.label}</div>))}
-            </div>
+          <div className="article-separator">
+            <h3 className="text-sm font-semibold mb-2">Colonnes du fichier</h3>
+            <ul className="article-import-columns">
+              {TENANT_IMPORT_HEADERS.map(column => <li key={column.key}>{column.label}{column.required && ' *'}</li>)}
+            </ul>
           </div>
-          <label className="flex flex-col items-center justify-center gap-2 p-5 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition">
-            <Upload className="w-5 h-5 text-slate-400" />
-            <div className="text-xs text-slate-600 text-center">Cliquez ou glissez un fichier Excel (.xlsx)</div>
-            {importFilename && <div className="text-[11px] font-semibold text-brand-700">{importFilename} — {importRows.length} ligne{importRows.length > 1 ? 's' : ''}</div>}
-            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = ''; }} />
+          <label className="block min-w-0">
+            <span className="label">Fichier Excel (.xlsx ou .xls)</span>
+            <input type="file" accept=".xlsx,.xls" className="article-file-input" disabled={importingArticles}
+              onChange={event => { const file = event.target.files?.[0]; if (file) void handleImportFile(file); event.target.value = ''; }} />
+            {importFilename && <span className="article-muted block break-words mt-1">{importFilename} · {importRows.length} ligne{importRows.length === 1 ? '' : 's'}</span>}
           </label>
           {importResult && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-center"><div className="text-[9px] font-bold uppercase text-emerald-700">Créés</div><div className="text-lg font-bold text-emerald-800 num">{importResult.imported}</div></div>
-                <div className="p-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-center"><div className="text-[9px] font-bold uppercase text-neutral-700">Mis à jour</div><div className="text-lg font-bold text-neutral-800 num">{importResult.updated}</div></div>
-                <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-center"><div className="text-[9px] font-bold uppercase text-red-700">Erreurs</div><div className="text-lg font-bold text-red-800 num">{importResult.errors?.length || 0}</div></div>
-              </div>
-              {importResult.errors && importResult.errors.length > 0 && <div className="max-h-32 overflow-auto bg-[var(--w-surface-el)] rounded-xl p-2 space-y-0.5">{importResult.errors.map((e: any, i: number) => <div key={i} className="text-[10px] text-red-700">Ligne {e.row}: {e.error}</div>)}</div>}
+            <div>
+              <dl className="article-result-totals">
+                <div><dt>Créés</dt><dd className="num">{importResult.imported}</dd></div>
+                <div><dt>Mis à jour</dt><dd className="num">{importResult.updated}</dd></div>
+                <div><dt>Erreurs</dt><dd className="num">{importResult.errors?.length || 0}</dd></div>
+              </dl>
+              {importResult.errors?.length > 0 && <ul className="article-result-errors">{importResult.errors.map((item, index) => <li key={index}>Ligne {item.row} · {item.error}</li>)}</ul>}
             </div>
           )}
         </div>

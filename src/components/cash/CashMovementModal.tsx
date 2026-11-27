@@ -157,48 +157,37 @@ export function CashMovementModal({ ctx, onClose, onDone }: Props) {
             </label>
           }
           footer={<>
-              <button onClick={() => onClose()} className="px-3 sm:px-4 h-8 rounded-[4px] border border-neutral-200 text-[12px] font-semibold text-neutral-900 hover:bg-neutral-50 transition-colors">Annuler</button>
+              <button onClick={() => onClose()} className="btn-secondary text-xs">Annuler</button>
               <button onClick={submitMovement} disabled={mvSubmitting || !!permsPending || mvAmount <= 0}
-                className="px-3 sm:px-4 h-8 rounded-[4px] bg-neutral-900 text-white text-[12px] font-semibold hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+                className="btn-primary text-xs">
                 {mvSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                 <span className="sm:hidden">Valider</span>
                 <span className="hidden sm:inline">Valider le mouvement</span>
               </button>
           </>}>
           <div>
-            {/* Type — flat horizontal nav */}
-            <div className="-mx-4 px-4 border-b border-neutral-200">
-              <div className="flex items-stretch w-full">
-                <button type="button" onClick={() => setMvKind('expense')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'expense' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <ArrowUpRight className={`w-6 h-6 ${mvKind === 'expense' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'expense' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Dépense</span>
-                </button>
-                <button type="button" onClick={() => setMvKind('income')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'income' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <ArrowDownRight className={`w-6 h-6 ${mvKind === 'income' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'income' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Entrée</span>
-                </button>
-                <button type="button" onClick={() => setMvKind('customer_prepayment')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_prepayment' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <Banknote className={`w-6 h-6 ${mvKind === 'customer_prepayment' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_prepayment' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Acompte</span>
-                </button>
-                {can('pos_customer_withdrawal') && !!(tenant as any)?.settings?.enable_customer_withdrawals && (
-                <button type="button" onClick={() => { setMvKind('customer_withdrawal'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_withdrawal' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <ArrowDownToLine className={`w-6 h-6 ${mvKind === 'customer_withdrawal' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_withdrawal' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Retrait</span>
-                </button>
-                )}
-                {can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans && (
-                <button type="button" onClick={() => { setMvKind('customer_loan'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_loan' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <HandCoins className={`w-6 h-6 ${mvKind === 'customer_loan' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_loan' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Prêt</span>
-                </button>
-                )}
-              </div>
+            <div className="flex flex-wrap gap-1 border-b border-[var(--w-separator)] pb-2" role="group" aria-label="Type de mouvement">
+              {([
+                { kind: 'expense', label: 'Dépense', icon: ArrowUpRight, visible: true },
+                { kind: 'income', label: 'Entrée', icon: ArrowDownRight, visible: true },
+                { kind: 'customer_prepayment', label: 'Acompte', icon: Banknote, visible: true },
+                { kind: 'customer_withdrawal', label: 'Retrait', icon: ArrowDownToLine, visible: can('pos_customer_withdrawal') && !!(tenant as any)?.settings?.enable_customer_withdrawals },
+                { kind: 'customer_loan', label: 'Prêt', icon: HandCoins, visible: can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans },
+              ] as const).filter(option => option.visible).map(option => {
+                const active = mvKind === option.kind;
+                return (
+                  <button key={option.kind} type="button" aria-pressed={active} onClick={() => {
+                    setMvKind(option.kind);
+                    if (option.kind === 'customer_withdrawal' || option.kind === 'customer_loan') {
+                      setMvCustPrepay(0);
+                      setMvCustBalance(0);
+                    }
+                  }} className={`w-option inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium ${active ? 'w-option-selected' : ''}`}>
+                    <option.icon className="h-4 w-4 shrink-0" />
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Customer section (for prepayment/withdrawal/loan) */}

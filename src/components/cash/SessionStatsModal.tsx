@@ -115,15 +115,15 @@ const load = async () => {
     <>
       <CashModal open={true} onClose={() => onClose()} title="Statistiques de la session"
         footer={<>
-          <button onClick={() => onClose()} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          <button onClick={() => onClose()} className="btn-secondary text-xs"><X className="h-4 w-4" />Fermer</button>
           {statsData && !loadError && !loadingStats && (
             <button onClick={() => printXReport(
               session, controls, statsData, sessionRegs,
               bound.printTenant,
               bound.operatorName, bound.siteName,
               { registerLabel: bound.registerLabel, printedBy: bound.mode === 'supervision' ? bound.userName : undefined }
-            )} className="btn-icon-primary" title="Imprimer rapport">
-              <Printer className="w-4 h-4" />
+            )} className="btn-primary text-xs">
+              <Printer className="h-4 w-4" />Imprimer le rapport
             </button>
           )}
         </>}
@@ -141,12 +141,12 @@ const load = async () => {
             {/* KPI strip: ventes + net */}
             <div className="flex items-end gap-4 border-b border-neutral-200 pb-3 mb-1">
               <div className="shrink-0 text-center pr-3 border-r border-neutral-200">
-                <div className="text-[8px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Ventes</div>
-                <div className="text-sm font-black text-neutral-900 num">{statsData.count}</div>
+                <div className="mb-0.5 text-xs text-[var(--w-text-sec)]">Ventes</div>
+                <div className="num text-sm font-semibold text-[var(--w-text)]">{statsData.count}</div>
               </div>
               <div className="flex-1 text-left">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Net</div>
-                <div className="text-xl font-black text-neutral-900 num leading-none">
+                <div className="mb-0.5 text-xs text-[var(--w-text-sec)]">Net</div>
+                <div className="num whitespace-nowrap text-xl font-semibold leading-none text-[var(--w-text)]">
                   {formatNumber(statsData.netTotal)} <span className="text-[11px] font-bold text-neutral-500">FCFA</span>
                 </div>
               </div>
@@ -157,7 +157,7 @@ const load = async () => {
               {/* Encaissements par mode */}
               {statsData.byMethod.length > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <CreditCard className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -174,7 +174,7 @@ const load = async () => {
                     const totalMethods = statsData.byMethod.reduce((s, m) => s + m.amount, 0);
                     return (
                       <div className="pb-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <div className="border border-neutral-100 rounded-md overflow-hidden">
+                        <div className="border-y border-[var(--w-separator)]">
                           <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-1.5 bg-neutral-50 border-b border-neutral-100">
                             <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-500">Mode de paiement</span>
                             <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 text-right">Montant</span>
@@ -205,7 +205,7 @@ const load = async () => {
               {/* Reglements */}
               {statsData.invoicePayments.length > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'reglements' ? null : 'reglements')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Wallet className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -243,7 +243,7 @@ const load = async () => {
               {/* Encaissements directs */}
               {statsData.movIncome > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'encDirect' ? null : 'encDirect')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <ArrowDownRight className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -278,7 +278,7 @@ const load = async () => {
               {/* Acomptes */}
               {statsData.movPrepay > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'acomptes' ? null : 'acomptes')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Wallet className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -313,7 +313,7 @@ const load = async () => {
               {/* Décaissements */}
               {(statsData.movExpense + statsData.movRefund) > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'depenses' ? null : 'depenses')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -354,7 +354,7 @@ const load = async () => {
               {/* Retraits clients */}
               {(statsData.movWithdrawal || 0) > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'retraits' ? null : 'retraits')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -386,7 +386,7 @@ const load = async () => {
               {/* Prêts clients */}
               {(statsData.movLoan || 0) > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'prets' ? null : 'prets')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <HandCoins className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -418,7 +418,7 @@ const load = async () => {
               {/* Transfert reçu du coffre */}
               {(statsData.movVaultIn || 0) > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'vaultIn' ? null : 'vaultIn')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'vaultIn' ? null : 'vaultIn')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <ArrowDownRight className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -450,7 +450,7 @@ const load = async () => {
               {/* Versement au coffre */}
               {(statsData.movVaultOut || 0) > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'vaultOut' ? null : 'vaultOut')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'vaultOut' ? null : 'vaultOut')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -481,7 +481,7 @@ const load = async () => {
 
               {session.status !== 'open' && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'controls' ? null : 'controls')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'controls' ? null : 'controls')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Lock className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">
@@ -521,7 +521,7 @@ const load = async () => {
               {/* Top articles */}
               {statsData.topArticles.length > 0 && (
                 <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'articles' ? null : 'articles')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'articles' ? null : 'articles')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-3 text-left transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Package className="w-4 h-4 text-neutral-400 shrink-0" />
                       <div className="min-w-0">

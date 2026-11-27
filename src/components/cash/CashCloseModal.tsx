@@ -291,34 +291,34 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
     <>
       <Modal open={regOpen} onClose={() => setRegOpen(false)} title="Régularisation d'écart" size="sm" layer="top"
         footer={<>
-          <button onClick={() => setRegOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveRegularization} disabled={savingReg || permsBlocked} className="btn-icon-primary" title="Enregistrer">
-            {savingReg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          <button onClick={() => setRegOpen(false)} className="btn-secondary text-xs">Annuler</button>
+          <button onClick={saveRegularization} disabled={savingReg || permsBlocked} className="btn-primary text-xs">
+            {savingReg && <Loader2 className="h-4 w-4 animate-spin" />}Enregistrer
           </button>
         </>}
       >
-        <div className="space-y-3">
-          <div className="group">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Type</div>
-            <select value={regType} onChange={e => setRegType(e.target.value as any)} className="w-select-ul text-[13px]">
+        <div className="space-y-4 text-xs text-[var(--w-text-sec)]">
+          <label className="block font-medium">
+            Type de régularisation
+            <select value={regType} onChange={e => setRegType(e.target.value as typeof regType)} className="w-select-ul py-2 text-sm">
               <option value="manquant">Manquant (déficit)</option>
               <option value="excedent">Excédent (surplus)</option>
               <option value="depot">Dépôt</option>
               <option value="retrait">Retrait</option>
             </select>
-          </div>
-          <div className="group">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant (FCFA)</div>
-            <input type="number" value={regAmount || ''} onChange={e => setRegAmount(Number(e.target.value))} className="w-input-ul text-[13px]" min="0" />
-          </div>
-          <div className="group">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Motif *</div>
-            <input value={regReason} onChange={e => setRegReason(e.target.value)} className="w-input-ul text-[13px]" placeholder="Ex: Écart de monnaie, dépôt initial…" />
-          </div>
-          <div className="group">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Note (optionnel)</div>
-            <input value={regNote} onChange={e => setRegNote(e.target.value)} className="w-input-ul text-[13px]" />
-          </div>
+          </label>
+          <label className="block font-medium">
+            Montant (FCFA)
+            <input type="number" inputMode="numeric" value={regAmount || ''} onChange={e => setRegAmount(Number(e.target.value))} className="w-input-ul py-2 text-sm num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+          </label>
+          <label className="block font-medium">
+            Motif *
+            <input value={regReason} onChange={e => setRegReason(e.target.value)} className="w-input-ul py-2 text-sm" aria-required="true" placeholder="Ex. écart de monnaie, dépôt initial" />
+          </label>
+          <label className="block font-medium">
+            Note (facultative)
+            <input value={regNote} onChange={e => setRegNote(e.target.value)} className="w-input-ul py-2 text-sm" />
+          </label>
         </div>
       </Modal>
 
@@ -326,20 +326,20 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
         footer={
           closeStep === 'control' ? (
             <>
-              <button onClick={() => onClose()} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={() => setRegOpen(true)} disabled={!!loadError || loadingControl || permsBlocked} className="btn-icon" title="Régulariser"><Plus className="w-4 h-4" /></button>
-              <button onClick={() => setCloseStep('regularize')} disabled={!!loadError || loadingControl || permsBlocked} className="btn-icon-primary" title="Suivant"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => onClose()} className="btn-secondary text-xs"><X className="h-4 w-4" />Annuler</button>
+              <button onClick={() => setRegOpen(true)} disabled={!!loadError || loadingControl || permsBlocked} className="btn-secondary text-xs disabled:opacity-50"><Plus className="h-4 w-4" />Régulariser</button>
+              <button onClick={() => setCloseStep('regularize')} disabled={!!loadError || loadingControl || permsBlocked} className="btn-primary text-xs"><ChevronRight className="h-4 w-4" />Suivant</button>
             </>
           ) : closeStep === 'regularize' ? (
             <>
-              <button onClick={() => setCloseStep('control')} className="btn-icon" title="Retour"><ArrowLeft className="w-4 h-4" /></button>
-              <button onClick={() => setCloseStep('confirm')} disabled={!!loadError || permsBlocked} className="btn-icon-primary" title="Confirmer"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => setCloseStep('control')} className="btn-secondary text-xs"><ArrowLeft className="h-4 w-4" />Retour</button>
+              <button onClick={() => setCloseStep('confirm')} disabled={!!loadError || permsBlocked} className="btn-primary text-xs"><ChevronRight className="h-4 w-4" />Confirmer</button>
             </>
           ) : (
             <>
-              <button onClick={() => setCloseStep('regularize')} className="btn-icon" title="Retour"><ArrowLeft className="w-4 h-4" /></button>
-              <button onClick={confirmClose} disabled={closing || !!loadError || !statsData || permsBlocked} className="btn-icon-primary" title="Clôturer">
-                {closing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              <button onClick={() => setCloseStep('regularize')} className="btn-secondary text-xs"><ArrowLeft className="h-4 w-4" />Retour</button>
+              <button onClick={confirmClose} disabled={closing || !!loadError || !statsData || permsBlocked} className="btn-primary text-xs">
+                {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}Clôturer
               </button>
             </>
           )
@@ -348,12 +348,12 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
         {/* Minimal stepper — flat, bottom-border only */}
         <div className="flex items-center mb-4">
           {(['control', 'regularize', 'confirm'] as CloseStep[]).map((s, i) => {
-            const labels = ['Contrôle', 'Régul.', 'Confirm.'];
+            const labels = ['Contrôle', 'Régularisation', 'Confirmation'];
             const active = closeStep === s;
             const done = (['control', 'regularize', 'confirm'] as CloseStep[]).indexOf(closeStep) > i;
             return (
-              <div key={s} className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-2 flex-1 justify-center border-b-2 transition-colors ${active ? 'border-neutral-900 text-neutral-900' : done ? 'border-neutral-300 text-neutral-500' : 'border-neutral-100 text-neutral-400'}`}>
-                {done ? <Check className="w-3 h-3" /> : <span className="text-[9px]">{i + 1}</span>}
+              <div key={s} aria-current={active ? 'step' : undefined} className={`flex flex-1 items-center justify-center gap-1 border-b px-1 py-2 text-center text-xs ${active ? 'border-[var(--w-text)] font-semibold text-[var(--w-text)]' : 'border-[var(--w-separator)] text-[var(--w-text-sec)]'}`}>
+                {done && <Check className="h-3 w-3 shrink-0" />}
                 <span>{labels[i]}</span>
               </div>
             );
@@ -392,13 +392,13 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
                 const balanced = diff === 0 && c.counted_amount > 0;
                 return (
                   <div key={c.method_name} className="border-b border-neutral-100 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold text-neutral-900 truncate">{c.method_name}</div>
-                        <div className="text-[10px] text-neutral-500 num mt-0.5">Théorique: <span className="font-semibold text-neutral-700">{formatFCFA(c.theoretical_amount)}</span></div>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2 gap-y-1 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-center">
+                      <div className="col-span-2 min-w-0 sm:col-span-1">
+                        <div className="break-words text-xs font-semibold text-[var(--w-text)]">{c.method_name}</div>
+                        <div className="mt-0.5 text-xs text-[var(--w-text-sec)]">Théorique <span className="font-semibold num">{formatFCFA(c.theoretical_amount)}</span></div>
                       </div>
-                      <input type="number" value={c.counted_amount || ''} onChange={e => setControlLines(lines => lines.map((l, i) => i === idx ? { ...l, counted_amount: Number(e.target.value) } : l))} className="w-24 px-2 py-1.5 text-xs text-right font-bold num bg-transparent focus:outline-none transition" min="0" placeholder="0" />
-                      <div className={`text-[10px] font-bold num w-14 text-right ${balanced ? 'text-neutral-700' : diff < 0 ? 'text-red-600' : diff > 0 ? 'text-amber-600' : 'text-neutral-300'}`}>
+                      <input type="number" value={c.counted_amount || ''} onChange={e => setControlLines(lines => lines.map((l, i) => i === idx ? { ...l, counted_amount: Number(e.target.value) } : l))} aria-label={`Montant compté · ${c.method_name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs font-semibold num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" inputMode="numeric" placeholder="0" />
+                      <div className={`min-w-12 whitespace-nowrap text-right text-xs font-semibold num ${balanced ? 'text-neutral-700' : diff < 0 ? 'text-red-600' : diff > 0 ? 'text-amber-600' : 'text-neutral-300'}`}>
                         {c.counted_amount === 0 ? '—' : diff === 0 ? 'OK' : `${diff > 0 ? '+' : ''}${formatFCFA(diff)}`}
                       </div>
                     </div>

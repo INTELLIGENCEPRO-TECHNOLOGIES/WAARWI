@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState,useCallback,type RefObject,type ReactNode,type ComponentProps} from 'react';
 import {WindowManagerProvider,useWindowManager} from '../context/WindowManagerContext';
 import {DesktopWindow} from './DesktopWindow';
-import {BookOpen,LayoutGrid,Minus,Check,X} from './Icons';
+import {BookOpen,LayoutGrid,Minus,X} from './Icons';
 import {Accounting} from '../pages/Accounting';
 import {AccountingWindowId as WindowId,AccountingWorkContext,AccountingWindowVisible,type AccountingWorkActions,type AccountingPieceRequest,useAccountingWork} from '../context/AccountingWindowContext';
 import {AccountingPiece} from './AccountingPiece';
@@ -91,14 +91,14 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
    <div className="acc-desktop-home"><Accounting section="overview" onNavigate={navigate}/></div>
    {open.filter(allowed).map((w,index)=>{
     const a=wm.getArea();const offset=18+(index%5)*22;const id=w.id;
-    return <DesktopWindow key={id} id={id} title={w.title} icon={<BookOpen size={16}/>} contained active={selected===id} onActivate={()=>{setActive(id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);}} minW={320} minH={170} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(w.kind==='piece'?850:1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(w)} onMinimize={()=>minimize(w)}>
+    return <DesktopWindow key={id} id={id} title={w.title} contained active={selected===id} onActivate={()=>{setActive(id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);}} minW={320} minH={170} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(w.kind==='piece'?850:1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(w)} onMinimize={()=>minimize(w)}>
       <WindowId.Provider value={id}><WindowScope actions={actions} visible={!wm.windows.find(x=>x.id===id)?.minimized&&(!compact||selected===id)}><div className="acc-window-content">{w.kind==='section'?<Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={()=>close(w)}/>:w.kind==='piece'?<AccountingPiece request={w.request} onPosted={()=>setRevision(v=>v+1)}/>:w.kind==='import'?<div className="accounting-workspace"><AccountingPlanIO accounts={[]} importOnly onClose={()=>close(w)} onImportDone={()=>setRevision(v=>v+1)}/></div>:tenant&&<div className="accounting-workspace"><AccountWork tenantId={tenant.id} code={w.code} canManage={can('manage_accounting')} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>}</div></WindowScope></WindowId.Provider>
     </DesktopWindow>;
    })}
   </div>
   <div className="acc-desktop-taskbar" aria-label="Fenêtres ouvertes">
    <button type="button" className="acc-task-action" title="Afficher le bureau comptable" aria-label="Afficher le bureau comptable" onClick={()=>navigate('acc_overview')}><BookOpen size={16}/><span>Bureau</span></button>
-   <div className="acc-desktop-tasks">{open.filter(allowed).map(o=>{const w=wm.windows.find(w=>w.id===o.id);return <div className="acc-task" key={o.id} data-active={selected===o.id&&!w?.minimized}><button type="button" title={o.title} aria-label={'Afficher '+o.title} aria-pressed={selected===o.id&&!w?.minimized} onClick={()=>activate(o)}>{w?.minimized?<Minus size={14}/>:selected===o.id?<Check size={14}/>:<BookOpen size={14}/>}<span>{o.title}</span></button><button type="button" aria-label={'Fermer '+o.title} onClick={()=>close(o)}><X size={13}/></button></div>;})}</div>
+   <div className="acc-desktop-tasks">{open.filter(allowed).map(o=>{const w=wm.windows.find(w=>w.id===o.id);return <div className="acc-task" key={o.id} data-active={selected===o.id&&!w?.minimized}><button type="button" title={o.title} aria-label={'Afficher '+o.title} aria-pressed={selected===o.id&&!w?.minimized} onClick={()=>activate(o)}>{w?.minimized?<Minus size={14} aria-hidden="true"/>:<BookOpen size={14} aria-hidden="true"/>}<span>{o.title}</span></button><button type="button" aria-label={'Fermer '+o.title} onClick={()=>close(o)}><X size={13}/></button></div>;})}</div>
    {open.length>0&&<><button type="button" className="acc-task-action acc-tile-control" disabled={!tilePossible} title="Répartir les fenêtres" aria-label="Répartir les fenêtres" onClick={tile}><LayoutGrid size={16}/></button><button type="button" className="acc-task-action" title="Fermer toutes les fenêtres" aria-label="Fermer toutes les fenêtres" onClick={closeAll}><X size={16}/></button></>}
   </div>
  </section></AccountingWorkContext.Provider>;

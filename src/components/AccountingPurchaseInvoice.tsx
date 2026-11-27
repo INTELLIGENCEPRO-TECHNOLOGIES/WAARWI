@@ -94,7 +94,7 @@ export function AccountingPurchaseInvoice({tenantId,onPosted}:{tenantId:string;o
       <input type="text" inputMode="decimal" className="input mt-1 w-full" value={value} placeholder={placeholder} disabled={busy}
         onChange={e=>{changeValue(e.target.value);setConfirmed(false);}}/>
     </label>);
-  return <section className="space-y-4 border-y border-neutral-200 py-4" aria-label="Factures fournisseurs">
+  return <section className="acc-section-block space-y-3" aria-label="Factures fournisseurs">
     <div><h2 className="text-sm font-semibold text-neutral-900">Factures fournisseurs</h2>
       <p className="mt-1 text-xs text-neutral-600">Une facture par commande reçue. Le total TTC doit correspondre à la dette existante. Aucun stock ni paiement supplémentaire ne sera créé.</p></div>
     {error&&<p role="alert" className="text-sm text-red-700 break-words">{error}</p>}
@@ -109,24 +109,24 @@ export function AccountingPurchaseInvoice({tenantId,onPosted}:{tenantId:string;o
       <div className="flex justify-between gap-2"><button type="button" className="btn btn-secondary" disabled={loading||page===0} onClick={()=>setPage(p=>p-1)}>Précédente</button><button type="button" className="btn btn-secondary" disabled={loading||!more} onClick={()=>setPage(p=>p+1)}>Suivante</button></div>
     </div>:<form className="space-y-4" onSubmit={e=>{e.preventDefault();void post();}}>
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{selected.order_number} · {fcfa(Number(selected.total)*100)}</p><button type="button" disabled={busy} className="btn btn-secondary" onClick={()=>{setSelected(null);setConfirmed(false);setError('');}}>Retour</button></div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="acc-fields acc-fields-2">
         <label className="text-xs font-medium">Numéro de facture<input required maxLength={120} className="input mt-1 w-full" value={number} disabled={busy} onChange={e=>{setNumber(e.target.value);setConfirmed(false);}}/></label>
         <label className="text-xs font-medium">Date de facture<input required type="date" max={new Date().toISOString().slice(0,10)} className="input mt-1 w-full" value={date} disabled={busy} onChange={e=>{setDate(e.target.value);setConfirmed(false);}}/></label>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="acc-fields acc-fields-3">
         {input('HT indiqué sur la facture',declaredNet,setDeclaredNet)}
         {input('TVA indiquée sur la facture',declaredVat,setDeclaredVat)}
         {input('TTC indiqué sur la facture',declaredGross,setDeclaredGross)}
       </div>
       <div className="space-y-3"><h3 className="text-sm font-semibold">Ventilation de la TVA</h3><p className="text-xs text-neutral-500">Montants HT après remises. Saisissez explicitement le taux et la part déductible (0 à 100 %), même en cas d’exonération.</p>
-      {lines.map((l,i)=><div key={i} className="grid gap-2 border border-neutral-200 rounded-xl p-3 sm:grid-cols-4 sm:items-end">
+      {lines.map((l,i)=><div key={i} className="acc-fields acc-fields-4 acc-field-row">
         {input('Montant HT',l.net,v=>change(i,'net',v))}
         {input('Taux TVA (%)',l.rate,v=>change(i,'rate',v),'18 ou 0')}
         {input('Part déductible (%)',l.deductible,v=>change(i,'deductible',v),'100 ou 0')}
         <button type="button" className="btn btn-secondary" disabled={busy||lines.length===1} onClick={()=>{setLines(p=>p.filter((_,j)=>j!==i));setConfirmed(false);}}>Retirer</button>
       </div>)}
       <button type="button" className="btn btn-secondary" disabled={busy||lines.length>=500} onClick={()=>{setLines(p=>[...p,blank()]);setConfirmed(false);}}>Ajouter une ligne</button></div>
-      {preview&&<div className="grid gap-3 rounded-xl border border-neutral-200 p-3 sm:grid-cols-2">{[['Achats à débiter',preview.expenseMinor],['TVA récupérable à débiter',preview.deductibleVatMinor],['Fournisseur à créditer',preview.grossMinor],['TVA non récupérable',preview.nonDeductibleVatMinor]].map(([label,amount])=><div key={String(label)}><p className="text-xs text-neutral-500">{label}</p><p className="text-sm font-semibold tabular-nums">{fcfa(Number(amount))}</p></div>)}</div>}
+      {preview&&<div className="acc-summary">{[['Achats à débiter',preview.expenseMinor],['TVA récupérable à débiter',preview.deductibleVatMinor],['Fournisseur à créditer',preview.grossMinor],['TVA non récupérable',preview.nonDeductibleVatMinor]].map(([label,amount])=><div key={String(label)}><span>{label}</span><strong>{fcfa(Number(amount))}</strong></div>)}</div>}
       {validation&&<p className="text-xs text-neutral-600">{validation}</p>}
       <label className="flex items-start gap-2 text-xs"><input type="checkbox" checked={confirmed} disabled={busy||!!validation||!preview} onChange={e=>setConfirmed(e.target.checked)}/> Je confirme les montants, la déductibilité et le justificatif fournisseur.</label>
       <button type="submit" className="btn btn-primary" disabled={busy||!confirmed||!preview||!!validation||!number.trim()||!date}>{busy?'Comptabilisation…':'Comptabiliser la facture'}</button>

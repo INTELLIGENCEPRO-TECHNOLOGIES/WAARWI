@@ -217,29 +217,30 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
             ) : undefined
           }
           footer={<>
-              <button onClick={() => onClose()} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
+              <button onClick={() => onClose()} className="btn-secondary text-xs">Annuler</button>
               {custPayMode === 'direct' ? (
                 <button onClick={submitDirectEncaissement} disabled={custPaySubmitting || !directAllowed || !custPayMethod || custPayAmount <= 0}
-                  className="px-5 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  className="btn-primary text-xs">
                   {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Valider'}
                 </button>
               ) : (
                 <button onClick={submitCustomerPayment} disabled={custPaySubmitting || !custPayCustomer || !custPayMethod || custPayAmount <= 0}
-                  className="px-5 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  className="btn-primary text-xs">
                   {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Continuer'}
                 </button>
               )}
           </>}>
           <div>
             {/* Flat tab navigation */}
-            <div className="flex border-b border-neutral-200 mb-5">
+            <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 border-b border-[var(--w-separator)]">
               <button type="button"
                 onClick={() => {
                   setCustPayMode('invoice');
                   setCustPayLabel('');
                   if (!custPayCustomer) setCustPayAmount(0);
                 }}
-                className={`px-0 mr-8 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'invoice' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>
+                aria-pressed={custPayMode === 'invoice'}
+                className={`px-0 pb-2 text-sm font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'invoice' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>
                 Client en attente
               </button>
               <button type="button" disabled={!directAllowed} title={directAllowed ? undefined : directBlockedMsg}
@@ -252,7 +253,8 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
                   setCustPayAmount(0);
                   if (!custPayMethod) setCustPayMethod(bound.methods[0] || null);
                 }}
-                className={`px-0 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'direct' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'} disabled:text-neutral-300 disabled:hover:text-neutral-300 disabled:cursor-not-allowed`}>
+                aria-pressed={custPayMode === 'direct'}
+                className={`px-0 pb-2 text-sm font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'direct' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'} disabled:text-neutral-300 disabled:hover:text-neutral-300 disabled:cursor-not-allowed`}>
                 Encaissement direct
                 {!directAllowed && <span className="block text-[10px] font-medium text-neutral-400 mt-0.5">{directBlockedMsg}</span>}
               </button>
@@ -263,7 +265,7 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
                   <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
-                    autoFocus className="w-input-ul text-lg font-bold num" placeholder="0" min={0} />
+                    autoFocus className="w-input-ul text-lg font-semibold num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" inputMode="numeric" aria-label="Montant" placeholder="0" min={0} />
                 </div>
 
                 <div className="group">
@@ -299,7 +301,7 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
                       className="w-input-ul pl-6 text-[13px]" placeholder="Nom, téléphone…" />
                   </div>
                 </div>
-                <div className="mt-3 max-h-72 overflow-y-auto -mx-1">
+                <div className="mt-2 divide-y divide-[var(--w-separator-l)]">
                   {bound.customers
                     .filter(c => {
                       const q = custPaySearch.toLowerCase().trim();
@@ -368,7 +370,7 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
                     <div className="group">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
                       <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
-                        className="w-input-ul text-lg font-bold num" placeholder="0" min={0} />
+                        className="w-input-ul text-lg font-semibold num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" inputMode="numeric" aria-label="Montant" placeholder="0" min={0} />
                     </div>
 
                     <div>

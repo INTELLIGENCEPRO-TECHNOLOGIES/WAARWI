@@ -1,13 +1,15 @@
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Loader2, Package, Check, Download, X, Filter, ChevronDown, AlertCircle, CheckCircle2, Layers, RefreshCw } from 'lucide-react';
+import { Loader2, Package, Check, Download, X, Filter, CheckCircle2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { PageSearch } from '../components/PageSearch';
+import './ArticleCatalog.css';
 
 type ActivityType = { id: string; name: string; slug: string };
 type Catalog = { id: string; name: string; description: string };
@@ -57,7 +59,6 @@ export function MasterCatalog() {
   const [refreshing, setRefreshing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState<null | { mode: 'selected' | 'category' | 'subcategory' | 'all'; label: string; count: number }>(null);
   const [lastResult, setLastResult] = useState<{ imported: number; skipped: number; errors: any[] } | null>(null);
-  const [lotOpen, setLotOpen] = useState(false);
 
   const MAX_IMPORT = 500;
 
@@ -325,380 +326,186 @@ export function MasterCatalog() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="py-16 flex justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-700" />
-      </div>
-    );
-  }
+  const setImportScope = (mode: 'category' | 'subcategory' | 'all') => {
+    const scope = mode === 'category' ? rootCategories.find(item => item.id === categoryId)
+      : mode === 'subcategory' ? subcategories.find(item => item.id === subcategoryId) : undefined;
+    const count = items.filter(item => !importedIds.has(item.id) && (
+      mode === 'all' || (mode === 'category' ? item.category_id === categoryId : item.subcategory_id === subcategoryId)
+    )).length;
+    setConfirmOpen({ mode, label: scope?.name || 'Tout le catalogue', count });
+  };
 
-  if (!catalog) {
+  if (loading || !catalog) {
     return (
-      <div>
-        <EmptyState
-          icon={Package}
-          title="Aucun catalogue maître disponible"
-          description={
-            activity
-              ? `Aucun catalogue n'est encore configuré pour l'activité "${activity.name}". Contactez l'équipe plateforme.`
-              : 'Votre type d\'activité n\'est pas configuré. Contactez l\'équipe plateforme.'
-          }
-        />
+      <div className="article-page">
+        <header className="article-page-header"><div className="article-page-title"><h1>Catalogue maître</h1></div></header>
+        {loading ? (
+          <div className="article-status-line mt-3" role="status"><Loader2 size={16} className="animate-spin" aria-hidden="true" />Chargement du catalogue…</div>
+        ) : (
+          <EmptyState icon={Package} title="Aucun catalogue maître disponible" description={activity
+            ? `Le catalogue de l’activité « ${activity.name} » n’est pas configuré.`
+            : 'Le type d’activité de l’entreprise n’est pas configuré.'} />
+        )}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 pb-6">
-      {/* Header */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
-      <div className="flex items-start justify-between">
-        <h1 className="text-lg font-bold text-neutral-900 leading-tight">Catalogue maître</h1>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => refreshImportedIds()}
-            disabled={refreshing}
-            className="shrink-0 p-1.5 text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-50"
-            title="Actualiser le statut des articles importés"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+    <div className="article-page space-y-3">
+      <header className="article-page-header">
+        <div className="article-page-title">
+          <h1>Catalogue maître</h1>
+          <button type="button" onClick={() => refreshImportedIds()} disabled={refreshing} className="btn-secondary article-button" aria-label="Actualiser le statut des articles importés">
+            <RefreshCw size={15} aria-hidden="true" className={refreshing ? 'animate-spin' : ''} />
           </button>
-          {selected.size > 0 ? (
-            <button
-              disabled={importing}
-              onClick={() => setConfirmOpen({ mode: 'selected', label: 'la sélection', count: selected.size })}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-50 ${selected.size > MAX_IMPORT ? 'text-red-600 hover:text-red-700' : 'text-brand-700 hover:text-brand-800'}`}
-              title={`Importer la sélection (${selected.size})`}
-            >
-              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              <span className="num">{selected.size}</span>
-            </button>
-          ) : (
-            <button
-              disabled={importing}
-              onClick={() => {
-                const count = items.filter(i => !importedIds.has(i.id)).length;
-                setConfirmOpen({ mode: 'all', label: 'tout le catalogue', count });
-              }}
-              className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold text-neutral-700 hover:text-neutral-900 transition-colors disabled:opacity-50"
-              title="Importer tout le catalogue"
-            >
-              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            </button>
-          )}
+          <button type="button" disabled={importing} className="btn-primary article-button"
+            onClick={() => selected.size ? setConfirmOpen({ mode: 'selected', label: 'Sélection', count: selected.size }) : setImportScope('all')}>
+            {importing ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
+            {selected.size ? 'Importer la sélection' : 'Importer le catalogue'}
+          </button>
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <input
-            value={searchInput}
-            onChange={e => handleSearchInput(e.target.value)}
-            placeholder="Désignation, marque, référence…"
-            className="w-input-ul w-full text-sm py-1.5"
-          />
+        <PageSearch value={searchInput} onChange={handleSearchInput} placeholder="Désignation, marque ou référence…"
+          rightSlot={<button type="button" className="btn-secondary article-button" onClick={() => setFiltersOpen(true)}>
+            <Filter size={15} aria-hidden="true" />Filtres{activeFilterCount > 0 && <span className="num">({activeFilterCount})</span>}
+          </button>}
+        />
+        <div className="article-toolbar article-muted">
+          <span className="num">{filtered.length} / {items.length} articles</span>
+          <span className="num">{importedIds.size} importé{importedIds.size === 1 ? '' : 's'}</span>
+          {selected.size > 0 && <span className={`num ${selected.size > MAX_IMPORT ? 'article-error-text' : ''}`}>
+            {selected.size} sélectionné{selected.size === 1 ? '' : 's'}{selected.size > MAX_IMPORT ? ` (limite de ${MAX_IMPORT})` : ''}
+          </span>}
+          {activeFilterCount > 0 && <button type="button" className="btn-ghost article-button" onClick={clearFilters}><X size={14} aria-hidden="true" />Effacer les filtres</button>}
         </div>
-        {search && (
-          <button onClick={() => { setSearch(''); setSearchInput(''); }} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>
-        )}
-        <button
-          onClick={() => setFiltersOpen(true)}
-          className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold transition-colors ${activeFilterCount > 0 ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}
-        >
-          <Filter className="w-3.5 h-3.5" />
-          {activeFilterCount > 0 && <span className="num">{activeFilterCount}</span>}
-        </button>
+      </header>
+
+      <div className="article-toolbar" aria-label="Sélection dans le catalogue">
+        <select aria-label="Sélection par lot" value="" className="article-page-select"
+          onChange={event => { if (event.target.value) selectBatch(Number(event.target.value)); }}>
+          <option value="">Sélection par lot</option>
+          {[100, 200, 300, 400, 500].map(size => <option key={size} value={size}>{size} articles</option>)}
+        </select>
+        {paginated.some(item => !importedIds.has(item.id)) && <button type="button" onClick={selectPage} className="btn-ghost article-button">
+          <Check size={15} aria-hidden="true" />Sélectionner la page
+        </button>}
+        {selectableFiltered.length > 0 && <button type="button" onClick={toggleAllFiltered} aria-pressed={allFilteredSelected} className="btn-ghost article-button">
+          {allFilteredSelected ? 'Désélectionner les résultats' : `Tout sélectionner (${selectableFiltered.length})`}
+        </button>}
+        {selected.size > 0 && <button type="button" onClick={() => setSelected(new Set())} className="btn-ghost article-button"><X size={15} aria-hidden="true" />Effacer la sélection</button>}
+        {categoryId && <button type="button" disabled={importing} onClick={() => setImportScope(subcategoryId ? 'subcategory' : 'category')} className="btn-secondary article-button">
+          <Download size={15} aria-hidden="true" />{subcategoryId ? 'Importer la sous-catégorie' : 'Importer la catégorie'}
+        </button>}
       </div>
 
-      {/* Selection stats */}
-      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 text-neutral-500 num">{filtered.length} / {items.length}</span>
-        <span className="shrink-0 text-emerald-600 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{importedIds.size} importé{importedIds.size > 1 ? 's' : ''}</span>
-        {selected.size > 0 && (
-          <span className={`shrink-0 inline-flex items-center gap-1 font-bold ${selected.size > MAX_IMPORT ? 'text-red-600' : 'text-brand-700'}`}>
-            {selected.size > MAX_IMPORT && <AlertCircle className="w-3 h-3" />}
-            {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
-            {selected.size > MAX_IMPORT && ` (max ${MAX_IMPORT})`}
-          </span>
-        )}
-        {activeFilterCount > 0 && <button onClick={clearFilters} className="btn-icon" title="Effacer"><X className="w-4 h-4" /></button>}
-      </div>
-
-      {/* Selection tools — one line */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 shrink-0">Sélection</span>
-        <div className="relative">
-          <button
-            onClick={() => setLotOpen(v => !v)}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors"
-          >
-            <Layers className="w-3.5 h-3.5" />Lot
-            <ChevronDown className={`w-3 h-3 transition-transform ${lotOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {lotOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setLotOpen(false)} />
-              <div className="absolute top-full left-0 mt-1 z-50 bg-white rounded-xl shadow-premium border border-[var(--w-separator)] py-1 min-w-[150px] animate-scale-in origin-top-left">
-                {[100, 200, 300, 400, 500].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => { selectBatch(n); setLotOpen(false); }}
-                    className="w-full text-left px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-brand-700 hover:bg-brand-50/50 transition-colors"
-                  >
-                    {n} articles
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-        {paginated.some(i => !importedIds.has(i.id)) && (
-          <button onClick={selectPage}
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors">
-            <Check className="w-3.5 h-3.5" />Page
-          </button>
-        )}
-        {selectableFiltered.length > 0 && (
-          <button onClick={toggleAllFiltered}
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors">
-            {allFilteredSelected ? 'Désélectionner filtrés' : `Tout (${selectableFiltered.length})`}
-          </button>
-        )}
-        {selected.size > 0 && (
-          <button onClick={() => setSelected(new Set())}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors">
-            <X className="w-3 h-3" />Effacer
-          </button>
-        )}
-        {categoryId && !subcategoryId && (
-          <button
-            disabled={importing}
-            onClick={() => {
-              const cat = rootCategories.find(c => c.id === categoryId);
-              const count = items.filter(i => i.category_id === categoryId && !importedIds.has(i.id)).length;
-              setConfirmOpen({ mode: 'category', label: `la catégorie "${cat?.name}"`, count });
-            }}
-            className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors disabled:opacity-50"
-            title="Importer la catégorie"
-          >
-            <Download className="w-3.5 h-3.5" />Catégorie
-          </button>
-        )}
-        {subcategoryId && (
-          <button
-            disabled={importing}
-            onClick={() => {
-              const sc = subcategories.find(c => c.id === subcategoryId);
-              const count = items.filter(i => i.subcategory_id === subcategoryId && !importedIds.has(i.id)).length;
-              setConfirmOpen({ mode: 'subcategory', label: `la sous-catégorie "${sc?.name}"`, count });
-            }}
-            className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors disabled:opacity-50"
-            title="Importer la sous-catégorie"
-          >
-            <Download className="w-3.5 h-3.5" />Sous-cat.
-          </button>
-        )}
-      </div>
-      </div>
-
-      {/* Items grid */}
       {filtered.length === 0 ? (
-        <div className="py-12"><EmptyState icon={Package} title="Aucun article" description="Ajustez vos filtres ou votre recherche." /></div>
+        <EmptyState icon={Package} title="Aucun article trouvé" description="Modifiez la recherche ou les filtres." />
       ) : (
         <>
-        {/* Desktop: thin list with header */}
-        <div className="hidden md:block">
-          <div className="grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-neutral-200 sticky top-[52px] z-10 bg-[var(--w-surface-el)]/95 backdrop-blur-sm">
-            <div></div>
-            <div>Désignation</div>
-            <div>Marque</div>
-            <div>Réf. fabricant</div>
-            <div className="text-right">Achat</div>
-            <div className="text-right">Vente</div>
-            <div className="text-center">Unité</div>
-          </div>
-          {paginated.map(i => {
-            const isImported = importedIds.has(i.id);
-            const isSelected = selected.has(i.id);
-            return (
-              <div
-                key={i.id}
-                className={`grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-2 items-center text-[12px] border-b border-neutral-100 last:border-b-0 transition-colors ${isSelected ? 'bg-brand-50/40' : isImported ? 'bg-emerald-50/20' : 'hover:bg-neutral-50'}`}
-              >
-                <div className="flex items-center justify-center">
-                  {!isImported ? (
-                    <button
-                      onClick={() => toggleSelect(i.id)}
-                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-black border-black' : 'border-slate-400 hover:border-black'}`}
-                      aria-label="Sélectionner"
-                    >
-                      {isSelected && <Check className="w-2 h-2 text-white" strokeWidth={3} />}
-                    </button>
-                  ) : (
-                    <div className="w-3.5 h-3.5 rounded bg-emerald-500 border border-emerald-500 flex items-center justify-center" title="Déjà importé">
-                      <Check className="w-2 h-2 text-white" strokeWidth={3} />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold text-slate-900 truncate leading-tight">{i.designation}</div>
-                  {isImported && <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700">Importé</span>}
-                </div>
-                <div className="truncate">{i.brand && <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}</div>
-                <div className="font-mono text-slate-500 text-[11px] truncate">{i.manufacturer_ref || '—'}</div>
-                <div className="text-right font-bold text-slate-800 num">{formatFCFA(i.purchase_price)}</div>
-                <div className="text-right font-bold text-brand-700 num">{formatFCFA(i.sale_price)}</div>
-                <div className="text-center text-slate-600 font-medium truncate">{i.unit}</div>
-              </div>
-            );
-          })}
-        </div>
-        {/* Mobile: card grid */}
-        <div className="md:hidden">
-          {paginated.map(i => {
-            const isImported = importedIds.has(i.id);
-            const isSelected = selected.has(i.id);
-            return (
-              <div
-                key={i.id}
-                className={`flex items-start gap-2 py-2.5 px-1 border-b border-neutral-100 last:border-b-0 transition-colors ${isSelected ? 'bg-brand-50/40' : isImported ? 'bg-emerald-50/20' : ''}`}
-              >
-                {!isImported ? (
-                  <button
-                    onClick={() => toggleSelect(i.id)}
-                    className={`shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-black border-black' : 'border-slate-400 hover:border-black'}`}
-                    aria-label="Sélectionner"
-                  >
-                    {isSelected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
-                  </button>
-                ) : (
-                  <div className="shrink-0 w-4 h-4 mt-0.5 rounded bg-emerald-500 border border-emerald-500 flex items-center justify-center" title="Déjà importé">
-                    <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1 leading-tight">
-                  <div className="text-[13px] font-semibold text-slate-900 line-clamp-2">{i.designation}</div>
-                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    {i.brand && <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}
-                    {i.manufacturer_ref && <span className="text-[11px] font-mono text-slate-400 truncate">{i.manufacturer_ref}</span>}
-                    {isImported && <span className="text-[11px] font-bold text-emerald-700 inline-flex items-center gap-0.5"><CheckCircle2 className="w-3 h-3" />Importé</span>}
-                  </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Achat <span className="text-slate-700 num">{formatFCFA(i.purchase_price)}</span></span>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vente <span className="text-brand-700 num">{formatFCFA(i.sale_price)}</span></span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 mt-3">
-            <div className="text-xs text-slate-500">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length} articles
+          <table className="master-catalog-table" aria-label="Articles du catalogue maître">
+            <thead>
+              <tr>
+                <th scope="col"><span className="sr-only">Sélection</span></th>
+                <th scope="col">Désignation</th>
+                <th scope="col">Marque</th>
+                <th scope="col">Référence fabricant</th>
+                <th scope="col" className="master-catalog-number">Achat</th>
+                <th scope="col" className="master-catalog-number">Vente</th>
+                <th scope="col">Unité</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginated.map(item => {
+                const imported = importedIds.has(item.id);
+                return (
+                  <tr key={item.id} data-selected={selected.has(item.id)}>
+                    <td className="master-catalog-check">
+                      {imported ? <CheckCircle2 size={17} title="Déjà importé" />
+                        : <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} aria-label={`Sélectionner ${item.designation}`} />}
+                    </td>
+                    <th scope="row" className="master-catalog-name">
+                      <strong>{item.designation}</strong>
+                      {imported && <small>Déjà importé</small>}
+                    </th>
+                    <td><span className="master-cell-label" aria-hidden="true">Marque</span>{item.brand || '—'}</td>
+                    <td><span className="master-cell-label" aria-hidden="true">Référence fabricant</span>{item.manufacturer_ref || '—'}</td>
+                    <td className="master-catalog-number"><span className="master-cell-label" aria-hidden="true">Achat</span><span className="num article-money">{formatFCFA(item.purchase_price)}</span></td>
+                    <td className="master-catalog-number"><span className="master-cell-label" aria-hidden="true">Vente</span><span className="num article-money">{formatFCFA(item.sale_price)}</span></td>
+                    <td><span className="master-cell-label" aria-hidden="true">Unité</span>{item.unit || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {totalPages > 1 && (
+            <div className="article-pagination">
+              <span className="article-muted num">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length}</span>
+              <nav className="article-toolbar" aria-label="Pages du catalogue">
+                <button type="button" onClick={() => setPage(0)} disabled={page === 0} title="Première page" className="waarwi-window-button">1</button>
+                <button type="button" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} aria-label="Page précédente" className="waarwi-window-button"><ChevronLeft size={16} aria-hidden="true" /></button>
+                <span className="article-page-number num">{page + 1} / {totalPages}</span>
+                <button type="button" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} aria-label="Page suivante" className="waarwi-window-button"><ChevronRight size={16} aria-hidden="true" /></button>
+                <button type="button" onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1} title="Dernière page" className="waarwi-window-button">{totalPages}</button>
+              </nav>
             </div>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">1</button>
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">Prec</button>
-              <span className="px-3 py-1 rounded-lg text-xs font-bold bg-brand-50 text-brand-700 border border-brand-200">{page + 1}/{totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">Suiv</button>
-              <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1} className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">{totalPages}</button>
-            </div>
-          </div>
-        )}
+          )}
         </>
       )}
 
-      {/* Filters modal */}
-      <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtres" size="sm"
+      <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtres du catalogue" size="sm" variant="flat" focusOnOpen
         footer={<>
-          <button onClick={clearFilters} className="btn-icon" title="Effacer"><X className="w-4 h-4" /></button>
-          <button onClick={() => setFiltersOpen(false)} className="btn-icon-primary" title="Appliquer"><Check className="w-4 h-4" /></button>
-        </>}
-      >
-        <div className="space-y-3">
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Catégorie</label>
-            <select value={categoryId} onChange={e => { setCategoryId(e.target.value); setSubcategoryId(''); }} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
+          <button type="button" onClick={clearFilters} className="btn-secondary article-button"><X size={15} aria-hidden="true" />Réinitialiser</button>
+          <button type="button" onClick={() => setFiltersOpen(false)} className="btn-primary article-button"><Check size={15} aria-hidden="true" />Appliquer</button>
+        </>}>
+        <div className="space-y-3 flat-form">
+          <label className="block">
+            <span className="label">Catégorie</span>
+            <select value={categoryId} onChange={event => { setCategoryId(event.target.value); setSubcategoryId(''); }} className="input text-sm">
               <option value="">Toutes les catégories</option>
-              {rootCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {rootCategories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
-          </div>
-          {subcategories.length > 0 && (
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sous-catégorie</label>
-              <select value={subcategoryId} onChange={e => setSubcategoryId(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
-                <option value="">Toutes les sous-catégories</option>
-                {subcategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-          )}
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Marque</label>
-            <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
+          </label>
+          {subcategories.length > 0 && <label className="block">
+            <span className="label">Sous-catégorie</span>
+            <select value={subcategoryId} onChange={event => setSubcategoryId(event.target.value)} className="input text-sm">
+              <option value="">Toutes les sous-catégories</option>
+              {subcategories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+          </label>}
+          <label className="block">
+            <span className="label">Marque</span>
+            <select value={brandFilter} onChange={event => setBrandFilter(event.target.value)} className="input text-sm">
               <option value="">Toutes les marques</option>
-              {brands.map(b => <option key={b} value={b}>{b}</option>)}
+              {brands.map(brand => <option key={brand} value={brand}>{brand}</option>)}
             </select>
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Statut</label>
-            <div className="mt-1 grid grid-cols-3 gap-1.5">
-              {(['all', 'available', 'imported'] as FilterStatus[]).map(s => (
-                <button key={s} onClick={() => setStatusFilter(s)}
-                  className={`px-2 py-2 rounded-xl text-[11px] font-semibold transition ${statusFilter === s ? 'bg-brand-600 text-white' : 'bg-[var(--w-surface-el)] text-slate-600 hover:bg-slate-100'}`}>
-                  {s === 'all' ? 'Tous' : s === 'available' ? 'Disponibles' : 'Déjà importés'}
-                </button>
-              ))}
-            </div>
-          </div>
+          </label>
+          <label className="block">
+            <span className="label">Statut d’import</span>
+            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as FilterStatus)} className="input text-sm">
+              <option value="all">Tous</option>
+              <option value="available">Disponibles</option>
+              <option value="imported">Déjà importés</option>
+            </select>
+          </label>
         </div>
       </Modal>
 
-      {/* Confirm modal */}
-      <Modal open={!!confirmOpen} onClose={() => !importing && setConfirmOpen(null)} title="Confirmer l'import" size="sm"
+      <Modal open={Boolean(confirmOpen)} onClose={() => !importing && setConfirmOpen(null)} title="Confirmer l’import" size="sm" variant="flat" focusOnOpen
         footer={<>
-          <button onClick={() => setConfirmOpen(null)} disabled={importing} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button
-            onClick={() => confirmOpen && runImport(confirmOpen.mode)}
-            disabled={importing || (confirmOpen?.count ?? 0) > MAX_IMPORT}
-            className="btn-icon-primary" title="Confirmer l'import"
-          >
-            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          <button type="button" onClick={() => setConfirmOpen(null)} disabled={importing} className="btn-secondary article-button"><X size={15} aria-hidden="true" />Annuler</button>
+          <button type="button" onClick={() => confirmOpen && runImport(confirmOpen.mode)} disabled={importing || (confirmOpen?.count ?? 0) > MAX_IMPORT} className="btn-primary article-button">
+            {importing ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}Importer
           </button>
-        </>}
-      >
+        </>}>
         {confirmOpen && (
-          <div className="space-y-3">
+          <div className="space-y-3 text-sm">
             {confirmOpen.count > MAX_IMPORT ? (
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200">
-                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-                <div className="space-y-1.5">
-                  <div className="text-sm font-bold text-red-800">Limite d'import dépassée</div>
-                  <div className="text-xs text-red-700">
-                    Vous ne pouvez importer que <span className="font-bold">{MAX_IMPORT} articles maximum</span> par opération.
-                    Vous en avez sélectionné <span className="font-bold">{confirmOpen.count}</span>.
-                  </div>
-                  <div className="text-xs text-red-600 mt-1 font-medium">
-                    Utilisez les boutons <strong>"Sélectionner par lot"</strong> (100, 200, 300, 400 ou 500) pour importer progressivement.
-                  </div>
-                </div>
-              </div>
+              <p role="alert" className="article-error-text">La sélection contient <strong>{confirmOpen.count} articles</strong>. Choisissez un lot de {MAX_IMPORT} articles maximum.</p>
             ) : (
               <>
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-brand-50/60 border border-brand-100">
-                  <AlertCircle className="w-4 h-4 text-brand-700 mt-0.5 shrink-0" />
-                  <div className="text-xs text-slate-700">
-                    Vous êtes sur le point d'importer {confirmOpen.label}. <span className="font-semibold">{confirmOpen.count}</span> article{confirmOpen.count !== 1 ? 's' : ''} seront ajoutés à votre catalogue. Les articles déjà importés seront ignorés automatiquement.
-                  </div>
-                </div>
+                <p className="article-muted">{confirmOpen.label}</p>
+                <p><strong className="num">{confirmOpen.count}</strong> article{confirmOpen.count === 1 ? '' : 's'} à ajouter. Les articles déjà importés seront ignorés.</p>
                 {isMultiSite && !sharedArticles && currentSite && (
-                  <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                    <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                    <div className="text-xs text-amber-800">
-                      <span className="font-bold">Mode catalogues indépendants actif.</span> Les articles seront importés uniquement dans le magasin <span className="font-semibold">« {currentSite.name} »</span>. Pour importer les articles dans vos {sites.length} magasins simultanément, activez le mode « Catalogue partagé » dans Paramètres &gt; Gestion des stocks.
-                    </div>
-                  </div>
+                  <p className="article-muted">Catalogue indépendant · magasin <strong>{currentSite.name}</strong>.</p>
                 )}
               </>
             )}
@@ -706,32 +513,18 @@ export function MasterCatalog() {
         )}
       </Modal>
 
-      {/* Last result modal */}
-      <Modal open={!!lastResult} onClose={() => setLastResult(null)} title="Résultat de l'import" size="sm"
-        footer={<button onClick={() => setLastResult(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}
-      >
+      <Modal open={Boolean(lastResult)} onClose={() => setLastResult(null)} title="Résultat de l’import" size="sm" variant="flat" focusOnOpen
+        footer={<button type="button" onClick={() => setLastResult(null)} className="btn-secondary article-button">Fermer</button>}>
         {lastResult && (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Importés</div>
-                <div className="text-2xl font-bold text-emerald-800 num mt-1">{lastResult.imported}</div>
-              </div>
-              <div className="p-3 rounded-xl bg-[var(--w-surface-el)] border border-slate-200">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ignorés (doublons)</div>
-                <div className="text-2xl font-bold text-slate-700 num mt-1">{lastResult.skipped}</div>
-              </div>
-            </div>
-            {lastResult.errors && lastResult.errors.length > 0 && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-100 max-h-40 overflow-auto">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-red-700 mb-1">Erreurs ({lastResult.errors.length})</div>
-                <div className="space-y-1 text-[11px] text-red-800">
-                  {lastResult.errors.slice(0, 10).map((e: any, idx: number) => (
-                    <div key={idx} className="break-words">· {e.designation || e.item_id}: {e.error}</div>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div>
+            <dl className="article-result-totals">
+              <div><dt>Importés</dt><dd className="num">{lastResult.imported}</dd></div>
+              <div><dt>Doublons ignorés</dt><dd className="num">{lastResult.skipped}</dd></div>
+              <div><dt>Erreurs</dt><dd className="num">{lastResult.errors?.length || 0}</dd></div>
+            </dl>
+            {lastResult.errors?.length > 0 && <ul className="article-result-errors">{lastResult.errors.slice(0, 10).map((item, index) => (
+              <li key={index}>{item.designation || item.item_id} · {item.error}</li>
+            ))}</ul>}
           </div>
         )}
       </Modal>

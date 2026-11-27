@@ -1,5 +1,99 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { X, ChevronLeft, ChevronRight, RotateCcw, Check } from 'lucide-react';
+import { Modal } from './Modal';
+
+type Range = { from: string; to: string };
+
+const weekdays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const monthFormat = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
+const dayFormat = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const rangeFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function dateFromISO(iso: string) {
+  const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function toISO(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function moveMonth(date: Date, offset = 0) {
+  return new Date(date.getFullYear(), date.getMonth() + offset, 1);
+}
+
+function monthsFor(range: Range) {
+  const end = range.to ? dateFromISO(range.to) : range.from ? dateFromISO(range.from) : new Date();
+  const start = range.from ? moveMonth(dateFromISO(range.from)) : moveMonth(end, -1);
+  const next = moveMonth(end);
+  return { start: +start === +next ? moveMonth(next, -1) : start, end: next };
+}
+
+function recentRange(days: number): Range {
+  const today = new Date();
+  const first = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days + 1);
+  return { from: toISO(first), to: toISO(today) };
+}
+
+const presets = [
+  { label: 'Aujourd’hui', range: () => recentRange(1) },
+  { label: '7 derniers jours', range: () => recentRange(7) },
+  { label: 'Ce mois', range: () => {
+    const today = new Date();
+    return { from: toISO(moveMonth(today)), to: toISO(today) };
+  } },
+  { label: '30 derniers jours', range: () => recentRange(30) },
+  { label: 'Mois dernier', range: () => {
+    const today = new Date();
+    return { from: toISO(moveMonth(today, -1)), to: toISO(new Date(today.getFullYear(), today.getMonth(), 0)) };
+  } },
+];
+
+function MonthCalendar({ month, range, onMonth, onSelect, className = '' }: {
+  month: Date;
+  range: Range;
+  onMonth: (month: Date) => void;
+  onSelect: (date: string) => void;
+  className?: string;
+}) {
+  const year = month.getFullYear();
+  const index = month.getMonth();
+  const offset = (month.getDay() + 6) % 7;
+  const lastDay = new Date(year, index + 1, 0).getDate();
+  const today = toISO(new Date());
+  const monthLabel = monthFormat.format(month);
+
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <button type="button" aria-label={`Mois précédent pour ${monthLabel}`} onClick={() => onMonth(moveMonth(month, -1))} className="waarwi-window-button">
+          <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+        </button>
+        <h4 className="text-center text-sm font-semibold capitalize">{monthLabel}</h4>
+        <button type="button" aria-label={`Mois suivant pour ${monthLabel}`} onClick={() => onMonth(moveMonth(month, 1))} className="waarwi-window-button">
+          <ChevronRight aria-hidden="true" className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {weekdays.map((day, i) => <div key={i} aria-hidden="true" className="pb-1 text-center text-[11px] text-[var(--w-text-muted)]">{day}</div>)}
+        {Array.from({ length: offset }, (_, i) => <span aria-hidden="true" key={`offset-${i}`} />)}
+        {Array.from({ length: lastDay }, (_, i) => {
+          const date = new Date(year, index, i + 1);
+          const iso = toISO(date);
+          const endpoint = iso === range.from || iso === range.to;
+          const within = !!range.from && !!range.to && iso > range.from && iso < range.to;
+          return <button type="button" key={i} aria-label={dayFormat.format(date)} aria-pressed={endpoint} aria-current={iso === today ? 'date' : undefined}
+            onClick={() => onSelect(iso)}
+            className={`mx-px grid h-9 place-items-center rounded-sm text-xs font-medium num focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-[var(--w-text)]
+              ${endpoint ? 'bg-[var(--w-accent)] text-[var(--w-accent-text)]' : within ? 'rounded-none bg-[var(--w-hover)] text-[var(--w-text)]' : 'text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]'}
+              ${iso === today && !endpoint ? 'ring-1 ring-inset ring-[var(--w-field-border)]' : ''}`}>
+            {i + 1}
+          </button>;
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extraFilters, onReset }: {
   open: boolean; onClose: () => void; from: string; to: string;
@@ -7,174 +101,60 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
   extraFilters?: ReactNode;
   onReset?: () => void;
 }) {
-  const [leftMonth, setLeftMonth] = useState(() => {
-    const d = from ? new Date(from) : new Date();
-    return new Date(d.getFullYear(), d.getMonth() - 1, 1);
-  });
-  const [rightMonth, setRightMonth] = useState(() => {
-    const d = to ? new Date(to) : (from ? new Date(from) : new Date());
-    return new Date(d.getFullYear(), d.getMonth(), 1);
-  });
-  const [localFrom, setLocalFrom] = useState<string>(from);
-  const [localTo, setLocalTo] = useState<string>(to);
+  const [range, setRange] = useState<Range>({ from, to });
+  const [months, setMonths] = useState(() => monthsFor({ from, to }));
 
   useEffect(() => {
-    if (open) {
-      setLocalFrom(from); setLocalTo(to);
-      const r = to ? new Date(to) : (from ? new Date(from) : new Date());
-      const l = from ? new Date(from) : new Date(r.getFullYear(), r.getMonth() - 1, 1);
-      setLeftMonth(new Date(l.getFullYear(), l.getMonth(), 1));
-      const rSame = from && to && new Date(from).getFullYear() === r.getFullYear() && new Date(from).getMonth() === r.getMonth();
-      setRightMonth(rSame ? new Date(r.getFullYear(), r.getMonth() + 1, 1) : new Date(r.getFullYear(), r.getMonth(), 1));
-    }
+    if (!open) return;
+    setRange({ from, to });
+    setMonths(monthsFor({ from, to }));
   }, [open, from, to]);
 
-  if (!open) return null;
-
-  const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-  const handleDayClick = (d: Date) => {
-    const iso = toISO(d);
-    if (!localFrom || (localFrom && localTo)) {
-      setLocalFrom(iso); setLocalTo('');
-    } else {
-      const fd = new Date(localFrom);
-      if (d < fd) { setLocalFrom(iso); setLocalTo(localFrom); }
-      else setLocalTo(iso);
-    }
-  };
-
-  const renderMonth = (base: Date) => {
-    const y = base.getFullYear(), m = base.getMonth();
-    const first = new Date(y, m, 1);
-    const startDay = (first.getDay() + 6) % 7;
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const cells: (Date | null)[] = [];
-    for (let i = 0; i < startDay; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(y, m, d));
-    while (cells.length % 7 !== 0) cells.push(null);
-    const today = new Date();
-    const fromD = localFrom ? new Date(localFrom) : null;
-    const toD = localTo ? new Date(localTo) : null;
-    return (
-      <div>
-        <div className="grid grid-cols-7 gap-0.5 mb-1">
-          {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
-            <div key={i} className="text-center text-[9px] font-bold uppercase tracking-wider text-slate-400 py-1">{d}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-0.5">
-          {cells.map((d, i) => {
-            if (!d) return <div key={i} />;
-            const isToday = sameDay(d, today);
-            const isFrom = fromD && sameDay(d, fromD);
-            const isTo = toD && sameDay(d, toD);
-            const inRange = fromD && toD && d > fromD && d < toD;
-            const isEnd = isFrom || isTo;
-            return (
-              <button key={i} onClick={() => handleDayClick(d)}
-                className={`relative aspect-square flex items-center justify-center text-[11px] font-semibold rounded-md transition-all
-                  ${isEnd ? 'bg-black text-white scale-105 z-10' : ''}
-                  ${inRange ? 'bg-slate-100 text-slate-900 rounded-none' : ''}
-                  ${!isEnd && !inRange ? 'text-slate-700 hover:bg-[var(--w-surface-el)]' : ''}
-                  ${isToday && !isEnd && !inRange ? 'ring-1 ring-slate-300 font-bold' : ''}
-                  ${fromD && isEnd && toD && d < toD ? 'rounded-r-none' : ''}
-                  ${toD && isEnd && fromD && d > fromD ? 'rounded-l-none' : ''}
-                `}>
-                {d.getDate()}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  const monthLabel = (d: Date) => d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-
-  const presets = [
-    { l: "Aujourd'hui", f: () => { const t = new Date(); return { f: toISO(t), t: toISO(t) }; } },
-    { l: '7 derniers jours', f: () => { const t = new Date(); const f = new Date(); f.setDate(t.getDate() - 6); return { f: toISO(f), t: toISO(t) }; } },
-    { l: 'Ce mois', f: () => { const t = new Date(); const f = new Date(t.getFullYear(), t.getMonth(), 1); return { f: toISO(f), t: toISO(t) }; } },
-    { l: '30 derniers jours', f: () => { const t = new Date(); const f = new Date(); f.setDate(t.getDate() - 29); return { f: toISO(f), t: toISO(t) }; } },
-    { l: 'Mois dernier', f: () => { const t = new Date(); const first = new Date(t.getFullYear(), t.getMonth() - 1, 1); const last = new Date(t.getFullYear(), t.getMonth(), 0); return { f: toISO(first), t: toISO(last) }; } },
-  ];
-
-  const fmtLbl = (iso: string) => iso ? new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const select = (iso: string) => setRange(current => {
+    if (!current.from || current.to) return { from: iso, to: '' };
+    return iso < current.from ? { from: iso, to: current.from } : { from: current.from, to: iso };
+  });
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start sm:items-center justify-center p-2 sm:p-3 animate-fade-in overflow-y-auto">
-      <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-md" onClick={onClose} />
-      <div className={`relative w-full max-w-2xl bg-white rounded-xl shadow-premium animate-scale-in flex flex-col max-h-[94vh] sm:max-h-[92vh] overflow-hidden my-auto`}>
-        <div className="relative px-4 py-3 bg-black text-white shrink-0">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/60">Sélection de période</div>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <div className="text-xs font-bold num">{fmtLbl(localFrom)}</div>
-                <ChevronRight className="w-3.5 h-3.5 text-white/40" />
-                <div className="text-xs font-bold num">{fmtLbl(localTo)}</div>
-              </div>
-            </div>
-            <button onClick={onClose} className="w-8 h-8 shrink-0 rounded-lg hover:bg-white/10 flex items-center justify-center transition-all"><X className="w-4 h-4" /></button>
+    <Modal open={open} onClose={onClose} title="Période" size="lg" layer="top" footer={<>
+      <button type="button" className="btn-ghost mr-auto text-xs" aria-label="Réinitialiser" onClick={() => { setRange({ from: '', to: '' }); onReset?.(); }}>
+        <RotateCcw aria-hidden="true" className="h-4 w-4" /> <span className="max-[359px]:sr-only">Réinitialiser</span>
+      </button>
+      <button type="button" className="btn-secondary text-xs" onClick={onClose}>
+        <X aria-hidden="true" className="h-4 w-4" /> Annuler
+      </button>
+      <button type="button" className="btn-primary text-xs" onClick={() => onApply(range.from, range.to || range.from)} disabled={!range.from}>
+        <Check aria-hidden="true" className="h-4 w-4" /> Appliquer
+      </button>
+    </>}>
+      <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4">
+        <div className="space-y-3 sm:border-r sm:border-[var(--w-separator)] sm:pr-3">
+          <div className="flex flex-wrap gap-1 sm:flex-col sm:items-stretch">
+            {presets.map(preset => {
+              const value = preset.range();
+              return <button key={preset.label} type="button"
+                aria-pressed={range.from === value.from && range.to === value.to}
+                className="rounded-sm px-2 py-1.5 text-left text-xs font-medium text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] aria-pressed:bg-[var(--w-hover)] aria-pressed:text-[var(--w-text)]"
+                onClick={() => { setRange(value); setMonths(monthsFor(value)); }}>
+                {preset.label}
+              </button>;
+            })}
           </div>
+          {extraFilters && <div className="space-y-2 border-t border-[var(--w-separator)] pt-2">{extraFilters}</div>}
         </div>
-
-        <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-y-auto">
-          <div className="lg:w-40 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 p-2 flex lg:flex-col gap-0.5 overflow-x-auto lg:overflow-x-visible lg:overflow-y-auto">
-            {presets.map(p => (
-              <button key={p.l} onClick={() => { const r = p.f(); setLocalFrom(r.f); setLocalTo(r.t); const ld = new Date(r.f); const rd = new Date(r.t); setLeftMonth(new Date(ld.getFullYear(), ld.getMonth(), 1)); setRightMonth(ld.getMonth() === rd.getMonth() && ld.getFullYear() === rd.getFullYear() ? new Date(rd.getFullYear(), rd.getMonth() + 1, 1) : new Date(rd.getFullYear(), rd.getMonth(), 1)); }}
-                className="shrink-0 lg:shrink px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-left text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition whitespace-nowrap lg:whitespace-normal">
-                {p.l}
-              </button>
-            ))}
-            {extraFilters && (
-              <>
-                <div className="hidden lg:block h-px bg-slate-200 my-1" />
-                <div className="hidden lg:block px-2.5 py-1">
-                  {extraFilters}
-                </div>
-              </>
-            )}
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 border-b border-[var(--w-separator)] pb-2 text-xs num" aria-live="polite">
+            <div><span className="mr-2 text-[var(--w-text-muted)]">Du</span>{range.from ? <time dateTime={range.from}>{rangeFormat.format(dateFromISO(range.from))}</time> : '—'}</div>
+            <div><span className="mr-2 text-[var(--w-text-muted)]">Au</span>{range.to ? <time dateTime={range.to}>{rangeFormat.format(dateFromISO(range.to))}</time> : '—'}</div>
           </div>
-
-          <div className="flex-1 p-3 sm:p-4 bg-white">
-            <div className="grid gap-0 grid-cols-1 sm:grid-cols-[1fr_auto_1fr]">
-              <div className="p-2 sm:p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                  <div className="text-xs font-bold capitalize text-slate-900">{monthLabel(leftMonth)}</div>
-                  <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() + 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronRight className="w-3.5 h-3.5" /></button>
-                </div>
-                {renderMonth(leftMonth)}
-              </div>
-              <div className="h-px sm:h-auto sm:w-px bg-slate-200 mx-3 sm:mx-0 sm:my-2" />
-              <div className="p-2 sm:p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <button onClick={() => setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                  <div className="text-xs font-bold capitalize text-slate-900">{monthLabel(rightMonth)}</div>
-                  <button onClick={() => setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() + 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronRight className="w-3.5 h-3.5" /></button>
-                </div>
-                {renderMonth(rightMonth)}
-              </div>
-            </div>
-            {extraFilters && (
-              <div className="lg:hidden border-t border-slate-200 pt-3 mt-3 space-y-3">
-                {extraFilters}
-              </div>
-            )}
+          <div className="grid gap-3 md:grid-cols-2">
+            <MonthCalendar className="hidden border-r border-[var(--w-separator)] pr-3 md:block" month={months.start} range={range}
+              onMonth={start => setMonths(current => ({ ...current, start }))} onSelect={select} />
+            <MonthCalendar month={months.end} range={range}
+              onMonth={end => setMonths(current => ({ ...current, end }))} onSelect={select} />
           </div>
-        </div>
-
-        <div className="px-4 py-3 border-t border-slate-200 bg-white flex items-center justify-end gap-2 flex-wrap shrink-0">
-          <button onClick={() => { setLocalFrom(''); setLocalTo(''); if (onReset) onReset(); }} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
-          <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={() => onApply(localFrom, localTo || localFrom)} disabled={!localFrom} className="btn-icon-primary" title="Appliquer">
-            <Check className="w-4 h-4" />
-          </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

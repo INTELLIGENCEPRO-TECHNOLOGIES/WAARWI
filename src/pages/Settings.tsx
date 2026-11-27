@@ -1,7 +1,7 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, Check, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, Monitor } from 'lucide-react';
+import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, Check, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, ChevronRight, Package, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, Monitor } from 'lucide-react';
 import { SalesVatSettings } from '../components/SalesVatSettings';
 import { BackupTab } from '../components/BackupTab';
 import { SubscriptionPaymentPanel, useCanPaySubscription } from '../components/SubscriptionPaymentPanel';
@@ -28,7 +28,7 @@ import { usePermissions } from '../lib/permissions';
 
 type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription' | 'rep_commissions' | 'expense_types' | 'cash_registers' | 'sales_vat';
 
-type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
+type SettingLink = { k: TabKey; label: string; icon: typeof Building2 };
 
 export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
   const { refresh, tenant, isOwner } = useApp();
@@ -37,40 +37,40 @@ export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
   const autoMode = (tenant?.business_type || 'auto_parts') === 'auto_parts';
   const [tab, setTab] = useState<TabKey>(initialTab || 'home');
 
-  const groups: { title: string; tiles: TileConfig[] }[] = [
+  const groups: { title: string; links: SettingLink[] }[] = [
     {
       title: 'Votre entreprise',
-      tiles: [
-        ...(isOwner ? [{ k: 'company' as TabKey, label: 'Identification', icon: Building2, color: 'text-slate-700', bg: 'bg-[var(--w-surface-el)] border-[var(--w-separator)]' }] : []),
-        { k: 'subscription', label: 'Abonnement', icon: CreditCard, color: 'text-blue-700', bg: 'bg-[var(--w-active)] border-[var(--w-separator)]' },
-        { k: 'users', label: 'Utilisateurs', icon: Users, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
-        { k: 'permissions', label: 'Permissions', icon: Shield, color: 'text-rose-700', bg: 'bg-rose-50/80 border-rose-200' },
-        { k: 'sites', label: 'Magasins', icon: Store, color: 'text-emerald-700', bg: 'bg-emerald-50/80 border-emerald-200' },
-        ...(canManageRegisters ? [{ k: 'cash_registers' as TabKey, label: 'Caisses', icon: Monitor, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' }] : []),
+      links: [
+        ...(isOwner ? [{ k: 'company' as TabKey, label: 'Identification', icon: Building2 }] : []),
+        { k: 'subscription', label: 'Abonnement', icon: CreditCard },
+        { k: 'users', label: 'Utilisateurs', icon: Users },
+        { k: 'permissions', label: 'Permissions', icon: Shield },
+        { k: 'sites', label: 'Magasins', icon: Store },
+        ...(canManageRegisters ? [{ k: 'cash_registers' as TabKey, label: 'Caisses', icon: Monitor }] : []),
       ],
     },
     {
       title: 'Données de structure',
-      tiles: [
-        { k: 'categories', label: 'Catégories', icon: Tag, color: 'text-amber-700', bg: 'bg-amber-50/80 border-amber-200' },
-        ...(autoMode ? [{ k: 'brands' as TabKey, label: 'Marques véhicules', icon: Car, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' }] : []),
-        { k: 'payments', label: 'Modes de paiement', icon: CreditCard, color: 'text-teal-700', bg: 'bg-teal-50/80 border-teal-200' },
-        { k: 'pricing_tiers', label: 'Catégories tarifaires', icon: Layers, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
-        { k: 'expense_types', label: 'Types de dépenses', icon: TrendingDown, color: 'text-red-700', bg: 'bg-red-50/80 border-red-200' },
-        { k: 'stock', label: 'Gestion des stocks', icon: Package, color: 'text-orange-700', bg: 'bg-orange-50/80 border-orange-200' },
-        { k: 'tiers', label: 'Tiers', icon: Users, color: 'text-lime-700', bg: 'bg-lime-50/80 border-lime-200' },
+      links: [
+        { k: 'categories', label: 'Catégories', icon: Tag },
+        ...(autoMode ? [{ k: 'brands' as TabKey, label: 'Marques véhicules', icon: Car }] : []),
+        { k: 'payments', label: 'Modes de paiement', icon: CreditCard },
+        { k: 'pricing_tiers', label: 'Catégories tarifaires', icon: Layers },
+        { k: 'expense_types', label: 'Types de dépenses', icon: TrendingDown },
+        { k: 'stock', label: 'Gestion des stocks', icon: Package },
+        { k: 'tiers', label: 'Tiers', icon: Users },
       ],
     },
     {
       title: 'Configuration avancée',
-      tiles: [
-        { k: 'accounting', label: 'Comptabilité', icon: BookOpen, color: 'text-cyan-700', bg: 'bg-cyan-50/80 border-cyan-200' },
-        ...(isOwner ? [{ k: 'sales_vat' as TabKey, label: 'TVA sur les ventes', icon: FileText, color: 'text-neutral-800', bg: 'bg-[var(--w-surface-el)] border-[var(--w-separator)]' }] : []),
-        { k: 'boutique', label: 'Boutique en ligne', icon: ShoppingBag, color: 'text-pink-700', bg: 'bg-pink-50/80 border-pink-200' },
-        { k: 'documents', label: 'Paramètres documents', icon: FileText, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
-        { k: 'rep_commissions', label: 'Représentants & commissions', icon: Users, color: 'text-teal-700', bg: 'bg-teal-50/80 border-teal-200' },
-        { k: 'ticket_header', label: 'En-tête tickets', icon: Printer, color: 'text-fuchsia-700', bg: 'bg-fuchsia-50/80 border-fuchsia-200' },
-        { k: 'backup', label: 'Sauvegarde', icon: Database, color: 'text-green-700', bg: 'bg-green-50/80 border-green-200' },
+      links: [
+        { k: 'accounting', label: 'Comptabilité', icon: BookOpen },
+        ...(isOwner ? [{ k: 'sales_vat' as TabKey, label: 'TVA sur les ventes', icon: FileText }] : []),
+        { k: 'boutique', label: 'Boutique en ligne', icon: ShoppingBag },
+        { k: 'documents', label: 'Paramètres documents', icon: FileText },
+        { k: 'rep_commissions', label: 'Représentants & commissions', icon: Users },
+        { k: 'ticket_header', label: 'En-tête tickets', icon: Printer },
+        { k: 'backup', label: 'Sauvegarde', icon: Database },
       ],
     },
   ];
@@ -78,42 +78,34 @@ export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
   if (tab === 'home') {
     return (
       <div className="space-y-5">
-        <div className="sticky -top-px z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-bg)] border-b border-transparent [&.scrolled]:border-[var(--w-separator)] flex items-center gap-2.5" ref={(el) => { if (!el) return; const obs = new IntersectionObserver(([e]) => el.classList.toggle('scrolled', e.intersectionRatio < 1), { threshold: [1] }); obs.observe(el); }}>
-          <SettingsIcon className="w-5 h-5 text-slate-600" />
-          <div>
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Paramètres</h1>
-            <p className="text-[11px] text-slate-500">Configuration de votre entreprise et référentiels</p>
-          </div>
-        </div>
+        <header className="sticky -top-px z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 py-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 border-b border-[var(--w-separator)] bg-[var(--w-bg)]">
+          <h1 className="text-lg font-bold tracking-tight text-[var(--w-text)]">Paramètres</h1>
+        </header>
 
-        {groups.map(g => (
-          <div key={g.title}>
-            <div className="flex items-center gap-3 mb-2.5">
-              <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{g.title}</h2>
-              <div className="flex-1 h-px bg-slate-100" />
-            </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
-              {g.tiles.map(t => {
-                const Icon = t.icon;
-                return (
-                  <button
-                    key={t.k}
-                    onClick={() => setTab(t.k)}
-                    className="group flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[var(--w-hover)] hover:-translate-y-0.5 transition-all duration-200"
-                  >
-                    <Icon className={`w-5 h-5 ${t.color} group-hover:scale-110 transition-transform`} />
-                    <span className="text-[10px] sm:text-[11px] font-semibold text-slate-600 text-center leading-tight">{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        <div className="grid gap-x-8 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
+          {groups.map(group => (
+            <section key={group.title} aria-label={group.title} className="min-w-0">
+              <h2 className="border-b border-[var(--w-separator)] pb-2 text-xs font-semibold text-[var(--w-text-sec)]">{group.title}</h2>
+              <ul className="divide-y divide-[var(--w-separator)]">
+                {group.links.map(({ k, label, icon: Icon }) => (
+                  <li key={k}>
+                    <button type="button" onClick={() => setTab(k)}
+                      className="flex min-h-11 w-full min-w-0 items-center gap-3 px-2 py-2 text-left text-sm font-medium text-[var(--w-text)] transition-colors hover:bg-[var(--w-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px]">
+                      <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--w-text-sec)]" />
+                      <span className="min-w-0 flex-1">{label}</span>
+                      <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--w-text-muted)]" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       </div>
     );
   }
 
-  const currentLabel = groups.flatMap(g => g.tiles).find(t => t.k === tab)?.label || 'Paramètres';
+  const currentLabel = groups.flatMap(group => group.links).find(t => t.k === tab)?.label || 'Paramètres';
 
   return (
     <div className="space-y-4">

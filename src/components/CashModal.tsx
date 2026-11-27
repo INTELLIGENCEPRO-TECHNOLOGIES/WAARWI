@@ -1,6 +1,5 @@
-import { ReactNode, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Modal } from './Modal';
 
 type Props = {
   open: boolean;
@@ -9,47 +8,19 @@ type Props = {
   children: ReactNode;
   footer?: ReactNode;
   footerLeft?: ReactNode;
-  layer?: 'base' | 'top';
 };
 
-export function CashModal({ open, onClose, title, children, footer, footerLeft, layer = 'base' }: Props) {
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
-  }, [open, onClose]);
-
-  if (!open) return null;
-  const z = layer === 'top' ? 'z-[10010]' : 'z-50';
-
-  const node = (
-    <div className={`fixed inset-0 ${z} flex items-center justify-center p-0 sm:p-4 animate-fade-in`}>
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full h-full sm:w-[520px] sm:h-[540px] bg-white sm:rounded-xl shadow-premium flex flex-col animate-scale-in sm:animate-scale-in">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-black sm:rounded-t-xl shrink-0">
-          <h3 className="text-[15px] font-bold text-white tracking-tight truncate">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-400 transition-colors shrink-0">
-            <X className="w-5 h-5" />
-          </button>
+export function CashModal({ open, onClose, title, children, footer, footerLeft }: Props) {
+  return (
+    <Modal open={open} onClose={onClose} title={title} size="md" layer="top" fullscreenMobile
+      footer={(footer || footerLeft) && (
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+          {footerLeft && <div className="mr-auto min-w-0">{footerLeft}</div>}
+          {footer}
         </div>
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 min-h-0">
-          {children}
-        </div>
-        {/* Footer */}
-        {(footer || footerLeft) && (
-          <div className="border-t border-neutral-100 px-4 py-2.5 flex items-center gap-2 shrink-0">
-            {footerLeft && <div className="flex-1 min-w-0">{footerLeft}</div>}
-            {!footerLeft && <div className="flex-1" />}
-            <div className="flex items-center gap-2 shrink-0">{footer}</div>
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    >
+      {children}
+    </Modal>
   );
-
-  return typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 }

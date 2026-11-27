@@ -90,6 +90,20 @@ try {
   await visible(mobile.getByText('Part patient réglée', { exact: true }).filter({ visible: true }).first(), 'Statut après encaissement');
   console.log('Facturation mobile : encaissement des 500 FCFA restant au patient');
 
+  const editAction = mobile.getByTitle('Modifier', { exact: true }).filter({ visible: true }).first();
+  await visible(editAction, 'Modification de la facture sur mobile');
+  await editAction.click();
+  const lease = mobile.getByRole('complementary', { name: 'Accès à la modification' });
+  await visible(lease.getByText('Modification active', { exact: true }), 'Verrou acquis');
+  await visible(lease.getByRole('button', { name: 'Libérer', exact: true }), 'Action de libération du verrou');
+  const leaseBounds = await lease.boundingBox();
+  assert.ok(leaseBounds?.height > 0 && leaseBounds.height < 100, `Le verrou mobile occupe ${leaseBounds?.height} pixels`);
+  assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth), 390);
+  await lease.getByRole('button', { name: 'Libérer', exact: true }).click();
+  await visible(lease.getByText('Accès libéré', { exact: true }), 'Libération du verrou');
+  console.log('Facturation mobile : verrou compact, aucune modification du document');
+
+
   const publicPage = await browserPage(browser, { width: 390, height: 844 });
   await publicPage.goto(new URL(`/inv/${fixture.token}`, app).href);
   await visible(publicPage.getByText('Part organisme à l’émission', { exact: true }), 'Part organisme sur le lien public');

@@ -7,6 +7,8 @@ import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { ConfirmDialog, DocPanel } from '../components/Modal';
+import { EmptyState } from '../components/EmptyState';
+import { PageSearch } from '../components/PageSearch';
 
 type OrderStatus = 'nouvelle' | 'confirmee' | 'en_preparation' | 'prete' | 'livree' | 'annulee';
 type PaymentStatus = 'non_paye' | 'en_attente' | 'paye' | 'rembourse';
@@ -299,38 +301,18 @@ export function OnlineOrders() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header unifié : titre intégré + recherche + filtre + refresh ─── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)]">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Commandes en ligne</h1>
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="N°, nom ou téléphone…"
-              className="w-input-ul w-full text-sm py-1.5"
-            />
+            <PageSearch value={query} onChange={setQuery} placeholder="N°, nom ou téléphone…" />
           </div>
-          {query && (
-            <button onClick={() => setQuery('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            onClick={() => setShowFilters(v => !v)}
-            className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-colors ${
-              payFilter !== 'all' || dateFilter !== 'all' || showFilters
-                ? 'text-brand-700'
-                : 'text-neutral-500 hover:text-neutral-700'
-            }`}
-          >
+          <button type="button" onClick={() => setShowFilters(value => !value)}
+            className="btn-secondary shrink-0" aria-pressed={showFilters} aria-label="Filtres">
             <Filter className="w-4 h-4" />
-            <span className="hidden md:inline">Filtres</span>
+            <span className="hidden sm:inline">Filtres</span>
           </button>
-          <button
-            onClick={() => load(true)}
-            className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors active:scale-95"
-            aria-label="Actualiser"
-          >
+          <button type="button" onClick={() => load(true)} className="btn-icon shrink-0" aria-label="Actualiser">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -399,19 +381,15 @@ export function OnlineOrders() {
       {loading ? (
         <div className="py-10 text-center text-sm text-neutral-500">Chargement…</div>
       ) : filtered.length === 0 ? (
-        <div className="py-10 text-center">
-          <Globe className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-          <div className="text-neutral-800 font-semibold text-sm">Aucune commande</div>
-          <p className="text-xs text-neutral-500 mt-1">Les commandes de votre boutique en ligne apparaîtront ici.</p>
-        </div>
+        <EmptyState icon={Globe} title="Aucune commande" />
       ) : (
         <div className={`divide-y divide-neutral-100 ${flashList ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
           {/* Thin header row */}
-          <div className="flex items-center gap-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+          <div className="hidden items-center gap-2 pb-1.5 text-xs font-medium text-neutral-500 sm:flex">
             <span className="w-20 shrink-0">N°</span>
             <span className="flex-1 min-w-0">Client</span>
             <span className="hidden sm:block w-20 shrink-0 text-right">Statut</span>
-            <span className="w-24 shrink-0 text-right">Montant</span>
+            <span className="w-32 shrink-0 text-right">Montant</span>
             <span className="w-5 shrink-0" />
           </div>
           {filtered.map(o => {
@@ -425,10 +403,10 @@ export function OnlineOrders() {
                 className="w-full py-2.5 px-0.5 text-left transition-colors hover:bg-neutral-50/60 active:bg-neutral-100/60"
               >
                 {/* Line 1: number + status + amount */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-extrabold text-neutral-900 shrink-0 w-20 truncate">{o.order_number}</span>
-                  <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                    <span className="font-semibold text-neutral-800 text-xs truncate">{o.customer_name || '—'}</span>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 sm:flex sm:gap-2">
+                  <span className="order-first min-w-0 break-all text-sm font-semibold text-[var(--w-text)] sm:w-20 sm:shrink-0">{o.order_number}</span>
+                  <div className="col-span-full row-start-2 min-w-0 flex flex-1 items-center gap-1.5">
+                    <span className="font-medium text-neutral-800 text-xs break-words">{o.customer_name || '—'}</span>
                     {o.customer_phone && (
                       <span className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-medium text-neutral-400 shrink-0">
                         <Phone className="w-2.5 h-2.5" />
@@ -440,7 +418,7 @@ export function OnlineOrders() {
                     <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
                     {meta.short}
                   </span>
-                  <span className="text-[13px] font-extrabold text-neutral-900 num whitespace-nowrap shrink-0 w-24 text-right">{formatFCFA(o.total)}</span>
+                  <span className="text-sm font-semibold text-[var(--w-text)] num whitespace-nowrap shrink-0 text-right sm:w-32">{formatFCFA(o.total)}</span>
                   <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                 </div>
                 {/* Line 2: date + payment + delivery (mobile-only compact) */}
@@ -474,20 +452,20 @@ export function OnlineOrders() {
         fullscreenMobile
         footer={selected && (
           <div className="flex flex-wrap gap-1.5 w-full" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-            <button onClick={() => openWhatsApp(selected)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-emerald-700 hover:text-emerald-800 text-xs font-bold transition-colors">
+            <button onClick={() => openWhatsApp(selected)} className="btn-secondary">
               <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
             </button>
-            <button onClick={() => printOrder(selected)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-slate-700 hover:text-slate-900 text-xs font-bold transition-colors">
+            <button onClick={() => printOrder(selected)} className="btn-secondary">
               <Printer className="w-3.5 h-3.5" /> Imprimer
             </button>
             {selected.status !== 'annulee' && selected.status !== 'livree' && (
-              <button onClick={() => setConfirmCancel(true)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-rose-600 hover:text-rose-700 text-xs font-bold transition-colors">
+              <button onClick={() => setConfirmCancel(true)} className="btn-secondary text-red-700">
                 <Ban className="w-3.5 h-3.5" /> Annuler
               </button>
             )}
             <div className="flex-1 min-w-0" />
             {nextStatus(selected.status) && (
-              <button onClick={() => updateStatus(nextStatus(selected.status)!)} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-brand-700 hover:text-brand-800 text-xs font-bold transition-colors">
+              <button onClick={() => updateStatus(nextStatus(selected.status)!)} className="btn-primary">
                 {STATUS_META[nextStatus(selected.status)!].label}
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -510,33 +488,30 @@ export function OnlineOrders() {
               <span className="text-[10px] text-neutral-400 font-semibold ml-auto">{formatDateTime(selected.created_at)}</span>
             </div>
 
-            {/* Stepper — text only, no bg/border */}
             {selected.status !== 'annulee' && (
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar -mx-0.5 px-0.5 border-b border-neutral-100 pb-2">
-                {STATUS_FLOW.map((s, i) => {
-                  const idx = STATUS_FLOW.indexOf(selected.status);
-                  const done = idx >= i;
-                  const active = idx === i;
+              <ol aria-label="Suivi de la commande" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--w-separator)] pb-2">
+                {STATUS_FLOW.map((status, index) => {
+                  const current = status === selected.status;
+                  const done = index < STATUS_FLOW.indexOf(selected.status);
                   return (
-                    <div key={s} className="flex items-center gap-1 shrink-0">
-                      <div className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold transition-colors ${active ? 'text-brand-700' : done ? 'text-brand-600' : 'text-neutral-400'}`}>
-                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] ${active ? 'bg-brand-700 text-white' : done ? 'bg-brand-600 text-white' : 'bg-slate-300 text-white'}`}>{i + 1}</span>
-                        <span className="whitespace-nowrap">{STATUS_META[s].label}</span>
-                      </div>
-                      {i < STATUS_FLOW.length - 1 && <div className={`h-px w-3 ${done && idx > i ? 'bg-brand-500' : 'bg-slate-200'}`} />}
-                    </div>
+                    <li key={status} aria-current={current ? 'step' : undefined}
+                      className={'flex items-center gap-1 text-xs '+(current ? 'font-semibold text-[var(--w-text)]' : 'text-[var(--w-text-sec)]')}>
+                      {done && <CheckCircle2 size={12} aria-hidden="true" />}
+                      {STATUS_META[status].label}
+                      {index < STATUS_FLOW.length-1 && <ChevronRight size={12} aria-hidden="true" />}
+                    </li>
                   );
                 })}
-              </div>
+              </ol>
             )}
 
             {/* Info rows — minimalist, divided by borders */}
             <div className="border-b border-neutral-100 pb-2 space-y-1.5">
               <DetailRow icon={Phone} label="Client">
-                <span className="font-semibold text-neutral-900 text-xs truncate block">{selected.customer_name || '—'}</span>
-                <span className="text-[11px] text-neutral-600 truncate block">{selected.customer_phone}</span>
-                {selected.customer_whatsapp && selected.customer_whatsapp !== selected.customer_phone && <span className="text-[11px] text-neutral-500 truncate block">WA: {selected.customer_whatsapp}</span>}
-                {selected.customer_email && <span className="text-[11px] text-neutral-500 truncate block">{selected.customer_email}</span>}
+                <span className="font-semibold text-neutral-900 text-xs break-words block">{selected.customer_name || '—'}</span>
+                <span className="text-[11px] text-neutral-600 break-words block">{selected.customer_phone}</span>
+                {selected.customer_whatsapp && selected.customer_whatsapp !== selected.customer_phone && <span className="text-[11px] text-neutral-500 break-all block">WhatsApp {selected.customer_whatsapp}</span>}
+                {selected.customer_email && <span className="text-[11px] text-neutral-500 break-all block">{selected.customer_email}</span>}
               </DetailRow>
               <DetailRow icon={MapPin} label={selected.delivery_mode === 'livraison' ? 'Livraison' : 'Retrait'}>
                 <span className="text-[11px] text-neutral-700 break-words block">
@@ -625,11 +600,9 @@ export function OnlineOrders() {
               {history.length === 0 ? (
                 <div className="text-xs text-neutral-400 text-center py-1">—</div>
               ) : (
-                <div className="relative pl-4 border-b border-neutral-100 pb-2">
-                  <div className="absolute left-[5px] top-1 bottom-1 w-px bg-neutral-200" />
+                <div className="divide-y divide-[var(--w-separator)] border-y border-[var(--w-separator)]">
                   {history.map((h) => (
-                    <div key={h.id} className="relative pb-2 last:pb-0">
-                      <div className={`absolute -left-4 top-0.5 w-[11px] h-[11px] rounded-full border-2 border-white ${STATUS_META[h.new_status as OrderStatus]?.dot || 'bg-slate-400'}`} />
+                    <div key={h.id} className="py-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-[11px] text-neutral-800">
@@ -657,7 +630,7 @@ export function OnlineOrders() {
       </DocPanel>
 
       <ConfirmDialog open={confirmCancel} onClose={() => setConfirmCancel(false)} onConfirm={doCancel}
-        title="Annuler la commande" message="Confirmer l'annulation de cette commande ?" confirmLabel="Annuler la commande" danger />
+        title="Annuler la commande" message="Confirmer l'annulation de cette commande ?" confirmLabel="Annuler la commande" danger layer="top" />
     </div>
   );
 }

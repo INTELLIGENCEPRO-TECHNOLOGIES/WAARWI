@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useId, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Check, X } from 'lucide-react';
+import './window-surfaces.css';
 
 export type SelectOption = {
   value: string;
@@ -24,6 +25,43 @@ type Props = {
   maxResults?: number;
 };
 
+type MenuPosition = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+  above: boolean;
+};
+
+const dropdownHeight = 272;
+const edge = 8;
+const gap = 4;
+
+function getPosition(rect: DOMRect, menuWidth?: number): MenuPosition {
+  const viewport = window.visualViewport;
+  const viewportLeft = viewport?.offsetLeft ?? 0;
+  const viewportTop = viewport?.offsetTop ?? 0;
+  const viewportRight = viewportLeft + (viewport?.width ?? window.innerWidth);
+  const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+  const innerTop = viewportTop + edge;
+  const innerBottom = viewportBottom - edge;
+  const width = Math.min(menuWidth ?? rect.width, viewportRight - viewportLeft - edge * 2);
+  const left = Math.max(viewportLeft + edge, Math.min(rect.left, viewportRight - edge - width));
+  const belowAnchor = Math.max(innerTop, Math.min(innerBottom, rect.bottom + gap));
+  const aboveAnchor = Math.max(innerTop, Math.min(innerBottom, rect.top - gap));
+  const belowSpace = innerBottom - belowAnchor;
+  const aboveSpace = aboveAnchor - innerTop;
+  const above = belowSpace < dropdownHeight && aboveSpace > belowSpace;
+
+  return {
+    top: above ? aboveAnchor : belowAnchor,
+    left,
+    width,
+    maxHeight: Math.min(dropdownHeight, above ? aboveSpace : belowSpace),
+    above,
+  };
+}
+
 export function SearchableSelect({
   options,
   value,
@@ -41,237 +79,186 @@ export function SearchableSelect({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const [pos, setPos] = useState<MenuPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [highlightIdx, setHighlightIdx] = useState(0);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
+  const triggerId = useId();
+  const listId = useId();
 
   const isUnderline = variant === 'underline';
-  const selected = options.find(o => o.value === value);
+  const selected = options.find(option => option.value === value);
+  const visible = open && !disabled;
+  const canClear = !!value && !disabled;
+  const textOverflow = wrapLabels ? 'break-words' : 'truncate';
 
   const filtered = useMemo(() => {
-    let result: SelectOption[];
-    if (!query.trim()) {
-      result = options;
-    } else {
-      const q = query.toLowerCase();
-      result = options.filter(
-        o => o.label.toLowerCase().includes(q) || (o.sublabel && o.sublabel.toLowerCase().includes(q))
-      );
-    }
+    const filter = query.trim().toLowerCase();
+    const result = filter ? options.filter(option =>
+      option.label.toLowerCase().includes(filter) || option.sublabel?.toLowerCase().includes(filter),
+    ) : options;
     return maxResults != null ? result.slice(0, maxResults) : result;
   }, [options, query, maxResults]);
 
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery('');
+  }, []);
+
   const updatePos = useCallback(() => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const margin = 8;
-    const maxW = window.innerWidth - margin * 2;
-    const width = Math.min(menuWidth ?? rect.width, maxW);
-    let left = rect.left;
-    if (left + width > window.innerWidth - margin) {
-      left = Math.max(margin, window.innerWidth - margin - width);
-    }
-    setPos({ top: rect.bottom + 4, left, width });
+    if (triggerRef.current) setPos(getPosition(triggerRef.current.getBoundingClientRect(), menuWidth));
   }, [menuWidth]);
 
+  const show = () => {
+    if (disabled) return;
+    updatePos();
+    setHighlightIdx(0);
+    setOpen(true);
+  };
+
   useEffect(() => {
-    if (open) {
-      updatePos();
-      if (inputRef.current && searchable) inputRef.current.focus();
-    }
-  }, [open, searchable, updatePos]);
+    if (visible && searchable) inputRef.current?.focus({ preventScroll: true });
+  }, [visible, searchable]);
 
   useEffect(() => {
     setHighlightIdx(0);
   }, [filtered.length, query]);
 
   useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
-      if (triggerRef.current?.contains(target)) return;
-      if (dropdownRef.current?.contains(target)) return;
-      setOpen(false);
-      setQuery('');
-    }
-    function handleScroll() {
-      updatePos();
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('resize', updatePos);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', updatePos);
+    if (!visible) return;
+    const viewport = window.visualViewport;
+    const dismissOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !dropdownRef.current?.contains(target)) close();
     };
-  }, [open, updatePos]);
+
+    document.addEventListener('pointerdown', dismissOutside);
+    window.addEventListener('scroll', updatePos, true);
+    window.addEventListener('resize', updatePos);
+    viewport?.addEventListener('resize', updatePos);
+    viewport?.addEventListener('scroll', updatePos);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      window.removeEventListener('scroll', updatePos, true);
+      window.removeEventListener('resize', updatePos);
+      viewport?.removeEventListener('resize', updatePos);
+      viewport?.removeEventListener('scroll', updatePos);
+    };
+  }, [visible, updatePos, close]);
 
   useEffect(() => {
-    if (open && listRef.current) {
-      const active = listRef.current.querySelector('[data-active="true"]');
-      if (active) active.scrollIntoView({ block: 'nearest' });
-    }
-  }, [highlightIdx, open]);
+    const list = listRef.current;
+    const active = list?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!visible || !list || !active) return;
+    if (active.offsetTop < list.scrollTop) list.scrollTop = active.offsetTop;
+    const end = active.offsetTop + active.offsetHeight;
+    if (end > list.scrollTop + list.clientHeight) list.scrollTop = end - list.clientHeight;
+  }, [visible, highlightIdx]);
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (!open) {
-      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        setOpen(true);
+  const choose = (option: string) => {
+    onChange(option);
+    triggerRef.current?.focus({ preventScroll: true });
+    close();
+  };
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement | HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return;
+    if (!visible) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        show();
       }
       return;
     }
-    switch (e.key) {
+    switch (event.key) {
       case 'ArrowDown':
-        e.preventDefault();
-        setHighlightIdx(i => Math.min(i + 1, filtered.length - 1));
+        event.preventDefault();
+        setHighlightIdx(index => Math.max(0, Math.min(index + 1, filtered.length - 1)));
         break;
       case 'ArrowUp':
-        e.preventDefault();
-        setHighlightIdx(i => Math.max(i - 1, 0));
+        event.preventDefault();
+        setHighlightIdx(index => Math.max(0, index - 1));
         break;
       case 'Enter':
-        e.preventDefault();
-        if (filtered[highlightIdx]) {
-          onChange(filtered[highlightIdx].value);
-          setOpen(false);
-          setQuery('');
-        }
+        event.preventDefault();
+        if (filtered[highlightIdx]) choose(filtered[highlightIdx].value);
         break;
       case 'Escape':
-        e.preventDefault();
-        setOpen(false);
-        setQuery('');
+        event.preventDefault();
+        triggerRef.current?.focus({ preventScroll: true });
+        close();
+        break;
+      case 'Tab':
+        triggerRef.current?.focus({ preventScroll: true });
+        close();
         break;
     }
   }
 
-  const dropdownCls = isUnderline
-    ? 'bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg shadow-md overflow-hidden'
-    : 'bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl shadow-lg shadow-slate-200/60 overflow-hidden';
-
-  const searchInputCls = isUnderline
-    ? 'w-full pl-8 pr-3 py-2 text-sm bg-transparent border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-all rounded-none'
-    : 'w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-[var(--w-separator)] bg-[var(--w-hover)] focus:bg-[var(--w-surface)] focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none transition-all';
-
-  const dropdown = open ? createPortal(
-    <div
-      ref={dropdownRef}
-      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 2147483000 }}
-      className={dropdownCls}
-    >
+  const activeOptionId = filtered[highlightIdx] ? `${listId}-${highlightIdx}` : undefined;
+  const dropdown = visible && pos ? createPortal(
+    <div ref={dropdownRef}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxHeight, transform: pos.above ? 'translateY(-100%)' : undefined, zIndex: 2147483000 }}
+      className="flex min-h-0 flex-col overflow-hidden rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] text-[var(--w-text)] shadow-md">
       {searchable && (
-        <div className={isUnderline ? 'p-2' : 'p-2 border-b border-[var(--w-separator)]'}>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Rechercher..."
-              className={searchInputCls}
-            />
-          </div>
+        <div className="relative shrink-0 border-b border-[var(--w-separator)]">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--w-text-muted)]" />
+          <input ref={inputRef} role="combobox" aria-label={label ? `Rechercher : ${label}` : 'Rechercher une option'}
+            aria-expanded="true" aria-autocomplete="list" aria-controls={listId} aria-activedescendant={activeOptionId}
+            type="text" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={handleKeyDown}
+            placeholder="Rechercher…" className="w-full bg-transparent py-2.5 pl-9 pr-3 text-[16px] text-[var(--w-text)] outline-none placeholder:text-[var(--w-text-muted)] sm:text-sm"/>
         </div>
       )}
-      <div ref={listRef} className="max-h-56 overflow-y-auto overscroll-contain">
+      <div ref={listRef} id={listId} role="listbox" aria-label={label || 'Options'}
+        className="relative min-h-0 flex-auto divide-y divide-[var(--w-separator-l)] overflow-y-auto overscroll-contain">
         {filtered.length === 0 ? (
-          <div className="px-3 py-6 text-center text-sm text-slate-400">Aucun resultat</div>
-        ) : (
-          isUnderline ? (
-            <div className="divide-y divide-[var(--w-separator)]">
-              {filtered.map((opt, idx) => {
-                const isSelected = opt.value === value;
-                const isHighlighted = idx === highlightIdx;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    data-active={isHighlighted}
-                    onClick={() => { onChange(opt.value); setOpen(false); setQuery(''); }}
-                    onMouseEnter={() => setHighlightIdx(idx)}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors
-                      ${isHighlighted ? 'bg-neutral-50' : ''}
-                      ${isSelected ? 'text-neutral-900 font-medium' : 'text-neutral-700'}
-                    `}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className={wrapLabels ? 'break-words' : 'truncate'}>{opt.label}</div>
-                      {opt.sublabel && <div className={`text-[11px] text-neutral-400 mt-0.5 ${wrapLabels ? 'break-words' : 'truncate'}`}>{opt.sublabel}</div>}
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-neutral-600 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            filtered.map((opt, idx) => {
-              const isSelected = opt.value === value;
-              const isHighlighted = idx === highlightIdx;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  data-active={isHighlighted}
-                  onClick={() => { onChange(opt.value); setOpen(false); setQuery(''); }}
-                  onMouseEnter={() => setHighlightIdx(idx)}
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors
-                    ${isHighlighted ? 'bg-[var(--w-hover)]' : ''}
-                    ${isSelected ? 'text-brand-700 font-medium' : 'text-[var(--w-text-sec)]'}
-                  `}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className={wrapLabels ? 'break-words' : 'truncate'}>{opt.label}</div>
-                    {opt.sublabel && <div className={`text-[11px] text-slate-400 mt-0.5 ${wrapLabels ? 'break-words' : 'truncate'}`}>{opt.sublabel}</div>}
-                  </div>
-                  {isSelected && <Check className="w-4 h-4 text-brand-600 shrink-0" />}
-                </button>
-              );
-            })
-          )
-        )}
+          <p className="px-3 py-2.5 text-sm text-[var(--w-text-sec)]">Aucun résultat.</p>
+        ) : filtered.map((option, index) => {
+          const current = option.value === value;
+          return (
+            <button key={option.value} id={`${listId}-${index}`} type="button" role="option" tabIndex={-1}
+              aria-selected={current} data-active={index === highlightIdx} onClick={() => choose(option.value)}
+              onPointerEnter={event => { if (event.pointerType === 'mouse') setHighlightIdx(index); }}
+              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm data-[active=true]:bg-[var(--w-hover)]
+                ${current ? 'font-medium text-[var(--w-text)]' : 'text-[var(--w-text-sec)]'}`}>
+              <span className="min-w-0 flex-1">
+                <span className={`block ${textOverflow}`}>{option.label}</span>
+                {option.sublabel && <span className={`mt-0.5 block text-xs text-[var(--w-text-muted)] ${textOverflow}`}>{option.sublabel}</span>}
+              </span>
+              {current && <Check aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--w-text)]" />}
+            </button>
+          );
+        })}
       </div>
     </div>,
-    document.body
+    document.body,
   ) : null;
 
-  const triggerCls = isUnderline
-    ? `w-full flex items-center justify-between gap-2 px-1 py-2.5 rounded-none border-0 border-b text-left text-sm transition-all bg-transparent
-       ${open ? 'border-[var(--w-text)]' : 'border-[var(--w-separator)]'}
-       ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`
-    : `w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left text-sm transition-all
-       ${noBorder ? 'border-transparent bg-transparent hover:bg-[var(--w-hover)]' : open ? 'border-brand-400 ring-2 ring-brand-100 bg-[var(--w-surface)]' : 'border-[var(--w-separator)] bg-[var(--w-surface)] hover:border-[var(--w-text-muted)]'}
-       ${disabled ? 'opacity-60 cursor-not-allowed bg-[var(--w-surface-el)]' : 'cursor-pointer'}`;
+  const triggerStyle = isUnderline
+    ? 'rounded-none border-0 border-b bg-transparent px-1'
+    : `rounded-md border px-3 ${noBorder ? 'bg-transparent hover:bg-[var(--w-hover)]' : 'bg-[var(--w-surface)]'}`;
+  const borderStyle = visible ? 'border-[var(--w-text-sec)]' : noBorder && !isUnderline ? 'border-transparent' : 'border-[var(--w-separator)]';
 
   return (
     <div className={isUnderline ? '' : className}>
-      {label && <label className="label">{label}</label>}
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => { if (!disabled) setOpen(!open); }}
-        onKeyDown={handleKeyDown}
-        className={triggerCls}
-      >
-        <span className={`flex-1 truncate ${selected ? 'text-neutral-900 font-medium' : 'text-neutral-400'}`}>
-          {selected ? selected.label : placeholder}
-        </span>
-        {value && !disabled ? (
-          <X
-            className="w-3.5 h-3.5 text-neutral-400 hover:text-neutral-600 shrink-0"
-            onClick={(e) => { e.stopPropagation(); onChange(''); setOpen(false); setQuery(''); }}
-          />
-        ) : (
-          <ChevronDown className={`w-4 h-4 text-neutral-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-        )}
-      </button>
+      {label && <label className="label" htmlFor={triggerId}>{label}</label>}
+      <div className="relative min-w-0">
+        <button ref={triggerRef} id={triggerId} type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={visible}
+          aria-controls={visible ? listId : undefined} onClick={visible ? close : show} onKeyDown={handleKeyDown}
+          className={`flex w-full min-w-0 items-center gap-2 py-2.5 text-left text-sm focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--w-text)] disabled:cursor-not-allowed disabled:opacity-60
+            ${triggerStyle} ${borderStyle} ${canClear ? 'pr-9' : ''}`}>
+          <span className={`min-w-0 flex-1 ${wrapLabels ? 'break-words' : 'truncate'} ${selected ? 'font-medium text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`}>
+            {selected ? selected.label : placeholder}
+          </span>
+          {!canClear && <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-[var(--w-text-muted)] ${visible ? 'rotate-180' : ''}`}/>}
+        </button>
+        {canClear && <button type="button" onClick={() => choose('')} aria-label="Effacer la sélection" title="Effacer la sélection"
+          className="waarwi-window-button absolute right-0.5 top-1/2 -translate-y-1/2">
+          <X aria-hidden="true" className="h-4 w-4" />
+        </button>}
+      </div>
       {dropdown}
     </div>
   );

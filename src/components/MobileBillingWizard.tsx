@@ -7,6 +7,7 @@ import {
 import { formatFCFA } from '../lib/format';
 import { SearchableSelect } from './SearchableSelect';
 import { QuickCreateButton } from './QuickCreate';
+import { useBodyScrollLock } from './modalStack';
 
 export type WizardItem = {
   article_id: string | null;
@@ -94,11 +95,7 @@ export function MobileBillingWizard({
     }
   }, [searchOpen]);
 
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
+  useBodyScrollLock(open);
 
   useEffect(()=>{if(editBlocked){setSearchOpen(false);setEditingIdx(null);}},[editBlocked]);
   const filteredArticles = useMemo(() => {
@@ -120,12 +117,12 @@ export function MobileBillingWizard({
     <div className="fixed inset-0 z-50 flex flex-col animate-fade-in bg-white" onPointerDownCapture={onActivity} onKeyDownCapture={onActivity} onInputCapture={onActivity}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-neutral-200 flex-shrink-0">
-        <button onClick={onClose} aria-label="Fermer" className="p-2 -ml-2 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] active:scale-95 transition-all">
+        <button onClick={onClose} aria-label="Fermer" className="waarwi-window-button -ml-1">
           <X className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
           <h2 className="text-[14px] font-bold text-neutral-900 tracking-tight truncate">{title}</h2>
-          <StepIndicator step={step} />
+          {!editBlocked && <StepIndicator step={step} />}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Loader2, X, AlertCircle, RotateCcw } from 'lucide-react';
+import { Check, Loader2, AlertCircle, RotateCcw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage, newIdempotencyKey } from '../../lib/cashSession';
 import { useApp } from '../../context/AppContext';
@@ -237,24 +237,24 @@ export function SupplierPaymentModal({ supplier, initialOrderId, siteId, onSucce
   const submitDisabled = paying || loading || !!loadError || !!blocked || blockedMissing || (Number(payAmount) || 0) <= 0;
 
   return (
-    <Modal open onClose={onClose} title="Saisir un règlement" size="sm" layer="top" fullscreenMobile panelClassName="sm:!h-[500px]"
+    <Modal open onClose={onClose} title="Saisir un règlement" size="sm" layer="top"
       footer={
-        <div className="flex items-center gap-2">
-          <button onClick={submitPayment} disabled={submitDisabled} className="btn-icon" title="Valider" aria-label="Valider le règlement">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn-secondary text-sm">Fermer</button>
+          <button type="button" onClick={submitPayment} disabled={submitDisabled} className="btn-primary text-sm">
             {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            Valider le règlement
           </button>
-          <button onClick={onClose} className="btn-icon" title="Fermer" aria-label="Fermer"><X className="w-4 h-4" /></button>
         </div>
       }>
-      <div className="pb-3 border-b border-neutral-100">
-        <div className="flex items-center justify-between gap-3">
+      <div className="border-b border-[var(--w-separator)] pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
-            <div className="text-sm font-bold text-black truncate">{supplier.name}</div>
-            <div className="text-[9px] font-semibold tracking-wider uppercase text-[var(--w-text-disabled)] mt-0.5">Règlement avec imputation</div>
+            <div className="break-words text-sm font-semibold text-[var(--w-text)]">{supplier.name}</div>
           </div>
-          <div className="text-right text-black shrink-0">
-            <div className="text-[9px] font-bold uppercase tracking-wider opacity-50 leading-none">Solde comptable</div>
-            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{loading ? '...' : formatFCFA(balance)}</div>
+          <div>
+            <div className="text-xs text-[var(--w-text-sec)]">Solde comptable</div>
+            <div className="text-sm font-semibold tabular-nums">{loading ? '…' : formatFCFA(balance)}</div>
           </div>
         </div>
       </div>
@@ -381,8 +381,8 @@ function SupplierPaymentForm({
         <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Mode</label>
         <div className="flex items-center gap-4 flex-wrap">
           {methods.map(m => (
-            <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
+            <button key={m.id} type="button" onClick={() => setPayMethod(m.id)} aria-pressed={payMethod === m.id}
+              className={`min-h-10 border-b-2 text-xs transition-colors ${payMethod === m.id ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-sec)] hover:text-[var(--w-text)]'}`}>
               {m.name}
             </button>
           ))}
@@ -401,8 +401,8 @@ function SupplierPaymentForm({
           <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Source des fonds</label>
           <div className="flex items-center gap-4">
             {(['cash', 'vault'] as const).map(f => (
-              <button key={f} type="button" onClick={() => setPayFunding(f)}
-                className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === f ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
+              <button key={f} type="button" onClick={() => setPayFunding(f)} aria-pressed={payFunding === f}
+                className={`min-h-10 border-b-2 text-xs transition-colors ${payFunding === f ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-sec)] hover:text-[var(--w-text)]'}`}>
                 {f === 'cash' ? 'Caisse' : 'Coffre'}
               </button>
             ))}

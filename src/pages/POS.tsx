@@ -1,7 +1,7 @@
 import { clayTouchHandlers } from '../lib/clayTouch';
 import { useSalePrice } from '../lib/useSalePrice';
 import { formatVatAmount } from '../lib/salesVat';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import {
   Search,
@@ -93,6 +93,14 @@ import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTI
 import { fetchPosArticlesById, fetchPosCatalog, type PosArticle as ArticleLite, type PosArticleTier } from '../lib/posCatalog';
 
 const noScores: Record<string, number> = {};
+const WEB_ORDER_STATUS_LABELS: Record<string, string> = {
+  nouvelle: 'Nouvelle',
+  confirmee: 'Confirmée',
+  en_preparation: 'En préparation',
+  prete: 'Prête',
+  livree: 'Livrée',
+  annulee: 'Annulée',
+};
 
 type PosCashSession = CashSession & Pick<OperationalCashSession, 'register_code' | 'register_name'>;
 
@@ -233,6 +241,52 @@ function sessionDuration(opened: string) {
 
 
 
+function OpeningFundModal({ open, onClose, amount, onAmountChange, submitting, onSubmit }: {
+  open: boolean;
+  onClose: () => void;
+  amount: number;
+  onAmountChange: (amount: number) => void;
+  submitting: boolean;
+  onSubmit: () => void;
+}) {
+  const formId = useId();
+  const amountId = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const close = () => { if (!submitting) onClose(); };
+
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => input.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  return (
+    <Modal open={open} onClose={close} title="Fond de caisse" size="sm" layer="top"
+      footer={<>
+        <button type="button" onClick={close} disabled={submitting} className="btn-secondary text-xs disabled:opacity-50">Annuler</button>
+        <button type="submit" form={formId} disabled={submitting} className="btn-primary text-xs">
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+          Ouvrir la caisse
+        </button>
+      </>}
+    >
+      <form id={formId} onSubmit={event => {
+        event.preventDefault();
+        if (!submitting) onSubmit();
+      }}>
+        <label htmlFor={amountId} className="mb-1 block text-xs text-[var(--w-text-sec)]">Montant initial (facultatif)</label>
+        <div className="flex items-baseline gap-2">
+          <input ref={input} id={amountId} type="number" value={amount || ''}
+            onChange={event => onAmountChange(Math.max(0, Number(event.target.value)))}
+            className="w-input-ul min-w-0 flex-1 py-2 text-lg font-semibold num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            placeholder="0" min="0" inputMode="numeric" disabled={submitting} />
+          <span className="shrink-0 text-xs text-[var(--w-text-sec)]">FCFA</span>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function POSLandingOpenMinimal({
   tenantName, tenantLogo, fundModalOpen, setFundModalOpen,
   openingAmount, setOpeningAmount, openingSubmitting, openSessionSubmit,
@@ -254,7 +308,6 @@ function POSLandingOpenMinimal({
 }) {
   const [now, setNow] = useState(() => new Date());
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
-  const fundInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -269,22 +322,12 @@ function POSLandingOpenMinimal({
   }, []);
 
   useEffect(() => {
-    if (fundModalOpen) {
-      setTimeout(() => fundInputRef.current?.focus(), 50);
-    } else {
-      setOpeningAmount(0);
-    }
+    if (!fundModalOpen) setOpeningAmount(0);
   }, [fundModalOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dayStr = now.toLocaleDateString('fr-FR', { weekday: 'long' });
   const dateStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  const submitFund = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (openingSubmitting) return;
-    openSessionSubmit();
-  };
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] overflow-hidden">
@@ -309,7 +352,7 @@ function POSLandingOpenMinimal({
       </div>
 
       {/* Center: site + cashier info, then Ouvrir la caisse */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 gap-3">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-4 py-2">
         {/* Site name (larger, higher) + cashier below */}
         <div className="flex flex-col items-center gap-1.5 text-center">
           {siteName && <div className="text-sm sm:text-base font-semibold text-neutral-800"><span className="text-neutral-400 font-normal">Point de vente : </span>{siteName}</div>}
@@ -319,10 +362,10 @@ function POSLandingOpenMinimal({
         <button
           onClick={() => setFundModalOpen(true)}
           disabled={openDisabled}
-          className="disabled:opacity-40 disabled:pointer-events-none group flex flex-col items-center gap-3 px-8 py-7 rounded-xl bg-white shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
+          className="btn-primary min-h-11 text-sm"
         >
-          <ShoppingCart className="w-7 h-7 text-neutral-900 group-hover:text-brand-700 transition-colors" />
-          <span className="text-sm font-bold text-neutral-900 group-hover:text-brand-700 transition-colors">Ouvrir la caisse</span>
+          <ShoppingCart className="h-4 w-4" />
+          <span className="font-semibold">Ouvrir la caisse</span>
         </button>
       </div>
 
@@ -330,68 +373,26 @@ function POSLandingOpenMinimal({
       <div className="flex items-center justify-center gap-3 pb-4 sm:pb-8">
         <button
           onClick={onMenu}
-          className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-bold shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
+          className="btn-secondary min-h-11 text-sm"
         >
           <MenuIcon className="w-5 h-5" />
           Menu
         </button>
         <button
           onClick={() => setQuickActionsOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-3.5 rounded-xl bg-[var(--w-surface)] border border-[var(--w-separator)] hover:bg-[var(--w-hover)] text-[var(--w-text-sec)] text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] quick-action-pulse"
+          className="btn-secondary min-h-11 text-sm"
         >
           <Activity className="w-4 h-4" />
-          <span className="hidden sm:inline">Actions rapides</span>
+          <span>Actions rapides</span>
         </button>
       </div>
 
       {quickActionsOpen && <QuickActionsPanel onClose={() => setQuickActionsOpen(false)} />}
 
       {/* Fund modal */}
-      {fundModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 animate-fade-in">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !openingSubmitting && setFundModalOpen(false)} />
-          <form onSubmit={submitFund} className="relative w-full max-w-[340px] bg-white rounded-xl shadow-premium flex flex-col animate-scale-in">
-            <div className="px-5 py-3.5 border-b border-neutral-100">
-              <h3 className="text-sm font-bold text-neutral-900">Fond de caisse</h3>
-            </div>
-            <div className="px-5 py-4 flex-1">
-              <label className="text-[10px] text-neutral-400 leading-none mb-2 block">Montant initial — facultatif</label>
-              <div className="flex items-baseline gap-1">
-                <input
-                  ref={fundInputRef}
-                  type="number"
-                  value={openingAmount || ''}
-                  onChange={e => setOpeningAmount(Math.max(0, Number(e.target.value)))}
-                  className="w-input-ul flex-1 min-w-0 text-lg font-bold text-neutral-900 tabular-nums py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="0"
-                  min="0"
-                  inputMode="numeric"
-                  disabled={openingSubmitting}
-                />
-                <span className="text-sm font-medium text-neutral-400 shrink-0">FCFA</span>
-              </div>
-            </div>
-            <div className="px-5 py-3 border-t border-neutral-100 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setFundModalOpen(false)}
-                disabled={openingSubmitting}
-                className="px-3 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-40"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={openingSubmitting}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
-              >
-                {openingSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                Ouvrir la caisse
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <OpeningFundModal open={fundModalOpen} onClose={() => setFundModalOpen(false)}
+        amount={openingAmount} onAmountChange={setOpeningAmount} submitting={openingSubmitting}
+        onSubmit={openSessionSubmit} />
     </div>
   );
 }
@@ -411,21 +412,10 @@ function POSLandingOpenInline({ fundModalOpen, setFundModalOpen, openingAmount, 
   cashierName?: string;
   onBack: () => void;
 }) {
-  const fundInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (fundModalOpen) {
-      setTimeout(() => fundInputRef.current?.focus(), 50);
-    } else {
-      setOpeningAmount(0);
-    }
+    if (!fundModalOpen) setOpeningAmount(0);
   }, [fundModalOpen]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const submitFund = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (openingSubmitting) return;
-    openSessionSubmit();
-  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -445,57 +435,15 @@ function POSLandingOpenInline({ fundModalOpen, setFundModalOpen, openingAmount, 
       <button
         onClick={() => setFundModalOpen(true)}
         disabled={openDisabled}
-        className="disabled:opacity-40 disabled:pointer-events-none group flex flex-col items-center gap-3 px-8 py-7 rounded-xl bg-white shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
+        className="btn-primary min-h-11 text-sm"
       >
-        <ShoppingCart className="w-7 h-7 text-neutral-900 group-hover:text-brand-700 transition-colors" />
-        <span className="text-sm font-bold text-neutral-900 group-hover:text-brand-700 transition-colors">Ouvrir la caisse</span>
+        <ShoppingCart className="h-4 w-4" />
+        <span className="font-semibold">Ouvrir la caisse</span>
       </button>
 
-      {fundModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 animate-fade-in">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !openingSubmitting && setFundModalOpen(false)} />
-          <form onSubmit={submitFund} className="relative w-full max-w-[340px] bg-white rounded-xl shadow-premium flex flex-col animate-scale-in">
-            <div className="px-5 py-3.5 border-b border-neutral-100">
-              <h3 className="text-sm font-bold text-neutral-900">Fond de caisse</h3>
-            </div>
-            <div className="px-5 py-4 flex-1">
-              <label className="text-[10px] text-neutral-400 leading-none mb-2 block">Montant initial — facultatif</label>
-              <div className="flex items-baseline gap-1">
-                <input
-                  ref={fundInputRef}
-                  type="number"
-                  value={openingAmount || ''}
-                  onChange={e => setOpeningAmount(Math.max(0, Number(e.target.value)))}
-                  className="w-input-ul flex-1 min-w-0 text-lg font-bold text-neutral-900 tabular-nums py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="0"
-                  min="0"
-                  inputMode="numeric"
-                  disabled={openingSubmitting}
-                />
-                <span className="text-sm font-medium text-neutral-400 shrink-0">FCFA</span>
-              </div>
-            </div>
-            <div className="px-5 py-3 border-t border-neutral-100 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setFundModalOpen(false)}
-                disabled={openingSubmitting}
-                className="px-3 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-40"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={openingSubmitting}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
-              >
-                {openingSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                Ouvrir la caisse
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <OpeningFundModal open={fundModalOpen} onClose={() => setFundModalOpen(false)}
+        amount={openingAmount} onAmountChange={setOpeningAmount} submitting={openingSubmitting}
+        onSubmit={openSessionSubmit} />
     </div>
   );
 }
@@ -2769,7 +2717,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         </div>
 
-        <aside aria-label="Panier" className="hidden lg:flex w-[400px] xl:w-[440px] bg-[var(--w-surface)] border-l border-[var(--w-separator)] flex-col shadow-[inset_8px_0_24px_-16px_rgb(15_23_42_/0.08)]">
+        <aside aria-label="Panier" className="hidden lg:flex w-[400px] xl:w-[440px] bg-[var(--w-surface)] border-l border-[var(--w-separator)] flex-col">
           {CartPanel}
         </aside>
 
@@ -2835,14 +2783,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <Modal open={tierPickerOpen} onClose={() => { setTierPickerOpen(false); setTierPickerArticle(null); }} title="Choisir le tarif" size="sm">
             <div className="space-y-2">
               <p className="text-xs text-neutral-500 mb-3">Sélectionnez le tarif à appliquer pour <span className="font-semibold text-neutral-700">{tierPickerArticle.name}</span></p>
-              <button onClick={() => addToCartWithTier(tierPickerArticle, '', defaultPrice)} className="w-full text-left px-4 py-3 rounded-md border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all group">
+              <button onClick={() => addToCartWithTier(tierPickerArticle, '', defaultPrice)} className="w-option w-full rounded-md px-3 py-2.5 text-left">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-neutral-900">Prix standard</span>
                   <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(defaultPrice)}</span>
                 </div>
               </button>
               {tiers.map(t => (
-                <button key={t.tier_name} onClick={() => addToCartWithTier(tierPickerArticle, t.tier_name, t.price)} className="w-full text-left px-4 py-3 rounded-md border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all group">
+                <button key={t.tier_name} onClick={() => addToCartWithTier(tierPickerArticle, t.tier_name, t.price)} className="w-option w-full rounded-md px-3 py-2.5 text-left">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-neutral-900">{t.tier_name}</span>
                     <span className="text-sm font-bold text-brand-700 num">{formatFCFA(t.price)}</span>
@@ -2913,10 +2861,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             }} className="btn-icon-primary" title="Facture"><FileText className="w-4 h-4" /></button>
           </div>}
         >
-          <div className="text-center py-4">
-            <div className="w-14 h-14 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-3">
-              <Check className="w-7 h-7 text-neutral-700" />
-            </div>
+          <div className="space-y-1 py-2">
             <div className="font-semibold text-neutral-900">{lastSale.sale_number}</div>
             <div className="text-2xl font-bold text-brand-800 mt-1">{formatFCFA(lastSale.total)}</div>
             {lastSale.payments.reduce((s, p) => s + p.amount, 0) > lastSale.total && (
@@ -2937,7 +2882,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : (
           <div className="space-y-2">
             {heldCarts.map(h => (
-              <div key={h.id} className="flex items-center justify-between p-3 border border-neutral-200 rounded-md hover:bg-neutral-50">
+              <div key={h.id} className="w-tr-hover flex items-center justify-between gap-2 border-b border-[var(--w-separator-l)] py-3">
                 <div className="min-w-0">
                   <div className="font-semibold text-sm">{h.label}</div>
                   <div className="text-xs text-neutral-500">{h.cart.length} article{h.cart.length > 1 ? 's' : ''} · {formatFCFA(h.cart.reduce((s, i) => s + i.quantity * i.unit_price - i.discount, 0) - h.discount)}</div>
@@ -3017,9 +2962,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   disabled={active}
                   className="w-full flex items-center gap-3 px-1 py-3 text-left transition-colors disabled:cursor-default"
                 >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500'}`}>
-                    <Store className="w-4 h-4" />
-                  </div>
+                  <Store className="h-4 w-4 shrink-0 text-[var(--w-text-sec)]" aria-hidden="true" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-neutral-900 truncate">{s.name}</p>
                     {s.address && <p className="text-[10px] text-neutral-500 truncate">{s.address}</p>}
@@ -3049,9 +2992,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 const active = webOrdersFilter === f.k;
                 return (
                   <button key={f.k} onClick={() => setWebOrdersFilter(f.k as any)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${active ? 'bg-gradient-to-r from-brand-600 to-brand-800 text-white shadow-sm' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`}>
+                    aria-pressed={active} className={`btn-secondary text-xs ${active ? 'w-option-selected font-semibold' : ''}`}>
                     <Icon className="w-3.5 h-3.5" />{f.label}
-                    <span className={`min-w-[20px] h-4 px-1 rounded-full flex items-center justify-center text-[10px] ${active ? 'bg-white/25' : 'bg-white text-neutral-700'}`}>{f.count}</span>
+                    <span className="num text-[var(--w-text-sec)]">({f.count})</span>
                   </button>
                 );
               })}
@@ -3062,28 +3005,30 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             ) : webOrdersFiltered.length === 0 ? (
               <EmptyState icon={Globe} title="Aucune commande" description="Aucune commande web dans cette catégorie." />
             ) : (
-              <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="divide-y divide-[var(--w-separator-l)] border-t border-[var(--w-separator)]">
                 {webOrdersFiltered.map(o => {
                   const transformed = !!o.sale_id;
                   return (
                     <button key={o.id} onClick={() => openWebOrderDetail(o)}
-                      className="w-full text-left p-3 rounded-md bg-white border border-neutral-200 hover:border-brand-400 hover:shadow-sm transition-all">
+                      className="w-tr-hover w-full px-1 py-3 text-left transition-colors">
                       <div className="flex items-start gap-3">
-                        <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 ${o.status === 'annulee' ? 'bg-rose-100 text-rose-700' : transformed ? 'bg-neutral-100 text-neutral-800' : 'bg-brand-100 text-brand-700'}`}>
-                          {o.delivery_mode === 'livraison' ? <Truck className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
-                        </div>
+                        {o.delivery_mode === 'livraison'
+                          ? <Truck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--w-text-sec)]" />
+                          : <ShoppingBag className="mt-0.5 h-4 w-4 shrink-0 text-[var(--w-text-sec)]" />}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-extrabold text-neutral-900 tracking-wider text-sm">{o.order_number}</span>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${o.status === 'nouvelle' ? 'bg-neutral-100 text-neutral-700' : o.status === 'confirmee' ? 'bg-neutral-100 text-neutral-800' : o.status === 'en_preparation' ? 'bg-amber-100 text-amber-700' : o.status === 'prete' ? 'bg-neutral-200 text-neutral-800' : o.status === 'livree' ? 'bg-neutral-100 text-neutral-800' : 'bg-rose-100 text-rose-700'}`}>{o.status}</span>
-                            {transformed && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-neutral-900 text-white inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Transformée</span>}
-                            {o.payment_status !== 'paye' && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">{o.payment_status === 'en_attente' ? 'Attente' : 'Non payé'}</span>}
+                            <span className="doc-number break-all text-sm font-semibold text-[var(--w-text)]">{o.order_number}</span>
+                            <span className={`text-xs ${o.status === 'annulee' ? 'text-red-600' : 'text-[var(--w-text-sec)]'}`}>
+                              {WEB_ORDER_STATUS_LABELS[o.status] ?? o.status}
+                            </span>
+                            {transformed && <span className="inline-flex items-center gap-1 text-xs text-[var(--w-text-sec)]"><CheckCircle2 className="h-3 w-3" />Transformée</span>}
+                            {o.payment_status !== 'paye' && <span className="text-xs text-amber-700">{o.payment_status === 'en_attente' ? 'Paiement en attente' : 'Non payée'}</span>}
                           </div>
                           <div className="text-xs text-neutral-600 mt-0.5 break-words">{o.customer_name} · <Phone className="inline w-3 h-3" /> {o.customer_phone}</div>
                           <div className="text-[11px] text-neutral-400 mt-0.5">{new Date(o.created_at).toLocaleString('fr-FR')}</div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="font-extrabold text-neutral-900 num">{formatFCFA(o.total)}</div>
+                          <div className="num whitespace-nowrap text-sm font-semibold text-[var(--w-text)]">{formatFCFA(o.total)}</div>
                           <div className="text-[10px] text-neutral-500 capitalize">{(o.payment_mode || '').replace(/_/g, ' ')}</div>
                         </div>
                       </div>
@@ -3096,27 +3041,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : (
           <div className="space-y-3">
             <button onClick={() => { setWebOrderDetail(null); setWebOrderItems([]); }} className="btn-icon" title="Retour à la liste"><ChevronLeft className="w-4 h-4" /></button>
-            <div className="p-4 rounded-md bg-gradient-to-br from-brand-50 to-white border border-brand-100">
-              <div className="flex items-start justify-between gap-3">
+            <div className="border-b border-[var(--w-separator)] pb-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700">Commande</div>
-                  <div className="font-extrabold text-lg text-neutral-900 tracking-wider">{webOrderDetail.order_number}</div>
+                  <div className="text-xs text-[var(--w-text-sec)]">Commande</div>
+                  <div className="doc-number text-lg font-semibold text-[var(--w-text)]">{webOrderDetail.order_number}</div>
                   <div className="text-xs text-neutral-600 mt-1">{new Date(webOrderDetail.created_at).toLocaleString('fr-FR')}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Total</div>
-                  <div className="font-extrabold text-xl text-neutral-900 num">{formatFCFA(webOrderDetail.total)}</div>
+                  <div className="num whitespace-nowrap text-xl font-semibold text-[var(--w-text)]">{formatFCFA(webOrderDetail.total)}</div>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-3 rounded-md bg-neutral-50 border border-neutral-200">
+            <div className="grid gap-3 border-b border-[var(--w-separator)] pb-3 text-xs sm:grid-cols-2">
+              <div className="min-w-0 break-words">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1 flex items-center gap-1"><User className="w-3 h-3" />Client</div>
                 <div className="font-bold text-neutral-900">{webOrderDetail.customer_name}</div>
                 <div className="text-neutral-600 flex items-center gap-1 mt-0.5"><Phone className="w-3 h-3" />{webOrderDetail.customer_phone}</div>
                 {webOrderDetail.customer_whatsapp && <div className="text-neutral-800 mt-0.5">WhatsApp: {webOrderDetail.customer_whatsapp}</div>}
               </div>
-              <div className="p-3 rounded-md bg-neutral-50 border border-neutral-200">
+              <div className="min-w-0 break-words">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1 flex items-center gap-1">
                   {webOrderDetail.delivery_mode === 'livraison' ? <Truck className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
                   {webOrderDetail.delivery_mode === 'livraison' ? 'Livraison' : 'Retrait'}
@@ -3125,16 +3070,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 {webOrderDetail.delivery_fee > 0 && <div className="text-neutral-500 mt-0.5">Frais: {formatFCFA(webOrderDetail.delivery_fee)}</div>}
               </div>
             </div>
-            <div className="p-3 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-900">
+            <div className="flex items-start gap-2 border-l border-[var(--w-separator)] pl-3">
+              <AlertCircle className="w-4 h-4 text-[var(--w-text-sec)] shrink-0 mt-0.5" />
+              <div className="text-xs text-[var(--w-text-sec)]">
                 <div className="font-bold">Paiement: <span className="capitalize">{(webOrderDetail.payment_mode || '').replace(/_/g, ' ')}</span></div>
                 <div className="mt-0.5">Le stock sera décrémenté uniquement lors de la validation de la vente en caisse.</div>
               </div>
             </div>
-            <div className="rounded-md border border-neutral-200 overflow-hidden">
-              <div className="px-3 py-2 bg-neutral-50 border-b border-neutral-200 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Articles ({webOrderItems.length})</div>
-              <div className="divide-y divide-neutral-100 max-h-60 overflow-y-auto">
+            <div className="border-y border-[var(--w-separator)]">
+              <div className="w-thead px-2 py-2 text-xs font-semibold text-[var(--w-text-sec)]">Articles ({webOrderItems.length})</div>
+              <div className="divide-y divide-[var(--w-separator-l)]">
                 {webOrderItems.map(it => (
                   <div key={it.id} className="flex items-start justify-between px-3 py-2 gap-2">
                     <div className="min-w-0 flex-1">
@@ -3147,29 +3092,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </div>
             </div>
             {webOrderDetail.customer_note && (
-              <div className="p-3 rounded-md bg-neutral-50 border border-neutral-200 text-xs text-neutral-700">
+              <div className="break-words text-xs text-[var(--w-text-sec)]">
                 <span className="font-bold">Note client:</span> {webOrderDetail.customer_note}
               </div>
             )}
             <div className="flex flex-col sm:flex-row gap-2">
               {!webOrderDetail.sale_id && webOrderDetail.status !== 'annulee' && (
                 <button onClick={loadToCartFromWebOrder} disabled={!session || transforming}
-                  className="flex-1 h-11 rounded-md bg-gradient-to-r from-brand-600 to-brand-800 text-white font-bold inline-flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.98] transition-all shadow-glow disabled:opacity-60">
+                  className="btn-primary min-h-11 text-sm">
                   <ArrowRight className="w-4 h-4" />Transformer en vente
                 </button>
               )}
               {webOrderDetail.sale_id && webOrderDetail.status !== 'livree' && (
-                <button onClick={() => markWebOrderDelivered(webOrderDetail)} className="flex-1 h-11 rounded-md bg-neutral-900 text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all">
+                <button onClick={() => markWebOrderDelivered(webOrderDetail)} className="btn-primary min-h-11 text-sm">
                   <CheckCircle2 className="w-4 h-4" />Marquer livrée
                 </button>
               )}
               {webOrderDetail.customer_phone && (
-                <a href={`tel:${webOrderDetail.customer_phone}`} className="h-11 px-4 rounded-md bg-neutral-100 text-neutral-700 font-semibold inline-flex items-center justify-center gap-2 hover:bg-neutral-200 transition-all">
+                <a href={`tel:${webOrderDetail.customer_phone}`} className="btn-secondary min-h-11 text-sm">
                   <Phone className="w-4 h-4" />Appeler
                 </a>
               )}
               {webOrderDetail.status !== 'annulee' && !webOrderDetail.sale_id && (
-                <button onClick={() => cancelWebOrder(webOrderDetail)} className="h-11 px-4 rounded-md bg-rose-50 text-rose-700 font-semibold inline-flex items-center justify-center gap-2 hover:bg-rose-100 transition-all border border-rose-200">
+                <button onClick={() => cancelWebOrder(webOrderDetail)} className="btn-secondary min-h-11 text-sm">
                   <X className="w-4 h-4" />Annuler
                 </button>
               )}
@@ -3264,36 +3209,34 @@ function PaymentScreen({
     setPayments(arr => arr.map((p, i) => i === idx ? { ...p, amount: needed } : p));
   };
 
+  const close = () => { if (!paying) onClose(); };
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center animate-fade-in">
-      <div className="absolute inset-0 bg-neutral-900/50" onClick={paying ? undefined : onClose} />
-      <div className="relative w-[calc(100%-32px)] max-w-[420px] bg-white rounded-lg shadow-lg flex flex-col max-h-[88vh]">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3">
-          <div className="flex items-baseline gap-3">
-            <p className="text-[20px] font-bold text-neutral-900 num leading-none tracking-tight">{formatPayment(total)}</p>
-            {totalPaid > 0 && (
-              <span className="text-[11px] num">
-                {remaining > 0
-                  ? <span className="text-amber-600 font-semibold">reste {formatPayment(remaining)}</span>
-                  : <span className="text-neutral-500">monnaie {formatPayment(-remaining)}</span>
-                }
-              </span>
-            )}
-          </div>
-          <button onClick={onClose} className="p-1.5 -mr-1.5 text-neutral-400 hover:text-neutral-700 transition-colors" disabled={paying}>
-            <X className="w-4 h-4" />
+    <Modal open onClose={close} title="Encaisser la vente" size="sm" layer="top"
+      footer={<>
+        <button type="button" onClick={close} className="btn-secondary text-xs disabled:opacity-50" disabled={paying}>Annuler</button>
+        {(enough || canPartial) && (
+          <button type="button" onClick={onValidate} disabled={paying || !ipmDocsValid} className="btn-primary text-xs">
+            {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : enough ? <Check className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+            {paying ? 'Traitement…' : enough ? 'Valider le paiement' : 'Valider le paiement partiel'}
           </button>
+        )}
+      </>}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-[var(--w-separator)] pb-3">
+        <div>
+          <p className="text-xs text-[var(--w-text-sec)]">À encaisser</p>
+          <p className="num whitespace-nowrap text-xl font-semibold text-[var(--w-text)]">{formatPayment(total)}</p>
         </div>
-        <div className="h-px bg-[var(--w-separator-l)]" />
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        {totalPaid > 0 && (
+          <p role="status" className="num text-xs text-[var(--w-text-sec)]">
+            {remaining > 0 ? 'Reste à payer' : 'Monnaie à rendre'} <strong className="whitespace-nowrap">{formatPayment(Math.abs(remaining))}</strong>
+          </p>
+        )}
+      </div>
 
           {/* Customer + IPM compact banner */}
           {(customer || ipmInfo) && (
-            <div className="px-4 py-2 flex items-center gap-2 text-[11px] border-b border-[var(--w-separator-l)]">
+            <div className="py-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] border-b border-[var(--w-separator-l)]">
               {customer && <><User className="w-3 h-3 text-neutral-400" /><span className="font-semibold text-neutral-700">{customer.name}</span>{
                 Number((customer as any).balance || 0) !== 0 && <span className="text-amber-700 font-bold num">({formatFCFA(Number((customer as any).balance || 0))})</span>
               }</>}
@@ -3304,9 +3247,9 @@ function PaymentScreen({
 
           {/* Payment lines */}
           {payments.length > 0 && (
-            <div className="px-4">
+            <div className="divide-y divide-[var(--w-separator-l)]">
               {payments.map((p, idx) => (
-                <div key={idx} className="flex items-center gap-2 py-2 border-b border-neutral-100 last:border-b-0">
+                <div key={idx} className="flex items-center gap-2 py-2">
                   <div className="flex-1 min-w-0">
                     <span className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">{p.method_name}</span>
                     <input
@@ -3314,19 +3257,20 @@ function PaymentScreen({
                       inputMode="numeric"
                       value={p.amount || ''}
                       onChange={e => updateAmount(idx, e.target.value)}
-                      className="w-full bg-transparent text-[16px] font-bold num text-neutral-900 outline-none border-none p-0 leading-tight [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      aria-label={`Montant · ${p.method_name}`}
+                      className="w-input-ul w-full py-1 text-sm font-semibold num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="0"
                     />
                   </div>
                   <button onClick={() => setExact(idx)} className="px-1.5 py-0.5 text-[9px] font-bold text-neutral-600 hover:text-neutral-900 transition-colors">Exact</button>
-                  <button onClick={() => removePayment(idx)} className="p-1 text-neutral-300 hover:text-red-500 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                  <button onClick={() => removePayment(idx)} aria-label={`Retirer ${p.method_name}`} className="btn-icon"><Trash2 className="w-3 h-3" /></button>
                 </div>
               ))}
             </div>
           )}
 
           {/* Payment methods */}
-          <div className="px-4 py-2.5">
+          <div className="py-2.5">
             {payments.length === 0 && <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-neutral-400 mb-1.5">Mode de paiement</p>}
             <div>
               {methods.filter(m => !payments.some(p => p.payment_method_id === m.id)).map(m => (
@@ -3340,9 +3284,9 @@ function PaymentScreen({
 
           {/* Credit sale option */}
           {customer && totalPaid === 0 && (
-            <div className="px-4 py-2 border-t border-neutral-100">
+            <div className="border-t border-[var(--w-separator)] py-2">
               <button onClick={onValidateCredit} disabled={paying || !ipmDocsValid}
-                className="w-full flex items-center justify-center gap-1.5 h-8 text-amber-800 hover:bg-amber-50 transition-colors text-[11px] font-bold disabled:opacity-50">
+                className="btn-secondary w-full text-xs disabled:opacity-50">
                 {paying ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
                 Tout à crédit
               </button>
@@ -3351,7 +3295,7 @@ function PaymentScreen({
 
           {/* Document fields */}
           {hasDocFields && (
-            <div className="px-4 py-2 border-t border-neutral-100">
+            <div className="border-t border-[var(--w-separator)] py-2">
               <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-neutral-400 mb-2">Document</p>
               {docSettings.show_reference && (
                 <div className="mb-2">
@@ -3391,7 +3335,7 @@ function PaymentScreen({
 
           {/* IPM mandatory documents */}
           {hasIpmDocFields && setIpmDocuments && (
-            <div className="px-4 py-2 border-t border-neutral-100">
+            <div className="border-t border-[var(--w-separator)] py-2">
               <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-neutral-400 mb-2">Documents IPM</p>
               {ipmDocRequired?.ordonnance && (
                 <div className="mb-2">
@@ -3416,52 +3360,23 @@ function PaymentScreen({
               )}
             </div>
           )}
-        </div>
 
         {/* Print toggles */}
-        <div className="border-t border-neutral-100 px-4 py-2 space-y-1.5">
-          <label className="flex items-center justify-between cursor-pointer select-none">
-            <span className="text-[10px] text-neutral-600 flex items-center gap-1"><Printer className="w-3 h-3" /> Ticket auto</span>
-            <button type="button" role="switch" aria-checked={autoPrintTicket}
-              onClick={() => { const next = !autoPrintTicket; setAutoPrintTicket(next); if (next) setAutoPrintInvoice(false); }}
-              className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${autoPrintTicket ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
-              <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${autoPrintTicket ? 'translate-x-[14px]' : ''}`} />
-            </button>
+        <div className="border-t border-[var(--w-separator)] pt-2 text-xs text-[var(--w-text-sec)]">
+          <label className="flex cursor-pointer select-none items-center gap-2 py-2">
+            <input type="checkbox" checked={autoPrintTicket}
+              onChange={e => { setAutoPrintTicket(e.target.checked); if (e.target.checked) setAutoPrintInvoice(false); }}
+              className="h-4 w-4 shrink-0 accent-neutral-900" />
+            Imprimer automatiquement le ticket
           </label>
-          <label className="flex items-center justify-between cursor-pointer select-none">
-            <span className="text-[10px] text-neutral-600 flex items-center gap-1"><FileText className="w-3 h-3" /> Facture auto</span>
-            <button type="button" role="switch" aria-checked={autoPrintInvoice}
-              onClick={() => { const next = !autoPrintInvoice; setAutoPrintInvoice(next); if (next) setAutoPrintTicket(false); }}
-              className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${autoPrintInvoice ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
-              <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${autoPrintInvoice ? 'translate-x-[14px]' : ''}`} />
-            </button>
+          <label className="flex cursor-pointer select-none items-center gap-2 py-2">
+            <input type="checkbox" checked={autoPrintInvoice}
+              onChange={e => { setAutoPrintInvoice(e.target.checked); if (e.target.checked) setAutoPrintTicket(false); }}
+              className="h-4 w-4 shrink-0 accent-neutral-900" />
+            Imprimer automatiquement la facture
           </label>
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-neutral-100 px-4 py-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          {enough ? (
-            <button onClick={onValidate} disabled={paying || !ipmDocsValid}
-              className="h-10 px-5 rounded-md bg-neutral-900 text-white text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50 order-1 sm:order-2 sm:ml-auto">
-              {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              <span>{paying ? 'Traitement...' : `Valider · ${formatPayment(total)}`}</span>
-            </button>
-          ) : canPartial ? (
-            <button onClick={onValidate} disabled={paying || !ipmDocsValid}
-              className="h-10 px-5 rounded-md bg-neutral-900 text-white text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50 order-1 sm:order-2 sm:ml-auto">
-              {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              <span>{paying ? 'Traitement...' : `Partiel · ${formatPayment(remaining)} crédit`}</span>
-            </button>
-          ) : (
-            <div className="h-10 px-5 rounded-md bg-neutral-50 text-neutral-400 font-semibold text-[13px] flex items-center justify-center border border-neutral-100 order-1 sm:order-2 sm:ml-auto">
-              {totalPaid === 0 ? 'Choisir un mode' : `Reste ${formatPayment(remaining)}`}
-            </div>
-          )}
-          <button onClick={onClose} className="h-10 px-4 rounded-md border border-neutral-200 text-[13px] font-semibold text-neutral-700 hover:border-neutral-400 transition-colors order-2 sm:order-1" disabled={paying}>
-            Annuler
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

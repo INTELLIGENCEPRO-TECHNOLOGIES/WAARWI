@@ -1,10 +1,11 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, ChevronLeft, CreditCard, Package, HandCoins, RotateCcw, Search, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, ChevronLeft, CreditCard, Package, HandCoins, RotateCcw, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA } from '../lib/format';
 import { CashModal } from '../components/CashModal';
+import { PageSearch } from '../components/PageSearch';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printXReport80, buildPrintTenantForSite } from '../lib/print';
@@ -293,23 +294,19 @@ export function CashHistory() {
   return (
     <div className="space-y-3">
       {/* Premium unified search bar with embedded title + date picker */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)]">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Caisse</h1>
-        <div className="flex items-center gap-2">
-          <Search className="w-4 h-4 text-neutral-400 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="w-input-ul w-full text-sm py-1.5" />
-          </div>
-          {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-4 h-4" /></button>}
-          <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-colors ${dateFrom || dateTo ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
-            <Calendar className="w-4 h-4" />
-            <span className="hidden md:inline max-w-[120px] truncate">{dateLabel}</span>
-          </button>
-        </div>
+        <PageSearch value={search} onChange={setSearch} placeholder="Rechercher une session…"
+          rightSlot={(
+            <button type="button" onClick={() => setPickerOpen(true)} className={`btn-ghost shrink-0 text-xs ${dateFrom || dateTo ? 'font-semibold' : ''}`}>
+              <Calendar className="h-4 w-4" />
+              <span>{dateLabel}</span>
+            </button>
+          )} />
       </div>
 
       {/* Inline stats chips */}
-      <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap mt-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium">
         <span className="shrink-0 text-neutral-500 num">{totalCount} session{totalCount !== 1 ? 's' : ''}</span>
         {stats.open_count > 0 && <span className="shrink-0 text-neutral-700 num">{stats.open_count} ouverte{stats.open_count > 1 ? 's' : ''}</span>}
         {stats.closed_count > 0 && <span className="shrink-0 text-neutral-600 num">{stats.closed_count} clôturée{stats.closed_count > 1 ? 's' : ''}</span>}
@@ -342,7 +339,7 @@ export function CashHistory() {
       ) : (
         <>
           {/* MOBILE: flat list */}
-          <div className="md:hidden divide-y divide-neutral-100">
+          <div className="divide-y divide-[var(--w-separator-l)] xl:hidden">
             {filtered.map(s => {
               const variance = s.variance != null ? Number(s.variance) : null;
               const isOpen = s.status === 'open';
@@ -351,14 +348,14 @@ export function CashHistory() {
               const closed = s.closed_at ? new Date(s.closed_at) : null;
               const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
               return (
-                <button key={s.id} data-row-id={s.id} onClick={() => openDetail(s)} className="w-full text-left px-2 py-3 flex flex-col gap-1.5 active:bg-neutral-50 transition-colors">
+                <button key={s.id} data-row-id={s.id} onClick={() => openDetail(s)} className="w-tr-hover flex w-full flex-col gap-1.5 px-2 py-3 text-left transition-colors">
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] font-bold tracking-wider text-neutral-800">#{s.id.slice(0, 8).toUpperCase()}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider ${isOpen ? 'text-neutral-700' : 'text-neutral-400'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="doc-number text-sm font-semibold">#{s.id.slice(0, 8).toUpperCase()}</span>
+                        <span className={`text-xs font-medium ${isOpen ? 'text-[var(--w-text)]' : 'text-[var(--w-text-sec)]'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
                       </div>
-                      <div className="text-[10px] text-neutral-500 num leading-tight mt-0.5 truncate">
+                      <div className="text-[10px] text-neutral-500 num leading-tight mt-0.5">
                         {opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         {closed && <>→{closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</>}
                         {duration != null && <span className="text-neutral-400"> · {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
@@ -372,19 +369,19 @@ export function CashHistory() {
                     </div>
                     <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
                   </div>
-                  <div className="grid grid-cols-3 gap-1 pt-1">
+                  <div className="flex flex-wrap items-start gap-x-4 gap-y-1 pt-1">
                     <div className="flex flex-col items-start">
                       <span className="text-[9px] text-neutral-400">Fond</span>
-                      <span className="text-[11px] font-bold text-neutral-800 num">{formatFCFA(s.opening_amount)}</span>
+                      <span className="text-xs font-semibold text-neutral-800 num whitespace-nowrap">{formatFCFA(s.opening_amount)}</span>
                     </div>
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-start">
                       <span className="text-[9px] text-neutral-400">Compté</span>
-                      <span className="text-[11px] font-bold text-neutral-800 num">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</span>
+                      <span className="text-xs font-semibold text-neutral-800 num whitespace-nowrap">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</span>
                     </div>
-                    <div className="flex flex-col items-end">
+                    <div className="flex flex-col items-start">
                       <span className="text-[9px] text-neutral-400">Écart</span>
                       {variance != null ? (
-                        <span className={`text-[11px] font-bold num ${balanced ? 'text-neutral-600' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                        <span className={`text-xs font-semibold num whitespace-nowrap ${balanced ? 'text-neutral-600' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                           {balanced ? 'OK' : `${variance > 0 ? '+' : ''}${formatFCFA(Math.abs(variance))}`}
                         </span>
                       ) : <span className="text-[11px] text-neutral-400">—</span>}
@@ -396,9 +393,9 @@ export function CashHistory() {
           </div>
 
           {/* DESKTOP: list */}
-          <div className="hidden md:block">
+          <div className="hidden xl:block">
             <table className="w-full text-sm">
-              <thead className="text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-slate-200">
+              <thead className="w-thead border-b border-[var(--w-separator)] text-xs font-semibold">
                 <tr>
                   <th className="px-2 py-1.5 text-left whitespace-nowrap">Session</th>
                   {showRegister && <th className="px-2 py-1.5 text-left whitespace-nowrap">Caisse</th>}
@@ -422,7 +419,7 @@ export function CashHistory() {
                   const closed = s.closed_at ? new Date(s.closed_at) : null;
                   const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
                   return (
-                    <tr key={s.id} data-row-id={s.id} className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
+                    <tr key={s.id} data-row-id={s.id} className="w-tr-hover border-b border-[var(--w-separator-l)] transition-colors cursor-pointer" onClick={() => openDetail(s)}>
                       <td className="px-2 py-1.5 doc-number text-[12px] font-bold text-neutral-700 whitespace-nowrap">#{s.id.slice(0, 8).toUpperCase()}</td>
                       {showRegister && <td className="px-2 py-1.5 text-[11px] font-semibold text-neutral-800 break-words min-w-[8rem]">{sessionRegister(s)}</td>}
                       {showRegister && <td className="px-2 py-1.5 text-[11px] text-neutral-600 break-words">{s.cashier_name || '—'}</td>}
@@ -442,7 +439,7 @@ export function CashHistory() {
                         ) : <span className="text-[11px] text-neutral-400">—</span>}
                       </td>
                       <td className="px-2 py-1.5 text-right">
-                        <button onClick={(e) => { e.stopPropagation(); openDetail(s); }} className="text-[10px] font-semibold text-neutral-500 hover:text-brand-700 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); openDetail(s); }} className="btn-ghost text-xs">
                           Voir
                         </button>
                       </td>
@@ -454,11 +451,11 @@ export function CashHistory() {
           </div>
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 py-3">
+            <div className="flex flex-wrap items-center justify-center gap-2 border-t border-[var(--w-separator)] py-3">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(p => Math.max(1, p - 1))}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="btn-secondary text-xs disabled:opacity-50"
               >
                 <ChevronLeft className="w-4 h-4" /> Précédent
               </button>
@@ -466,7 +463,7 @@ export function CashHistory() {
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="btn-secondary text-xs disabled:opacity-50"
               >
                 Suivant <ChevronRight className="w-4 h-4" />
               </button>
@@ -475,13 +472,13 @@ export function CashHistory() {
         </>
       )}
 
-      {/* Detail modal — fintech ultra compact */}
+      {/* Détail de la session */}
       <CashModal open={detailOpen} onClose={() => setDetailOpen(false)} title="Détail de la session"
         footer={<>
-          <button onClick={() => setDetailOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          <button onClick={() => setDetailOpen(false)} className="btn-secondary text-xs"><X className="h-4 w-4" />Fermer</button>
           {detail && (
-            <button onClick={() => printReport(detail)} className="btn-icon-primary" title="Imprimer X de caisse">
-              <Printer className="w-4 h-4" />
+            <button onClick={() => printReport(detail)} className="btn-primary text-xs">
+              <Printer className="h-4 w-4" />Imprimer le X de caisse
             </button>
           )}
         </>}
@@ -539,7 +536,7 @@ export function CashHistory() {
               const variance = detail.session.variance;
               return (
                 <div className="divide-y divide-neutral-100">
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-black">Ventes validées</span>
                     <div className="text-right shrink-0">
                       <span className="text-sm font-bold text-neutral-900 num">{detail.sales.length}</span>
@@ -548,41 +545,41 @@ export function CashHistory() {
                       )}
                     </div>
                   </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-black">Facturé</span>
                     <span className="text-sm font-bold text-neutral-900 num shrink-0">{formatFCFA(salesTotal)}</span>
                   </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-black">Fond initial</span>
                     <span className="text-sm font-bold text-neutral-900 num shrink-0">{formatFCFA(openingAmount)}</span>
                   </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-black">Encaissé</span>
                     <span className="text-sm font-bold text-emerald-700 num shrink-0">+{formatFCFA(totalEncaisse)}</span>
                   </div>
                   {mvVaultIn > 0 && (
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-black">Transfert reçu du coffre</span>
                       <span className="text-sm font-bold text-emerald-700 num shrink-0">+{formatFCFA(mvVaultIn)}</span>
                     </div>
                   )}
                   {mvVaultOut > 0 && (
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-black">Versement au coffre</span>
                       <span className="text-sm font-bold text-red-600 num shrink-0">-{formatFCFA(mvVaultOut)}</span>
                     </div>
                   )}
                   {totalSorties > 0 && (
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-black">Sorties</span>
                       <span className="text-sm font-bold text-red-600 num shrink-0">-{formatFCFA(totalSorties)}</span>
                     </div>
                   )}
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-black">Caisse théorique</span>
                     <span className="text-sm font-bold text-neutral-900 num shrink-0">{formatFCFA(net)}</span>
                   </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-black">Écart</span>
                     <span className={`text-sm font-bold num shrink-0 ${(variance || 0) === 0 ? 'text-neutral-700' : (variance || 0) < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                       {variance != null ? (variance === 0 ? 'OK' : `${variance > 0 ? '+' : ''}${formatFCFA(variance)}`) : '--'}
@@ -596,14 +593,14 @@ export function CashHistory() {
             <div className="mt-1 divide-y divide-neutral-100">
               {/* Encaissements par mode */}
               {detail.byMethod.length > 0 && (<>
-                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'modes' ? null : 'modes'); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'modes' ? null : 'modes'); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 py-2.5 px-1 rounded-md text-left w-tr-hover transition-colors">
                   <div className="flex items-center gap-2 min-w-0">
                     <CreditCard className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                     <span className="text-[10px] text-neutral-400 shrink-0 num">{detail.byMethod.length}</span>
                     <span className="text-xs font-semibold text-neutral-800">Encaissements par mode</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-bold text-neutral-800 num">{formatFCFA(detail.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
+                    <span className="text-xs font-semibold text-neutral-800 num whitespace-nowrap">{formatFCFA(detail.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
                     <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${detailExpanded === 'modes' ? 'rotate-90' : ''}`} />
                   </div>
                 </button>
@@ -613,7 +610,7 @@ export function CashHistory() {
                       const total = detail.byMethod.reduce((s, x) => s + x.amount, 0);
                       const pct = total > 0 ? (m.amount / total) * 100 : 0;
                       return (
-                        <div key={m.method_name} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-1.5 pl-6 text-xs">
+                        <div key={m.method_name} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-1.5 pl-6 text-xs">
                           <span className="text-neutral-600">{m.method_name}</span>
                           <div className="flex items-center gap-2 shrink-0">
                             <span className="text-[10px] text-neutral-400 num">{pct.toFixed(0)}%</span>
@@ -628,7 +625,7 @@ export function CashHistory() {
 
               {/* Reglements factures */}
               {detail.invoicePayments.length > 0 && (<>
-                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'reglements' ? null : 'reglements'); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'reglements' ? null : 'reglements'); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 py-2.5 px-1 rounded-md text-left w-tr-hover transition-colors">
                   <div className="flex items-center gap-2 min-w-0">
                     <Wallet className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                     <span className="text-[10px] text-neutral-400 shrink-0 num">{detail.invoicePayments.length}</span>
@@ -672,7 +669,7 @@ export function CashHistory() {
                   id: typeof detailExpanded; icon: any; label: string;
                   items: CashMovementRow[]; total: number; sign: string; color: string;
                 }) => items.length === 0 ? null : (<>
-                  <button onClick={() => { tap(); setDetailExpanded(detailExpanded === id ? null : id); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                  <button onClick={() => { tap(); setDetailExpanded(detailExpanded === id ? null : id); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 py-2.5 px-1 rounded-md text-left w-tr-hover transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                       <span className="text-[10px] text-neutral-400 shrink-0 num">{items.length}</span>
@@ -714,14 +711,14 @@ export function CashHistory() {
               })()}
 
               {/* Ventes */}
-              <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'ventes' ? null : 'ventes'); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+              <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'ventes' ? null : 'ventes'); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 py-2.5 px-1 rounded-md text-left w-tr-hover transition-colors">
                 <div className="flex items-center gap-2 min-w-0">
                   <Package className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <span className="text-[10px] text-neutral-400 shrink-0 num">{detail.sales.length}</span>
                   <span className="text-xs font-semibold text-neutral-800">Ventes de la session</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-bold text-neutral-800 num">{formatFCFA(detail.sales.reduce((s, x) => s + x.total, 0))}</span>
+                  <span className="text-xs font-semibold text-neutral-800 num whitespace-nowrap">{formatFCFA(detail.sales.reduce((s, x) => s + x.total, 0))}</span>
                   <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${detailExpanded === 'ventes' ? 'rotate-90' : ''}`} />
                 </div>
               </button>
@@ -746,7 +743,7 @@ export function CashHistory() {
 
               {/* Controle de caisse */}
               {detail.controls.length > 0 && (<>
-                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'controle' ? null : 'controle'); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'controle' ? null : 'controle'); }} className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 py-2.5 px-1 rounded-md text-left w-tr-hover transition-colors">
                   <div className="flex items-center gap-2 min-w-0">
                     <Check className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                     <span className="text-[10px] text-neutral-400 shrink-0 num">{detail.controls.length}</span>
@@ -757,7 +754,7 @@ export function CashHistory() {
                 {detailExpanded === 'controle' && (
                   <div className="pb-2 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                     {Number(detail.session.opening_amount) > 0 && (
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-1.5 pl-6 text-xs">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-1.5 pl-6 text-xs">
                         <span className="text-neutral-500">Fond d'ouverture</span>
                         <span className="font-semibold text-neutral-800 num shrink-0">{formatFCFA(Number(detail.session.opening_amount))}</span>
                       </div>
@@ -767,7 +764,7 @@ export function CashHistory() {
                       const balanced = diff === 0;
                       return (
                         <div key={i} className="py-1.5 pl-6">
-                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 text-xs">
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 text-xs">
                             <span className="font-medium text-neutral-800">{c.method_name}</span>
                             <span className={`font-bold num shrink-0 ${balanced ? 'text-neutral-600' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                               {balanced ? 'OK' : `${diff > 0 ? '+' : ''}${formatFCFA(diff)}`}
@@ -791,7 +788,7 @@ export function CashHistory() {
                 <div className="text-[10px] font-bold uppercase tracking-wider text-black mb-1">Régularisations ({detail.regularizations.length})</div>
                 <div className="divide-y divide-neutral-100">
                   {detail.regularizations.map((r, i) => (
-                    <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-1.5 text-xs">
+                    <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-1.5 text-xs">
                       <div className="min-w-0">
                         <span className={`font-semibold capitalize ${r.reg_type === 'manquant' ? 'text-red-600' : r.reg_type === 'excedent' ? 'text-amber-600' : 'text-neutral-700'}`}>{r.reg_type}</span>
                         {r.reason && <span className="text-neutral-500 ml-1.5">{r.reason}</span>}

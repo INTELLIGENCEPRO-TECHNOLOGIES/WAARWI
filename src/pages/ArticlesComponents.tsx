@@ -1,8 +1,10 @@
-import { useState, useRef, useMemo, useEffect, ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, ChevronRight, CheckSquare, Square, Pencil, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, Tags, Boxes, Car, CheckCircle2, Percent, ShieldCheck, ToggleLeft, ToggleRight, Settings2, Eye, EyeOff } from 'lucide-react';
+import { useState, useRef, useMemo, useEffect, useId, ReactNode } from 'react';
+import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, ChevronRight, CheckSquare, Square, Pencil, ArrowRight, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, Tags, Boxes, Car, CheckCircle2, Percent, Settings2, Eye, EyeOff } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 import type { Article, Category, VehicleBrand } from '../lib/types';
+import { DocPanel, Modal } from '../components/Modal';
+import { PageSearch } from '../components/PageSearch';
+import './ArticleCatalog.css';
 type TierDefinition = { id: string; tier_name: string; sort_order: number; is_default: boolean };
 type Form = Partial<Article> & { stock_init?: number };
 type Compat = { id?: string; brand_id: string; model_id: string; year_start: number; year_end: number; notes: string };
@@ -21,9 +23,9 @@ export function stockStatus(qty: number, min: number) {
 export function Field({ label, children, hint, className = '' }: { label: string; children: ReactNode; hint?: string; className?: string }) {
   return (
     <div className={className}>
-      <label className="block text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-1">{label}</label>
+      <label className="label mb-1 text-xs font-semibold">{label}</label>
       {children}
-      {hint && <p className="text-[10px] text-neutral-400 mt-1">{hint}</p>}
+      {hint && <p className="text-[11px] text-[var(--w-text-sec)] mt-1">{hint}</p>}
     </div>
   );
 }
@@ -60,21 +62,20 @@ export function PremiumSelect({ value, onChange, options, placeholder }: {
   return (
     <div className="relative" ref={ref}>
       <button type="button" onClick={() => setOpen(!open)} onKeyDown={handleKey}
-        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-sm text-left transition-colors
-          border-[var(--w-separator)] bg-[var(--w-surface)] hover:bg-[var(--w-hover)]
+        className={`article-select
           ${!value && placeholder ? 'text-[var(--w-text-muted)]' : 'text-[var(--w-text)]'}`}>
-        <span className="truncate">{label}</span>
+        <span className="min-w-0 break-words">{label}</span>
         <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--w-text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg max-h-60 overflow-y-auto py-1">
+        <div className="article-popover absolute z-50 left-0 right-0 top-full mt-1 max-h-60 overflow-y-auto py-1">
           {allOptions.map((o, i) => (
             <button key={o.value} type="button"
               onMouseEnter={() => setHighlighted(i)}
               onClick={() => { onChange(o.value); setOpen(false); }}
               className={`w-full text-left px-3 py-2 text-sm transition-colors
                 ${o.bold ? 'font-semibold' : ''}
-                ${o.value === value ? 'text-brand-600 font-semibold' : 'text-[var(--w-text)]'}
+                ${o.value === value ? 'bg-[var(--w-active)] font-semibold' : 'text-[var(--w-text)]'}
                 ${i === highlighted ? 'bg-[var(--w-hover)]' : 'hover:bg-[var(--w-hover)]'}`}>
               {o.label}
             </button>
@@ -103,60 +104,24 @@ export function PriceInput({ value, onChange, placeholder }: { value: number | '
 
 // ── ArticleCard (mobile) ───────────────────────────────────
 
-export function ArticleCard({ article, onEdit, selectionMode, selected, onToggleSelect, showMargin: _showMargin }: {
+export function ArticleCard({ article, category, qty, onEdit, selectionMode, selected, onToggleSelect, showStock }: {
   article: Article; category?: Category; qty: number;
   onEdit: () => void; onDelete: () => void;
   selectionMode: boolean; selected: boolean; onToggleSelect: () => void;
   showMargin: boolean; showStock: boolean;
 }) {
+  const reference = article.oem_ref || article.internal_ref;
   return (
-    <div className={`border-b border-neutral-100 last:border-b-0 py-2.5 px-1 flex items-end gap-2 transition-colors active:bg-neutral-50 ${selected ? 'bg-brand-50/40' : ''}`}
+    <button type="button" className="article-list-item" aria-pressed={selectionMode ? selected : undefined}
       onClick={selectionMode ? onToggleSelect : onEdit}>
-      {selectionMode && (
-        <span className="shrink-0 text-brand-700 pb-0.5">{selected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-400" />}</span>
-      )}
-      <div className="min-w-0 flex-1 leading-tight">
-        <div className="text-[11px] font-semibold text-slate-900 line-clamp-2">{article.name}</div>
-        {article.oem_ref && <div className="text-[9px] text-slate-400 font-mono truncate mt-0.5">OEM: {article.oem_ref}</div>}
-      </div>
-      <span className="shrink-0 text-[11px] font-bold text-slate-900 tabular-nums pb-0.5">{formatFCFA(article.sale_price)}</span>
-    </div>
-  );
-}
-
-// ── CategoryFilterSheet ────────────────────────────────────
-
-export function CategoryFilterSheet({ categories, value, onChange, onClose }: {
-  categories: Category[]; value: string; onChange: (v: string) => void; onClose: () => void;
-}) {
-  const parents = categories.filter(c => !c.parent_id);
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in">
-      <div className="absolute inset-0 bg-neutral-900/40" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-[var(--w-surface)] rounded-t-xl sm:rounded-xl shadow-lg max-h-[70vh] flex flex-col animate-sheet-up">
-        <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-          <h3 className="font-bold text-neutral-900 text-sm">Filtrer par catégorie</h3>
-          <button onClick={onClose} className="p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto divide-y divide-neutral-100">
-          <button onClick={() => onChange('')} className={`w-full text-left px-4 py-3 text-sm font-semibold transition-colors ${!value ? 'text-brand-700' : 'text-neutral-700 hover:text-neutral-900'}`}>
-            Toutes les catégories
-          </button>
-          {parents.map(c => (
-            <div key={c.id}>
-              <button onClick={() => onChange(c.id)} className={`w-full text-left px-4 py-3 text-sm font-semibold transition-colors ${value === c.id ? 'text-brand-700' : 'text-neutral-700 hover:text-neutral-900'}`}>
-                {c.name}
-              </button>
-              {categories.filter(s => s.parent_id === c.id).map(s => (
-                <button key={s.id} onClick={() => onChange(s.id)} className={`w-full text-left pl-8 pr-4 py-2.5 text-sm transition-colors ${value === s.id ? 'text-brand-700 font-semibold' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  ↳ {s.name}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+      {selectionMode && (selected ? <CheckSquare size={17} aria-hidden="true" /> : <Square size={17} aria-hidden="true" />)}
+      <span className="article-list-item-main">
+        <strong>{article.name}</strong>
+        {(reference || category) && <span className="article-muted">{[reference, category?.name].filter(Boolean).join(' · ')}</span>}
+        {showStock && article.track_stock !== false && <span className="article-muted">Stock <span className="num">{qty}</span></span>}
+      </span>
+      <strong className="num article-money">{formatFCFA(article.sale_price)}</strong>
+    </button>
   );
 }
 
@@ -166,37 +131,25 @@ export function MasterCatalogGuide({ step, articleCount: _articleCount, onStep, 
   step: number; articleCount: number; onStep: (s: number) => void; onDismiss: () => void; onGo: () => void;
 }) {
   const steps = [
-    { title: 'Bienvenue dans votre catalogue', desc: 'Gérez vos articles, prix, et stocks depuis un seul endroit. Ajoutez manuellement ou depuis le catalogue maître.', icon: Library },
-    { title: 'Catalogue maître', desc: 'Des milliers de pièces pré-renseignées : importez en un clic et personnalisez les prix.', icon: MousePointerClick },
-    { title: 'Ajout rapide', desc: 'Cliquez sur le bouton "+" pour créer un article, ou importez un fichier Excel.', icon: Lightbulb },
+    { title: 'Ajouter des articles', detail: 'Créez un article ou reprenez ses références dans le catalogue maître.' },
+    { title: 'Choisir dans le catalogue maître', detail: 'Sélectionnez les références utiles puis vérifiez les prix après l’import.' },
+    { title: 'Importer depuis Excel', detail: 'Téléchargez le modèle depuis le bouton Excel puis importez votre fichier rempli.' },
   ];
-  const s = steps[step];
-  const Icon = s.icon;
+  const current = steps[step];
 
   return (
-    <div className="relative py-3 border-b border-neutral-100 animate-fade-in">
-      <button onClick={onDismiss} className="absolute top-3 right-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-4 h-4" /></button>
-      <div className="flex items-start gap-3">
-        <Icon className="w-5 h-5 text-brand-700 shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0 pr-6">
-          <h4 className="text-sm font-bold text-neutral-900">{s.title}</h4>
-          <p className="text-xs text-neutral-500 mt-0.5">{s.desc}</p>
-          <div className="flex items-center gap-2 mt-3">
-            {steps.map((_, i) => <span key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === step ? 'bg-brand-600 w-4' : 'bg-neutral-200'}`} />)}
-            <div className="flex-1" />
-            {step < steps.length - 1 ? (
-              <button onClick={() => onStep(step + 1)} className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-700 hover:text-brand-800 transition-colors">
-                Suivant <ArrowRight className="w-3 h-3" />
-              </button>
-            ) : (
-              <button onClick={onGo} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-brand-700 hover:text-brand-800 transition-colors">
-                Voir le catalogue maître <ArrowRight className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        </div>
+    <aside className="article-guide">
+      <div>
+        <h2>{current.title}</h2>
+        <p>{current.detail}</p>
       </div>
-    </div>
+      <button type="button" onClick={onDismiss} className="waarwi-window-button" aria-label="Masquer le guide">
+        <X size={16} aria-hidden="true" />
+      </button>
+      <button type="button" onClick={step < steps.length - 1 ? () => onStep(step + 1) : onGo} className="btn-ghost article-button">
+        {step < steps.length - 1 ? 'Suivant' : 'Ouvrir le catalogue maître'} <ArrowRight size={14} aria-hidden="true" />
+      </button>
+    </aside>
   );
 }
 
@@ -210,206 +163,139 @@ export function CategoryPickerModal({ open, onClose, categories, onSelect, selec
   selected?: string;
   createCategory?: (name: string, parentId: string | null) => Promise<string | null>;
 }) {
+  const formId = useId();
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatParent, setNewCatParent] = useState('');
   const [creatingCat, setCreatingCat] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (open) { setSearch(''); setExpanded(new Set()); setTimeout(() => inputRef.current?.focus(), 50); } }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    setSearch('');
+    setExpanded(new Set());
+    setShowNewCat(false);
+    setNewCatName('');
+    setNewCatParent('');
+  }, [open]);
 
-  const parents = useMemo(() => categories.filter(c => !c.parent_id), [categories]);
+  const parents = useMemo(() => categories.filter(category => !category.parent_id), [categories]);
   const childMap = useMemo(() => {
-    const m = new Map<string, Category[]>();
-    for (const c of categories) { if (c.parent_id) { const arr = m.get(c.parent_id) || []; arr.push(c); m.set(c.parent_id, arr); } }
-    return m;
-  }, [categories]);
-  const childrenOf = (pid: string) => childMap.get(pid) || [];
-
-  const normalizedSearch = search.toLowerCase().trim();
-  const isSearching = normalizedSearch.length > 0;
-
-  const flatResults = useMemo(() => {
-    if (!isSearching) return null;
-    const results: { id: string; name: string; breadcrumb: string }[] = [];
-    for (const p of parents) {
-      if (p.name.toLowerCase().includes(normalizedSearch)) {
-        results.push({ id: p.id, name: p.name, breadcrumb: '' });
-      }
-      for (const c of childrenOf(p.id)) {
-        if (c.name.toLowerCase().includes(normalizedSearch) || p.name.toLowerCase().includes(normalizedSearch)) {
-          results.push({ id: c.id, name: c.name, breadcrumb: p.name });
-        }
-      }
+    const result = new Map<string, Category[]>();
+    for (const category of categories) {
+      if (!category.parent_id) continue;
+      const siblings = result.get(category.parent_id) ?? [];
+      siblings.push(category);
+      result.set(category.parent_id, siblings);
     }
-    return results;
-  }, [parents, childMap, normalizedSearch]);
-
-  const toggleExpand = (id: string) => {
-    setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  };
-
-  const handleSelect = (id: string) => { onSelect(id); };
+    return result;
+  }, [categories]);
+  const query = search.trim().toLocaleLowerCase('fr');
+  const results = query ? parents.flatMap(parent => {
+    const parentMatches = parent.name.toLocaleLowerCase('fr').includes(query);
+    return [
+      ...(parentMatches ? [{ category: parent, parentName: '' }] : []),
+      ...(childMap.get(parent.id) ?? [])
+        .filter(child => parentMatches || child.name.toLocaleLowerCase('fr').includes(query))
+        .map(child => ({ category: child, parentName: parent.name })),
+    ];
+  }) : [];
+  const toggleExpand = (id: string) => setExpanded(current => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
 
   const submitNewCategory = async () => {
-    if (!newCatName.trim() || !createCategory) return;
+    if (!newCatName.trim() || !createCategory || creatingCat) return;
     setCreatingCat(true);
-    const id = await createCategory(newCatName.trim(), newCatParent || null);
-    setCreatingCat(false);
-    if (id) {
-      handleSelect(id);
-      setShowNewCat(false);
-      setNewCatName('');
-      setNewCatParent('');
+    try {
+      const id = await createCategory(newCatName.trim(), newCatParent || null);
+      if (id) {
+        onSelect(id);
+        setShowNewCat(false);
+        setNewCatName('');
+        setNewCatParent('');
+      }
+    } finally {
+      setCreatingCat(false);
     }
   };
+  const close = () => {
+    if (creatingCat) return;
+    if (showNewCat) setShowNewCat(false);
+    else onClose();
+  };
 
-  if (!open) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-fade-in" onClick={onClose}>
-      <div className="absolute inset-0 bg-neutral-900/40" />
-      <div className="relative w-full max-w-sm bg-[var(--w-surface)] rounded-2xl shadow-xl animate-sheet-up max-h-[70vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* Dark header */}
-        <div className="bg-neutral-900 px-5 pt-4 pb-3 shrink-0 rounded-t-2xl">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white">Catégorie</h3>
-            <button onClick={onClose} className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Search bar */}
-        <div className="px-4 pt-3 pb-2 shrink-0 border-b border-neutral-100">
-          <div className="flex items-center gap-2 bg-neutral-100 rounded-lg px-3 py-2">
-            <Search className="w-4 h-4 text-neutral-400 shrink-0" />
-            <input
-              ref={inputRef}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="flex-1 bg-transparent border-0 outline-none text-sm text-neutral-800 placeholder-neutral-400"
-              placeholder="Rechercher une catégorie..."
-            />
-            {search && <button onClick={() => setSearch('')} className="text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
-          </div>
-        </div>
-
-        {/* Category tree / search results */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 min-h-0">
-          {createCategory && !isSearching && (
-            <button onClick={() => setShowNewCat(true)} className="w-full flex items-center gap-2 px-3 py-2.5 border-b border-neutral-100 hover:bg-brand-50 text-brand-700 transition-colors">
-              <Plus className="w-4 h-4" />
-              <span className="text-xs font-semibold">Nouvelle catégorie</span>
-            </button>
-          )}
-
-          {/* No category option */}
-          {!isSearching && (
-            <button onClick={() => handleSelect('')} className={`w-full flex items-center gap-2 px-3 py-2.5 border-b border-neutral-100 transition-colors ${!selected ? 'bg-neutral-100' : 'hover:bg-neutral-50'}`}>
-              <span className={`text-xs ${!selected ? 'font-semibold text-neutral-700' : 'text-neutral-400 italic'}`}>Toutes les catégories</span>
-              {!selected && <CheckCircle2 className="w-3.5 h-3.5 text-neutral-600 ml-auto" />}
-            </button>
-          )}
-
-          {/* Search mode: flat results with breadcrumbs */}
-          {isSearching && flatResults && (
+  return (
+    <Modal open={open} onClose={close} title={showNewCat ? 'Nouvelle catégorie' : 'Catégories'}
+      size="sm" layer="top" variant="flat" focusOnOpen
+      footer={showNewCat ? <>
+        <button type="button" onClick={close} disabled={creatingCat} className="btn-secondary article-button"><X size={15} aria-hidden="true" />Annuler</button>
+        <button type="submit" form={formId} disabled={!newCatName.trim() || creatingCat} className="btn-primary article-button">
+          {creatingCat ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}
+          Créer
+        </button>
+      </> : createCategory ? <button type="button" onClick={() => setShowNewCat(true)} className="btn-primary article-button"><Plus size={15} aria-hidden="true" />Nouvelle catégorie</button> : undefined}
+    >
+      {showNewCat ? (
+        <form id={formId} className="space-y-3 flat-form" onSubmit={event => { event.preventDefault(); void submitNewCategory(); }}>
+          <label>
+            <span className="label">Nom de la catégorie</span>
+            <input required value={newCatName} onChange={event => setNewCatName(event.target.value)} className="input text-sm" />
+          </label>
+          <label className="block">
+            <span className="label">Catégorie parente</span>
+            <select value={newCatParent} onChange={event => setNewCatParent(event.target.value)} className="input text-sm">
+              <option value="">Aucune</option>
+              {parents.map(parent => <option key={parent.id} value={parent.id}>{parent.name}</option>)}
+            </select>
+          </label>
+        </form>
+      ) : (
+        <div className="space-y-2">
+          <PageSearch value={search} onChange={setSearch} placeholder="Rechercher une catégorie…" />
+          {query ? (
+            results.length ? results.map(({ category, parentName }) => (
+              <button key={category.id} type="button" className="article-category-row" aria-pressed={selected === category.id} onClick={() => onSelect(category.id)}>
+                <span>{category.name}{parentName && <small>{parentName}</small>}</span>
+                {selected === category.id && <CheckCircle2 size={15} aria-hidden="true" />}
+              </button>
+            )) : <p className="article-muted py-3">Aucune catégorie trouvée.</p>
+          ) : (
             <>
-              {flatResults.map(item => (
-                <button key={item.id} onClick={() => handleSelect(item.id)}
-                  className={`w-full text-left flex items-center gap-2 px-3 py-2.5 border-b border-neutral-100 transition-colors ${selected === item.id ? 'bg-[var(--w-active)]' : 'hover:bg-neutral-50'}`}>
-                  <div className="flex-1 min-w-0">
-                    {item.breadcrumb && (
-                      <div className="flex items-center gap-1 mb-0.5">
-                        <span className="text-[10px] text-neutral-400 truncate">{item.breadcrumb}</span>
-                        <ChevronRight className="w-2.5 h-2.5 text-neutral-300 shrink-0" />
-                      </div>
-                    )}
-                    <span className={`text-xs truncate block ${selected === item.id ? 'font-bold text-[var(--w-text)]' : 'text-neutral-800'}`}>{item.name}</span>
+              <button type="button" className="article-category-row" aria-pressed={!selected} onClick={() => onSelect('')}>
+                <span>Toutes les catégories</span>{!selected && <CheckCircle2 size={15} aria-hidden="true" />}
+              </button>
+              {parents.map(parent => {
+                const children = childMap.get(parent.id) ?? [];
+                const isOpen = expanded.has(parent.id);
+                return (
+                  <div key={parent.id}>
+                    <div className="article-category-parent">
+                      {children.length > 0 && <button type="button" className="waarwi-window-button" aria-expanded={isOpen}
+                        aria-label={`${isOpen ? 'Replier' : 'Déplier'} ${parent.name}`} onClick={() => toggleExpand(parent.id)}>
+                        <ChevronRight size={15} className={isOpen ? 'rotate-90' : ''} aria-hidden="true" />
+                      </button>}
+                      <button type="button" className="article-category-row" aria-pressed={selected === parent.id} onClick={() => onSelect(parent.id)}>
+                        <span>{parent.name}</span>{selected === parent.id && <CheckCircle2 size={15} aria-hidden="true" />}
+                      </button>
+                    </div>
+                    {isOpen && <div className="article-category-children">{children.map(child => (
+                      <button key={child.id} type="button" className="article-category-row" aria-pressed={selected === child.id} onClick={() => onSelect(child.id)}>
+                        <span>{child.name}</span>{selected === child.id && <CheckCircle2 size={15} aria-hidden="true" />}
+                      </button>
+                    ))}</div>}
                   </div>
-                  {selected === item.id && <CheckCircle2 className="w-4 h-4 text-[var(--w-text-sec)] shrink-0" />}
-                </button>
-              ))}
-              {flatResults.length === 0 && (
-                <div className="py-8 text-center text-xs text-neutral-400">Aucune catégorie trouvée</div>
-              )}
+                );
+              })}
             </>
           )}
-
-          {/* Tree mode: collapsible parent categories */}
-          {!isSearching && parents.map(parent => {
-            const children = childrenOf(parent.id);
-            const hasChildren = children.length > 0;
-            const isOpen = expanded.has(parent.id);
-            const isSelected = selected === parent.id;
-            return (
-              <div key={parent.id} className="border-b border-neutral-100">
-                <div className="flex items-center">
-                  {hasChildren ? (
-                    <button onClick={() => toggleExpand(parent.id)}
-                      className="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-neutral-700 transition-all shrink-0">
-                      <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
-                    </button>
-                  ) : <span className="w-8 shrink-0" />}
-                  <button onClick={() => handleSelect(parent.id)}
-                    className={`flex-1 text-left flex items-center justify-between px-2 py-2.5 transition-colors ${isSelected ? 'bg-[var(--w-active)]' : 'hover:bg-neutral-50'}`}>
-                    <span className={`text-xs truncate ${isSelected ? 'font-bold text-[var(--w-text)]' : 'font-semibold text-neutral-800'}`}>
-                      {parent.name}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      {hasChildren && <span className="text-[10px] text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded-full tabular-nums">{children.length}</span>}
-                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[var(--w-text-sec)]" />}
-                    </span>
-                  </button>
-                </div>
-                {hasChildren && isOpen && (
-                  <div className="ml-8 border-l-2 border-neutral-200 mb-1">
-                    {children.map(child => {
-                      const childSelected = selected === child.id;
-                      return (
-                        <button key={child.id} onClick={() => handleSelect(child.id)}
-                          className={`w-full text-left flex items-center justify-between px-3 py-2 transition-colors ${childSelected ? 'bg-[var(--w-active)]' : 'hover:bg-neutral-50'}`}>
-                          <span className={`text-xs truncate ${childSelected ? 'font-bold text-[var(--w-text)]' : 'text-neutral-600'}`}>{child.name}</span>
-                          {childSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[var(--w-text-sec)] shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
         </div>
-
-        {/* New category inline form */}
-        {showNewCat && (
-          <div className="px-5 py-3 border-t border-neutral-200 bg-neutral-50 shrink-0">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-2">Nouvelle catégorie</div>
-            <div className="space-y-2.5">
-              <input autoFocus value={newCatName} onChange={e => setNewCatName(e.target.value)}
-                className="w-full bg-white border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-sm text-neutral-800 placeholder-neutral-400"
-                placeholder="Nom de la catégorie"
-                onKeyDown={e => { if (e.key === 'Enter') submitNewCategory(); if (e.key === 'Escape') setShowNewCat(false); }} />
-              <select value={newCatParent} onChange={e => setNewCatParent(e.target.value)}
-                className="w-full bg-white border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-xs text-neutral-700">
-                <option value="">Pas de parent (catégorie principale)</option>
-                {parents.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-3">
-              <button onClick={() => setShowNewCat(false)} className="text-xs font-semibold text-neutral-500 hover:text-neutral-900 transition-colors px-3 py-1.5 rounded-lg hover:bg-neutral-200">Annuler</button>
-              <button onClick={submitNewCategory} disabled={!newCatName.trim() || creatingCat} className="inline-flex items-center gap-1 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 transition-colors px-3 py-1.5 rounded-lg">
-                {creatingCat ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                Créer
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body
+      )}
+    </Modal>
   );
 }
 
@@ -454,14 +340,14 @@ export function InfosTab({ form, setForm, editing, categories, onGenerateRef, au
         <Field label="Référence interne *">
           <div className="flex gap-2">
             <input value={form.internal_ref || ''} onChange={e => setForm(f => ({ ...f, internal_ref: e.target.value }))} className="bare-input text-sm flex-1 font-mono" placeholder="REF-0001" />
-            {!editing && <button type="button" onClick={onGenerateRef} className="px-2 text-xs font-semibold text-brand-700 hover:text-brand-800 transition-colors shrink-0">Auto</button>}
+            {!editing && <button type="button" onClick={onGenerateRef} className="btn-secondary article-button shrink-0">Générer</button>}
           </div>
         </Field>
         <Field label="Catégorie">
           <button type="button" onClick={() => setCatPickerOpen(true)}
-            className="w-full text-left bg-transparent border-0 hover:border-brand-400 px-0 py-1 text-sm text-neutral-800 outline-none transition cursor-pointer flex items-center justify-between">
-            <span className={selectedCatLabel ? 'text-neutral-800' : 'text-neutral-400'}>{selectedCatLabel || 'Choisir une catégorie'}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+            className="article-select" aria-haspopup="dialog">
+            <span className={selectedCatLabel ? '' : 'article-muted'}>{selectedCatLabel || 'Choisir une catégorie'}</span>
+            <ChevronDown size={15} aria-hidden="true" />
           </button>
         </Field>
         {autoMode && (
@@ -488,7 +374,8 @@ export function InfosTab({ form, setForm, editing, categories, onGenerateRef, au
         open={catPickerOpen}
         onClose={() => setCatPickerOpen(false)}
         categories={categories}
-        onSelect={handleCategoryChange}
+        selected={form.category_id ?? undefined}
+        onSelect={value => { handleCategoryChange(value); setCatPickerOpen(false); }}
         createCategory={createCategory}
       />
     </div>
@@ -506,7 +393,7 @@ export function PrixTab({ form, setForm, marginValue, marginStr, showPurchasePri
   tierDefinitions: TierDefinition[];
   isPharmacy?: boolean;
 }) {
-  const mgTone = marginValue >= 30 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : marginValue >= 15 ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200';
+  const mgTone = marginValue >= 30 ? 'text-emerald-700' : marginValue >= 15 ? 'text-amber-700' : 'text-[var(--w-error)]';
 
   return (
     <div className="space-y-5">
@@ -525,44 +412,40 @@ export function PrixTab({ form, setForm, marginValue, marginStr, showPurchasePri
       </div>
 
       {showMargin && form.sale_price !== undefined && Number(form.sale_price) > 0 && (
-        <div className={`flex items-center gap-1.5 text-xs font-bold ${mgTone.split(' ')[0]}`}>
-          <Percent className="w-3.5 h-3.5" />
-          Marge : {marginStr}%
+        <div className={`flex items-center gap-1.5 text-xs font-bold ${mgTone}`}>
+          <Percent className="w-3.5 h-3.5" aria-hidden="true" />
+          Marge <span className="num">{marginStr}%</span>
         </div>
       )}
 
       {/* Pricing tiers */}
       {tierDefinitions.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Catégories tarifaires</div>
+        <div className="article-separator space-y-2">
+          <h3 className="text-sm font-semibold">Catégories tarifaires</h3>
           <div className="space-y-2">
             {formTiers.map((tier, idx) => (
-              <div key={tier.tier_name} className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-700 w-32 truncate">{tier.tier_name}</span>
+              <label key={tier.tier_name} className="grid grid-cols-2 items-center gap-2">
+                <span className="text-xs font-semibold break-words">{tier.tier_name}</span>
                 <PriceInput value={tier.price} onChange={v => {
                   const updated = [...formTiers];
                   updated[idx] = { ...updated[idx], price: v };
                   setFormTiers(updated);
                 }} placeholder="Prix" />
-              </div>
+              </label>
             ))}
           </div>
-          <p className="text-[10px] text-slate-400">Laissez vide si non applicable. Ces prix seront proposés lors de la vente.</p>
+          <p className="article-muted">Seuls les tarifs renseignés sont proposés lors de la vente.</p>
         </div>
       )}
 
       {isPharmacy && (
-        <div className="flex items-center gap-3 py-1">
-          <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-slate-700">Eligible IPM</div>
-            <div className="text-[10px] text-slate-500">Cet article est pris en charge par les conventions IPM</div>
-          </div>
-          <button type="button" onClick={() => setForm(f => ({ ...f, ipm_eligible: f.ipm_eligible === false ? true : false }))}
-            className={`relative w-10 h-5 rounded-full transition-colors ${form.ipm_eligible !== false ? 'bg-teal-500' : 'bg-slate-300'}`}>
-            <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.ipm_eligible !== false ? 'translate-x-5' : 'translate-x-0'}`} />
-          </button>
-        </div>
+        <label className="article-check-row">
+          <input type="checkbox" checked={form.ipm_eligible !== false} onChange={event => {
+            const checked = event.target.checked;
+            setForm(previous => ({ ...previous, ipm_eligible: checked }));
+          }} />
+          <span><strong>Éligible à l’IPM</strong><span className="article-muted block">Article pris en charge par les conventions IPM</span></span>
+        </label>
       )}
     </div>
   );
@@ -580,26 +463,15 @@ export function StockTab({ form, setForm, editing, currentArticle, stockMap }: {
 
   return (
     <div className="space-y-4">
-      {/* Track stock toggle */}
-      <button
-        type="button"
-        onClick={() => setForm(f => ({ ...f, track_stock: !trackStock }))}
-        className="w-full flex items-center justify-between gap-3 py-2 transition-all"
-      >
-        <div className="text-left">
-          <div className={`text-xs font-bold ${trackStock ? 'text-brand-800' : 'text-slate-600'}`}>
-            {trackStock ? 'Stock suivi' : 'Stock non suivi'}
-          </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">
-            {trackStock
-              ? 'Les ventes et mouvements de cet article affectent le stock.'
-              : 'Cet article (service, prestation…) ne génère aucun mouvement de stock.'}
-          </div>
-        </div>
-        {trackStock
-          ? <ToggleRight className="w-6 h-6 text-brand-600 shrink-0" />
-          : <ToggleLeft className="w-6 h-6 text-slate-400 shrink-0" />}
-      </button>
+      <label className="article-check-row">
+        <input type="checkbox" checked={trackStock} onChange={event => {
+          const checked = event.target.checked;
+          setForm(previous => ({ ...previous, track_stock: checked }));
+        }} />
+        <span><strong>Suivre le stock</strong><span className="article-muted block">
+          {trackStock ? 'Les ventes et mouvements affectent le stock.' : 'La vente est possible sans contrainte de quantité.'}
+        </span></span>
+      </label>
 
       {trackStock && (
         <>
@@ -607,7 +479,7 @@ export function StockTab({ form, setForm, editing, currentArticle, stockMap }: {
             <div className="flex items-center gap-2 py-1">
               <Package className={`w-4 h-4 ${mStatus.icon} shrink-0`} />
               <div>
-                <div className="text-xs font-bold text-slate-900">Stock actuel : <span className="num">{currentQty}</span> {form.unit || 'unité(s)'}</div>
+                <div className="text-sm font-semibold">Stock actuel <span className="num">{currentQty}</span> {form.unit || 'unité(s)'}</div>
                 <div className={`text-[10px] font-semibold ${mStatus.icon}`}>{mStatus.label}</div>
               </div>
             </div>
@@ -630,13 +502,6 @@ export function StockTab({ form, setForm, editing, currentArticle, stockMap }: {
           </div>
         </>
       )}
-
-      {!trackStock && (
-        <div className="flex items-center gap-2 text-slate-500 text-xs py-1">
-          <Package className="w-4 h-4 text-slate-300 shrink-0" />
-          Aucun suivi de stock pour cet article. Il peut être vendu sans contrainte de quantité.
-        </div>
-      )}
     </div>
   );
 }
@@ -650,19 +515,15 @@ export function CompatTab({ compats, brands, models, onAdd, onRemove, onUpdate }
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs font-bold text-slate-700">Véhicules compatibles</h4>
-        <button onClick={onAdd} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-brand-700 hover:bg-brand-50">
-          <Plus className="w-3 h-3" />Ajouter
+      <div className="article-editor-tools">
+        <h3 className="text-sm font-semibold">Véhicules compatibles</h3>
+        <button type="button" onClick={onAdd} className="btn-secondary article-button">
+          <Plus size={15} aria-hidden="true" />Ajouter un véhicule
         </button>
       </div>
-      {compats.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Aucune compatibilité ajoutée</p>}
+      {compats.length === 0 && <p className="article-muted">Aucun véhicule associé.</p>}
       {compats.map((c, i) => (
-        <div key={i} className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase">Compatibilité {i + 1}</span>
-            <button onClick={() => onRemove(i)} className="p-1 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
-          </div>
+        <div key={i} className="article-separator space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <PremiumSelect value={c.brand_id} onChange={v => onUpdate(i, { brand_id: v, model_id: '' })} placeholder="Marque"
               options={brands.map(b => ({ value: b.id, label: b.name }))} />
@@ -672,6 +533,7 @@ export function CompatTab({ compats, brands, models, onAdd, onRemove, onUpdate }
             <input type="number" value={c.year_end || ''} onChange={e => onUpdate(i, { year_end: Number(e.target.value) })} className="bare-input text-xs num" placeholder="Année fin" />
           </div>
           <input value={c.notes || ''} onChange={e => onUpdate(i, { notes: e.target.value })} className="bare-input text-xs" placeholder="Notes (motorisation, variante...)" />
+          <button type="button" onClick={() => onRemove(i)} className="btn-ghost article-button" aria-label={`Retirer le véhicule ${i + 1}`}><Trash2 size={15} aria-hidden="true" />Retirer</button>
         </div>
       ))}
     </div>
@@ -684,28 +546,27 @@ export function ImageTab({ currentUrl, uploading, onFileSelect, onDelete }: {
   currentUrl: string | null; uploading: boolean;
   onFileSelect: (f: File) => void; onDelete: () => void;
 }) {
+  const fileInputId = useId();
   return (
     <div className="space-y-4">
       {currentUrl ? (
-        <div className="relative">
-          <img src={currentUrl} alt="Article" className="w-full max-h-64 object-contain" />
-          <button onClick={onDelete} className="absolute top-2 right-2 p-2 rounded-xl bg-red-600 text-white shadow-lg hover:bg-red-700">
-            <Trash2 className="w-4 h-4" />
+        <div className="space-y-2">
+          <img src={currentUrl} alt="Image de l’article" className="article-image-preview" />
+          <button type="button" onClick={onDelete} className="btn-secondary article-button">
+            <Trash2 size={15} aria-hidden="true" />Supprimer l’image
           </button>
         </div>
       ) : (
-        <label className="flex flex-col items-center justify-center gap-3 py-8 cursor-pointer hover:opacity-70 transition">
-          <Camera className="w-8 h-8 text-slate-300" />
-          <div className="text-center">
-            <div className="text-sm font-semibold text-slate-700">Ajouter une image</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">JPG, PNG — max 5 Mo</div>
-          </div>
-          <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFileSelect(f); }} />
-        </label>
+        <div className="space-y-2">
+          <label htmlFor={fileInputId} className="label">Ajouter une image</label>
+          <input id={fileInputId} type="file" accept="image/*" className="article-file-input" disabled={uploading} aria-describedby={fileInputId + '-hint'}
+            onChange={event => { const file = event.target.files?.[0]; if (file) onFileSelect(file); }} />
+          <p id={fileInputId + '-hint'} className="article-muted">JPG, PNG · 5 Mo maximum</p>
+        </div>
       )}
       {uploading && (
-        <div className="flex items-center gap-2 text-xs text-neutral-500">
-          <Loader2 className="w-4 h-4 animate-spin" />Téléversement en cours…
+        <div className="article-status-line" role="status">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />Téléversement en cours…
         </div>
       )}
     </div>
@@ -745,7 +606,7 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
   ];
   const tabKeys = BLOCKS.map(b => b.key);
   const activeIdx = Math.max(0, tabKeys.indexOf(tab));
-  const activeBlock = BLOCKS[activeIdx];
+
 
   // Swipe gesture state
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -787,119 +648,53 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center animate-fade-in">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      {/* Full-screen sheet */}
-      <div className="relative w-full bg-white shadow-premium flex flex-col h-full sm:max-w-none rounded-none animate-fade-in overflow-hidden">
-
-        {/* Header with icon actions — no big footer buttons */}
-        <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-neutral-100">
-          <button onClick={onClose} aria-label="Annuler"
-            className="shrink-0 w-9 h-9 flex items-center justify-center text-neutral-900 active:scale-90 transition-all">
-            <X className="w-[18px] h-[18px]" />
+    <Modal open onClose={onClose} title={form.name || 'Nouvel article'} size="xl" fullscreenMobile
+      panelClassName="article-editor" footer={
+        formMode === 'create' ? <>
+          <button type="button" onClick={saveAndNew} disabled={saving} className="btn-secondary article-button"><Plus size={15} aria-hidden="true" />Enregistrer et nouveau</button>
+          <button type="button" onClick={saveAndCloseIntent} disabled={saving} className="btn-primary article-button">
+            {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
+            Enregistrer et fermer
           </button>
-
-          <div className="flex-1 min-w-0 px-1">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 leading-none flex items-center gap-1.5">
-              <span>{formMode === 'create' ? 'Nouvel article' : 'Modification'}</span>
-              {!!(formMode !== 'create' && totalCount > 0) && <span className="text-slate-400">· {editingIndex + 1}/{totalCount}</span>}
-              {saveState === 'saving' && <Loader2 className="w-2.5 h-2.5 animate-spin text-neutral-400" />}
-              {saveState === 'saved' && <span className="text-emerald-500">Enregistré</span>}
-              {saveState === 'error' && <span className="text-red-500">Échec</span>}
-            </div>
-            <h2 className="text-sm font-bold text-slate-900 leading-tight mt-0.5 break-words">
-              {form.name || 'Sans titre'}
-            </h2>
-          </div>
-
-          {/* Prev/next article navigation (edit mode) */}
-          {editing && (onPrev || onNext) && (
-            <div className="shrink-0 flex items-center gap-0.5">
-              <button onClick={onPrev} disabled={!onPrev} aria-label="Article précédent"
-                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-25 disabled:hover:bg-transparent active:scale-90 transition-all flex items-center justify-center">
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <button onClick={onNext} disabled={!onNext} aria-label="Article suivant"
-                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-25 disabled:hover:bg-transparent active:scale-90 transition-all flex items-center justify-center">
-                <ArrowRightIcon className="w-4 h-4" />
-              </button>
+        </> : <button type="button" onClick={save} disabled={saving} className="btn-primary article-button">
+          {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
+          Enregistrer
+        </button>
+      }
+    >
+      {(editing || saveState === 'saving' || saveState === 'saved' || saveState === 'error') && (
+        <div className="article-editor-tools">
+          <span className="article-muted" role="status">
+            {saveState === 'saving' ? 'Enregistrement…' : saveState === 'saved' ? 'Enregistré' : saveState === 'error' ? 'Échec de l’enregistrement' : ''}
+          </span>
+          {editing && totalCount > 0 && (
+            <div className="article-toolbar">
+              <button type="button" onClick={onPrev} disabled={!onPrev} aria-label="Article précédent" className="waarwi-window-button"><ArrowLeft size={16} aria-hidden="true" /></button>
+              <span className="num article-muted">{editingIndex + 1} / {totalCount}</span>
+              <button type="button" onClick={onNext} disabled={!onNext} aria-label="Article suivant" className="waarwi-window-button"><ArrowRightIcon size={16} aria-hidden="true" /></button>
             </div>
           )}
-
-          {/* Save actions */}
-          {formMode === 'create' ? (
-            <div className="shrink-0 flex items-center gap-1">
-              <button onClick={saveAndCloseIntent} disabled={saving} aria-label="Enregistrer et fermer"
-                className="w-9 h-9 flex items-center justify-center text-neutral-500 active:scale-90 transition-all disabled:opacity-50">
-                <CheckCircle2 className="w-5 h-5" />
-              </button>
-              <button onClick={saveAndNew} disabled={saving} aria-label="Enregistrer et nouveau"
-                className="w-9 h-9 flex items-center justify-center text-neutral-900 active:scale-90 transition-all disabled:opacity-50">
-                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-              </button>
-            </div>
-          ) : (
-            <button onClick={save} disabled={saving} aria-label="Enregistrer"
-              className="shrink-0 w-9 h-9 flex items-center justify-center text-neutral-900 active:scale-90 transition-all disabled:opacity-50">
-              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-            </button>
-          )}
         </div>
-
-        {/* Section indicator — icon-only segmented control + active label */}
-        <div className="shrink-0 px-3 pt-3 pb-2.5 border-b border-neutral-100">
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 text-neutral-900">
-                {(() => { const I = activeBlock.icon; return <I className="w-3.5 h-3.5" />; })()}
-              </span>
-              <span className="text-xs font-bold text-neutral-900 truncate">{activeBlock.label}</span>
-            </div>
-            <span className="text-[10px] font-bold text-neutral-400 tabular-nums shrink-0">
-              {activeIdx + 1} / {tabKeys.length}
-            </span>
-          </div>
-
-          {/* Icon-only segmented progress bar */}
-          <div className="flex items-center gap-1.5">
-            {BLOCKS.map((b, i) => {
-              const I = b.icon;
-              const active = i === activeIdx;
-              const done = i < activeIdx;
-              return (
-                <button key={b.key} onClick={() => goToTab(b.key, i > activeIdx ? 'left' : 'right')}
-                  className={`flex-1 h-8 flex items-center justify-center transition-all active:scale-95 ${active ? 'text-neutral-900' : done ? 'text-neutral-400' : 'text-neutral-300'}`}
-                  aria-label={b.label}>
-                  <I className="w-4 h-4" />
-                </button>
-              );
-            })}
-          </div>
+      )}
+      <nav className="article-tabs" aria-label="Fiche article">
+        {BLOCKS.map((block, index) => (
+          <button key={block.key} type="button" aria-pressed={index === activeIdx} onClick={() => goToTab(block.key, index > activeIdx ? 'left' : 'right')}>
+            <block.icon size={15} aria-hidden="true" />{block.label}
+          </button>
+        ))}
+      </nav>
+      <div className="article-edit-body touch-pan-y"
+        style={{ transform: dragX ? `translateX(${dragX * 0.35}px)` : undefined, transition: dragX ? 'none' : 'transform 0.24s cubic-bezier(0.22,1,0.36,1)' }}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        <div key={tab} className={slideDir === 'left' ? 'tab-slide-left' : 'tab-slide-right'}>
+          {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} createCategory={createCategory} />}
+          {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={showPurchasePrice} showMargin={showMargin} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy} />}
+          {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
+          {tab === 'compat' && autoMode && <CompatTab compats={compats} brands={brands} models={models} onAdd={addCompat} onRemove={removeCompat} onUpdate={(i, patch) => setCompats((arr: Compat[]) => arr.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
+          {tab === 'image' && <ImageTab currentUrl={imagePreview} uploading={imageUploading} onFileSelect={onFileSelect} onDelete={onDeleteImage} />}
         </div>
-
-        {/* Swipeable content area — fixed via flex-1, only inner scrolls */}
-        <div className="flex-1 overflow-hidden touch-pan-y" style={{ touchAction: 'pan-y' }}>
-          <div
-            className="h-full overflow-y-auto px-4 py-4"
-            style={{ transform: dragX ? `translateX(${dragX * 0.35}px)` : undefined, transition: dragX ? 'none' : 'transform 0.24s cubic-bezier(0.22,1,0.36,1)' }}
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-          >
-            <div key={tab} className={slideDir === 'left' ? 'tab-slide-left' : 'tab-slide-right'}>
-              {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} createCategory={createCategory} />}
-              {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={showPurchasePrice} showMargin={showMargin} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy} />}
-              {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
-              {tab === 'compat' && autoMode && <CompatTab compats={compats} brands={brands} models={models} onAdd={addCompat} onRemove={removeCompat} onUpdate={(i, patch) => setCompats((arr: Compat[]) => arr.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
-              {tab === 'image' && <ImageTab currentUrl={imagePreview} uploading={imageUploading} onFileSelect={onFileSelect} onDelete={onDeleteImage} />}
-            </div>
-          </div>
-        </div>
-
-        {/* Minimal bottom safe area */}
-        <div className="shrink-0 h-[env(safe-area-inset-bottom,0px)] bg-white" />
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -950,16 +745,15 @@ function ColumnSettingsDropdown({ visible, onToggle }: { visible: Set<ColumnKey>
   }, [open]);
   return (
     <div className="relative inline-block" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} className={`p-1 rounded-lg transition-colors ${open ? 'bg-brand-100 text-brand-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`} title="Colonnes">
+      <button type="button" onClick={() => setOpen(value => !value)} className="waarwi-window-button" aria-label="Colonnes visibles" aria-expanded={open}>
         <Settings2 className="w-3.5 h-3.5" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--w-surface)] rounded-xl shadow-lg border border-[var(--w-separator)] py-1.5 z-50 animate-fade-in">
-          <div className="px-3 py-1.5 text-[9px] uppercase tracking-wider text-slate-400 font-bold">Colonnes visibles</div>
+        <div className="article-popover absolute right-0 top-full mt-1 w-44 py-1.5 z-50">
           {ALL_OPTIONAL_COLUMNS.map(col => (
-            <button key={col.key} onClick={() => onToggle(col.key)} className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--w-surface-el)] transition-colors">
-              {visible.has(col.key) ? <Eye className="w-3.5 h-3.5 text-brand-600" /> : <EyeOff className="w-3.5 h-3.5 text-slate-300" />}
-              <span className={`text-xs ${visible.has(col.key) ? 'text-slate-800 font-medium' : 'text-slate-400'}`}>{col.label}</span>
+            <button type="button" key={col.key} onClick={() => onToggle(col.key)} aria-pressed={visible.has(col.key)} className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--w-hover)]">
+              {visible.has(col.key) ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+              <span className={`text-xs ${visible.has(col.key) ? 'font-medium' : 'text-[var(--w-text-sec)]'}`}>{col.label}</span>
             </button>
           ))}
         </div>
@@ -997,10 +791,10 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
   const showCol = (k: ColumnKey) => visibleCols.has(k) && (k !== 'stock' || showStock) && (k !== 'purchase_price' || _showPurchase);
 
   return (
-    <div className="rounded-2xl bg-[var(--w-surface)] shadow-card border border-[var(--w-separator)] overflow-hidden">
+    <div className="border-y border-[var(--w-separator)]">
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
         <table className="w-full text-xs">
-          <thead className="bg-[var(--w-surface-el)]/70 text-[9px] uppercase text-slate-500 tracking-wider border-b border-[var(--w-separator)] sticky top-0 z-10">
+          <thead className="bg-[var(--w-surface-el)] text-[11px] text-[var(--w-text-sec)] border-b border-[var(--w-separator)] sticky top-0 z-10">
             <tr>
               {selectionMode && (
                 <th className="px-2 py-2.5 w-8 bg-[var(--w-surface-el)]">
@@ -1070,7 +864,7 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
               const tracksStock = (a as any).track_stock !== false;
               const mStatus = tracksStock ? stockStatus(qty, Number(a.stock_min || 0)) : { badge: 'text-slate-400', dot: 'bg-slate-300', label: 'Service' };
               return (
-                <tr key={a.id} className={`group transition-colors ${edited ? 'bg-brand-50/40' : 'hover:bg-[var(--w-surface-el)]/60'} ${selectedIds.has(a.id) ? 'bg-brand-50/60' : ''}`}>
+                <tr key={a.id} className={edited || selectedIds.has(a.id) ? 'bg-[var(--w-active)]' : 'hover:bg-[var(--w-hover)]'}>
                   {selectionMode && (
                     <td className="px-2 py-1.5">
                       <button onClick={() => onToggleSelect(a.id)} className="text-brand-700">{selectedIds.has(a.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5 text-slate-400" />}</button>
@@ -1142,9 +936,9 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                     </td>
                   )}
                   <td className="px-2 py-1.5 text-center">
-                    <div className="inline-flex gap-0.5 opacity-60 group-hover:opacity-100">
-                      <button onClick={() => onOpenFullScreen(a)} className="p-1 rounded-lg hover:bg-brand-100 text-slate-600 hover:text-brand-700" title="Modifier"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => onDelete(a)} className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <div className="inline-flex gap-1">
+                      <button type="button" onClick={() => onOpenFullScreen(a)} className="waarwi-window-button" aria-label={`Modifier ${a.name}`}><Pencil size={14} aria-hidden="true" /></button>
+                      <button type="button" onClick={() => onDelete(a)} className="waarwi-window-button article-error-text" aria-label={`Supprimer ${a.name}`}><Trash2 size={14} aria-hidden="true" /></button>
                     </div>
                   </td>
                 </tr>
@@ -1166,7 +960,7 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
 
 // ── FullScreenArticleEdit ──────────────────────────────────
 
-export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TABS: _TABS, save, saveAndNew, saveAndClose: saveAndCloseIntent, saving, saveState, formMode, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, onClose, onPrev, onNext, editingIndex, totalCount, filtered, onJumpTo }: {
+export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TABS: _TABS, save, saveAndNew, saveAndClose: saveAndCloseIntent, saving, saveState, formMode, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount, filtered, onJumpTo }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
   TABS: { k: TabKey; l: string; icon: any }[];
@@ -1184,6 +978,7 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
   formTiers: Array<{ tier_name: string; price: number | '' }>;
   setFormTiers: (t: Array<{ tier_name: string; price: number | '' }>) => void;
   tierDefinitions: TierDefinition[];
+  isPharmacy: boolean;
   onClose: () => void;
   onPrev?: () => void; onNext?: () => void;
   editingIndex: number; totalCount: number;
@@ -1230,126 +1025,62 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col animate-fade-in">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 lg:px-6 py-3 border-b border-neutral-200 bg-white shrink-0">
-        <button onClick={onClose} className="p-2 text-neutral-900 hover:opacity-70 transition-opacity">
-          <ArrowLeft className="w-5 h-5" />
+    <DocPanel open onClose={onClose} title={form.name || 'Nouvel article'} fullscreen fullscreenMobile
+      footer={isCreate ? <>
+        <button type="button" onClick={saveAndNew} disabled={saving} className="btn-secondary article-button" title="Ctrl+Entrée">
+          <Plus size={15} aria-hidden="true" />Enregistrer et nouveau
         </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-              {isCreate ? 'Nouvel article' : 'Modification'}{totalCount > 0 && !isCreate && ` — ${editingIndex + 1}/${totalCount}`}
-            </span>
-            {saveStateLabel && (
-              <span className={`text-[10px] font-semibold ${saveState === 'error' ? 'text-red-500' : saveState === 'saved' ? 'text-emerald-500' : 'text-neutral-400'}`}>
-                {saveState === 'saving' && <Loader2 className="w-3 h-3 animate-spin inline mr-0.5" />}
-                {saveStateLabel}
-              </span>
-            )}
+        <button type="button" onClick={saveAndCloseIntent} disabled={saving} className="btn-primary article-button" title="Ctrl+Maj+Entrée">
+          {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
+          Enregistrer et fermer
+        </button>
+      </> : (
+        <button type="button" onClick={save} disabled={saving} className="btn-primary article-button">
+          {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
+          Enregistrer
+        </button>
+      )}>
+      <div className="article-edit-desktop">
+        <div className="article-editor-tools">
+          <span className="article-muted" role="status">{saveStateLabel}</span>
+          <div className="article-toolbar">
+            <button type="button" onClick={() => { setSearchOpen(!searchOpen); setLocalSearch(''); }} className="btn-secondary article-button" aria-expanded={searchOpen}>
+              <Search size={15} aria-hidden="true" />Rechercher
+            </button>
+            {!isCreate && <>
+              <button type="button" onClick={onPrev} disabled={!onPrev} aria-label="Article précédent" className="waarwi-window-button"><ArrowLeft size={16} aria-hidden="true" /></button>
+              {totalCount > 0 && <span className="num article-muted">{editingIndex + 1} / {totalCount}</span>}
+              <button type="button" onClick={onNext} disabled={!onNext} aria-label="Article suivant" className="waarwi-window-button"><ArrowRightIcon size={16} aria-hidden="true" /></button>
+            </>}
           </div>
-          <h2 className="text-base font-bold text-neutral-900 break-words leading-tight">{form.name || 'Sans titre'}</h2>
         </div>
-
-        {/* Search button */}
-        <div className="relative">
-          <button onClick={() => { setSearchOpen(!searchOpen); setLocalSearch(''); }} className="p-2 text-neutral-500 hover:text-neutral-900 transition-colors">
-            <Search className="w-5 h-5" />
-          </button>
-          {searchOpen && (
-            <div className="absolute top-full right-0 mt-1 w-72 bg-white rounded-xl shadow-premium border border-neutral-200 z-50 overflow-hidden">
-              <div className="px-3 py-2 border-b border-neutral-100">
-                <input ref={searchRef} autoFocus value={localSearch} onChange={e => setLocalSearch(e.target.value)} placeholder="Rechercher un article…" className="w-full text-sm outline-none" />
-              </div>
-              {searchResults.length > 0 && (
-                <div className="max-h-48 overflow-y-auto">
-                  {searchResults.map(a => (
-                    <button key={a.id} onClick={() => { onJumpTo(a); setSearchOpen(false); setLocalSearch(''); }} className="w-full text-left px-3 py-2 hover:bg-neutral-50 text-sm">
-                      <div className="font-semibold text-neutral-900 truncate">{a.name}</div>
-                      <div className="text-[10px] text-neutral-400 font-mono">{a.internal_ref}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {localSearch && searchResults.length === 0 && <div className="px-3 py-3 text-xs text-neutral-400 text-center">Aucun résultat</div>}
-            </div>
-          )}
-        </div>
-
-        {/* Prev/Next (edit mode only) */}
-        {!isCreate && (
-          <div className="flex items-center gap-1">
-            <button onClick={onPrev} disabled={!onPrev} className="p-2 text-neutral-500 hover:text-neutral-900 disabled:opacity-30 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <button onClick={onNext} disabled={!onNext} className="p-2 text-neutral-500 hover:text-neutral-900 disabled:opacity-30 transition-colors">
-              <ArrowRightIcon className="w-4 h-4" />
-            </button>
+        {searchOpen && (
+          <div className="article-search-list">
+            <input ref={searchRef} autoFocus aria-label="Rechercher un article" value={localSearch} onChange={event => setLocalSearch(event.target.value)}
+              placeholder="Rechercher un article…" className="w-input-ul" />
+            {searchResults.map(article => (
+              <button key={article.id} type="button" onClick={() => { onJumpTo(article); setSearchOpen(false); setLocalSearch(''); }} className="article-category-row">
+                <span>{article.name}<small>{article.internal_ref}</small></span>
+              </button>
+            ))}
+            {localSearch && !searchResults.length && <p className="article-muted py-2">Aucun article trouvé.</p>}
           </div>
         )}
-
-        {/* Save buttons: context-dependent */}
-        {isCreate ? (
-          <div className="flex items-center gap-2">
-            <button onClick={saveAndCloseIntent} disabled={saving} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-neutral-600 hover:text-neutral-900 transition-colors disabled:opacity-50" title="Ctrl+Maj+Entrée">
-              Enregistrer et fermer
+        <nav className="article-tabs" aria-label="Fiche article">
+          {BLOCKS.map(({ key, label, icon: Icon }) => (
+            <button type="button" key={key} aria-pressed={tab === key} onClick={() => setTab(key)}>
+              <Icon size={15} aria-hidden="true" />{label}
             </button>
-            <button onClick={saveAndNew} disabled={saving} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors disabled:opacity-50" title="Ctrl+Entrée">
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-              Enregistrer et nouveau
-            </button>
-          </div>
-        ) : (
-          <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 text-sm font-bold text-neutral-900 hover:opacity-70 disabled:opacity-50 transition-opacity">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            Enregistrer
-          </button>
-        )}
-      </div>
-
-      {/* Body: sidebar + content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar nav */}
-        <div className="w-56 shrink-0 py-4 px-3 overflow-y-auto hidden lg:block">
-          <nav className="space-y-1">
-            {BLOCKS.map(b => {
-              const Icon = b.icon;
-              const active = tab === b.key;
-              return (
-                <button key={b.key} onClick={() => setTab(b.key)} className={`w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium transition-colors ${active ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-900'}`}>
-                  <Icon className={`w-4 h-4 ${active ? 'text-neutral-900' : 'text-neutral-300'}`} />
-                  {b.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Main content */}
-        <div className="flex-1 overflow-y-auto px-6 lg:px-10 py-6">
-          <div className="max-w-2xl mx-auto space-y-6">
-            {/* Mobile tab bar */}
-            <div className="lg:hidden overflow-x-auto no-scrollbar">
-              <div className="inline-flex items-center gap-1">
-                {BLOCKS.map(b => {
-                  const Icon = b.icon;
-                  return (
-                    <button key={b.key} onClick={() => setTab(b.key)} className={`shrink-0 inline-flex items-center gap-1.5 px-3 h-9 text-xs font-semibold whitespace-nowrap transition-colors ${tab === b.key ? 'text-neutral-900' : 'text-neutral-400'}`}>
-                      <Icon className="w-3.5 h-3.5" />{b.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} createCategory={createCategory} />}
-            {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={showPurchasePrice} showMargin={showMargin} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} />}
-            {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
-            {tab === 'compat' && autoMode && <CompatTab compats={compats} brands={brands} models={models} onAdd={addCompat} onRemove={removeCompat} onUpdate={(i, patch) => setCompats((arr: Compat[]) => arr.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
-            {tab === 'image' && <ImageTab currentUrl={imagePreview} uploading={imageUploading} onFileSelect={onFileSelect} onDelete={onDeleteImage} />}
-          </div>
+          ))}
+        </nav>
+        <div className="article-edit-body">
+          {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} createCategory={createCategory} />}
+          {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={showPurchasePrice} showMargin={showMargin} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy} />}
+          {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
+          {tab === 'compat' && autoMode && <CompatTab compats={compats} brands={brands} models={models} onAdd={addCompat} onRemove={removeCompat} onUpdate={(i, patch) => setCompats((arr: Compat[]) => arr.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
+          {tab === 'image' && <ImageTab currentUrl={imagePreview} uploading={imageUploading} onFileSelect={onFileSelect} onDelete={onDeleteImage} />}
         </div>
       </div>
-    </div>
+    </DocPanel>
   );
 }

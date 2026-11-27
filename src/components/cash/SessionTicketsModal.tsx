@@ -123,7 +123,7 @@ const load = async () => {
     <>
       {/* Session tickets list */}
       <CashModal open={true} onClose={() => onClose()} title="Tickets de la session"
-        footer={<button onClick={() => onClose()} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Fermer</button>}
+        footer={<button onClick={() => onClose()} className="btn-secondary text-xs">Fermer</button>}
       >
         {loadingTickets ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
@@ -152,22 +152,21 @@ const load = async () => {
           <div>
             {/* KPI strip */}
             {can('pos_view_session_stats') && (
-            <div className="flex items-center border-b border-neutral-200 pb-4 mb-4">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--w-separator)] pb-3">
               <div className="flex-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Tickets</div>
-                <div className="text-xl font-bold text-neutral-900 num">{sessionSales.filter(x => x.status !== 'return').length}</div>
+                <div className="mb-0.5 text-xs text-[var(--w-text-sec)]">Tickets</div>
+                <div className="num whitespace-nowrap text-xl font-semibold text-[var(--w-text)]">{sessionSales.filter(x => x.status !== 'return').length}</div>
               </div>
-              <div className="w-px h-8 bg-neutral-200 mx-4 shrink-0" />
               <div className="flex-1 text-right">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Total encaissé</div>
-                <div className="text-xl font-bold text-neutral-900 num">{formatFCFA(sessionEncaisse)}</div>
+                <div className="mb-0.5 text-xs text-[var(--w-text-sec)]">Total encaissé</div>
+                <div className="num whitespace-nowrap text-xl font-semibold text-[var(--w-text)]">{formatFCFA(sessionEncaisse)}</div>
               </div>
             </div>
             )}
 
             {/* Tickets de vente section */}
             <div>
-              <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-full flex items-center justify-between py-2 text-left transition-colors">
+              <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-tr-hover flex w-full items-start justify-between gap-2 py-2.5 text-left transition-colors">
                 <div className="flex items-center gap-2 min-w-0">
                   <List className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <span className="text-[13px] font-semibold text-neutral-900">Tickets de vente</span>

@@ -7,6 +7,7 @@ import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { isSaleSettlementIncome } from '../lib/cashMovements';
 import { getOperationalCashContext } from '../lib/cashSession';
 import SubscriptionStatus from '../components/SubscriptionStatus';
+import { Modal } from '../components/Modal';
 import { SubscriptionPaymentButton } from '../components/SubscriptionPaymentPanel';
 import { TrendingUp, AlertTriangle, Package, Loader2, Users, FileText, ExternalLink, Globe, ShoppingCart, ChevronRight, Calendar, CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, X, Share2, Copy, Check as CheckIcon, MessageCircle, ClipboardList, Coins, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3, Store, Network, Award, ChevronDown, Monitor, LogOut } from 'lucide-react';
 
@@ -1810,45 +1811,29 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
       </div>
 
       {/* ── FAB Overlay — Quick actions ── */}
-      {fabOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm" onClick={() => setFabOpen(false)} />
-          <div className="relative z-10 w-full max-w-lg px-6">
-            <div className="bg-white rounded-xl border border-neutral-200 shadow-premium p-6 animate-scale-in">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-bold text-neutral-900">Actions rapides</h2>
-                <button onClick={() => setFabOpen(false)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { icon: ShoppingCart, label: 'Nouvelle vente', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
-                  { icon: CreditCard, label: 'Encaisser', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
-                  { icon: ClipboardList, label: 'Nouvelle commande', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('supplier_orders', { target: 'newOrder' }); } },
-                  { icon: Users, label: 'Nouveau client', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('tiers', { target: 'newCustomer' }); } },
-                  { icon: Truck, label: 'Nouveau fournisseur', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('tiers', { target: 'newSupplier' }); } },
-                  { icon: ArrowDownCircle, label: 'Entrée stock', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('stock', { target: 'stockIn' }); } },
-                  { icon: ArrowUpCircle, label: 'Sortie stock', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('stock', { target: 'stockOut' }); } },
-                  { icon: ArrowRightLeft, label: 'Transfert', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('stock', { target: 'stockTransfer' }); } },
-                  { icon: BarChart3, label: 'Rapport', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('reports'); } },
-                ].map(item => (
-                  <button
-                    key={item.label}
-                    onClick={item.action}
-                    className="flex flex-col items-center gap-2 p-4 rounded-xl border border-neutral-100 hover:border-neutral-200 hover:bg-neutral-50 transition-all active:scale-[0.96] group"
-                  >
-                    <div className={`w-9 h-9 rounded-lg ${item.bg} flex items-center justify-center`}>
-                      <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
-                    </div>
-                    <span className="text-[11px] font-medium text-neutral-700 text-center leading-tight">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal open={fabOpen} onClose={() => setFabOpen(false)} title="Actions rapides" size="sm" layer="top" focusOnOpen>
+        <ul className="divide-y divide-[var(--w-separator)]">
+          {[
+            { icon: ShoppingCart, label: 'Nouvelle vente', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
+            { icon: CreditCard, label: 'Encaisser', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
+            { icon: ClipboardList, label: 'Nouvelle commande', action: () => { setFabOpen(false); nav('supplier_orders', { target: 'newOrder' }); } },
+            { icon: Users, label: 'Nouveau client', action: () => { setFabOpen(false); nav('tiers', { target: 'newCustomer' }); } },
+            { icon: Truck, label: 'Nouveau fournisseur', action: () => { setFabOpen(false); nav('tiers', { target: 'newSupplier' }); } },
+            { icon: ArrowDownCircle, label: 'Entrée stock', action: () => { setFabOpen(false); nav('stock', { target: 'stockIn' }); } },
+            { icon: ArrowUpCircle, label: 'Sortie stock', action: () => { setFabOpen(false); nav('stock', { target: 'stockOut' }); } },
+            { icon: ArrowRightLeft, label: 'Transfert', action: () => { setFabOpen(false); nav('stock', { target: 'stockTransfer' }); } },
+            { icon: BarChart3, label: 'Rapport', action: () => { setFabOpen(false); nav('reports'); } },
+          ].map(({ icon: Icon, label, action }) => (
+            <li key={label}>
+              <button type="button" onClick={action} className="flex min-h-11 w-full items-center gap-3 px-2 py-2 text-left text-sm font-medium text-[var(--w-text)] transition-colors hover:bg-[var(--w-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px]">
+                <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--w-text-sec)]" />
+                <span className="min-w-0 flex-1">{label}</span>
+                <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--w-text-muted)]" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Modal>
       </div>{/* closes sticky top bar wrapper */}
 
       {/* ── Hero + Rentabilité (left column) + Situation actuelle (right column) ── */}

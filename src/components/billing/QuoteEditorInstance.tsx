@@ -346,7 +346,7 @@ export function QuoteEditorInstance({ descriptor, articles, customers, docSettin
 
   return (
     <div ref={containerRef} className="flex flex-col h-full relative" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
-      {mode==='edit'&&<div className="px-3 pt-2 shrink-0"><DocumentEditLeaseBar lease={editLease} dirty={dirtyEdit} saving={saving} label="ce devis" onSaveAndRelease={editSnapshot.ready?()=>void saveQuote():undefined}/><InvoiceEditSnapshotBar state={editSnapshot} document="devis"/></div>}
+      {mode==='edit'&&<div className="shrink-0"><DocumentEditLeaseBar lease={editLease} dirty={dirtyEdit} saving={saving} label="ce devis" onSaveAndRelease={editSnapshot.ready?()=>void saveQuote():undefined}/><InvoiceEditSnapshotBar state={editSnapshot} document="devis"/></div>}
       {siteMismatch && (
         <>
           <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-2 text-xs text-amber-800 relative z-10">

@@ -1,11 +1,12 @@
-import { useRealtimeTick } from '../lib/useRealtimeData';
-import { useRealtimeRefresh } from '../lib/useRealtimeData';
+import { useRealtimeTick, useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, Search, X, Check, AlertTriangle, Loader2, CreditCard as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, ChevronDown, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Smartphone, Activity, Package, Users, Receipt, HandCoins, Phone, Save } from 'lucide-react';
+import { ArrowLeft, ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, X, Check, AlertTriangle, Loader2, Pencil as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Smartphone, Package, Users, Receipt, HandCoins, Phone } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
+import { ConfirmDialog, Modal } from '../components/Modal';
+import { PageSearch } from '../components/PageSearch';
 
 type SubPage = 'dashboard' | 'operations' | 'operations_grossiste' | 'depenses' | 'clients' | 'soldes' | 'clotures' | 'rapports' | 'parametres';
 
@@ -14,7 +15,7 @@ const SUB_NAV: { key: SubPage; label: string; icon: any }[] = [
   { key: 'operations', label: 'Opérations clients', icon: RefreshCw },
   { key: 'operations_grossiste', label: 'Opérations grossiste', icon: Package },
   { key: 'depenses', label: 'Dépenses', icon: Receipt },
-  { key: 'clients', label: 'Clients & créances', icon: Users },
+  { key: 'clients', label: 'Clients et créances', icon: Users },
   { key: 'soldes', label: 'Soldes', icon: Wallet },
   { key: 'clotures', label: 'Clôtures', icon: Lock },
   { key: 'rapports', label: 'Rapports', icon: FileText },
@@ -53,7 +54,7 @@ const STATUS_COLORS: Record<string, string> = {
   validee: 'bg-emerald-50 text-emerald-700',
   en_attente: 'bg-amber-50 text-amber-700',
   annulee: 'bg-red-50 text-red-600',
-  rapprochee: 'bg-sky-50 text-sky-700',
+  rapprochee: 'w-badge-muted',
   rejetee: 'bg-red-50 text-red-600',
   ecart_detecte: 'bg-orange-50 text-orange-700',
 };
@@ -67,7 +68,6 @@ export function MoneyTransfer() {
   const { tenant } = useApp();
   const { can, loading: permsLoading } = usePermissions();
   const [sub, setSub] = useState<SubPage>('dashboard');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [initStatus, setInitStatus] = useState<string>('loading');
 
   const loadInitStatus = useCallback(async () => {
@@ -92,52 +92,39 @@ export function MoneyTransfer() {
     return true;
   };
 
-  return (
-    <div className="h-full flex flex-col -mx-3 sm:-mx-5 lg:mx-0">
-      <h1 className="sr-only">Transfert d'argent</h1>
-      {/* Sous-navigation */}
-      <div className="shrink-0 border-b border-neutral-200 bg-white mx-3 sm:mx-5 lg:mx-0">
-        {/* Desktop */}
-        <div className="hidden lg:flex items-center gap-1 px-4 pt-2 overflow-x-auto scrollbar-hide">
-          {SUB_NAV.filter(n => isNavVisible(n.key)).map(n => (
-            <button
-              key={n.key}
-              onClick={() => setSub(n.key)}
-              className={`flex items-center gap-2 px-3 py-2.5 text-xs font-medium rounded-t-lg border-b-2 transition-all whitespace-nowrap ${
-                sub === n.key
-                  ? 'border-neutral-900 text-neutral-900 bg-neutral-50'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50'
-              } ${!isInitialized && blockedPages.includes(n.key) ? 'opacity-40 pointer-events-none' : ''}`}
-            >
-              <n.icon className="w-3.5 h-3.5" />
-              {n.label}
-              {!isInitialized && blockedPages.includes(n.key) && <Lock className="w-3 h-3 text-neutral-400" />}
-            </button>
-          ))}
-        </div>
-        {/* Mobile */}
-        <div className="lg:hidden px-3 py-2 relative">
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-neutral-200 bg-white">
-            <span className="flex items-center gap-2 text-sm font-medium text-neutral-900">
-              {(() => { const c = SUB_NAV.find(n => n.key === sub); return c ? <><c.icon className="w-4 h-4" />{c.label}</> : null; })()}
-            </span>
-            <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {mobileMenuOpen && (
-            <div className="absolute left-0 right-0 mt-1 mx-3 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
-              {SUB_NAV.filter(n => isNavVisible(n.key) && (isInitialized || !blockedPages.includes(n.key))).map(n => (
-                <button key={n.key} onClick={() => { setSub(n.key); setMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm ${sub === n.key ? 'bg-neutral-50 font-medium text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50'}`}>
-                  <n.icon className="w-4 h-4" />{n.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+  const navigation = SUB_NAV.filter(item => isNavVisible(item.key));
 
-      {/* Zone de contenu */}
-      <div className="flex-1 overflow-y-auto px-2 sm:px-3 lg:px-8 py-3 lg:py-6">
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <header className="shrink-0 border-b border-[var(--w-separator)] bg-[var(--w-surface)]">
+        <div className="mx-auto max-w-[1400px] px-1 py-2.5 lg:px-4">
+          <h1 className="text-base font-bold text-[var(--w-text)]">Transfert d’argent</h1>
+          <div className="mt-2 flex items-center gap-2 lg:hidden">
+            <label htmlFor="mt-section" className="sr-only">Rubrique de transfert d’argent</label>
+            <select id="mt-section" value={sub} onChange={event => setSub(event.target.value as SubPage)}
+              className="input min-h-10 min-w-0 text-sm">
+              {navigation.map(item => (
+                <option key={item.key} value={item.key} disabled={!isInitialized && blockedPages.includes(item.key)}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <nav aria-label="Rubriques de transfert d’argent" className="mt-2 hidden flex-wrap gap-1 lg:flex">
+            {navigation.map(item => (
+              <button key={item.key} type="button" aria-current={sub === item.key ? 'page' : undefined}
+                disabled={!isInitialized && blockedPages.includes(item.key)}
+                onClick={() => setSub(item.key)}
+                className={`btn-ghost min-h-9 px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40 ${sub === item.key ? 'bg-[var(--w-active)] font-semibold !text-[var(--w-text)]' : ''}`}>
+                <item.icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </header>
+
+      <div className="min-w-0 flex-1 overflow-y-auto px-1 py-3 lg:px-4 lg:py-5">
         {sub === 'dashboard' && <MTDashboard isInitialized={isInitialized} onGoInit={() => setSub('parametres')} />}
         {sub === 'operations' && isInitialized && <MTOperations />}
         {sub === 'operations_grossiste' && isInitialized && can('mt_wholesaler_operation_view') && <MTWholesalerOperations />}
@@ -153,19 +140,46 @@ export function MoneyTransfer() {
   );
 }
 
+function MTEmpty({ children }: { children: React.ReactNode }) {
+  return <p className="px-3 py-6 text-center text-sm text-[var(--w-text-muted)]">{children}</p>;
+}
+
 function BlockedMessage({ onGoInit }: { onGoInit: () => void }) {
+  const { can } = usePermissions();
   return (
-    <div className="max-w-[600px] mx-auto py-16 text-center">
-      <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
-        <AlertTriangle className="w-7 h-7 text-amber-500" />
+    <section className="mx-auto max-w-xl space-y-3 border-b border-[var(--w-separator)] px-1 py-4">
+      <div className="flex items-start gap-2">
+        <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--w-text-muted)]" aria-hidden="true" />
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--w-text)]">Soldes d’ouverture à configurer</h2>
+          <p className="mt-0.5 text-sm text-[var(--w-text-sec)]">Configurez les points de service, les services et leurs soldes d’ouverture pour accéder aux opérations.</p>
+        </div>
       </div>
-      <h3 className="text-base font-semibold text-neutral-900 mb-2">Module non initialisé</h3>
-      <p className="text-sm text-neutral-500 mb-6">Veuillez initialiser les soldes d'ouverture avant de commencer les opérations.</p>
-      <button onClick={onGoInit} className="px-4 py-2.5 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors">
-        Initialiser les soldes
-      </button>
-    </div>
+      {can('mt_settings_manage') && <button type="button" onClick={onGoInit} className="btn-primary text-xs">Initialiser les soldes</button>}
+    </section>
   );
+}
+
+function MTMoney({ value, className = '' }: { value: number; className?: string }) {
+  return <span className={`num whitespace-nowrap ${className}`}>{fmt(value)} <span className="text-[0.72em] font-medium">FCFA</span></span>;
+}
+
+function MTFormActions({ cancel, submit, label, busy, disabled = false }: {
+  cancel: () => void; submit: () => void; label: string; busy: boolean; disabled?: boolean;
+}) {
+  return (
+    <>
+      <button type="button" onClick={cancel} disabled={busy} className="btn-secondary text-xs disabled:opacity-50">Annuler</button>
+      <button type="button" onClick={submit} disabled={busy || disabled} className="btn-primary text-xs">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+        {label}
+      </button>
+    </>
+  );
+}
+
+function MTSectionHeading({ children }: { children: React.ReactNode }) {
+  return <h3 className="border-b border-[var(--w-separator)] px-3.5 py-2.5 text-sm font-semibold xl:px-4">{children}</h3>;
 }
 
 /* ============================================ */
@@ -205,7 +219,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
   useEffect(() => { load(); }, [load]);
   useRealtimeRefresh(['mt_operations', 'mt_closures', 'mt_expenses', 'mt_accounts', 'mt_service_points', 'mt_services'], load);
 
-  
+
 
   const getPointName = (pointId: string | null) => {
     if (!pointId) return '—';
@@ -221,35 +235,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
-  if (!isInitialized) {
-    return (
-      <div className="max-w-[700px] mx-auto py-10">
-        <div className="bg-white border border-neutral-200 rounded-xl p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-5">
-            <PlayCircle className="w-8 h-8 text-amber-500" />
-          </div>
-          <h2 className="text-lg font-bold text-neutral-900 mb-2">Module Transfert d'argent non initialisé</h2>
-          <p className="text-sm text-neutral-500 mb-6 max-w-md mx-auto">
-            Veuillez configurer les points de service, les services de transfert et les soldes d'ouverture avant de commencer les opérations.
-          </p>
-          <button onClick={onGoInit} className="px-5 py-2.5 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors flex items-center gap-2 mx-auto">
-            <PlayCircle className="w-4 h-4" />Initialiser les soldes
-          </button>
-          <div className="mt-8 pt-6 border-t border-neutral-100 text-left">
-            <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">Étapes requises</h4>
-            <div className="space-y-2">
-              {[['1', 'Configurer au moins un point de service'], ['2', 'Configurer au moins un service de transfert'], ['3', 'Renseigner les soldes d\'ouverture'], ['4', 'Valider l\'initialisation']].map(([n, l]) => (
-                <div key={n} className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center text-xs font-bold text-neutral-600">{n}</span>
-                  <span className="text-sm text-neutral-600">{l}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (!isInitialized) return <BlockedMessage onGoInit={onGoInit} />;
 
   // Filter ops by selected point
   const filteredOps = selectedPointId
@@ -304,507 +290,168 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
     };
   });
 
-  // Top points ranking
-  const topPoints = [...pointStats].sort((a, b) => b.opsCount - a.opsCount || b.volume - a.volume);
+  const topPoints = [...pointStats].sort((a, b) => b.opsCount - a.opsCount || b.volume - a.volume).slice(0, 3);
+  const dailyAmounts = [
+    { label: 'Caisse', value: totalCash },
+    { label: 'Unités de valeur', value: totalUV },
+    { label: 'Stock crédit', value: totalCredit },
+    { label: 'Dépôts du jour', value: deposits },
+    { label: 'Retraits du jour', value: withdrawals },
+  ];
 
   return (
-    <div className="space-y-2.5 lg:space-y-4 lg:max-w-[1400px] lg:mx-auto pb-28 lg:pb-0">
-
-      {/* ── MOBILE HERO: Tableau de bord Transfert ── */}
-      <div className="lg:hidden">
-        <div
-          className="w-full relative overflow-hidden rounded-[18px] p-4"
-          style={{ background: 'linear-gradient(160deg, #0a0a0a 0%, #171717 35%, #262626 65%, #404040 100%)', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }}
-        >
-          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[18px]">
-            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-white/5 to-transparent blur-3xl" />
-            <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-white/3 to-transparent blur-3xl" />
-          </div>
-          <div className="relative">
-            {/* Header with module name + point context */}
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-white/70" />
-                <span className="text-[10px] font-bold text-white/90">Transfert d'argent</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] font-bold text-white/50 num">
-                  {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </span>
-                <button onClick={() => load()} className="p-1 rounded-full hover:bg-white/10 transition-colors">
-                  <RefreshCw className="w-3 h-3 text-white/60" />
-                </button>
-              </div>
-            </div>
-
-            {/* Point de service context */}
-            <div className="flex items-center gap-1.5 mb-3">
-              <MapPin className="w-2.5 h-2.5 text-sky-400" />
-              <span className="text-[9px] font-semibold text-sky-300/80">
-                {selectedPointId ? getPointName(selectedPointId) : `Tous les points (${points.length})`}
-              </span>
-              {selectedPointId && (
-                <button onClick={() => setSelectedPointId(null)} className="ml-1 text-white/40 hover:text-white"><X className="w-2.5 h-2.5" /></button>
-              )}
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-auto" />
-              <span className="text-[8px] font-bold uppercase tracking-wider text-emerald-400/80">En direct</span>
-            </div>
-
-            {/* Alert banner if any */}
-            {totalAlerts > 0 && (
-              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-rose-500/15 border border-rose-400/20 mb-3">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-                <span className="text-[9px] font-bold text-rose-200">
-                  {totalAlerts} {totalAlerts > 1 ? 'comptes' : 'compte'} en solde bas
-                  {uvAlerts > 0 && <span className="text-rose-300/70"> ({uvAlerts} UV{creditAlerts > 0 ? `, ${creditAlerts} crédit` : ''})</span>}
-                  {uvAlerts === 0 && creditAlerts > 0 && <span className="text-rose-300/70"> ({creditAlerts} crédit)</span>}
-                </span>
-              </div>
-            )}
-
-            {/* Main Amount - Liquidités totales */}
-            <div className="mb-3">
-              <p className="text-[9px] font-bold uppercase tracking-[0.07em] text-white/50 mb-0.5">Liquidités totales (Cash + UV + Crédit)</p>
-              <p className="text-[clamp(24px,8vw,32px)] font-black text-white num leading-none">{fmt(totalCash + totalUV + totalCredit)} <span className="text-[11px] font-normal text-white/40">FCFA</span></p>
-            </div>
-
-            {/* Key metrics grid */}
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
-                <p className="text-[8px] font-bold uppercase tracking-wider text-white/50 mb-0.5">Caisse</p>
-                <p className="text-[13px] font-black num text-white">{fmt(totalCash)}</p>
-              </div>
-              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
-                <p className="text-[8px] font-bold uppercase tracking-wider text-sky-400/70 mb-0.5">Solde UV</p>
-                <p className="text-[13px] font-black num text-sky-300">{fmt(totalUV)}</p>
-              </div>
-              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
-                <p className="text-[8px] font-bold uppercase tracking-wider text-amber-400/70 mb-0.5">Stock crédit</p>
-                <p className="text-[13px] font-black num text-amber-300">{fmt(totalCredit)}</p>
-              </div>
-            </div>
-
-            {/* Flows du jour */}
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
-                <p className="text-[8px] font-bold uppercase tracking-wider text-emerald-400/70 mb-0.5">Dépôts du jour</p>
-                <p className="text-[13px] font-black num text-emerald-300">+{fmt(deposits)}</p>
-              </div>
-              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
-                <p className="text-[8px] font-bold uppercase tracking-wider text-rose-400/70 mb-0.5">Retraits du jour</p>
-                <p className="text-[13px] font-black num text-rose-300">-{fmt(withdrawals)}</p>
-              </div>
-            </div>
-
-            {/* Activity summary row */}
-            <div className="flex items-center justify-between py-2 rounded-lg bg-white/5 border border-white/8 px-2.5">
-              <div className="flex items-center gap-1.5">
-                <Activity className="w-3 h-3 text-white/50" />
-                <span className="text-[9px] font-bold text-white/60">Opérations du jour</span>
-              </div>
-              <span className="text-[13px] font-black num text-white/90">{opsCount}</span>
-            </div>
-
-            {/* Credit sales row if any */}
-            {creditSales > 0 && (
-              <div className="flex items-center justify-between py-2 mt-2 rounded-lg bg-amber-500/10 border border-amber-400/15 px-2.5">
-                <div className="flex items-center gap-1.5">
-                  <Smartphone className="w-3 h-3 text-amber-400" />
-                  <span className="text-[9px] font-bold text-amber-300/80">Ventes crédit du jour</span>
-                </div>
-                <span className="text-[13px] font-black num text-amber-300">{fmt(creditSales)}</span>
-              </div>
-            )}
-
-            {/* Footer - derniere operation */}
-            {filteredOps.length > 0 && (
-              <div className="flex items-center gap-1.5 pt-2 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <Clock className="w-3 h-3 text-white/30" />
-                <span className="text-[9px] text-white/40">Dernière opération à {new Date(filteredOps[0].operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-            )}
-          </div>
+    <div className="mx-auto max-w-[1400px] space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-base font-bold text-[var(--w-text)]">Situation du jour</h2>
+          <p className="text-xs text-[var(--w-text-sec)]">{new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <select aria-label="Filtrer par point de service" value={selectedPointId ?? ''}
+            onChange={event => setSelectedPointId(event.target.value || null)} className="input !w-auto max-w-full py-1.5 text-xs">
+            <option value="">Tous les points</option>
+            {points.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
+          </select>
+          <button type="button" onClick={load} className="btn-icon" aria-label="Actualiser la situation" title="Actualiser">
+            <RefreshCw className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
-      {/* ── DESKTOP: Situation du jour (left) + 3 cards (right) ── */}
-      <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_380px] gap-4">
-
-        {/* Situation du jour */}
-        <div
-          className="relative overflow-hidden rounded-xl p-5 flex flex-col"
-          style={{ background: 'linear-gradient(160deg, #0a0a0a 0%, #171717 35%, #262626 65%, #404040 100%)', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)', minHeight: 320 }}
-        >
-          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
-            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-white/5 to-transparent blur-3xl" />
-            <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-white/3 to-transparent blur-3xl" />
-          </div>
-          <div className="relative flex flex-col h-full">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-white/70" />
-                <h3 className="text-base font-bold text-white">Situation du jour</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedPointId && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/20 border border-sky-400/30 text-sky-200">
-                    <MapPin className="w-3 h-3" />{getPointName(selectedPointId)}
-                    <button onClick={() => setSelectedPointId(null)} className="ml-0.5 hover:text-white"><X className="w-3 h-3" /></button>
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/10 border border-white/15 text-white/80">
-                  <Clock className="w-3 h-3" />
-                  {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                </span>
-              </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
+        <section className="min-w-0 rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--w-separator)] px-3.5 py-3 xl:px-4">
+            <div>
+              <p className="text-xs text-[var(--w-text-sec)]">Liquidités (caisse et UV)</p>
+              <MTMoney value={totalCash + totalUV} className="text-[clamp(1.05rem,6vw,1.875rem)] font-bold" />
             </div>
-
-            {/* KPI Grid - 4 main totals */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div className="rounded-lg px-3.5 py-3 flex flex-col justify-center border bg-white/6 border-white/8">
-                <p className="text-[10px] font-medium uppercase tracking-wide mb-1 text-white/50">Total dépôts</p>
-                <p className="text-xl font-bold num leading-tight text-emerald-300">{fmt(deposits)} <span className="text-[10px] font-normal text-white/40">FCFA</span></p>
-              </div>
-              <div className="rounded-lg px-3.5 py-3 flex flex-col justify-center border bg-white/6 border-white/8">
-                <p className="text-[10px] font-medium uppercase tracking-wide mb-1 text-white/50">Total retraits</p>
-                <p className="text-xl font-bold num leading-tight text-rose-300">{fmt(withdrawals)} <span className="text-[10px] font-normal text-white/40">FCFA</span></p>
-              </div>
-              <div className="rounded-lg px-3.5 py-3 flex flex-col justify-center border bg-white/6 border-white/8">
-                <p className="text-[10px] font-medium uppercase tracking-wide mb-1 text-white/50">Total UV restant</p>
-                <p className="text-xl font-bold num leading-tight text-amber-300">{fmt(totalUV)} <span className="text-[10px] font-normal text-white/40">FCFA</span></p>
-              </div>
-              <div className="rounded-lg px-3.5 py-3 flex flex-col justify-center border bg-white/6 border-white/8">
-                <p className="text-[10px] font-medium uppercase tracking-wide mb-1 text-white/50">Total cash restant</p>
-                <p className="text-xl font-bold num leading-tight text-white">{fmt(totalCash)} <span className="text-[10px] font-normal text-white/40">FCFA</span></p>
-              </div>
-            </div>
-
-            {/* Secondary stats */}
-            <div className="grid grid-cols-2 gap-3 flex-1">
-              <div className="rounded-lg px-3.5 py-2.5 flex flex-col justify-center border bg-white/4 border-white/6">
-                <p className="text-[10px] font-medium uppercase tracking-wide mb-0.5 text-white/40">Opérations</p>
-                <p className="text-base font-bold num leading-tight text-white/90">{opsCount}</p>
-              </div>
-              <div className="rounded-lg px-3.5 py-2.5 flex flex-col justify-center border bg-white/4 border-white/6">
-                <p className="text-[10px] font-medium uppercase tracking-wide mb-0.5 text-white/40">Points actifs</p>
-                <p className="text-base font-bold num leading-tight text-white/90">{points.length}</p>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between pt-3 mt-3 border-t border-white/10">
-              {filteredOps.length > 0 && (
-                <div className="flex items-center gap-1.5 text-xs text-white/40">
-                  <Clock className="w-3.5 h-3.5" />
-                  Dernière opération à {new Date(filteredOps[0].operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              )}
-              <button onClick={() => load()} className="flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white ml-auto transition-colors">
-                <RefreshCw className="w-3.5 h-3.5" /> Actualiser
-              </button>
+            <div className="text-sm">
+              <p className="text-xs text-[var(--w-text-sec)]">Total avec stock crédit</p>
+              <MTMoney value={totalCash + totalUV + totalCredit} className="font-semibold" />
             </div>
           </div>
-        </div>
-
-        {/* Right column: 3 cards */}
-        <div className="flex flex-col gap-3">
-          {/* Top points de service */}
-          <div className="bg-white rounded-xl border border-neutral-200 px-4 py-3.5 overflow-hidden">
-            <div className="flex items-center gap-2 mb-2.5">
-              <TrendingUp className="w-4 h-4 text-neutral-700" />
-              <h3 className="text-sm font-bold text-neutral-900">Top points de service</h3>
-            </div>
-            {topPoints.length === 0 ? (
-              <p className="text-xs text-neutral-400">Aucune activité</p>
-            ) : (
-              <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: 200 }}>
-                {topPoints.slice(0, 5).map((pt, i) => (
-                  <div key={pt.id} className="flex items-center gap-2">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-neutral-100 text-neutral-600' : 'bg-orange-50 text-orange-600'}`}>{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-neutral-900 truncate">{pt.name}</p>
-                      <p className="text-[10px] text-neutral-400">{pt.opsCount} op. · Dép: {fmt(pt.deposits)} · Ret: {fmt(pt.withdrawals)}</p>
-                    </div>
-                  </div>
-                ))}
+          <dl className="grid grid-cols-1 divide-y divide-[var(--w-separator-l)] px-3.5 sm:grid-cols-2 sm:gap-x-5 sm:divide-y-0 xl:px-4">
+            {dailyAmounts.map(({ label, value }) => (
+              <div key={label} className="flex min-w-0 items-baseline justify-between gap-3 py-2 text-sm sm:border-b sm:border-[var(--w-separator-l)]">
+                <dt className="text-xs text-[var(--w-text-sec)]">{label}</dt>
+                <dd className="font-semibold"><MTMoney value={value} /></dd>
               </div>
-            )}
-          </div>
-
-          {/* Liquidités totales */}
-          <div className="flex-1 bg-white rounded-xl border border-neutral-200 px-4 py-3.5">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Wallet className="w-4 h-4 text-neutral-600" />
-              <h3 className="text-sm font-bold text-neutral-900">Liquidités totales</h3>
+            ))}
+            <div className="flex min-w-0 items-baseline justify-between gap-3 py-2 text-sm">
+              <dt className="text-xs text-[var(--w-text-sec)]">Opérations du jour</dt>
+              <dd className="num font-semibold">{fmt(opsCount)}</dd>
             </div>
-            <p className="text-xl font-bold text-neutral-900 num tracking-tight">{fmt(totalCash + totalUV)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
-            <p className="text-[11px] text-neutral-400 mt-0.5">Cash: {fmt(totalCash)} + UV: {fmt(totalUV)}</p>
-          </div>
+            {creditSales > 0 && <div className="flex min-w-0 items-baseline justify-between gap-3 py-2 text-sm">
+              <dt className="text-xs text-[var(--w-text-sec)]">Ventes crédit du jour</dt>
+              <dd className="font-semibold"><MTMoney value={creditSales} /></dd>
+            </div>}
+          </dl>
+        </section>
 
-          {/* Alertes soldes */}
-          <div className="flex-1 bg-white rounded-xl border border-neutral-200 px-4 py-3.5">
-            <div className="flex items-center gap-2 mb-1.5">
-              <AlertTriangle className={`w-4 h-4 ${uvAlerts > 0 ? 'text-orange-500' : 'text-neutral-400'}`} />
-              <h3 className="text-sm font-bold text-neutral-900">Alertes soldes bas</h3>
-            </div>
-            <p className={`text-xl font-bold num tracking-tight ${uvAlerts > 0 ? 'text-orange-600' : 'text-neutral-900'}`}>{uvAlerts}</p>
-            <p className="text-[11px] text-neutral-400 mt-0.5">Comptes UV en dessous de 50 000 FCFA</p>
-          </div>
-        </div>
+        <section className="min-w-0 rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]">
+          <MTSectionHeading>Points les plus actifs</MTSectionHeading>
+          {topPoints.length === 0 ? <MTEmpty>Aucun point de service</MTEmpty> : (
+            <ul className="divide-y divide-[var(--w-separator-l)] px-3.5 xl:px-4">
+              {topPoints.map(point => <li key={point.id} className="flex items-baseline justify-between gap-2 py-2.5 text-sm">
+                <span className="font-medium">{point.name}</span>
+                <span className="shrink-0 text-xs text-[var(--w-text-muted)]">{point.opsCount} op.</span>
+              </li>)}
+            </ul>
+          )}
+          {totalAlerts > 0 && (
+            <p className="flex items-start gap-2 border-t border-[var(--w-separator)] px-3.5 py-2.5 text-xs text-[var(--w-warning)] xl:px-4">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>{totalAlerts} en solde bas{uvAlerts ? ` · ${uvAlerts} UV` : ''}{creditAlerts ? ` · ${creditAlerts} crédit` : ''}</span>
+            </p>
+          )}
+        </section>
       </div>
 
-      {/* ── Détail par service ── */}
       {services.length > 0 && (
-        <div className="bg-white rounded-[18px] lg:rounded-xl border border-neutral-200 overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
-          <div className="flex items-center gap-2.5 px-3.5 lg:px-4 py-2.5 lg:py-3 border-b border-neutral-100/50 bg-neutral-50/80">
-            <ArrowRightLeft className="w-3.5 h-3.5 text-neutral-700" />
-            <span className="text-[10px] lg:text-sm font-bold text-neutral-700 uppercase tracking-wider lg:tracking-normal lg:normal-case">Activité par service</span>
-            <span className="text-[9px] lg:text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{services.length}</span>
-          </div>
-          {/* Mobile: horizontal scroll - 2 cards per page */}
-          <div className="lg:hidden overflow-x-auto snap-x snap-mandatory no-scrollbar px-3 py-3">
-            <div className="flex gap-2" style={{ width: 'max-content' }}>
-              {services.map((svc, i) => {
-              const st = serviceStats.find(s => s.id === svc.id);
-              const svcDeposits = st?.deposits || 0;
-              const svcWithdrawals = st?.withdrawals || 0;
-              const svcOps = st?.opsCount || 0;
-              const svcUV = st?.uvBalance || 0;
+        <section className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]">
+          <MTSectionHeading>Activité par service</MTSectionHeading>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {services.map(service => {
+              const stats = serviceStats.find(item => item.id === service.id);
               return (
-                <div key={svc.id} className={`shrink-0 p-2.5 rounded-xl border border-neutral-200 bg-white ${i % 2 === 0 ? 'snap-start' : ''}`} style={{ width: 'calc((100vw - 48px) / 2)' }}>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${svcOps > 0 ? 'bg-sky-500' : 'bg-neutral-300'}`} />
-                    <span className="text-[10px] font-bold text-neutral-800 truncate">{svc.name}</span>
+                <li key={service.id} className="min-w-0 border-b border-[var(--w-separator-l)] px-3.5 py-2.5 xl:px-4">
+                  <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                    <h4 className="text-sm font-semibold">{service.name}</h4>
+                    <span className="text-xs text-[var(--w-text-muted)]">{stats?.opsCount ?? 0} op.</span>
                   </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Dépôts</span>
-                      <span className="text-[9px] font-bold text-emerald-700 num">{fmt(svcDeposits)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Retraits</span>
-                      <span className="text-[9px] font-bold text-red-600 num">{fmt(svcWithdrawals)}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-1 border-t border-neutral-100">
-                      <span className="text-[8px] text-neutral-600 font-bold">Solde UV</span>
-                      <span className="text-[9px] font-bold text-neutral-900 num">{fmt(svcUV)}</span>
-                    </div>
-                  </div>
-                  <div className="mt-1.5 pt-1 border-t border-[var(--w-separator-l)]">
-                    <span className="text-[8px] text-neutral-400">{svcOps} op.</span>
-                  </div>
-                </div>
+                  <dl className="space-y-1 text-xs">
+                    {[
+                      ['Dépôts', stats?.deposits ?? 0],
+                      ['Retraits', stats?.withdrawals ?? 0],
+                      ['Solde UV', stats?.uvBalance ?? 0],
+                    ].map(([label, value]) => <div key={label} className="flex justify-between gap-2">
+                      <dt className="text-[var(--w-text-sec)]">{label}</dt>
+                      <dd className="font-medium"><MTMoney value={Number(value)} /></dd>
+                    </div>)}
+                  </dl>
+                </li>
               );
             })}
-            </div>
-          </div>
-          {/* Desktop: grid */}
-          <div className="hidden lg:block p-4">
-            <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(services.length, 5)}, minmax(0, 1fr))` }}>
-            {services.map(svc => {
-              const st = serviceStats.find(s => s.id === svc.id);
-              const svcDeposits = st?.deposits || 0;
-              const svcWithdrawals = st?.withdrawals || 0;
-              const svcOps = st?.opsCount || 0;
-              const svcUV = st?.uvBalance || 0;
-              return (
-                <div key={svc.id} className="p-3 rounded-lg border border-neutral-200 bg-neutral-50/50">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${svcOps > 0 ? 'bg-sky-500' : 'bg-neutral-300'}`} />
-                    <span className="text-[11px] font-bold text-neutral-900 truncate">{svc.name}</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-neutral-400 font-semibold">Dépôts</span>
-                      <span className="text-[11px] font-bold text-emerald-700 num">{fmt(svcDeposits)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-neutral-400 font-semibold">Retraits</span>
-                      <span className="text-[11px] font-bold text-red-600 num">{fmt(svcWithdrawals)}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100">
-                      <span className="text-[9px] text-neutral-600 font-bold">Solde UV</span>
-                      <span className="text-[11px] font-black text-neutral-900 num">{fmt(svcUV)}</span>
-                    </div>
-                  </div>
-                  <div className="mt-1.5 pt-1 border-t border-[var(--w-separator-l)]">
-                    <span className="text-[8px] text-neutral-400">{svcOps} opération{svcOps > 1 ? 's' : ''}</span>
-                  </div>
-                </div>
-              );
-            })}
-            </div>
-          </div>
-        </div>
+          </ul>
+        </section>
       )}
 
-      {/* ── Points de service (multi-point like multi-store mobile) ── */}
       {pointStats.length > 0 && (
-        <div className="bg-white rounded-[18px] lg:rounded-xl border border-neutral-200 overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
-          {/* Header */}
-          <div className="flex items-center justify-between px-3.5 lg:px-4 py-2.5 lg:py-3 border-b border-neutral-100/50 bg-neutral-50/80">
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-neutral-700" />
-              <span className="text-[10px] lg:text-sm font-bold text-neutral-700 uppercase tracking-wider lg:tracking-normal lg:normal-case">Points de service</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{points.length}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {selectedPointId && (
-                <button onClick={() => setSelectedPointId(null)} className="text-[10px] font-medium text-sky-600 hover:text-sky-800 transition-colors">
-                  Tous
+        <section className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]">
+          <MTSectionHeading>Points de service</MTSectionHeading>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {pointStats.map(point => (
+              <li key={point.id} className="min-w-0 border-b border-[var(--w-separator-l)]">
+                <button type="button" aria-pressed={selectedPointId === point.id}
+                  onClick={() => setSelectedPointId(selectedPointId === point.id ? null : point.id)}
+                  className="w-full px-3.5 py-2.5 text-left hover:bg-[var(--w-hover)] aria-pressed:bg-[var(--w-active)] xl:px-4">
+                  <span className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                    <span className="text-sm font-semibold">{point.name}</span>
+                    <span className="text-xs text-[var(--w-text-muted)]">{point.opsCount} op. · {point.servicesCount} service{point.servicesCount > 1 ? 's' : ''}</span>
+                  </span>
+                  <span className="block space-y-1 text-xs">
+                    {[
+                      ['Caisse', point.cash],
+                      ['Solde UV', point.uv],
+                      ['Dépôts', point.deposits],
+                      ['Retraits', point.withdrawals],
+                    ].map(([label, value]) => <span key={label} className="flex justify-between gap-2">
+                      <span className="text-[var(--w-text-sec)]">{label}</span>
+                      <MTMoney value={Number(value)} className="font-medium" />
+                    </span>)}
+                  </span>
                 </button>
-              )}
-              <span className="hidden lg:inline text-[11px] text-neutral-400">Cliquez pour filtrer</span>
-            </div>
-          </div>
-
-          {/* Mobile: horizontal scroll cards - 2 per page */}
-          <div className="lg:hidden overflow-x-auto snap-x snap-mandatory no-scrollbar px-3 py-3">
-            <div className="flex gap-2" style={{ width: 'max-content' }}>
-              {pointStats.map((pt, i) => {
-              const isSelected = selectedPointId === pt.id;
-              return (
-                <button
-                  key={pt.id}
-                  onClick={() => setSelectedPointId(isSelected ? null : pt.id)}
-                  className={`shrink-0 p-2.5 rounded-xl border text-left transition-all ${i % 2 === 0 ? 'snap-start' : ''} ${isSelected ? 'border-neutral-400 bg-neutral-50' : 'border-neutral-200 bg-white active:bg-neutral-50'}`}
-                  style={{ width: 'calc((100vw - 48px) / 2)' }}
-                >
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${pt.opsCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
-                    <span className="text-[10px] font-bold text-neutral-900 truncate">{pt.name}</span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Dépôts</span>
-                      <span className="text-[9px] font-bold text-emerald-700 num">{fmt(pt.deposits)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Retraits</span>
-                      <span className="text-[9px] font-bold text-red-600 num">{fmt(pt.withdrawals)}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-0.5 border-t border-neutral-100">
-                      <span className="text-[8px] text-neutral-600 font-bold">Cash</span>
-                      <span className="text-[9px] font-bold text-neutral-900 num">{fmt(pt.cash)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-600 font-bold">UV</span>
-                      <span className="text-[9px] font-bold text-neutral-900 num">{fmt(pt.uv)}</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-            </div>
-          </div>
-
-          {/* Desktop: grid */}
-          <div className="hidden lg:block p-4">
-            <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(pointStats.length, 5)}, minmax(0, 1fr))` }}>
-              {pointStats.slice(0, 10).map(pt => {
-                const isSelected = selectedPointId === pt.id;
-                return (
-                  <button
-                    key={pt.id}
-                    onClick={() => setSelectedPointId(isSelected ? null : pt.id)}
-                    className={`p-3 rounded-lg border text-left transition-all duration-200 ${isSelected ? 'border-sky-400 bg-sky-50/50 ring-1 ring-sky-200' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${pt.opsCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
-                        <span className="text-[11px] font-bold text-neutral-900 truncate">{pt.name}</span>
-                      </div>
-                      {isSelected && <span className="text-[8px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded shrink-0 ml-1">Filtre actif</span>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-neutral-400 font-semibold">Dépôts</span>
-                        <span className="text-[11px] font-bold text-emerald-700 num">{fmt(pt.deposits)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-neutral-400 font-semibold">Retraits</span>
-                        <span className="text-[11px] font-bold text-red-600 num">{fmt(pt.withdrawals)}</span>
-                      </div>
-                      <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100">
-                        <span className="text-[9px] text-neutral-600 font-bold">Cash</span>
-                        <span className="text-[11px] font-black text-neutral-900 num">{fmt(pt.cash)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-neutral-600 font-bold">UV</span>
-                        <span className="text-[11px] font-black text-neutral-900 num">{fmt(pt.uv)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-[var(--w-separator-l)]">
-                      <span className="text-[8px] text-neutral-400">{pt.opsCount} opération{pt.opsCount > 1 ? 's' : ''}</span>
-                      <span className="text-[8px] text-neutral-400">{pt.servicesCount} service{pt.servicesCount > 1 ? 's' : ''}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {pointStats.length > 10 && (
-              <div className="flex justify-end mt-2">
-                <span className="text-[10px] text-neutral-400 font-medium">+{pointStats.length - 10} autre{pointStats.length - 10 > 1 ? 's' : ''} point{pointStats.length - 10 > 1 ? 's' : ''}</span>
-              </div>
-            )}
-          </div>
-        </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
-      {/* ── Dernières opérations ── */}
-      <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden flex flex-col" style={{ maxHeight: 420 }}>
-        <div className="px-3.5 lg:px-5 py-3 lg:py-3.5 border-b border-neutral-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-neutral-700" />
-            <h3 className="text-sm font-bold text-neutral-900">Dernières opérations</h3>
-          </div>
-          <span className="text-[10px] lg:text-xs text-neutral-400">{filteredOps.length} op.</span>
-        </div>
-        {filteredOps.length === 0 ? (
-          <div className="py-16 text-center">
-            <RefreshCw className="w-8 h-8 text-neutral-200 mx-auto mb-3" />
-            <p className="text-sm text-neutral-400">Aucune opération {selectedPointId ? 'pour ce point' : "aujourd'hui"}</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-neutral-100 overflow-y-auto flex-1">
+      <section className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]">
+        <MTSectionHeading>Dernières opérations</MTSectionHeading>
+        {filteredOps.length === 0 ? <MTEmpty>Aucune opération {selectedPointId ? 'pour ce point' : 'aujourd’hui'}</MTEmpty> : (
+          <ul className="divide-y divide-[var(--w-separator-l)]">
             {filteredOps.slice(0, 20).map(op => {
-              const opTime = new Date(op.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-              const isDeposit = op.type === 'depot';
-              const isWithdraw = op.type === 'retrait';
+              const time = new Date(op.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+              const isWithdrawal = op.type === 'retrait';
+              const Icon = op.type === 'depot' ? ArrowDownLeft : isWithdrawal ? ArrowUpRight : ArrowRightLeft;
               return (
-                <div key={op.id} className="px-3.5 lg:px-5 py-3 flex items-center gap-2.5 lg:gap-3 hover:bg-neutral-50/50 transition-colors">
-                  <div className={`w-8 h-8 lg:w-9 lg:h-9 rounded-full flex items-center justify-center shrink-0 ${isDeposit ? 'bg-emerald-50' : isWithdraw ? 'bg-red-50' : 'bg-neutral-100'}`}>
-                    {isDeposit ? <ArrowDownLeft className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-emerald-600" /> : isWithdraw ? <ArrowUpRight className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-red-500" /> : <ArrowRightLeft className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-500" />}
+                <li key={op.id} className="flex items-start gap-2.5 px-3.5 py-2.5 xl:px-4">
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--w-text-sec)]" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{OP_TYPE_LABELS[op.type] || op.type}</p>
+                    <p className="text-xs text-[var(--w-text-sec)]">{[getServiceName(op.service_id), getPointName(op.service_point_id), time].filter(Boolean).join(' · ')}</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <p className="text-xs lg:text-sm font-semibold text-neutral-900 truncate">{OP_TYPE_LABELS[op.type] || op.type}</p>
-                      {op.service_id && (
-                        <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 font-medium shrink-0">{getServiceName(op.service_id)}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[10px] lg:text-xs text-neutral-400 flex-wrap">
-                      <span className="flex items-center gap-0.5">
-                        <MapPin className="w-2.5 h-2.5 lg:w-3 lg:h-3" />{getPointName(op.service_point_id)}
-                      </span>
-                      <span className="text-neutral-200">|</span>
-                      <span>{opTime}</span>
-                    </div>
+                  <div className="shrink-0 text-right">
+                    <MTMoney value={isWithdrawal ? -Number(op.amount) : Number(op.amount)} className="text-xs font-semibold sm:text-sm" />
+                    <p className="text-xs text-[var(--w-text-sec)]">{STATUS_LABELS[op.status] || op.status}</p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className={`text-xs lg:text-sm font-bold num ${isDeposit ? 'text-emerald-700' : isWithdraw ? 'text-red-600' : 'text-neutral-900'}`}>
-                      {isDeposit ? '+' : isWithdraw ? '-' : ''}{fmt(op.amount)}
-                    </p>
-                    <span className={`inline-block text-[9px] lg:text-[10px] font-medium px-1 lg:px-1.5 py-0.5 rounded mt-0.5 ${STATUS_COLORS[op.status] || 'bg-neutral-100 text-neutral-600'}`}>
-                      {STATUS_LABELS[op.status] || op.status}
-                    </span>
-                  </div>
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
     </div>
   );
 }
@@ -943,10 +590,10 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
   return (
-    <div className="lg:max-w-[1100px] lg:mx-auto space-y-5 pb-28 lg:pb-0">
+    <div className="lg:max-w-[1100px] mx-auto min-w-0 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-neutral-900">Initialisation des soldes</h2>
+          <h2 className="text-base font-bold text-[var(--w-text)]">Initialisation des soldes</h2>
           <p className="text-xs text-neutral-500 mt-0.5">
             {isValidated && uninitializedPoints.length === 0
               ? 'Tous les points sont initialisés.'
@@ -964,7 +611,7 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
 
       {/* Pre-requisites check */}
       {!isValidated && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-4">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-4">
           <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">Pré-requis</h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${points.length > 0 ? 'border-emerald-200 bg-emerald-50/50' : 'border-orange-200 bg-orange-50/50'}`}>
@@ -994,7 +641,7 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
 
       {/* Already initialized points (info only) */}
       {isValidated && initializedPoints.length > 0 && uninitializedPoints.length > 0 && (
-        <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface-el)] p-4">
           <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Points déjà initialisés</h4>
           <div className="flex flex-wrap gap-2">
             {initializedPoints.map(pt => (
@@ -1008,13 +655,9 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
 
       {/* Balance grids per point */}
       {displayPoints.length === 0 && !isValidated ? (
-        <div className="bg-white border border-neutral-200 rounded-xl py-12 text-center">
-          <MapPin className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucun point de service configuré</p>
-          <p className="text-xs text-neutral-400 mt-1">Créez d'abord vos points de service et associez-leur des services</p>
-        </div>
+        <MTEmpty>Aucun point de service configuré · Créez d'abord vos points de service et associez-leur des services</MTEmpty>
       ) : displayPoints.length === 0 && isValidated ? (
-        <div className="bg-white border border-neutral-200 rounded-xl py-12 text-center">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] py-12 text-center">
           <CheckCircle2 className="w-10 h-10 text-emerald-300 mx-auto mb-3" />
           <p className="text-sm text-neutral-600">Tous les points de service sont initialisés</p>
           <p className="text-xs text-neutral-400 mt-1">Ajoutez un nouveau point de service pour pouvoir l'initialiser ici</p>
@@ -1025,7 +668,7 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
             const svcIds = pointServices[pt.id] || [];
             const pointSvcs = svcIds.map(sid => services.find(s => s.id === sid)).filter(Boolean);
             return (
-              <div key={pt.id} className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+              <div key={pt.id} className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden">
                 <div className="px-5 py-3 border-b border-neutral-100 bg-neutral-50/50 flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
                     <MapPin className="w-4 h-4 text-emerald-600" />
@@ -1039,7 +682,7 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Cash balance */}
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
+                      <label className="flex items-center gap-2 text-xs font-medium text-[var(--w-text-sec)] tracking-wide">
                         <Banknote className="w-3.5 h-3.5 text-emerald-500" />Caisse (Cash)
                       </label>
                       <input
@@ -1053,7 +696,7 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
                     {/* UV per service */}
                     {pointSvcs.map(svc => (
                       <div key={svc.id} className="space-y-1.5">
-                        <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
+                        <label className="flex items-center gap-2 text-xs font-medium text-[var(--w-text-sec)] tracking-wide">
                           {svc.logo_url ? <img src={svc.logo_url} alt="" className="w-4 h-4 rounded object-contain" /> : <Smartphone className="w-3.5 h-3.5 text-sky-500" />}
                           {svc.name}
                         </label>
@@ -1079,7 +722,7 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
 
       {/* Validate button */}
       {(canValidate || canInitNewPoints) && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-5">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-5">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h4 className="text-sm font-semibold text-neutral-900">{isValidated ? 'Initialiser les nouveaux points' : 'Prêt à valider'}</h4>
@@ -1094,28 +737,19 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
         </div>
       )}
 
-      {/* Confirmation modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl border border-neutral-200 shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-base font-bold text-neutral-900">{isValidated ? 'Confirmer l\'initialisation' : 'Confirmer la validation'}</h3>
-            <p className="text-sm text-neutral-600">Les soldes suivants seront créés :</p>
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-neutral-500">Cash total</span><span className="font-semibold">{fmt(totalCash)} FCFA</span></div>
-              <div className="flex justify-between"><span className="text-neutral-500">UV total</span><span className="font-semibold">{fmt(totalUV)} FCFA</span></div>
-              <div className="flex justify-between pt-2 border-t border-neutral-100"><span className="text-neutral-700 font-medium">Total actifs</span><span className="font-bold">{fmt(totalCash + totalUV)} FCFA</span></div>
-              <div className="flex justify-between pt-2 border-t border-neutral-100"><span className="text-neutral-700 font-medium">Points concernés</span><span className="font-semibold">{displayPoints.length}</span></div>
-            </div>
-            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2">Les comptes seront créés et les opérations deviendront accessibles.</p>
-            <div className="flex gap-2 justify-end pt-2">
-              <button onClick={() => setShowConfirm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={validate} disabled={validating} className="btn-icon-primary" title="Confirmer">
-                {validating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal open={showConfirm} onClose={() => { if (!validating) setShowConfirm(false); }}
+        title={isValidated ? 'Confirmer l’initialisation' : 'Confirmer la validation'} size="sm" layer="top"
+        panelClassName="!h-auto" focusOnOpen
+        footer={<MTFormActions cancel={() => setShowConfirm(false)} submit={validate} label="Confirmer" busy={validating} />}>
+        <p className="mb-3 text-sm text-[var(--w-text-sec)]">Soldes d’ouverture à créer</p>
+        <dl className="divide-y divide-[var(--w-separator-l)] text-sm">
+          <div className="flex justify-between gap-2 py-2"><dt>Caisse</dt><dd className="font-semibold"><MTMoney value={totalCash} /></dd></div>
+          <div className="flex justify-between gap-2 py-2"><dt>Unités de valeur</dt><dd className="font-semibold"><MTMoney value={totalUV} /></dd></div>
+          <div className="flex justify-between gap-2 py-2"><dt>Total des actifs</dt><dd className="font-semibold"><MTMoney value={totalCash + totalUV} /></dd></div>
+          <div className="flex justify-between gap-2 py-2"><dt>Points concernés</dt><dd className="font-semibold">{displayPoints.length}</dd></div>
+        </dl>
+        <p className="mt-2 border-t border-[var(--w-separator)] pt-2 text-xs text-[var(--w-text-sec)]">L’initialisation ouvre l’accès aux opérations de ces points.</p>
+      </Modal>
     </div>
   );
 }
@@ -1197,18 +831,20 @@ function MTServicePoints() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
   return (
-    <div className="lg:max-w-[1000px] lg:mx-auto space-y-4 pb-28 lg:pb-0">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-neutral-900">Points de service</h2>
+    <div className="lg:max-w-[1000px] mx-auto min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold text-[var(--w-text)]">Points de service</h2>
         <button onClick={() => { setShowForm(true); setEditId(null); setForm({ name: '', code: '', address: '', manager_name: '', phone: '', description: '', serviceIds: [] }); }}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors">
+          className="btn-primary min-h-9 px-3 py-1.5 text-xs">
           <Plus className="w-4 h-4" />Ajouter
         </button>
       </div>
 
-      {showForm && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
-          <h3 className="text-sm font-semibold text-neutral-900">{editId ? 'Modifier le point de service' : 'Nouveau point de service'}</h3>
+      <Modal open={showForm} onClose={() => { if (!(saving)) { setShowForm(false); setEditId(null); } }}
+        title={editId ? 'Modifier le point de service' : 'Nouveau point de service'} size="md" layer="top" panelClassName="!h-auto" focusOnOpen
+        footer={<MTFormActions cancel={() => { setShowForm(false); setEditId(null); }} submit={save}
+          label={editId ? 'Mettre à jour' : 'Créer'} busy={saving} disabled={!form.name.trim()} />}>
+        <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nom *" className="input" />
             <input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="Code" className="input" />
@@ -1219,7 +855,7 @@ function MTServicePoints() {
           </div>
           {services.length > 0 && (
             <div>
-              <p className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-2">Services effectués par ce point</p>
+              <p className="text-xs font-medium text-[var(--w-text-sec)] tracking-wide mb-2">Services effectués par ce point</p>
               <div className="flex flex-wrap gap-2">
                 {services.map(s => (
                   <button key={s.id} type="button" onClick={() => {
@@ -1236,23 +872,13 @@ function MTServicePoints() {
               )}
             </div>
           )}
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => { setShowForm(false); setEditId(null); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-            <button onClick={save} disabled={saving || !form.name.trim()} className="btn-icon-primary" title={editId ? 'Modifier' : 'Créer'}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-          </div>
         </div>
-      )}
+      </Modal>
 
       {points.length === 0 ? (
-        <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
-          <MapPin className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucun point de service configuré</p>
-          <p className="text-xs text-neutral-400 mt-1">Créez votre premier point de service pour commencer</p>
-        </div>
+        <MTEmpty>Aucun point de service configuré · Créez votre premier point de service pour commencer</MTEmpty>
       ) : (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden divide-y divide-neutral-100">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden divide-y divide-neutral-100">
           {points.map(p => (
             <div key={p.id} className="px-4 py-3 flex items-center gap-3">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${p.status === 'active' ? 'bg-emerald-50' : 'bg-neutral-100'}`}>
@@ -1265,14 +891,14 @@ function MTServicePoints() {
                   <div className="flex flex-wrap gap-1 mt-1">
                     {(pointServices[p.id] || []).map(sid => {
                       const svc = services.find(s => s.id === sid);
-                      return svc ? <span key={sid} className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700">{svc.name}</span> : null;
+                      return svc ? <span key={sid} className="text-[10px] px-1.5 py-0.5 rounded w-badge-muted">{svc.name}</span> : null;
                     })}
                   </div>
                 )}
               </div>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${p.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>{p.status === 'active' ? 'Actif' : 'Inactif'}</span>
-              <button onClick={() => edit(p)} className="p-1.5 rounded-lg hover:bg-neutral-100"><Edit2 className="w-3.5 h-3.5 text-neutral-400" /></button>
-              <button onClick={() => toggleStatus(p)} className="p-1.5 rounded-lg hover:bg-neutral-100">{p.status === 'active' ? <XCircle className="w-3.5 h-3.5 text-neutral-400" /> : <CheckCircle2 className="w-3.5 h-3.5 text-neutral-400" />}</button>
+              <button onClick={() => edit(p)} className="btn-icon shrink-0"><Edit2 className="w-3.5 h-3.5 text-neutral-400" /></button>
+              <button onClick={() => toggleStatus(p)} className="btn-icon shrink-0">{p.status === 'active' ? <XCircle className="w-3.5 h-3.5 text-neutral-400" /> : <CheckCircle2 className="w-3.5 h-3.5 text-neutral-400" />}</button>
             </div>
           ))}
         </div>
@@ -1376,7 +1002,7 @@ function MTServices() {
   const removeLogo = async (s: any) => {
     if (!s.logo_url) return;
     await supabase.from('mt_services').update({ logo_url: null, updated_at: new Date().toISOString() }).eq('id', s.id);
-    toast.success('Logo supprime');
+    toast.success('Logo supprimé');
     load();
   };
 
@@ -1391,41 +1017,30 @@ function MTServices() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
   return (
-    <div className="lg:max-w-[1000px] lg:mx-auto space-y-4 pb-28 lg:pb-0">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-neutral-900">Services de transfert</h2>
+    <div className="lg:max-w-[1000px] mx-auto min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold text-[var(--w-text)]">Services de transfert</h2>
         <button onClick={() => { setShowForm(true); setEditId(null); setLogoFile(null); setLogoPreview(''); setForm({ name: '', type: 'national', family: 'transfert', currency: 'XOF', alert_min_balance: '0', description: '' }); }}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors">
+          className="btn-primary min-h-9 px-3 py-1.5 text-xs">
           <Plus className="w-4 h-4" />Ajouter
         </button>
       </div>
 
-      {showForm && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
-          <h3 className="text-sm font-semibold text-neutral-900">{editId ? 'Modifier le service' : 'Nouveau service'}</h3>
-
-          {/* Logo upload section */}
-          <div className="flex items-start gap-4">
-            <div className="shrink-0">
-              <p className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-2">Logo</p>
-              <div className="relative w-20 h-20 rounded-xl border-2 border-dashed border-neutral-300 hover:border-neutral-400 transition-colors overflow-hidden group">
-                {logoPreview ? (
-                  <>
-                    <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-1" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button onClick={() => { setLogoFile(null); setLogoPreview(''); }} className="p-1 rounded-full bg-white/90">
-                        <X className="w-4 h-4 text-neutral-700" />
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
-                    <Plus className="w-5 h-5 text-neutral-400" />
-                    <span className="text-[9px] text-neutral-400 mt-1">Max 2Mo</span>
-                    <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleLogoSelect} className="hidden" />
-                  </label>
-                )}
-              </div>
+      <Modal open={showForm} onClose={() => { if (!(saving || uploadingLogo)) { setShowForm(false); setEditId(null); } }}
+        title={editId ? 'Modifier le service' : 'Nouveau service'} size="md" layer="top" panelClassName="!h-auto" focusOnOpen
+        footer={<MTFormActions cancel={() => { setShowForm(false); setEditId(null); }} submit={save}
+          label={editId ? 'Mettre à jour' : 'Créer'} busy={saving || uploadingLogo} disabled={!form.name.trim()} />}>
+        <div className="space-y-3">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--w-separator-l)] pb-2.5">
+              {logoPreview && <img src={logoPreview} alt="Logo du service" className="h-9 w-9 object-contain" />}
+              <label className="btn-secondary cursor-pointer px-2.5 py-1.5 text-xs focus-within:outline focus-within:outline-2 focus-within:outline-offset-2">
+                {logoPreview ? 'Changer le logo' : 'Importer un logo'}
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleLogoSelect} className="sr-only" />
+              </label>
+              <span className="text-xs text-[var(--w-text-muted)]">2 Mo max.</span>
+              {logoPreview && <button type="button" onClick={() => { setLogoFile(null); setLogoPreview(''); }}
+                className="btn-icon" aria-label="Retirer le logo" title="Retirer le logo"><X className="h-4 w-4" /></button>}
             </div>
             <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nom du service *" className="input" />
@@ -1444,23 +1059,13 @@ function MTServices() {
             </div>
           </div>
 
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => { setShowForm(false); setEditId(null); setLogoFile(null); setLogoPreview(''); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-            <button onClick={save} disabled={saving || uploadingLogo || !form.name.trim()} className="btn-icon-primary" title="Enregistrer">
-              {(saving || uploadingLogo) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            </button>
-          </div>
         </div>
-      )}
+      </Modal>
 
       {services.length === 0 ? (
-        <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
-          <ArrowRightLeft className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucun service configuré</p>
-          <p className="text-xs text-neutral-400 mt-1">Ajoutez Orange Money, Wave, Ria, etc.</p>
-        </div>
+        <MTEmpty>Aucun service configuré · Ajoutez Orange Money, Wave, Ria, etc.</MTEmpty>
       ) : (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden divide-y divide-neutral-100">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden divide-y divide-neutral-100">
           {services.map(s => (
             <div key={s.id} className="px-4 py-3 flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-neutral-50 border border-neutral-200 flex items-center justify-center overflow-hidden">
@@ -1480,7 +1085,7 @@ function MTServices() {
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               )}
-              <button onClick={() => edit(s)} className="p-1.5 rounded-lg hover:bg-neutral-100"><Edit2 className="w-3.5 h-3.5 text-neutral-400" /></button>
+              <button onClick={() => edit(s)} className="btn-icon shrink-0"><Edit2 className="w-3.5 h-3.5 text-neutral-400" /></button>
             </div>
           ))}
         </div>
@@ -1665,15 +1270,6 @@ function MTOperations() {
     return r;
   }, [ops, filter, profile, selectedPoint]);
 
-  const getServiceColor = (svc: any) => {
-    const name = (svc.name || '').toLowerCase();
-    if (name.includes('wave')) return { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-700', icon: 'text-sky-600' };
-    if (name.includes('orange')) return { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', icon: 'text-orange-600' };
-    if (name.includes('free')) return { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', icon: 'text-teal-600' };
-    if (name.includes('expresso')) return { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: 'text-amber-600' };
-    return { bg: 'bg-neutral-50', border: 'border-neutral-200', text: 'text-neutral-700', icon: 'text-neutral-600' };
-  };
-
   const transferServices = useMemo(() => availableServices.filter(s => s.family !== 'credit_telephone'), [availableServices]);
   const creditServices = useMemo(() => availableServices.filter(s => s.family === 'credit_telephone'), [availableServices]);
 
@@ -1684,305 +1280,164 @@ function MTOperations() {
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
-  const selectedPointName = points.find(p => p.id === selectedPoint)?.name || '';
+  const selectedPointName = points.find(point => point.id === selectedPoint)?.name;
+  const closeOperation = () => {
+    if (saving) return;
+    setOpModal(null);
+    setForm({ amount: '', note: '', reference: '' });
+  };
 
   return (
-    <div className="flex flex-col min-h-0 lg:max-w-[900px] lg:mx-auto lg:h-[calc(100vh-180px)] lg:overflow-hidden pb-28 lg:pb-0">
-      <div className="flex items-center justify-between gap-2 mb-4 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center shrink-0">
-            <MapPin className="w-4 h-4 text-neutral-600" />
-          </div>
-          {points.length > 1 ? (
-            <select value={selectedPoint} onChange={e => setSelectedPoint(e.target.value)} className="text-sm font-semibold text-neutral-900 bg-transparent border-none p-0 focus:ring-0 cursor-pointer min-w-0">
-              <option value="">Sélectionner un point</option>
-              {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          ) : (
-            <span className="text-sm font-semibold text-neutral-900">{selectedPointName}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={() => setHistoryOpen(true)} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors">
-            <Clock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Historique</span>
+    <div className="mx-auto max-w-[1050px] space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold">Opérations clients</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setHistoryOpen(true)} className="btn-secondary px-2.5 py-1.5 text-xs">
+            <Clock className="h-4 w-4" aria-hidden="true" /> Historique
           </button>
-          <button onClick={() => load()} className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors">
-            <RefreshCw className="w-4 h-4" />
+          <button type="button" onClick={load} className="btn-icon" title="Actualiser" aria-label="Actualiser les opérations">
+            <RefreshCw className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {!selectedPoint ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <MapPin className="w-10 h-10 text-neutral-200 mx-auto mb-3" />
-            <p className="text-sm text-neutral-400">Sélectionnez un point de service</p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Cash card - white, banking style */}
-          <div className="bg-white border border-neutral-200 rounded-2xl p-4 sm:p-5 mb-4 sm:mb-5 shrink-0">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Cash disponible</p>
-                <p className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight num">{fmt(ptCash)} <span className="text-base font-medium text-neutral-400">FCFA</span></p>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
-                <Banknote className="w-5 h-5 text-emerald-600" />
-              </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <MapPin className="h-4 w-4 shrink-0 text-[var(--w-text-sec)]" aria-hidden="true" />
+        {points.length > 1 ? (
+          <select aria-label="Point de service" value={selectedPoint} onChange={event => setSelectedPoint(event.target.value)}
+            className="input !w-auto min-w-0 max-w-full py-1.5 text-sm">
+            <option value="">Sélectionner un point</option>
+            {points.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
+          </select>
+        ) : <span className="text-sm font-medium">{selectedPointName}</span>}
+      </div>
+
+      {!selectedPoint ? <MTEmpty>{points.length ? 'Sélectionnez un point de service' : 'Aucun point de service disponible'}</MTEmpty> : (
+        <>
+          <section className="divide-y divide-[var(--w-separator-l)] rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] px-3.5 xl:px-4">
+            <div className="py-3">
+              <p className="text-xs text-[var(--w-text-sec)]">Disponible en caisse</p>
+              <MTMoney value={ptCash} className="text-[clamp(1.05rem,6vw,1.875rem)] font-bold" />
             </div>
-            <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-neutral-100">
-              <div>
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Entrées cash</p>
-                <p className="text-sm font-bold text-emerald-600 num mt-0.5">+{fmt(todayDeposits)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Sorties cash</p>
-                <p className="text-sm font-bold text-red-500 num mt-0.5">-{fmt(todayWithdrawals)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Opérations</p>
-                <p className="text-sm font-bold text-neutral-900 num mt-0.5">{todayOps.length}</p>
-              </div>
-            </div>
-          </div>
+            <dl className="flex flex-wrap gap-x-6 gap-y-2 py-2.5">
+              <div><dt className="text-xs text-[var(--w-text-sec)]">Entrées de caisse</dt><dd className="text-sm font-semibold"><MTMoney value={todayDeposits} /></dd></div>
+              <div><dt className="text-xs text-[var(--w-text-sec)]">Sorties de caisse</dt><dd className="text-sm font-semibold"><MTMoney value={todayWithdrawals} /></dd></div>
+              <div><dt className="text-xs text-[var(--w-text-sec)]">Opérations</dt><dd className="num text-sm font-semibold">{todayOps.length}</dd></div>
+            </dl>
+          </section>
 
-          {/* Service cards - split by family */}
-          <div className="flex-1 min-h-0 overflow-y-auto pb-4 space-y-6">
-            {/* Transfert d'argent */}
-            {transferServices.length > 0 && (
-              <div>
-                <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <ArrowRightLeft className="w-3.5 h-3.5" />Transfert d'argent
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                  {transferServices.map(svc => {
-                    const color = getServiceColor(svc);
-                    const uvBal = getServiceUV(svc.id);
-                    return (
-                      <button
-                        key={svc.id}
-                        onClick={() => setActionModal(svc)}
-                        className="w-full aspect-square rounded-2xl bg-white border border-neutral-100 shadow-lg shadow-neutral-200/60 hover:shadow-xl hover:shadow-neutral-300/50 hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-3 sm:p-4"
-                      >
-                        <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center">
-                          {svc.logo_url ? <img src={svc.logo_url} alt="" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" /> : <Smartphone className={`w-8 h-8 sm:w-10 sm:h-10 ${color.icon}`} />}
-                        </div>
-                        <p className="text-[10px] sm:text-xs font-semibold text-neutral-900 text-center truncate w-full">{svc.name}</p>
-                        <p className={`text-xs sm:text-sm font-bold num ${svc.alert_min_balance > 0 && uvBal < svc.alert_min_balance ? 'text-red-600' : color.text}`}>{fmt(uvBal)}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Crédit téléphonique */}
-            {creditServices.length > 0 && (
-              <div>
-                <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Smartphone className="w-3.5 h-3.5" />Crédit téléphonique
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                  {creditServices.map(svc => {
-                    const color = getServiceColor(svc);
-                    const stockBal = getServiceStock(svc.id);
-                    return (
-                      <button
-                        key={svc.id}
-                        onClick={() => { setOpModal({ type: 'vente_credit', service: svc }); }}
-                        className="w-full aspect-square rounded-2xl bg-white border border-neutral-100 shadow-lg shadow-neutral-200/60 hover:shadow-xl hover:shadow-neutral-300/50 hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-3 sm:p-4"
-                      >
-                        <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center">
-                          {svc.logo_url ? <img src={svc.logo_url} alt="" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" /> : <Smartphone className={`w-8 h-8 sm:w-10 sm:h-10 ${color.icon}`} />}
-                        </div>
-                        <p className="text-[10px] sm:text-xs font-semibold text-neutral-900 text-center truncate w-full">{svc.name}</p>
-                        <p className={`text-xs sm:text-sm font-bold num ${svc.alert_min_balance > 0 && stockBal < svc.alert_min_balance ? 'text-red-600' : color.text}`}>{fmt(stockBal)}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {transferServices.length === 0 && creditServices.length === 0 && (
-              <p className="text-xs text-neutral-400 text-center">Aucun service configuré</p>
-            )}
-          </div>
-        </div>
+          {[
+            { label: 'Services de transfert', items: transferServices, credit: false },
+            { label: 'Crédit téléphonique', items: creditServices, credit: true },
+          ].map(({ label, items, credit }) => items.length > 0 && (
+            <section key={label} className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]">
+              <MTSectionHeading>{label}</MTSectionHeading>
+              <ul className="grid sm:grid-cols-2 xl:grid-cols-3">
+                {items.map(service => {
+                  const balance = credit ? getServiceStock(service.id) : getServiceUV(service.id);
+                  const lowBalance = service.alert_min_balance > 0 && balance < service.alert_min_balance;
+                  return <li key={service.id} className="min-w-0 border-b border-[var(--w-separator-l)]">
+                    <button type="button"
+                      onClick={() => credit ? setOpModal({ type: 'vente_credit', service }) : setActionModal(service)}
+                      className="flex min-h-12 w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-[var(--w-hover)] xl:px-4">
+                      {service.logo_url ? <img src={service.logo_url} alt="" className="h-6 w-6 shrink-0 object-contain" /> : <Smartphone className="h-4 w-4 shrink-0 text-[var(--w-text-sec)]" aria-hidden="true" />}
+                      <span className="min-w-0 flex-1 text-sm font-medium">{service.name}</span>
+                      <span className="shrink-0 text-right">
+                        <MTMoney value={balance} className={`text-xs font-semibold ${lowBalance ? 'text-[var(--w-error)]' : ''}`} />
+                        {lowBalance && <span className="block text-xs text-[var(--w-error)]">Solde bas</span>}
+                      </span>
+                    </button>
+                  </li>;
+                })}
+              </ul>
+            </section>
+          ))}
+          {transferServices.length === 0 && creditServices.length === 0 && <MTEmpty>Aucun service configuré pour ce point</MTEmpty>}
+        </>
       )}
 
-      {/* Action modal - choose deposit or withdrawal for transfer services */}
       {actionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setActionModal(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl p-5 w-[280px] animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                {actionModal.logo_url ? <img src={actionModal.logo_url} className="w-5 h-5 rounded object-contain" /> : <Smartphone className="w-4 h-4 text-neutral-500" />}
-                <p className="text-sm font-semibold text-neutral-900">{actionModal.name}</p>
-              </div>
-              <button onClick={() => setActionModal(null)} className="p-1 rounded-lg hover:bg-neutral-100"><X className="w-4 h-4 text-neutral-400" /></button>
-            </div>
-            <div className="space-y-2">
-              {can('mt_client_deposit_create') && (
-                <button onClick={() => { setOpModal({ type: 'depot', service: actionModal }); setActionModal(null); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors">
-                  <ArrowDownLeft className="w-5 h-5 text-emerald-600" />
-                  <span className="text-sm font-semibold text-emerald-800">Dépôt du jour</span>
-                </button>
-              )}
-              {can('mt_client_withdrawal_create') && (
-                <button onClick={() => { setOpModal({ type: 'retrait', service: actionModal }); setActionModal(null); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 hover:bg-red-100 transition-colors">
-                  <ArrowUpRight className="w-5 h-5 text-red-500" />
-                  <span className="text-sm font-semibold text-red-700">Retrait du jour</span>
-                </button>
-              )}
-            </div>
+        <Modal open onClose={() => setActionModal(null)} title={actionModal.name} size="sm" layer="top" panelClassName="!h-auto" focusOnOpen>
+          <div className="flex flex-wrap gap-2">
+            {can('mt_client_deposit_create') && (
+              <button type="button" onClick={() => { setOpModal({ type: 'depot', service: actionModal }); setActionModal(null); }} className="btn-primary min-h-10 flex-1 text-xs">
+                <ArrowDownLeft className="h-4 w-4" aria-hidden="true" /> Dépôt du jour
+              </button>
+            )}
+            {can('mt_client_withdrawal_create') && (
+              <button type="button" onClick={() => { setOpModal({ type: 'retrait', service: actionModal }); setActionModal(null); }} className="btn-secondary min-h-10 flex-1 text-xs">
+                <ArrowUpRight className="h-4 w-4" aria-hidden="true" /> Retrait du jour
+              </button>
+            )}
+            {!can('mt_client_deposit_create') && !can('mt_client_withdrawal_create') && (
+              <MTEmpty>Aucune opération autorisée pour ce service.</MTEmpty>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Operation modal - daily consolidated entry */}
       {opModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => { setOpModal(null); setForm({ amount: '', note: '', reference: '' }); }}>
-          <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-[340px] animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
-            <div className={`flex items-center gap-2 mb-4 pb-3 border-b ${opModal.type === 'depot' || opModal.type === 'vente_credit' ? 'border-emerald-100' : 'border-red-100'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${opModal.type === 'depot' || opModal.type === 'vente_credit' ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                {opModal.type === 'depot' ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" /> : opModal.type === 'vente_credit' ? <Smartphone className="w-4 h-4 text-emerald-600" /> : <ArrowUpRight className="w-4 h-4 text-red-500" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-neutral-900">
-                  {opModal.type === 'depot' ? 'Total dépôt du jour' : opModal.type === 'retrait' ? 'Total retrait du jour' : 'Vente crédit du jour'}
-                </p>
-                <p className="text-[10px] text-neutral-400">{opModal.service.name} - {selectedPointName}</p>
-              </div>
-              <button onClick={() => { setOpModal(null); setForm({ amount: '', note: '', reference: '' }); }} className="p-1 rounded-lg hover:bg-neutral-100"><X className="w-4 h-4 text-neutral-400" /></button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[10px] font-medium text-neutral-500 uppercase mb-1">Montant total (FCFA)</label>
-                <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} type="number" placeholder="0" autoFocus
-                  className="w-full px-3 py-2.5 text-xl font-bold text-neutral-900 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent text-center num" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-neutral-500 uppercase mb-1">Référence opérateur (optionnel)</label>
-                <input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} type="text" placeholder="Ex: TX-12345"
-                  className="w-full px-3 py-2 text-sm bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-neutral-500 uppercase mb-1">Note (optionnel)</label>
-                <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} type="text" placeholder="Observation du jour..."
-                  className="w-full px-3 py-2 text-sm bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent" />
-              </div>
-            </div>
-            <div className="mt-3 px-3 py-2 bg-neutral-50 rounded-lg">
-              <p className="text-[9px] text-neutral-400 leading-relaxed">
-                Libellé automatique : <span className="font-medium text-neutral-600">
-                  {opModal.type === 'depot' ? `Total dépôt ${opModal.service.name} du jour` : opModal.type === 'retrait' ? `Total retrait ${opModal.service.name} du jour` : `Vente crédit ${opModal.service.name} du jour`}
-                </span>
-              </p>
-            </div>
-            <button onClick={createOp} disabled={saving || !form.amount}
-              className={`btn-icon-primary ${opModal.type === 'depot' || opModal.type === 'vente_credit' ? '!bg-emerald-600 hover:!bg-emerald-700' : '!bg-red-500 hover:!bg-red-600'}`} title="Valider">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
+        <Modal open onClose={closeOperation} title={OP_TYPE_LABELS[opModal.type]} size="sm" layer="top" panelClassName="!h-auto" focusOnOpen
+          footer={<MTFormActions cancel={closeOperation} submit={createOp} label="Valider" busy={saving} disabled={!form.amount} />}>
+          <p className="mb-3 text-sm text-[var(--w-text-sec)]">{opModal.service.name} · {selectedPointName}</p>
+          <div className="space-y-3">
+            <label className="label">Montant total (FCFA)
+              <input value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} type="number" inputMode="decimal" placeholder="0"
+                className="input num mt-1 text-lg font-semibold" />
+            </label>
+            <label className="label">Référence opérateur
+              <input value={form.reference} onChange={event => setForm({ ...form, reference: event.target.value })} placeholder="Facultatif" className="input mt-1 text-sm" />
+            </label>
+            <label className="label">Note
+              <input value={form.note} onChange={event => setForm({ ...form, note: event.target.value })} placeholder="Facultatif" className="input mt-1 text-sm" />
+            </label>
           </div>
-        </div>
+          <p className="mt-3 border-t border-[var(--w-separator)] pt-2 text-xs text-[var(--w-text-sec)]">
+            Libellé automatique · {opModal.type === 'depot' ? `Total dépôt ${opModal.service.name} du jour` : opModal.type === 'retrait' ? `Total retrait ${opModal.service.name} du jour` : `Vente crédit ${opModal.service.name} du jour`}
+          </p>
+        </Modal>
       )}
 
-      {/* History full-screen modal */}
-      {historyOpen && (
-        <div className="fixed inset-0 z-50 bg-white flex flex-col">
-          {/* Header */}
-          <div className="shrink-0 border-b border-neutral-200 px-5 py-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-neutral-900">Historique des operations</h2>
-              <p className="text-xs text-neutral-400 mt-0.5">{selectedPointName || 'Tous les points'} - {historyOps.length} operation{historyOps.length > 1 ? 's' : ''}</p>
-            </div>
-            <button onClick={() => setHistoryOpen(false)} className="w-9 h-9 rounded-full bg-neutral-100 flex items-center justify-center hover:bg-neutral-200 transition-colors">
-              <X className="w-5 h-5 text-neutral-600" />
-            </button>
-          </div>
-          {/* Filters */}
-          <div className="shrink-0 px-5 py-3 border-b border-neutral-100 flex items-center gap-3">
-            <div className="relative flex-1 max-w-[240px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <input value={filter.search} onChange={e => setFilter({ ...filter, search: e.target.value })} placeholder="Rechercher..." className="w-full pl-9 pr-3 py-2 text-sm bg-neutral-50 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-neutral-900 focus:border-transparent" />
-            </div>
-            <select value={filter.type} onChange={e => setFilter({ ...filter, type: e.target.value })} className="px-3 py-2 text-sm bg-neutral-50 border border-neutral-200 rounded-lg">
-              <option value="">Tous types</option>
-              {Object.entries(OP_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historique des opérations" size="lg" layer="top" fullscreenMobile focusOnOpen>
+        <div className="space-y-3">
+          <p className="text-xs text-[var(--w-text-sec)]">{selectedPointName || 'Tous les points'} · {historyOps.length} opération{historyOps.length > 1 ? 's' : ''}</p>
+          <div className="grid items-end gap-2 sm:grid-cols-2">
+            <PageSearch value={filter.search} onChange={search => setFilter({ ...filter, search })} placeholder="Rechercher une référence ou une note…" />
+            <select aria-label="Type d’opération" value={filter.type} onChange={event => setFilter({ ...filter, type: event.target.value })} className="input py-1.5 text-sm">
+              <option value="">Tous les types</option>
+              {Object.entries(OP_TYPE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
             </select>
           </div>
-          {/* Table */}
-          <div className="flex-1 overflow-y-auto">
-            {historyOps.length === 0 ? (
-              <div className="py-20 text-center">
-                <Clock className="w-10 h-10 text-neutral-200 mx-auto mb-3" />
-                <p className="text-sm text-neutral-400">Aucune operation</p>
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-neutral-50 border-b border-neutral-200">
-                  <tr className="text-[10px] font-medium text-neutral-400 uppercase tracking-wider">
-                    <th className="text-left px-5 py-2.5">Date / Heure</th>
-                    <th className="text-left px-3 py-2.5">Type</th>
-                    <th className="text-left px-3 py-2.5">Service</th>
-                    <th className="text-left px-3 py-2.5">Libellé</th>
-                    <th className="text-right px-3 py-2.5">Montant</th>
-                    <th className="text-center px-3 py-2.5">Statut</th>
-                    <th className="text-right px-5 py-2.5">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {historyOps.map(op => {
-                    const svc = services.find(s => s.id === op.service_id);
-                    const pt = points.find(p => p.id === op.service_point_id);
-                    return (
-                      <tr key={op.id} className="hover:bg-neutral-50/50 transition-colors">
-                        <td className="px-5 py-2.5 whitespace-nowrap">
-                          <p className="text-xs font-medium text-neutral-900">{new Date(op.operated_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</p>
-                          <p className="text-[10px] text-neutral-400">{new Date(op.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${op.type === 'depot' || op.type === 'vente_credit' ? 'text-emerald-700' : op.type === 'retrait' ? 'text-red-600' : 'text-neutral-600'}`}>
-                            {op.type === 'depot' ? <ArrowDownLeft className="w-3 h-3" /> : op.type === 'retrait' ? <ArrowUpRight className="w-3 h-3" /> : op.type === 'vente_credit' ? <Smartphone className="w-3 h-3" /> : <ArrowRightLeft className="w-3 h-3" />}
-                            {OP_TYPE_LABELS[op.type] || op.type}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <p className="text-xs text-neutral-700">{svc?.name || '—'}</p>
-                          {pt && <p className="text-[10px] text-neutral-400">{pt.name}</p>}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <p className="text-xs text-neutral-700 truncate max-w-[200px]">{op.comment || op.reference || '—'}</p>
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <p className={`text-xs font-bold num ${['depot', 'vente_credit'].includes(op.type) ? 'text-emerald-700' : op.type === 'retrait' ? 'text-red-600' : 'text-neutral-900'}`}>
-                            {['depot', 'vente_credit'].includes(op.type) ? '+' : op.type === 'retrait' ? '-' : ''}{fmt(op.amount)}
-                          </p>
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[op.status] || 'bg-neutral-100 text-neutral-600'}`}>
-                            {STATUS_LABELS[op.status] || op.status}
-                          </span>
-                        </td>
-                        <td className="px-5 py-2.5 text-right">
-                          {op.status === 'validee' && (can('mt_client_operation_cancel_any') || (can('mt_client_operation_cancel_own') && op.operated_by === profile?.id)) && (
-                            <button onClick={() => cancelOp(op)} className="btn-icon-danger" title="Annuler"><XCircle className="w-4 h-4" /></button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {historyOps.length === 0 ? <MTEmpty>Aucune opération</MTEmpty> : (
+            <ul className="divide-y divide-[var(--w-separator-l)] border-y border-[var(--w-separator)]">
+              {historyOps.map(op => {
+                const service = services.find(item => item.id === op.service_id);
+                const point = points.find(item => item.id === op.service_point_id);
+                const when = new Date(op.operated_at).toLocaleString('fr-FR');
+                const canCancel = op.status === 'validee' && (can('mt_client_operation_cancel_any') || (can('mt_client_operation_cancel_own') && op.operated_by === profile?.id));
+                return (
+                  <li key={op.id} className="flex items-start gap-2 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{OP_TYPE_LABELS[op.type] || op.type}</p>
+                      <p className="text-xs text-[var(--w-text-sec)]">{[service?.name, point?.name, when].filter(Boolean).join(' · ')}</p>
+                      {(op.comment || op.reference) && <p className="break-words text-xs text-[var(--w-text-muted)]">{op.comment || op.reference}</p>}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <MTMoney value={op.type === 'retrait' ? -Number(op.amount) : Number(op.amount)} className="text-xs font-semibold sm:text-sm" />
+                      <p className="text-xs text-[var(--w-text-sec)]">{STATUS_LABELS[op.status] || op.status}</p>
+                    </div>
+                    {canCancel && (
+                      <button type="button" onClick={() => cancelOp(op)} className="btn-icon-danger shrink-0" title="Annuler l’opération" aria-label="Annuler l’opération">
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
@@ -2086,23 +1541,25 @@ function MTWholesalers() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
   return (
-    <div className="lg:max-w-[1000px] lg:mx-auto space-y-4 pb-28 lg:pb-0">
-      <div className="flex items-center justify-between">
+    <div className="lg:max-w-[1000px] mx-auto min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-bold text-neutral-900">Grossistes</h2>
+          <h2 className="text-base font-bold text-[var(--w-text)]">Grossistes</h2>
           <p className="text-xs text-neutral-500 mt-0.5">Gérez vos grossistes pour les recharges et déchargements de solde électronique.</p>
         </div>
         {can('mt_wholesaler_manage') && (
           <button onClick={() => { setShowForm(true); setEditId(null); setForm({ name: '', phone: '', address: '', zone: '', notes: '', serviceIds: [] }); }}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors">
+            className="btn-primary min-h-9 px-3 py-1.5 text-xs">
             <Plus className="w-4 h-4" />Ajouter
           </button>
         )}
       </div>
 
-      {showForm && can('mt_wholesaler_manage') && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
-          <h3 className="text-sm font-semibold text-neutral-900">{editId ? 'Modifier le grossiste' : 'Nouveau grossiste'}</h3>
+      <Modal open={showForm && can('mt_wholesaler_manage')} onClose={() => { if (!(saving)) { setShowForm(false); setEditId(null); } }}
+        title={editId ? 'Modifier le grossiste' : 'Nouveau grossiste'} size="md" layer="top" panelClassName="!h-auto" focusOnOpen
+        footer={<MTFormActions cancel={() => { setShowForm(false); setEditId(null); }} submit={save}
+          label={editId ? 'Mettre à jour' : 'Créer'} busy={saving} disabled={!form.name.trim()} />}>
+        <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nom du grossiste *" className="input" />
             <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Téléphone" className="input" />
@@ -2111,7 +1568,7 @@ function MTWholesalers() {
             <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Notes" className="input sm:col-span-2" rows={2} />
           </div>
           <div>
-            <p className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-2">Services associés</p>
+            <p className="text-xs font-medium text-[var(--w-text-sec)] tracking-wide mb-2">Services associés</p>
             <div className="flex flex-wrap gap-2">
               {services.map(s => (
                 <button key={s.id} onClick={() => {
@@ -2122,23 +1579,13 @@ function MTWholesalers() {
               ))}
             </div>
           </div>
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => { setShowForm(false); setEditId(null); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-            <button onClick={save} disabled={saving || !form.name.trim()} className="btn-icon-primary" title={editId ? 'Modifier' : 'Créer'}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-          </div>
         </div>
-      )}
+      </Modal>
 
       {wholesalers.length === 0 ? (
-        <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
-          <Users className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucun grossiste configuré</p>
-          <p className="text-xs text-neutral-400 mt-1">Ajoutez vos grossistes pour les opérations de recharge et déchargement</p>
-        </div>
+        <MTEmpty>Aucun grossiste configuré · Ajoutez vos grossistes pour les opérations de recharge et déchargement</MTEmpty>
       ) : (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden divide-y divide-neutral-100">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden divide-y divide-neutral-100">
           {wholesalers.map(w => (
             <div key={w.id} className="px-4 py-3 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center">
@@ -2150,7 +1597,7 @@ function MTWholesalers() {
                 {w.services?.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {w.services.map((sid: string) => (
-                      <span key={sid} className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700">{getServiceName(sid)}</span>
+                      <span key={sid} className="text-[10px] px-1.5 py-0.5 rounded w-badge-muted">{getServiceName(sid)}</span>
                     ))}
                   </div>
                 )}
@@ -2160,10 +1607,10 @@ function MTWholesalers() {
               </span>
               {can('mt_wholesaler_manage') && (
                 <>
-                  <button onClick={() => toggleStatus(w)} className="p-1.5 rounded-lg hover:bg-neutral-100" title={w.status === 'active' ? 'Désactiver' : 'Activer'}>
+                  <button onClick={() => toggleStatus(w)} className="btn-icon shrink-0" title={w.status === 'active' ? 'Désactiver' : 'Activer'}>
                     {w.status === 'active' ? <XCircle className="w-3.5 h-3.5 text-neutral-400" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
                   </button>
-                  <button onClick={() => edit(w)} className="p-1.5 rounded-lg hover:bg-neutral-100"><Edit2 className="w-3.5 h-3.5 text-neutral-400" /></button>
+                  <button onClick={() => edit(w)} className="btn-icon shrink-0"><Edit2 className="w-3.5 h-3.5 text-neutral-400" /></button>
                 </>
               )}
             </div>
@@ -2415,23 +1862,23 @@ function MTWholesalerOperations() {
   const canValidate = !saving && !validationError;
 
   return (
-    <div className="lg:max-w-[1200px] lg:mx-auto space-y-5 pb-28 lg:pb-0">
+    <div className="lg:max-w-[1200px] mx-auto min-w-0 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-neutral-900">Opérations grossiste</h2>
+          <h2 className="text-base font-bold text-[var(--w-text)]">Opérations grossiste</h2>
           <p className="text-xs text-neutral-500 mt-0.5">Alimentation et transferts internes des soldes cash, UV et stock crédit.</p>
         </div>
         {can('mt_wholesaler_operation_create') && !showForm && (
           <button onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors">
+            className="btn-primary min-h-9 px-3 py-1.5 text-xs">
             <Plus className="w-4 h-4" />Nouvelle opération
           </button>
         )}
       </div>
 
       {showForm && can('mt_wholesaler_operation_create') && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-4 sm:p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-neutral-900">Nouvelle opération</h3>
             <button onClick={() => { setShowForm(false); resetForm(); }} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
           </div>
@@ -2448,7 +1895,7 @@ function MTWholesalerOperations() {
 
           {isTransfer && (
             <div>
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1.5">Type de transfert</label>
+              <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1.5">Type de transfert</label>
               <div className="flex gap-2 flex-wrap">
                 {([{ k: 'cash', l: 'Cash' }, { k: 'uv', l: 'UV' }, { k: 'stock_credit', l: 'Stock crédit' }] as { k: TransferKind; l: string }[]).map(({ k, l }) => (
                   <button key={k} onClick={() => { setTransferKind(k); setForm(f => ({ ...f, service_id: '' })); }}
@@ -2463,7 +1910,7 @@ function MTWholesalerOperations() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {!isTransfer && (
               <div>
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Grossiste *</label>
+                <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Grossiste *</label>
                 <select value={form.wholesaler_id} onChange={e => setForm({ ...form, wholesaler_id: e.target.value })} className="input">
                   <option value="">Sélectionner...</option>
                   {wholesalers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -2472,7 +1919,7 @@ function MTWholesalerOperations() {
             )}
             {needsService && (
               <div>
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Service *</label>
+                <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Service *</label>
                 <select value={form.service_id} onChange={e => setForm({ ...form, service_id: e.target.value })} className="input">
                   <option value="">Sélectionner...</option>
                   {filteredServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -2480,7 +1927,7 @@ function MTWholesalerOperations() {
               </div>
             )}
             <div>
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">{isTransfer ? 'Point source *' : 'Point de service *'}</label>
+              <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">{isTransfer ? 'Point source *' : 'Point de service *'}</label>
               <select value={form.service_point_id} onChange={e => setForm({ ...form, service_point_id: e.target.value })} className="input">
                 <option value="">Sélectionner...</option>
                 {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -2488,7 +1935,7 @@ function MTWholesalerOperations() {
             </div>
             {isTransfer && (
               <div>
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Point destination *</label>
+                <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Point destination *</label>
                 <select value={form.dest_service_point_id} onChange={e => setForm({ ...form, dest_service_point_id: e.target.value })} className="input">
                   <option value="">Sélectionner...</option>
                   {points.filter(p => p.id !== form.service_point_id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -2497,18 +1944,18 @@ function MTWholesalerOperations() {
             )}
             {!isTransfer && (
               <div>
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Source des fonds</label>
+                <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Source des fonds</label>
                 <div className="px-3 py-2 text-xs font-medium rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700">
                   Cash
                 </div>
               </div>
             )}
             <div>
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant (FCFA) *</label>
+              <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Montant (FCFA) *</label>
               <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" type="number" min="0" className="input text-base font-semibold" />
             </div>
             <div className="sm:col-span-2 lg:col-span-3">
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Commentaire</label>
+              <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Commentaire</label>
               <input value={form.comment} onChange={e => setForm({ ...form, comment: e.target.value })} placeholder="Optionnel" className="input" />
             </div>
           </div>
@@ -2518,7 +1965,7 @@ function MTWholesalerOperations() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {preview ? preview.rows.map((r, i) => (
                 <div key={i} className={`rounded-xl border p-3.5 ${r.isSource ? 'border-neutral-200 bg-white' : 'border-neutral-200 bg-neutral-50/60'}`}>
-                  <p className="text-[11px] font-medium text-neutral-500 uppercase truncate">{r.label}</p>
+                  <p className="text-xs font-medium text-[var(--w-text-sec)] truncate">{r.label}</p>
                   <div className="flex items-baseline gap-2 mt-1">
                     <p className="text-sm text-neutral-400 line-through">{fmt(r.before)}</p>
                     <p className="text-base font-bold text-neutral-900">{fmt(r.after)}</p>
@@ -2546,7 +1993,7 @@ function MTWholesalerOperations() {
             </div>
           )}
 
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 border-t border-[var(--w-separator-l)] pt-2.5">
             <button onClick={() => { setShowForm(false); resetForm(); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
             <button onClick={createOp} disabled={!canValidate}
               className="btn-icon-primary" title={`Valider ${WH_OP_META[opType].verb}`}>
@@ -2558,13 +2005,9 @@ function MTWholesalerOperations() {
 
       {/* Historique */}
       {ops.length === 0 ? (
-        <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
-          <Package className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucune opération enregistrée</p>
-          <p className="text-xs text-neutral-400 mt-1">Créez une nouvelle opération pour alimenter ou déplacer vos soldes.</p>
-        </div>
+        <MTEmpty>Aucune opération enregistrée · Créez une nouvelle opération pour alimenter ou déplacer vos soldes.</MTEmpty>
       ) : (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden">
           <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-neutral-900">Historique récent</h3>
             <span className="text-[11px] text-neutral-400">{ops.length} opération{ops.length > 1 ? 's' : ''}</span>
@@ -2585,7 +2028,7 @@ function MTWholesalerOperations() {
                       <p className="text-sm font-medium text-neutral-900">{badge}</p>
                       {op.service_id && <span className="text-[10px] font-medium text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded">{getServiceName(op.service_id)}</span>}
                     </div>
-                    <p className="text-xs text-neutral-500 mt-0.5 truncate">
+                    <p className="text-xs text-neutral-500 mt-0.5 break-words">
                       {isTr
                         ? `${getPointName(op.service_point_id)} → ${getPointName(op.dest_service_point_id)}`
                         : `${getWholesalerName(op.wholesaler_id)} · ${getPointName(op.service_point_id)}`}
@@ -2773,7 +2216,7 @@ function MTBalances() {
   const periodLabel = dateRange === 'today' ? "aujourd'hui" : dateRange === 'week' ? '7 derniers jours' : '30 derniers jours';
 
   const fmtBalance = (bal: number, isInitialized: boolean) =>
-    !isInitialized && bal === 0 ? <span className="text-neutral-400 italic text-xs">Non initialisé</span> : <span className="num">{fmt(bal)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></span>;
+    !isInitialized && bal === 0 ? <span className="text-neutral-400 italic text-xs">Non initialisé</span> : <MTMoney value={bal} />;
 
   const StatusPill = ({ status }: { status: 'ok' | 'low' | 'ecart' | 'uninit' }) => {
     const map = {
@@ -2785,98 +2228,79 @@ function MTBalances() {
     return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${map[status].cls}`}>{map[status].label}</span>;
   };
 
-  const hasAnyAccounts = aggAccounts.length > 0;
-  if (!hasAnyAccounts) {
-    return (
-      <div className="pb-28 lg:pb-6">
-        <div className="bg-white border border-neutral-200 rounded-2xl py-16 text-center max-w-md mx-auto">
-          <Wallet className="w-10 h-10 text-neutral-200 mx-auto mb-3" />
-          <p className="text-sm text-neutral-700 font-medium">Aucun solde initialisé pour le moment</p>
-          <p className="text-xs text-neutral-400 mt-1 px-6">Veuillez initialiser les soldes d'ouverture avant d'exploiter cette page.</p>
-        </div>
-      </div>
-    );
-  }
+  if (aggAccounts.length === 0) return <MTEmpty>Aucun solde initialisé</MTEmpty>;
 
   return (
-    <div className="flex flex-col min-h-0 lg:max-w-[1100px] lg:mx-auto pb-28 lg:pb-6">
-      {/* Barre du haut */}
-      <div className="flex items-center justify-between gap-2 mb-4 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center shrink-0">
-            <MapPin className="w-4 h-4 text-neutral-600" />
-          </div>
+    <div className="mx-auto max-w-[1100px] space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold">Soldes</h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {points.length > 1 ? (
-            <select value={selectedPointId} onChange={e => setSelectedPointId(e.target.value)} className="text-sm font-semibold text-neutral-900 bg-transparent border-none p-0 focus:ring-0 cursor-pointer min-w-0">
+            <select aria-label="Point de service" value={selectedPointId} onChange={e => setSelectedPointId(e.target.value)} className="input !w-auto max-w-full py-1.5 text-xs">
               <option value="">Tous les points</option>
-              {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {points.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
             </select>
-          ) : (
-            <span className="text-sm font-semibold text-neutral-900">{selectedPointName}</span>
-          )}
+          ) : <span className="text-sm text-[var(--w-text-sec)]">{selectedPointName}</span>}
+          <select aria-label="Période" value={dateRange} onChange={e => setDateRange(e.target.value)} className="input !w-auto max-w-full py-1.5 text-xs">
+            <option value="today">Aujourd’hui</option>
+            <option value="week">7 derniers jours</option>
+            <option value="month">30 derniers jours</option>
+          </select>
         </div>
-        <select value={dateRange} onChange={e => setDateRange(e.target.value)} className="px-3 py-1.5 text-xs font-medium bg-neutral-100 border-none rounded-lg text-neutral-700 focus:ring-0 cursor-pointer">
-          <option value="today">Aujourd'hui</option>
-          <option value="week">7 derniers jours</option>
-          <option value="month">30 derniers jours</option>
-        </select>
       </div>
 
-      <div className="flex-1 space-y-5">
+      <div className="flex-1 space-y-4">
         {/* ─── Bloc 1 : Synthèse ─── */}
         <section>
-          <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">
+          <h2 className="mb-2 text-sm font-semibold text-[var(--w-text)]">
             {selectedPointId ? `Synthèse — ${selectedPointName}` : 'Synthèse globale'}
           </h2>
-          <div className="bg-white border border-neutral-200 rounded-2xl p-4 sm:p-5">
+          <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-4 sm:p-5">
             <div className="flex items-start justify-between mb-4">
               <div className="min-w-0">
                 <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Solde total disponible</p>
                 {hasAnyInit ? (
-                  <p className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight num">{fmt(totals.cash + totals.uv + totals.credit)} <span className="text-base font-medium text-neutral-400">FCFA</span></p>
+                  <MTMoney value={totals.cash + totals.uv + totals.credit} className="text-[clamp(1.05rem,6vw,1.875rem)] font-bold" />
                 ) : (
                   <p className="text-lg font-semibold text-neutral-400 italic">Non initialisé</p>
                 )}
               </div>
-              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
-                <Wallet className="w-5 h-5 text-emerald-600" />
-              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-neutral-100">
               <div className="min-w-0">
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Cash total</p>
+                <p className="text-xs font-medium text-[var(--w-text-muted)]">Cash total</p>
                 <p className="text-sm font-bold text-neutral-900 mt-0.5">
                   {cashInitialized ? <span className="num">{fmt(totals.cash)}</span> : <span className="text-neutral-400 italic text-xs">Non initialisé</span>}
                 </p>
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">UV transfert</p>
-                <p className="text-sm font-bold text-sky-700 mt-0.5">
+                <p className="text-xs font-medium text-[var(--w-text-muted)]">UV transfert</p>
+                <p className="text-sm font-bold text-[var(--w-text)] mt-0.5">
                   {uvInitialized ? <span className="num">{fmt(totals.uv)}</span> : <span className="text-neutral-400 italic text-xs">Non initialisé</span>}
                 </p>
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Stock crédit</p>
-                <p className="text-sm font-bold text-amber-700 mt-0.5">
+                <p className="text-xs font-medium text-[var(--w-text-muted)]">Stock crédit</p>
+                <p className="text-sm font-bold text-[var(--w-text)] mt-0.5">
                   {creditInitialized ? <span className="num">{fmt(totals.credit)}</span> : <span className="text-neutral-400 italic text-xs">Non initialisé</span>}
                 </p>
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Opérations {periodLabel}</p>
+                <p className="text-xs font-medium text-[var(--w-text-muted)]">Opérations {periodLabel}</p>
                 <p className="text-sm font-bold text-neutral-900 num mt-0.5">{scopedOps.length}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4 mt-3 border-t border-neutral-100">
               <div className="min-w-0">
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Commissions {periodLabel}</p>
+                <p className="text-xs font-medium text-[var(--w-text-muted)]">Commissions {periodLabel}</p>
                 <p className="text-sm font-bold text-emerald-700 num mt-0.5">{fmt(commissionsToday)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Écarts non résolus</p>
+                <p className="text-xs font-medium text-[var(--w-text-muted)]">Écarts non résolus</p>
                 <p className={`text-sm font-bold mt-0.5 ${pendingEcarts.length > 0 ? 'text-red-600' : 'text-neutral-900'} num`}>{pendingEcarts.length}</p>
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Alertes solde bas</p>
+                <p className="text-xs font-medium text-[var(--w-text-muted)]">Alertes solde bas</p>
                 <p className={`text-sm font-bold mt-0.5 ${lowBalanceAlerts.length > 0 ? 'text-amber-700' : 'text-neutral-900'} num`}>{lowBalanceAlerts.length}</p>
               </div>
             </div>
@@ -2886,16 +2310,16 @@ function MTBalances() {
         {/* ─── Bloc 2 : Soldes par point (vue Tous les points) ─── */}
         {!selectedPointId && points.length > 1 && (
           <section>
-            <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">Soldes par point de service</h2>
+            <h2 className="mb-2 text-sm font-semibold text-[var(--w-text)]">Soldes par point de service</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {pointCards.map(({ pt, cash, uv, credit, opsCount, initialized, status }) => (
-                <div key={pt.id} className="bg-white border border-neutral-200 rounded-xl p-4 hover:border-neutral-300 transition-colors">
+                <div key={pt.id} className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-4 hover:border-neutral-300 transition-colors">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center shrink-0">
                         <MapPin className="w-4 h-4 text-neutral-600" />
                       </div>
-                      <p className="text-sm font-bold text-neutral-900 truncate">{pt.name}</p>
+                      <p className="text-sm font-bold text-neutral-900 break-words">{pt.name}</p>
                     </div>
                     <StatusPill status={status} />
                   </div>
@@ -2906,11 +2330,11 @@ function MTBalances() {
                     </div>
                     <div>
                       <p className="text-[10px] text-neutral-400 uppercase font-medium">UV transfert</p>
-                      <p className="text-sm font-bold text-sky-700 mt-0.5">{fmtBalance(uv, initialized)}</p>
+                      <p className="text-sm font-bold text-[var(--w-text)] mt-0.5">{fmtBalance(uv, initialized)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-neutral-400 uppercase font-medium">Stock crédit</p>
-                      <p className="text-sm font-bold text-amber-700 mt-0.5">{fmtBalance(credit, initialized)}</p>
+                      <p className="text-sm font-bold text-[var(--w-text)] mt-0.5">{fmtBalance(credit, initialized)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-neutral-400 uppercase font-medium">Opérations</p>
@@ -2926,10 +2350,10 @@ function MTBalances() {
         {/* ─── Bloc 3 : UV transfert par service ─── */}
         {uvGroups.length > 0 && (
           <section>
-            <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">
+            <h2 className="mb-2 text-sm font-semibold text-[var(--w-text)]">
               {selectedPointId ? 'Services de transfert' : 'Soldes UV par service de transfert'}
             </h2>
-            <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden divide-y divide-neutral-100">
+            <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden divide-y divide-neutral-100">
               {uvGroups.map(({ svc, total, perPoint, initialized, isLow }) => (
                 <div key={svc.id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
@@ -2938,7 +2362,7 @@ function MTBalances() {
                         {svc.logo_url ? <img src={svc.logo_url} className="w-full h-full object-contain" alt={svc.name} /> : <Smartphone className="w-4 h-4 text-sky-500" />}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-neutral-900 truncate">{svc.name}</p>
+                        <p className="text-sm font-semibold text-neutral-900 break-words">{svc.name}</p>
                         {!selectedPointId && perPoint.length > 0 && (
                           <p className="text-[10px] text-neutral-400">{perPoint.length} point{perPoint.length > 1 ? 's' : ''}</p>
                         )}
@@ -2968,10 +2392,10 @@ function MTBalances() {
         {/* ─── Bloc 4 : Stock crédit téléphonique par service ─── */}
         {creditGroups.length > 0 && (
           <section>
-            <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">
+            <h2 className="mb-2 text-sm font-semibold text-[var(--w-text)]">
               {selectedPointId ? 'Crédit téléphonique' : 'Stock crédit par service téléphonique'}
             </h2>
-            <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden divide-y divide-neutral-100">
+            <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden divide-y divide-neutral-100">
               {creditGroups.map(({ svc, total, perPoint, initialized, isLow }) => (
                 <div key={svc.id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
@@ -2980,7 +2404,7 @@ function MTBalances() {
                         {svc.logo_url ? <img src={svc.logo_url} className="w-full h-full object-contain" alt={svc.name} /> : <Smartphone className="w-4 h-4 text-amber-500" />}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-neutral-900 truncate">{svc.name}</p>
+                        <p className="text-sm font-semibold text-neutral-900 break-words">{svc.name}</p>
                         {!selectedPointId && perPoint.length > 0 && (
                           <p className="text-[10px] text-neutral-400">{perPoint.length} point{perPoint.length > 1 ? 's' : ''}</p>
                         )}
@@ -3010,7 +2434,7 @@ function MTBalances() {
         {/* ─── Bloc 5 : Alertes et anomalies ─── */}
         {(lowBalanceAlerts.length > 0 || pendingEcarts.length > 0) && (
           <section>
-            <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">Alertes et anomalies</h2>
+            <h2 className="mb-2 text-sm font-semibold text-[var(--w-text)]">Alertes et anomalies</h2>
             <div className="space-y-2">
               {lowBalanceAlerts.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
@@ -3026,8 +2450,8 @@ function MTBalances() {
                           <div className="flex items-center gap-2.5 min-w-0">
                             {x.svc.logo_url ? <img src={x.svc.logo_url} className="w-5 h-5 object-contain" /> : <Smartphone className="w-4 h-4 text-amber-600" />}
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold text-amber-900 truncate">{x.svc.name}</p>
-                              <p className="text-[10px] text-amber-600 truncate">{ptName ? `${ptName} · ` : ''}Seuil : {fmt(x.svc.alert_min_balance)} FCFA</p>
+                              <p className="text-xs font-semibold text-amber-900 break-words">{x.svc.name}</p>
+                              <p className="text-[10px] text-amber-600 break-words">{ptName ? `${ptName} · ` : ''}Seuil : {fmt(x.svc.alert_min_balance)} FCFA</p>
                             </div>
                           </div>
                           <p className="text-sm font-bold text-amber-900 num shrink-0">{fmt(x.acc.balance)}</p>
@@ -3297,25 +2721,24 @@ function MTClosures() {
   const lastClosureByPoint = (pointId: string) => closures.find(c => c.service_point_id === pointId);
 
   return (
-    <div className="lg:max-w-[1100px] lg:mx-auto space-y-5 pb-28 lg:pb-0">
+    <div className="lg:max-w-[1100px] mx-auto min-w-0 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-neutral-900">Clôtures & Ouvertures</h2>
-          <p className="text-xs text-neutral-500 mt-0.5">Clôturez la journée et ouvrez avec les nouveaux montants de départ.</p>
+          <h2 className="text-base font-bold text-[var(--w-text)]">Clôtures et ouvertures</h2>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => { setShowOpeningForm(false); setShowForm(true); }} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => { setShowOpeningForm(false); setShowForm(true); }} className="btn-primary min-h-9 px-3 py-1.5 text-xs">
             <Lock className="w-4 h-4" />Clôturer
           </button>
-          <button onClick={() => { setShowForm(false); setShowOpeningForm(true); }} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-            <PlayCircle className="w-4 h-4" />Ouvrir journée
+          <button onClick={() => { setShowForm(false); setShowOpeningForm(true); }} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+            <PlayCircle className="w-4 h-4" />Ouvrir la journée
           </button>
         </div>
       </div>
 
       {/* Closure form */}
       {showForm && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-5 space-y-4">
           <h3 className="text-sm font-semibold text-neutral-900">Clôture journalière</h3>
           <div className="flex items-center gap-3">
             <select value={selectedPointId} onChange={e => { loadTheoretical(e.target.value); }} className="input text-sm w-auto">
@@ -3329,7 +2752,7 @@ function MTClosures() {
           {theoretical && selectedPointId && !loadingTheoretical && (
             <div className="space-y-4">
               <div className="rounded-lg border border-neutral-100 bg-neutral-50/50 p-4">
-                <p className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-3">Soldes théoriques vs réels</p>
+                <p className="text-xs font-medium text-[var(--w-text-sec)] tracking-wide mb-3">Soldes théoriques vs réels</p>
                 <div className="space-y-3">
                   {/* Cash */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 items-center">
@@ -3423,7 +2846,7 @@ function MTClosures() {
 
               <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes / observations (optionnel)" className="input text-sm" />
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button onClick={() => { setShowForm(false); setTheoretical(null); setSelectedPointId(''); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
                 <button onClick={closureCreate} disabled={saving} className="btn-icon-primary" title="Confirmer la clôture">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -3449,11 +2872,11 @@ function MTClosures() {
           {selectedPointId && (
             <div className="space-y-3">
               <div className="rounded-lg border border-neutral-100 bg-neutral-50/50 p-4">
-                <p className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-3">Montants de départ</p>
+                <p className="text-xs font-medium text-[var(--w-text-sec)] tracking-wide mb-3">Montants de départ</p>
                 <div className="space-y-4">
                   {/* Cash */}
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
+                    <label className="flex items-center gap-2 text-xs font-medium text-[var(--w-text-sec)] tracking-wide">
                       <Banknote className="w-3.5 h-3.5 text-emerald-500" />Caisse (Cash)
                     </label>
                     <input type="number" value={openingInputs.cash || ''} onChange={e => setOpeningInputs(prev => ({ ...prev, cash: e.target.value }))} className="input text-base font-semibold" placeholder="0" />
@@ -3468,7 +2891,7 @@ function MTClosures() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {services.filter(s => s.family !== 'credit_telephone').map(svc => (
                           <div key={svc.id} className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
+                            <label className="flex items-center gap-2 text-xs font-medium text-[var(--w-text-sec)] tracking-wide">
                               {svc?.logo_url ? <img src={svc.logo_url} alt="" className="w-4 h-4 rounded object-contain" /> : <Smartphone className="w-3.5 h-3.5 text-sky-500" />}
                               {svc?.name || 'Service'}
                             </label>
@@ -3488,7 +2911,7 @@ function MTClosures() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {services.filter(s => s.family === 'credit_telephone').map(svc => (
                           <div key={svc.id} className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
+                            <label className="flex items-center gap-2 text-xs font-medium text-[var(--w-text-sec)] tracking-wide">
                               {svc?.logo_url ? <img src={svc.logo_url} alt="" className="w-4 h-4 rounded object-contain" /> : <Smartphone className="w-3.5 h-3.5 text-amber-500" />}
                               {svc?.name || 'Service'}
                             </label>
@@ -3500,7 +2923,7 @@ function MTClosures() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button onClick={() => { setShowOpeningForm(false); setSelectedPointId(''); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
                 <button onClick={confirmOpening} disabled={saving} className="btn-icon-primary !bg-emerald-600 hover:!bg-emerald-700" title="Confirmer l'ouverture">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -3513,7 +2936,7 @@ function MTClosures() {
 
       {/* Quick status per point */}
       {!showForm && !showOpeningForm && points.length > 0 && (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden">
           <div className="px-4 py-3 border-b border-neutral-100">
             <h3 className="text-sm font-semibold text-neutral-900">État par point de service</h3>
           </div>
@@ -3546,7 +2969,7 @@ function MTClosures() {
 
       {/* Closure history */}
       {closures.length > 0 && (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden">
           <div className="px-4 py-3 border-b border-neutral-100">
             <h3 className="text-sm font-semibold text-neutral-900">Historique des clôtures</h3>
           </div>
@@ -3614,11 +3037,7 @@ function MTClosures() {
       )}
 
       {closures.length === 0 && !showForm && !showOpeningForm && (
-        <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
-          <Lock className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucune clôture effectuée</p>
-          <p className="text-xs text-neutral-400 mt-1">Clôturez en fin de journée pour suivre les écarts</p>
-        </div>
+        <MTEmpty>Aucune clôture effectuée · Clôturez en fin de journée pour suivre les écarts</MTEmpty>
       )}
     </div>
   );
@@ -3634,6 +3053,7 @@ function MTReports() {
   const [dateFrom, setDateFrom] = useState(new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]);
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [data, setData] = useState<any[]>([]);
+  const [generated, setGenerated] = useState(false);
 
   const generate = async () => {
     if (!tenant) return;
@@ -3650,86 +3070,64 @@ function MTReports() {
     }
     const { data: result } = await q;
     setData(result || []);
+    setGenerated(true);
     setLoading(false);
   };
 
-  const totalAmount = data.reduce((s, d) => s + Number(d.amount || 0), 0);
+  const totalAmount = data.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const changeType = (value: string) => {
+    setReport(value);
+    setData([]);
+    setGenerated(false);
+  };
 
   return (
-    <div className="lg:max-w-[1200px] lg:mx-auto space-y-4 pb-28 lg:pb-0">
-      <h2 className="text-lg font-bold text-neutral-900">Rapports</h2>
-
-      <div className="bg-white border border-neutral-200 rounded-xl p-4 space-y-3">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="text-xs text-neutral-500 mb-1 block">Type de rapport</label>
-            <select value={report} onChange={e => setReport(e.target.value)} className="input text-sm">
-              <option value="operations">Toutes les opérations</option>
-              <option value="depots">Dépôts</option>
-              <option value="retraits">Retraits</option>
-              <option value="clotures">Clôtures</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 mb-1 block">Du</label>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 mb-1 block">Au</label>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="input text-sm" />
-          </div>
-          <button onClick={generate} disabled={loading} className="px-4 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 disabled:opacity-50 flex items-center gap-2">
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart3 className="w-3.5 h-3.5" />}Générer
-          </button>
-        </div>
-      </div>
+    <div className="mx-auto max-w-[1200px] space-y-4">
+      <h2 className="text-base font-bold">Rapports</h2>
+      <form className="grid min-w-0 items-end gap-2 border-b border-[var(--w-separator)] pb-3 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+        onSubmit={event => { event.preventDefault(); void generate(); }}>
+        <label className="label min-w-0">Type de rapport
+          <select value={report} onChange={event => changeType(event.target.value)} className="input mt-1 text-sm" disabled={loading}>
+            <option value="operations">Toutes les opérations</option>
+            <option value="depots">Dépôts</option>
+            <option value="retraits">Retraits</option>
+            <option value="clotures">Clôtures</option>
+          </select>
+        </label>
+        <label className="label min-w-0">Du
+          <input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} className="input mt-1 min-w-0 text-sm" required />
+        </label>
+        <label className="label min-w-0">Au
+          <input type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} className="input mt-1 min-w-0 text-sm" min={dateFrom} required />
+        </label>
+        <button type="submit" disabled={loading} className="btn-primary mb-1 text-xs">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <BarChart3 className="h-4 w-4" aria-hidden="true" />} Générer
+        </button>
+      </form>
 
       {data.length > 0 && (
-        <>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="bg-white border border-neutral-200 rounded-xl p-4">
-              <p className="text-xs text-neutral-500">Nombre de lignes</p>
-              <p className="text-lg font-bold text-neutral-900">{data.length}</p>
-            </div>
-            <div className="bg-white border border-neutral-200 rounded-xl p-4">
-              <p className="text-xs text-neutral-500">Total montants</p>
-              <p className="text-lg font-bold text-neutral-900">{fmt(totalAmount)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
-            </div>
+        <section className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)]">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--w-separator)] px-3.5 py-2.5 text-sm xl:px-4">
+            <h3 className="font-semibold">{data.length} résultat{data.length > 1 ? 's' : ''}</h3>
+            {report !== 'clotures' && <MTMoney value={totalAmount} className="font-semibold" />}
           </div>
-
-          <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 border-b border-neutral-200 sticky top-0">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium text-neutral-500">Date</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-neutral-500">Type</th>
-                    <th className="text-right px-4 py-2.5 font-medium text-neutral-500">Montant</th>
-                    <th className="text-center px-4 py-2.5 font-medium text-neutral-500">Statut</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {data.map((d: any) => (
-                    <tr key={d.id}>
-                      <td className="px-4 py-2 text-neutral-600">{new Date(d.operated_at || d.closure_date).toLocaleDateString('fr-FR')}</td>
-                      <td className="px-4 py-2 text-neutral-900">{OP_TYPE_LABELS[d.type] || d.type || 'Clôture'}</td>
-                      <td className="px-4 py-2 text-right font-medium">{fmt(d.amount || d.cash_theoretical)}</td>
-                      <td className="px-4 py-2 text-center"><span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[d.status] || 'bg-neutral-100 text-neutral-500'}`}>{STATUS_LABELS[d.status] || d.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
+          <ul className="divide-y divide-[var(--w-separator-l)]">
+            {data.map(row => (
+              <li key={row.id} className="flex items-start justify-between gap-2 px-3.5 py-2.5 xl:px-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{OP_TYPE_LABELS[row.type] || row.type || 'Clôture'}</p>
+                  <p className="text-xs text-[var(--w-text-sec)]">{new Date(row.operated_at || row.closure_date).toLocaleDateString('fr-FR')}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <MTMoney value={Number(row.amount ?? row.cash_theoretical ?? 0)} className="text-xs font-semibold sm:text-sm" />
+                  <p className="text-xs text-[var(--w-text-sec)]">{STATUS_LABELS[row.status] || row.status}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
-
-      {data.length === 0 && !loading && (
-        <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
-          <FileText className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Sélectionnez un rapport et une période puis cliquez Générer</p>
-        </div>
-      )}
+      {generated && data.length === 0 && !loading && <MTEmpty>Aucun résultat pour cette période</MTEmpty>}
     </div>
   );
 }
@@ -3751,35 +3149,29 @@ function MTSettings({ onValidated }: { onValidated: () => void }) {
     { key: 'config', label: 'Configuration', icon: Settings2, visible: true },
   ] satisfies { key: SettingsTab; label: string; icon: any; visible: boolean }[]).filter(t => t.visible);
 
-  return (
-    <div className="lg:max-w-[1100px] lg:mx-auto space-y-4 pb-28 lg:pb-0">
-      <h2 className="text-lg font-bold text-neutral-900">Paramètres</h2>
+  const currentTab = tabs.some(tab => tab.key === activeTab) ? activeTab : tabs[0].key;
 
-      {/* Sub-tabs */}
-      <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto scrollbar-hide">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-all -mb-px ${
-              activeTab === t.key
-                ? 'border-neutral-900 text-neutral-900'
-                : 'border-transparent text-neutral-500 hover:text-neutral-700'
-            }`}
-          >
-            <t.icon className="w-3.5 h-3.5" />
-            {t.label}
+  return (
+    <div className="mx-auto max-w-[1100px] space-y-4">
+      <h2 className="text-base font-bold">Paramètres</h2>
+      <nav aria-label="Paramètres du transfert d’argent" className="flex flex-wrap gap-1 border-b border-[var(--w-separator)] pb-2">
+        {tabs.map(tab => (
+          <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
+            aria-current={currentTab === tab.key ? 'page' : undefined}
+            className={`btn-ghost min-h-9 flex-wrap px-2.5 py-1.5 text-xs ${currentTab === tab.key ? 'bg-[var(--w-active)] font-semibold !text-[var(--w-text)]' : ''}`}>
+            <tab.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {tab.label}
           </button>
         ))}
-      </div>
+      </nav>
 
       <div>
-        {activeTab === 'initialisation' && can('mt_balance_initialize') && <MTInitialisation onValidated={onValidated} />}
-        {activeTab === 'points' && <MTServicePoints />}
-        {activeTab === 'services' && can('mt_services_manage') && <MTServices />}
-        {activeTab === 'grossistes' && can('mt_wholesaler_view') && <MTWholesalers />}
-        {activeTab === 'config' && (
-          <div className="lg:max-w-[700px] bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 space-y-4">
+        {currentTab === 'initialisation' && can('mt_balance_initialize') && <MTInitialisation onValidated={onValidated} />}
+        {currentTab === 'points' && <MTServicePoints />}
+        {currentTab === 'services' && can('mt_services_manage') && <MTServices />}
+        {currentTab === 'grossistes' && can('mt_wholesaler_view') && <MTWholesalers />}
+        {currentTab === 'config' && (
+          <div className="lg:max-w-[700px] rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-4 sm:p-5 space-y-4">
             <div className="flex items-center gap-3 pb-3 border-b border-neutral-100">
               <Settings2 className="w-5 h-5 text-neutral-400" />
               <div>
@@ -3807,6 +3199,7 @@ function MTExpenses() {
   const toast = useToast();
   const { can } = usePermissions();
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [expenseToCancel, setExpenseToCancel] = useState<{ id: string; status: string; service_point_id: string; amount: number } | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [points, setPoints] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3897,7 +3290,6 @@ function MTExpenses() {
 
   const cancelExpense = async (e: any) => {
     if (e.status !== 'validee') return;
-    if (!confirm('Annuler cette dépense ? Le solde sera recrédité.')) return;
     await supabase.from('mt_expenses').update({ status: 'annulee', cancelled_by: profile?.id, cancelled_at: new Date().toISOString() }).eq('id', e.id);
     await updateBalance(tenant!.id, e.service_point_id, null, 'cash', Number(e.amount));
     toast.success('Dépense annulée');
@@ -3910,18 +3302,18 @@ function MTExpenses() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
   return (
-    <div className="lg:max-w-[1200px] lg:mx-auto space-y-5 pb-28 lg:pb-0">
+    <div className="lg:max-w-[1200px] mx-auto min-w-0 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-neutral-900">Dépenses</h2>
-          <p className="text-xs text-neutral-500 mt-0.5">Dépenses propres au module Transfert d'argent (carburant, salaires, fournitures…).</p>
+          <h2 className="text-base font-bold text-[var(--w-text)]">Dépenses</h2>
+
         </div>
         {can('mt_expense_manage') && !showForm && (
-          <div className="flex gap-2">
-            <button onClick={() => setShowCatForm(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setShowCatForm(true)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
               <Settings2 className="w-4 h-4" />Catégories
             </button>
-            <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800">
+            <button onClick={() => setShowForm(true)} className="btn-primary min-h-9 px-3 py-1.5 text-xs">
               <Plus className="w-4 h-4" />Nouvelle dépense
             </button>
           </div>
@@ -3930,80 +3322,60 @@ function MTExpenses() {
 
       {/* Synthèse */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">Total période</p>
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-3.5">
+          <p className="text-xs font-medium text-[var(--w-text-sec)]">Total période</p>
           <p className="text-lg font-bold text-neutral-900 mt-1">{fmt(stats.total)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
           <p className="text-[10px] text-neutral-400 mt-0.5">{stats.count} dépense{stats.count > 1 ? 's' : ''}</p>
         </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">Points concernés</p>
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-3.5">
+          <p className="text-xs font-medium text-[var(--w-text-sec)]">Points concernés</p>
           <p className="text-lg font-bold text-neutral-900 mt-1">{new Set(filtered.filter(e => e.status === 'validee').map(e => e.service_point_id)).size}</p>
         </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">Catégories actives</p>
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] p-3.5">
+          <p className="text-xs font-medium text-[var(--w-text-sec)]">Catégories actives</p>
           <p className="text-lg font-bold text-neutral-900 mt-1">{categories.length}</p>
         </div>
       </div>
 
-      {showCatForm && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-neutral-900">Catégories de dépense</h3>
-            <button onClick={() => setShowCatForm(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {categories.map(c => <span key={c.id} className="px-2.5 py-1 text-xs font-medium bg-neutral-100 text-neutral-700 rounded-full">{c.name}</span>)}
-            {categories.length === 0 && <span className="text-xs text-neutral-400">Aucune catégorie créée.</span>}
-          </div>
-          <div className="flex gap-2">
-            <input value={catForm.name} onChange={e => setCatForm({ name: e.target.value })} placeholder="Ex. Carburant, Salaires, Fournitures…" className="input flex-1" />
-            <button onClick={saveCat} disabled={saving || !catForm.name.trim()} className="btn-icon-primary" title="Ajouter"><Plus className="w-4 h-4" /></button>
-          </div>
-        </div>
-      )}
+      <Modal open={showCatForm} onClose={() => { if (!saving) setShowCatForm(false); }} title="Catégories de dépense"
+        size="sm" layer="top" panelClassName="!h-auto" focusOnOpen
+        footer={<MTFormActions cancel={() => setShowCatForm(false)} submit={saveCat} label="Ajouter" busy={saving} disabled={!catForm.name.trim()} />}>
+        {categories.length > 0 ? (
+          <ul className="mb-3 divide-y divide-[var(--w-separator-l)]">
+            {categories.map(category => <li key={category.id} className="py-2 text-sm">{category.name}</li>)}
+          </ul>
+        ) : <MTEmpty>Aucune catégorie créée</MTEmpty>}
+        <label className="label">Nom de la catégorie
+          <input value={catForm.name} onChange={e => setCatForm({ name: e.target.value })} placeholder="Ex. Carburant" className="input mt-1" />
+        </label>
+      </Modal>
 
-      {showForm && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-neutral-900">Nouvelle dépense</h3>
-            <button onClick={() => setShowForm(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Point de service *</label>
-              <select value={form.service_point_id} onChange={e => setForm({ ...form, service_point_id: e.target.value })} className="input">
-                <option value="">Sélectionner...</option>
-                {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Catégorie</label>
-              <select value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })} className="input">
-                <option value="">Sans catégorie</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Source</label>
-              <div className="px-3 py-2 text-xs font-medium rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700">Cash</div>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant (FCFA) *</label>
-              <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" type="number" min="0" className="input text-base font-semibold" />
-            </div>
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Description</label>
-              <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Optionnel" className="input" />
-            </div>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button onClick={() => setShowForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-            <button onClick={save} disabled={saving || !form.service_point_id || !form.amount} className="btn-icon-primary" title="Enregistrer la dépense">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-          </div>
+      <Modal open={showForm} onClose={() => { if (!saving) setShowForm(false); }} title="Nouvelle dépense"
+        size="md" layer="top" panelClassName="!h-auto" focusOnOpen
+        footer={<MTFormActions cancel={() => setShowForm(false)} submit={save} label="Enregistrer" busy={saving}
+          disabled={!form.service_point_id || !form.amount} />}>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <label className="label">Point de service <span aria-hidden="true">*</span>
+            <select value={form.service_point_id} onChange={e => setForm({ ...form, service_point_id: e.target.value })} className="input mt-1" required>
+              <option value="">Sélectionner un point</option>
+              {points.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
+            </select>
+          </label>
+          <label className="label">Catégorie
+            <select value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })} className="input mt-1">
+              <option value="">Sans catégorie</option>
+              {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+          </label>
+          <label className="label">Montant (FCFA) <span aria-hidden="true">*</span>
+            <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" type="number" inputMode="decimal" min="0" className="input num mt-1 text-base font-semibold" required />
+          </label>
+          <div className="self-center text-sm text-[var(--w-text-sec)]">Source · Caisse</div>
+          <label className="label sm:col-span-2">Description
+            <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="input mt-1" />
+          </label>
         </div>
-      )}
+      </Modal>
 
       {/* Filtres */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -4017,8 +3389,8 @@ function MTExpenses() {
         </select>
         <div className="flex gap-1 bg-neutral-100 rounded-lg p-0.5">
           {(['today', 'week', 'month', 'all'] as const).map(p => (
-            <button key={p} onClick={() => setFilterPeriod(p)} className={`px-2.5 py-1 text-xs font-medium rounded-md ${filterPeriod === p ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500'}`}>
-              {p === 'today' ? "Aujourd'hui" : p === 'week' ? '7 jours' : p === 'month' ? '30 jours' : 'Tout'}
+            <button key={p} onClick={() => setFilterPeriod(p)} className={`px-2.5 py-1 text-xs font-medium rounded-md ${filterPeriod === p ? 'bg-white text-neutral-900 ' : 'text-neutral-500'}`}>
+              {p === 'today' ? "Aujourd’hui" : p === 'week' ? '7 jours' : p === 'month' ? '30 jours' : 'Tout'}
             </button>
           ))}
         </div>
@@ -4026,12 +3398,9 @@ function MTExpenses() {
 
       {/* Liste */}
       {filtered.length === 0 ? (
-        <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
-          <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucune dépense sur cette période</p>
-        </div>
+        <MTEmpty>Aucune dépense sur cette période</MTEmpty>
       ) : (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden">
           <div className="divide-y divide-neutral-100 max-h-[600px] overflow-y-auto">
             {filtered.map(e => (
               <div key={e.id} className="px-4 py-3 flex items-center gap-3">
@@ -4042,7 +3411,7 @@ function MTExpenses() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium text-neutral-900">{getCatName(e.category_id)}</p>
                   </div>
-                  <p className="text-xs text-neutral-500 mt-0.5 truncate">{getPointName(e.service_point_id)}{e.description ? ` · ${e.description}` : ''}</p>
+                  <p className="text-xs text-neutral-500 mt-0.5 break-words">{getPointName(e.service_point_id)}{e.description ? ` · ${e.description}` : ''}</p>
                   <p className="text-[11px] text-neutral-400 mt-0.5">{new Date(e.expense_date).toLocaleDateString('fr-FR')} {new Date(e.expense_date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
                 <div className="text-right shrink-0">
@@ -4050,7 +3419,7 @@ function MTExpenses() {
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${e.status === 'validee' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{e.status === 'validee' ? 'Validée' : 'Annulée'}</span>
                 </div>
                 {e.status === 'validee' && can('mt_expense_cancel') && (
-                  <button onClick={() => cancelExpense(e)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 shrink-0" title="Annuler">
+                  <button onClick={() => setExpenseToCancel(e)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 shrink-0" title="Annuler">
                     <XCircle className="w-4 h-4" />
                   </button>
                 )}
@@ -4059,6 +3428,9 @@ function MTExpenses() {
           </div>
         </div>
       )}
+      <ConfirmDialog open={!!expenseToCancel} onClose={() => setExpenseToCancel(null)}
+        onConfirm={() => { if (expenseToCancel) void cancelExpense(expenseToCancel); }}
+        title="Annuler la dépense" message="Le solde de caisse sera recrédité." confirmLabel="Annuler la dépense" danger layer="top" />
     </div>
   );
 }
@@ -4076,6 +3448,7 @@ function MTCustomers() {
   const { can } = usePermissions();
   const [customers, setCustomers] = useState<MTCustomer[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [ledgerEntryToCancel, setLedgerEntryToCancel] = useState<LedgerEntry | null>(null);
   const [points, setPoints] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -4288,7 +3661,6 @@ function MTCustomers() {
 
   const cancelLedgerEntry = async (e: LedgerEntry) => {
     if (!tenant) return;
-    if (!confirm('Annuler cette opération ? Les soldes seront recrédités.')) return;
     if (e.operation_id) {
       const { data: op } = await supabase.from('mt_operations').select('*').eq('id', e.operation_id).maybeSingle();
       if (op) {
@@ -4319,47 +3691,37 @@ function MTCustomers() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
   return (
-    <div className="lg:max-w-[1200px] lg:mx-auto space-y-5 pb-28 lg:pb-0">
+    <div className="lg:max-w-[1200px] mx-auto min-w-0 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-neutral-900">Clients & créances</h2>
-          <p className="text-xs text-neutral-500 mt-0.5">Fichier clients propre au module MT, avec solde et créances autonomes.</p>
+          <h2 className="text-base font-bold text-[var(--w-text)]">Clients et créances</h2>
+
         </div>
         {can('mt_customer_manage') && (
-          <button onClick={openNewCustomer} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800">
+          <button onClick={openNewCustomer} className="btn-primary min-h-9 px-3 py-1.5 text-xs">
             <Plus className="w-4 h-4" />Nouveau client
           </button>
         )}
       </div>
 
-      {/* Synthèse */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">Clients actifs</p>
-          <p className="text-lg font-bold text-neutral-900 mt-1">{totals.count}</p>
-        </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">Solde total clients</p>
-          <p className="text-lg font-bold text-neutral-900 mt-1">{fmt(totals.balance)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
-        </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">Créances en cours</p>
-          <p className="text-lg font-bold text-red-600 mt-1">{fmt(totals.creance)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
-        </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">Clients avec créance</p>
-          <p className="text-lg font-bold text-neutral-900 mt-1">{totals.withCreance}</p>
-        </div>
-      </div>
+      <dl className="grid divide-y divide-[var(--w-separator-l)] rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4">
+        {[
+          { label: 'Clients actifs', value: totals.count, money: false },
+          { label: 'Solde total clients', value: totals.balance, money: true },
+          { label: 'Créances en cours', value: totals.creance, money: true },
+          { label: 'Clients avec créance', value: totals.withCreance, money: false },
+        ].map(({ label, value, money }) => (
+          <div key={label} className="flex min-w-0 flex-wrap items-baseline justify-between gap-1.5 px-3 py-2.5 xl:justify-start">
+            <dt className="text-xs text-[var(--w-text-sec)]">{label}</dt>
+            <dd className="font-semibold">{money ? <MTMoney value={value} /> : <span className="num">{value}</span>}</dd>
+          </div>
+        ))}
+      </dl>
 
-      {/* Liste + détail */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-4">
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <div className="p-3 border-b border-neutral-100">
-            <div className="relative">
-              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." className="input pl-9 h-9 text-sm" />
-            </div>
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+        <div className={`min-w-0 rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] ${selected ? 'hidden lg:block' : ''}`}>
+          <div className="border-b border-[var(--w-separator)] p-3">
+            <PageSearch value={search} onChange={setSearch} placeholder="Rechercher un client…" />
           </div>
           <div className="divide-y divide-neutral-100 max-h-[600px] overflow-y-auto">
             {filtered.length === 0 && <p className="text-sm text-neutral-400 p-6 text-center">Aucun client</p>}
@@ -4367,15 +3729,16 @@ function MTCustomers() {
               const agg = aggregates.get(c.id) || { balance: 0, creance: 0 };
               return (
                 <button key={c.id} onClick={() => setSelectedId(c.id)}
-                  className={`w-full text-left px-3 py-2.5 hover:bg-neutral-50 ${selectedId === c.id ? 'bg-neutral-50' : ''}`}>
+                  aria-pressed={selectedId === c.id}
+                  className="w-full px-3 py-2.5 text-left hover:bg-[var(--w-hover)] aria-pressed:bg-[var(--w-active)]">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-neutral-900 truncate flex-1">{c.name}</p>
+                    <p className="text-sm font-medium text-neutral-900 break-words flex-1">{c.name}</p>
                     {c.status === 'inactif' && <span className="text-[10px] text-neutral-400">inactif</span>}
                   </div>
                   {c.phone && <p className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5"><Phone className="w-3 h-3" />{c.phone}</p>}
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[11px] text-neutral-500">Solde <span className="font-semibold text-neutral-900">{fmt(agg.balance)}</span></span>
-                    {agg.creance > 0.01 && <span className="text-[11px] text-red-600 font-medium">Créance {fmt(agg.creance)}</span>}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="text-[11px] text-neutral-500">Solde <span className="font-semibold text-neutral-900"><MTMoney value={agg.balance} /></span></span>
+                    {agg.creance > 0.01 && <span className="text-[11px] text-red-600 font-medium">Créance <MTMoney value={agg.creance} /></span>}
                   </div>
                 </button>
               );
@@ -4383,16 +3746,16 @@ function MTCustomers() {
           </div>
         </div>
 
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <div className={`min-w-0 rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] ${!selected ? 'hidden lg:block' : ''}`}>
           {!selected ? (
-            <div className="py-16 text-center">
-              <Users className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-              <p className="text-sm text-neutral-500">Sélectionnez un client pour voir son détail</p>
-            </div>
+            <MTEmpty>Sélectionnez un client pour voir son détail</MTEmpty>
           ) : (
             <div className="flex flex-col h-full">
-              <div className="p-4 border-b border-neutral-100">
-                <div className="flex items-start justify-between gap-2">
+              <div className="border-b border-[var(--w-separator)] p-3.5">
+                <button type="button" onClick={() => setSelectedId(null)} className="btn-ghost mb-2 min-h-9 px-0 text-xs lg:hidden">
+                  <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Tous les clients
+                </button>
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="text-base font-bold text-neutral-900">{selected.name}</h3>
                     <p className="text-xs text-neutral-500">{selected.phone || '—'}{selected.address ? ` · ${selected.address}` : ''}</p>
@@ -4401,27 +3764,27 @@ function MTCustomers() {
                   <div className="flex gap-1 shrink-0">
                     {can('mt_customer_manage') && (
                       <>
-                        <button onClick={() => openEditCustomer(selected)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500" title="Modifier"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => toggleStatus(selected)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500" title={selected.status === 'actif' ? 'Désactiver' : 'Activer'}>{selected.status === 'actif' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}</button>
+                        <button onClick={() => openEditCustomer(selected)} className="btn-icon shrink-0 text-neutral-500" title="Modifier"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => toggleStatus(selected)} className="btn-icon shrink-0 text-neutral-500" title={selected.status === 'actif' ? 'Désactiver' : 'Activer'}>{selected.status === 'actif' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}</button>
                       </>
                     )}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <div className="rounded-lg bg-neutral-50 p-3">
-                    <p className="text-[11px] font-medium text-neutral-500 uppercase">Solde disponible</p>
-                    <p className="text-lg font-bold text-neutral-900 mt-1">{fmt(selectedAgg?.balance || 0)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
+                    <p className="text-xs font-medium text-[var(--w-text-sec)]">Solde disponible</p>
+                    <p className="text-lg font-bold text-neutral-900 mt-1"><MTMoney value={selectedAgg?.balance || 0} /></p>
                   </div>
                   <div className={`rounded-lg p-3 ${(selectedAgg?.creance || 0) > 0.01 ? 'bg-red-50' : 'bg-neutral-50'}`}>
-                    <p className="text-[11px] font-medium text-neutral-500 uppercase">Créance en cours</p>
-                    <p className={`text-lg font-bold mt-1 ${(selectedAgg?.creance || 0) > 0.01 ? 'text-red-600' : 'text-neutral-900'}`}>{fmt(selectedAgg?.creance || 0)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
+                    <p className="text-xs font-medium text-[var(--w-text-sec)]">Créance en cours</p>
+                    <p className={`text-lg font-bold mt-1 ${(selectedAgg?.creance || 0) > 0.01 ? 'text-red-600' : 'text-neutral-900'}`}><MTMoney value={selectedAgg?.creance || 0} /></p>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 flex-wrap">
-                  {can('mt_customer_credit') && <button onClick={openOperation} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800"><ArrowRightLeft className="w-3.5 h-3.5" />Opération</button>}
-                  {can('mt_customer_manage') && <button onClick={() => openMovement('depot')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50"><ArrowDownLeft className="w-3.5 h-3.5" />Dépôt</button>}
-                  {can('mt_customer_manage') && <button onClick={() => openMovement('retrait')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50"><ArrowUpRight className="w-3.5 h-3.5" />Retrait</button>}
-                  {can('mt_customer_repay') && (selectedAgg?.creance || 0) > 0.01 && <button onClick={() => openMovement('remboursement')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"><HandCoins className="w-3.5 h-3.5" />Remboursement</button>}
+                  {can('mt_customer_credit') && <button onClick={openOperation} className="btn-primary min-h-9 px-3 py-1.5 text-xs"><ArrowRightLeft className="w-3.5 h-3.5" />Opération</button>}
+                  {can('mt_customer_manage') && <button onClick={() => openMovement('depot')} className="btn-secondary min-h-9 px-3 py-1.5 text-xs"><ArrowDownLeft className="w-3.5 h-3.5" />Dépôt</button>}
+                  {can('mt_customer_manage') && <button onClick={() => openMovement('retrait')} className="btn-secondary min-h-9 px-3 py-1.5 text-xs"><ArrowUpRight className="w-3.5 h-3.5" />Retrait</button>}
+                  {can('mt_customer_repay') && (selectedAgg?.creance || 0) > 0.01 && <button onClick={() => openMovement('remboursement')} className="btn-secondary min-h-9 px-3 py-1.5 text-xs"><HandCoins className="w-3.5 h-3.5" />Remboursement</button>}
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto max-h-[400px]">
@@ -4443,9 +3806,9 @@ function MTCustomers() {
                             </div>
                             <p className="text-[11px] text-neutral-400">{new Date(e.operated_at).toLocaleDateString('fr-FR')} {new Date(e.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}{e.comment ? ` · ${e.comment}` : ''}</p>
                           </div>
-                          <p className={`text-sm font-bold shrink-0 ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>{isPositive ? '+' : '-'}{fmt(Math.abs(Number(e.amount)))} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
+                          <MTMoney value={Math.abs(Number(e.amount)) * (isPositive ? 1 : -1)} className={`shrink-0 text-xs font-semibold ${isPositive ? 'text-[var(--w-success)]' : 'text-[var(--w-error)]'}`} />
                           {cancellable && (
-                            <button onClick={() => cancelLedgerEntry(e)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 shrink-0" title="Annuler l'opération">
+                            <button onClick={() => setLedgerEntryToCancel(e)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 shrink-0" title="Annuler l'opération">
                               <XCircle className="w-4 h-4" />
                             </button>
                           )}
@@ -4460,100 +3823,81 @@ function MTCustomers() {
         </div>
       </div>
 
-      {/* Modale formulaire client */}
-      {showCustomerForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowCustomerForm(false)}>
-          <div className="bg-white rounded-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-neutral-900">{editingCustomer ? 'Modifier client' : 'Nouveau client'}</h3>
-              <button onClick={() => setShowCustomerForm(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="space-y-2">
-              <input value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} placeholder="Nom du client *" className="input" />
-              <input value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} placeholder="Téléphone" className="input" />
-              <input value={customerForm.code} onChange={e => setCustomerForm({ ...customerForm, code: e.target.value })} placeholder="Code interne (optionnel)" className="input" />
-              <input value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} placeholder="Adresse" className="input" />
-              <textarea value={customerForm.notes} onChange={e => setCustomerForm({ ...customerForm, notes: e.target.value })} placeholder="Notes" rows={2} className="input" />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setShowCustomerForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={saveCustomer} disabled={saving || !customerForm.name.trim()} className="btn-icon-primary" title={editingCustomer ? 'Mettre à jour' : 'Créer'}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
-            </div>
-          </div>
+      <Modal open={showCustomerForm} onClose={() => { if (!saving) setShowCustomerForm(false); }}
+        title={editingCustomer ? 'Modifier le client' : 'Nouveau client'} size="sm" layer="top" panelClassName="!h-auto" focusOnOpen
+        footer={<MTFormActions cancel={() => setShowCustomerForm(false)} submit={saveCustomer} label={editingCustomer ? 'Mettre à jour' : 'Créer'}
+          busy={saving} disabled={!customerForm.name.trim()} />}>
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <label className="label sm:col-span-2">Nom du client <span aria-hidden="true">*</span>
+            <input value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} required className="input mt-1" />
+          </label>
+          <label className="label">Téléphone
+            <input value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} type="tel" className="input mt-1" />
+          </label>
+          <label className="label">Code interne
+            <input value={customerForm.code} onChange={e => setCustomerForm({ ...customerForm, code: e.target.value })} className="input mt-1" />
+          </label>
+          <label className="label sm:col-span-2">Adresse
+            <input value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} className="input mt-1" />
+          </label>
+          <label className="label sm:col-span-2">Notes
+            <textarea value={customerForm.notes} onChange={e => setCustomerForm({ ...customerForm, notes: e.target.value })} rows={2} className="input mt-1" />
+          </label>
         </div>
-      )}
+      </Modal>
 
-      {/* Modale mouvement */}
       {movementModal && selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setMovementModal(null)}>
-          <div className="bg-white rounded-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-neutral-900">
-                {movementModal === 'depot' ? 'Dépôt de solde' : movementModal === 'retrait' ? 'Retrait de solde' : 'Remboursement de créance'}
-              </h3>
-              <button onClick={() => setMovementModal(null)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
-            </div>
-            <p className="text-xs text-neutral-500">
-              {movementModal === 'depot' && `Le client apporte du cash pour approvisionner son solde. Cash +, solde client +.`}
-              {movementModal === 'retrait' && `Le client retire du cash de son solde. Cash −, solde client −.`}
-              {movementModal === 'remboursement' && `Le client rembourse sa créance en cash. Cash +, créance −.`}
-            </p>
-            <div className="space-y-2">
-              <div>
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Point de service *</label>
-                <select value={movementForm.service_point_id} onChange={e => setMovementForm({ ...movementForm, service_point_id: e.target.value })} className="input">
-                  <option value="">Sélectionner...</option>
-                  {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant (FCFA) *</label>
-                <input value={movementForm.amount} onChange={e => setMovementForm({ ...movementForm, amount: e.target.value })} placeholder="0" type="number" className="input text-base font-semibold" />
-              </div>
-              <input value={movementForm.comment} onChange={e => setMovementForm({ ...movementForm, comment: e.target.value })} placeholder="Commentaire (optionnel)" className="input" />
-            </div>
-            <div className="rounded-lg bg-neutral-50 p-2.5 text-[11px] text-neutral-600 space-y-0.5">
-              <p>Solde actuel : <span className="font-semibold text-neutral-900">{fmt(selectedAgg?.balance || 0)} FCFA</span></p>
-              <p>Créance actuelle : <span className={`font-semibold ${(selectedAgg?.creance || 0) > 0.01 ? 'text-red-600' : 'text-neutral-900'}`}>{fmt(selectedAgg?.creance || 0)} FCFA</span></p>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setMovementModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={saveMovement} disabled={saving || !movementForm.amount || !movementForm.service_point_id} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
-            </div>
+        <Modal open onClose={() => { if (!saving) setMovementModal(null); }}
+          title={movementModal === 'depot' ? 'Dépôt de solde' : movementModal === 'retrait' ? 'Retrait de solde' : 'Remboursement de créance'}
+          size="sm" layer="top" panelClassName="!h-auto" focusOnOpen
+          footer={<MTFormActions cancel={() => setMovementModal(null)} submit={saveMovement} label="Enregistrer" busy={saving}
+            disabled={!movementForm.amount || !movementForm.service_point_id} />}>
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--w-text-sec)]">{selected.name}</p>
+            <label className="label">Point de service <span aria-hidden="true">*</span>
+              <select value={movementForm.service_point_id} onChange={e => setMovementForm({ ...movementForm, service_point_id: e.target.value })} className="input mt-1" required>
+                <option value="">Sélectionner un point</option>
+                {points.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
+              </select>
+            </label>
+            <label className="label">Montant (FCFA) <span aria-hidden="true">*</span>
+              <input value={movementForm.amount} onChange={e => setMovementForm({ ...movementForm, amount: e.target.value })} placeholder="0" type="number" inputMode="decimal" className="input num mt-1 font-semibold" required />
+            </label>
+            <label className="label">Commentaire
+              <input value={movementForm.comment} onChange={e => setMovementForm({ ...movementForm, comment: e.target.value })} className="input mt-1" />
+            </label>
+            <dl className="space-y-1.5 border-t border-[var(--w-separator)] pt-2 text-xs">
+              <div className="flex justify-between gap-2"><dt>Solde actuel</dt><dd><MTMoney value={selectedAgg?.balance || 0} className="font-semibold" /></dd></div>
+              <div className="flex justify-between gap-2"><dt>Créance actuelle</dt><dd><MTMoney value={selectedAgg?.creance || 0} className="font-semibold" /></dd></div>
+            </dl>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Modale opération client */}
       {operationModal && selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOperationModal(false)}>
-          <div className="bg-white rounded-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-neutral-900">Opération pour {selected.name}</h3>
-              <button onClick={() => setOperationModal(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
-            </div>
-            <p className="text-xs text-neutral-500">
-              Réalisez une opération de service pour le client. Si son solde couvre le montant, il sera débité en priorité ;
-              le reste devient une créance. Le cash n'est pas mouvementé.
-            </p>
+        <Modal open onClose={() => { if (!saving) setOperationModal(false); }} title={`Opération pour ${selected.name}`}
+          size="md" layer="top" panelClassName="!h-auto" focusOnOpen
+          footer={<MTFormActions cancel={() => setOperationModal(false)} submit={saveOperation} label="Valider l’opération" busy={saving} disabled={!!opError} />}>
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--w-text-sec)]">Le montant est d’abord débité du solde client. Le reste est porté en créance.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Point de service *</label>
+                <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Point de service *</label>
                 <select value={opForm.service_point_id} onChange={e => setOpForm({ ...opForm, service_point_id: e.target.value, service_id: '' })} className="input">
                   <option value="">Sélectionner...</option>
                   {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Service *</label>
+                <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Service *</label>
                 <select value={opForm.service_id} onChange={e => setOpForm({ ...opForm, service_id: e.target.value })} className="input" disabled={!opForm.service_point_id}>
                   <option value="">Sélectionner...</option>
                   {services.map(s => <option key={s.id} value={s.id}>{s.name}{s.family === 'credit_telephone' ? ' (crédit)' : ''}</option>)}
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant demandé (FCFA) *</label>
+                <label className="block text-xs font-medium text-[var(--w-text-sec)] mb-1">Montant demandé (FCFA) *</label>
                 <input value={opForm.amount} onChange={e => setOpForm({ ...opForm, amount: e.target.value })} placeholder="0" type="number" min="0" className="input text-lg font-bold" />
               </div>
               <div className="sm:col-span-2">
@@ -4562,7 +3906,7 @@ function MTCustomers() {
             </div>
 
             {opAmount > 0 && opForm.service_id && opForm.service_point_id && (
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-3 space-y-2">
+              <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface-el)] p-3 space-y-2">
                 <p className="text-[11px] font-semibold text-neutral-500 uppercase">Répartition du règlement</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-lg bg-white border border-neutral-200 p-2.5">
@@ -4599,15 +3943,12 @@ function MTCustomers() {
               </div>
             )}
 
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setOperationModal(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={saveOperation} disabled={saving || !!opError} className="btn-icon-primary" title="Valider l'opération">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
+      <ConfirmDialog open={!!ledgerEntryToCancel} onClose={() => setLedgerEntryToCancel(null)}
+        onConfirm={() => { if (ledgerEntryToCancel) void cancelLedgerEntry(ledgerEntryToCancel); }}
+        title="Annuler l’opération client" message="Les soldes seront recrédités." confirmLabel="Annuler l’opération" danger layer="top" />
     </div>
   );
 }

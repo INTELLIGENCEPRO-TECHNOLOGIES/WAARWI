@@ -128,7 +128,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
   const lastRow = rows?.[rows.length - 1];
 
   return (
-    <section aria-label="Rapprochement de la caisse" className="space-y-4 border-y border-neutral-200 py-4">
+    <section aria-label="Rapprochement de la caisse" className="acc-section-block space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-neutral-900">Mouvements de caisse</h2>
         <button type="button" className="btn btn-secondary" disabled={busy} aria-expanded={vaultAccounts !== null}
@@ -140,7 +140,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
       {vaultAccounts && (
         <div className="border-b border-neutral-200 pb-4">
           {vaultAccounts.vaults.length === 0 ? <p className="text-sm text-neutral-500">Aucun coffre à configurer.</p> : (
-            <div className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
+            <div className="acc-fields acc-fields-with-action">
               <SearchableSelect label="Coffre" variant="underline" value={vaultId} onChange={selectVault} disabled={busy}
                 options={vaultAccounts.vaults.map(vault => ({
                   value: vault.id, label: `${vault.site_name} · ${vault.name}`,
@@ -187,7 +187,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
       {rows && rows.length > 0 && (
         <ul className="divide-y divide-neutral-200 border-t border-neutral-200">
           {rows.map(row => (
-            <li key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+            <li key={row.id} className="acc-cash-row">
               <div className="min-w-0">
                 <p className="break-words text-sm font-medium text-neutral-900">{row.label}</p>
                 <p className="mt-0.5 text-xs text-neutral-500">
@@ -197,7 +197,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
               </div>
               <p className="whitespace-nowrap text-right text-sm font-medium tabular-nums">{formatCurrency(Number(row.decision.amount))}</p>
               {(row.decision.action === 'post' || row.decision.action === 'post_payment') && (
-                <div className="col-span-2 flex flex-wrap gap-2 sm:col-span-1">
+                <div className="acc-cash-row-actions">
                   {confirmId === row.id ? (
                     <>
                       <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirmId('')}>Annuler</button>
@@ -221,7 +221,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
                       })} />
                   </div>
                 ) : (
-                  <button type="button" className="btn-secondary col-span-2 justify-self-start sm:col-span-1"
+                  <button type="button" className="btn-secondary acc-cash-row-actions justify-self-start"
                     disabled={busy} onClick={() => setConfirmId(row.id)}>Vérifier la pièce</button>
                 )
               )}
@@ -230,7 +230,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
         </ul>
       )}
       {rows && (cursorTrail.length > 1 || hasMore) && (
-        <nav className="flex justify-between gap-2" aria-label="Pages des mouvements de caisse">
+        <nav className="acc-pagination" aria-label="Pages des mouvements de caisse">
           <button type="button" className="btn btn-secondary" disabled={busy || cursorTrail.length < 2}
             onClick={() => void run(() => fetchPage(cursorTrail.slice(0, -1)))}>Précédente</button>
           <button type="button" className="btn btn-secondary" disabled={busy || !hasMore || !lastRow}

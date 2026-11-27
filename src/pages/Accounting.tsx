@@ -38,31 +38,30 @@ type TabKey = 'analytics' | 'assets' | 'revision' | 'aging' | 'journal_settings'
 
 export function Accounting({ section = 'plan',onNavigate,inWindow=false,onExit }: { section?: TabKey;onNavigate?:(route:string)=>void;inWindow?:boolean;onExit?:()=>void }) {
   const {tenant}=useApp();const {can}=usePermissions();
-  const titles: Record<TabKey, { t: string; s: string }> = {
-    analytics:{t:'Analytique et budgets',s:'Ventilation des charges et produits, budgets et réalisations.'},
-    assets:{t:'Immobilisations et amortissements',s:'Registre des biens, plans et dotations comptables.'},
-    revision:{t:'Révision comptable',s:'Dossiers mensuels, contrôles et justificatifs.'},
-    aging:{t:'Balance âgée et échéances',s:'Postes ouverts et échéances comptables.'},
-    journal_settings:{t:'Codes journaux',s:'Paramétrage des journaux comptables.'},
-    overview: {t:'Accueil comptable',s:'Situation et accès directs.'},
-    entry: {t:'Saisie des écritures',s:'Nouvelle pièce comptable.'},
-    plan: { t: 'Plan comptable', s: 'Plan comptable SYSCOHADA.' },
-    journals: { t: 'Journaux', s: "Journaux d'écritures comptables." },
-    balance: { t: 'Balance générale', s: 'Balance des comptes par période.' },
-    grandlivre: { t: 'Grand Livre', s: 'Détail des mouvements par compte.' },
-    tiers: { t: 'Tiers', s: 'Balance et interrogation des comptes clients/fournisseurs.' },
-    search: { t: 'Recherche', s: "Recherche avancée d'écritures comptables." },
-    cloture: { t: 'Clôtures', s: 'Contrôles et clôture mensuelle' },
-    vat: { t: 'Situation de TVA', s: 'TVA collectée, récupérable et contrôles par période.' },
-    statement: { t: 'Interrogation des comptes', s: 'Mouvements, soldes et pièces des comptes généraux et auxiliaires.' },
-    bank: { t: 'Rapprochement bancaire', s: 'Relevés, pointage des écritures et contrôle des soldes.' },
-    fiscal: { t: 'Exercices et reports à nouveau', s: 'Arrêtés annuels, balance et ouverture du prochain exercice.' },
-    financial: { t: 'États financiers', s: 'Bilan, compte de résultat, comparatifs et contrôles.' },
+  const titles: Record<TabKey, string> = {
+    analytics: 'Analytique et budgets',
+    assets: 'Immobilisations et amortissements',
+    revision: 'Révision comptable',
+    aging: 'Balance âgée et échéances',
+    journal_settings: 'Codes journaux',
+    overview: 'Bureau comptable',
+    entry: 'Saisie des écritures',
+    plan: 'Plan comptable',
+    journals: 'Journaux comptables',
+    balance: 'Balance générale',
+    grandlivre: 'Grand livre',
+    tiers: 'Balance des tiers',
+    search: 'Recherche des écritures',
+    cloture: 'Clôtures mensuelles',
+    vat: 'Situation de TVA',
+    statement: 'Interrogation et lettrage',
+    bank: 'Rapprochement bancaire',
+    fiscal: 'Exercices et reports à nouveau',
+    financial: 'États financiers',
   };
-  const meta = titles[section];
   return (
     <div className="accounting-workspace">
-      {!inWindow&&<header className="acc-titlebar"><div><h1>{meta.t}</h1><p>{meta.s}</p></div><span className="acc-module">Comptabilité</span></header>}
+      {!inWindow && <header className="acc-titlebar"><h1>{titles[section]}</h1></header>}
       <div className="acc-body" key={section}>
       {section === 'journal_settings' && <AccountingJournalSettings/>}
       {section === 'plan' && <PlanTab />}
@@ -155,7 +154,7 @@ function PlanTab() {
         </table>
       </AccountingTable>
 
-      {open&&<section className="acc-section-head space-y-2"><div className="acc-toolbar"><strong className="text-sm">{editing?'Modifier le compte':'Nouveau compte'}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={saving} onClick={()=>setOpen(false)}>Annuler</button><button type="button" className="btn-primary" disabled={saving} onClick={save}>{saving?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Enregistrer</button></div><div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+      {open&&<section className="acc-section-head space-y-2"><div className="acc-toolbar"><strong className="text-sm">{editing?'Modifier le compte':'Nouveau compte'}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={saving} onClick={()=>setOpen(false)}>Annuler</button><button type="button" className="btn-primary" disabled={saving} onClick={save}>{saving?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Enregistrer</button></div><div className="acc-fields acc-fields-account">
           <div>
             <label className="label">Code (7 chiffres) *</label>
             <input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="5710000" maxLength={7} disabled={!!editing} />
@@ -511,7 +510,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
 
       {/* Export modal */}
       {exportOpen&&<section className="acc-section-head space-y-3"><div className="acc-toolbar"><strong className="text-sm">Export comptable</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={exportLoading} onClick={()=>setExportOpen(false)}>Fermer</button>{!exportData?<button type="button" className="btn-primary" disabled={exportLoading||!exportDateFrom||!exportDateTo} onClick={prepareExport}>{exportLoading?<Loader2 size={15} className="animate-spin"/>:<Search size={15}/>}Préparer</button>:<button type="button" className="btn-primary" onClick={downloadExport}><Download size={15}/>Télécharger</button>}</div><div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="acc-fields acc-fields-2">
             <div>
               <label className="label">Date de début *</label>
               <input type="date" value={exportDateFrom} onChange={e => { setExportDateFrom(e.target.value); setExportData(null); }} className="input" disabled={exportLoading} />
@@ -521,7 +520,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
               <input type="date" value={exportDateTo} onChange={e => { setExportDateTo(e.target.value); setExportData(null); }} className="input" disabled={exportLoading} />
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="acc-fields acc-fields-2">
             <div>
               <label className="label">Journal</label>
               <select value={exportJournal} onChange={e => { setExportJournal(e.target.value); setExportData(null); }} className="input" disabled={exportLoading}>
@@ -551,9 +550,7 @@ function JournalsTab({entryOnly=false,onExit,onNew}:{entryOnly?:boolean;onExit?:
                 <span>Chargement des lignes…</span>
                 <span>{exportProgress.loaded.toLocaleString('fr-FR')} / {exportProgress.total.toLocaleString('fr-FR')}</span>
               </div>
-              <div className="w-full bg-neutral-200 rounded-full h-2">
-                <div className="bg-brand-600 h-2 rounded-full transition-all" style={{ width: `${exportProgress.total > 0 ? Math.min(100, (exportProgress.loaded / exportProgress.total) * 100) : 0}%` }} />
-              </div>
+              <progress className="acc-progress" aria-label="Progression de l’export comptable" max={exportProgress.total || 1} value={exportProgress.loaded} />
             </div>
           )}
 
@@ -666,29 +663,28 @@ function BalanceTab() {
 
   return (
     <div className="space-y-4">
-      <div className="acc-toolbar acc-fixed">
-        {canManage && <div className="flex items-center gap-2 flex-wrap">
+      {canManage && <div className="acc-toolbar acc-posting-actions" aria-label="Comptabilisation des opérations">
+          <span className="acc-field-label">Comptabiliser</span>
           <button onClick={comptabiliserTout} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
             {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Ventes
           </button>
           <button onClick={comptabiliserReglements} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
             {bulkPayBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
-            Rglts clients
+            Règlements clients
           </button>
           <button type="button" className="btn btn-secondary" aria-expanded={showPurchaseInvoice} onClick={() => setShowPurchaseInvoice(show => !show)}>
             Factures fournisseurs
           </button>
           <button onClick={comptabiliserReglFourn} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
             {bulkPayFournBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
-            Rglts fournisseurs
+            Règlements fournisseurs
           </button>
           <button type="button" className="btn btn-secondary" aria-expanded={showCashReview}
             onClick={() => setShowCashReview(show => !show)}>
             Mouvements de caisse
           </button>
-        </div>}
-      </div>
+      </div>}
 
       {canManage && tenant && showPurchaseInvoice && (
         <AccountingPurchaseInvoice key={tenant.id} tenantId={tenant.id} onPosted={() => void load()} />
@@ -712,143 +708,133 @@ function BalanceTab() {
 function GrandLivreTab(){return <AccountingPeriodBooks mode="ledger"/>;}
 
 /* ===================== BALANCE DES TIERS ===================== */
+type ThirdPartyBalance = {
+  tiers_id: string;
+  account_code: string;
+  tiers_name: string;
+  total_debit: number;
+  total_credit: number;
+  solde: number;
+};
+
+type ThirdPartyLine = {
+  entry_number: string;
+  entry_date: string;
+  label: string | null;
+  debit: number;
+  credit: number;
+  solde_cumule: number;
+};
+
+const formatAccountingAmount = (value: number) => Number(value).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+const formatMovement = (value: number) => Number(value) ? formatAccountingAmount(value) : '—';
+
 function TiersTab() {
   const { tenant } = useApp();
-  const work=useAccountingWork();
+  const work = useAccountingWork();
   const { error: toastError } = useToast();
-  const [tiers, setTiers] = useState<any[]>([]);
+  const [tiers, setTiers] = useState<ThirdPartyBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [type, setType] = useState<'client' | 'fournisseur'>('client');
-  const [selected, setSelected] = useState<any | null>(null);
-  const [extrait, setExtrait] = useState<any[]>([]);
+  const [selected, setSelected] = useState<ThirdPartyBalance | null>(null);
+  const [extrait, setExtrait] = useState<ThirdPartyLine[]>([]);
   const [extraitLoading, setExtraitLoading] = useState(false);
-
+  const extractRequest = useRef(0);
   const realtimeTick = useRealtimeTick(['journal_entries', 'journal_lines', 'customers', 'suppliers']);
+  const apiType = type === 'fournisseur' ? 'supplier' : 'client';
 
   useEffect(() => {
     if (!tenant) return;
+    let active = true;
     setLoading(true);
-    supabase.rpc('balance_tiers', { p_tenant_id: tenant.id, p_tiers_type: type === 'fournisseur' ? 'supplier' : 'client' })
+    void supabase.rpc('balance_tiers', { p_tenant_id: tenant.id, p_tiers_type: apiType })
       .then(({ data, error }) => {
+        if (!active) return;
         if (error) toastError(error.message);
-        else setTiers(data || []);
+        setTiers(error ? [] : (data ?? []) as ThirdPartyBalance[]);
         setLoading(false);
       });
-  }, [tenant, type, realtimeTick]);
+    return () => { active = false; };
+  }, [tenant?.id, apiType, realtimeTick]);
 
-  const tiersPaging=useAccountingPagination(tiers,type);
-  const extraitPaging=useAccountingPagination(extrait,selected?.account_code??'');
-  function loadExtrait(account: any) {
+  useEffect(() => () => { extractRequest.current++; }, [tenant?.id]);
+  const tiersPaging = useAccountingPagination(tiers, type);
+  const extraitPaging = useAccountingPagination(extrait, selected?.tiers_id ?? '');
+
+  const selectType = (next: typeof type) => {
+    if (next === type) return;
+    extractRequest.current++;
+    setType(next);
+    setSelected(null);
+    setExtrait([]);
+    setExtraitLoading(false);
+  };
+
+  const loadExtrait = async (account: ThirdPartyBalance) => {
+    if (!tenant) return;
+    const request = ++extractRequest.current;
     setSelected(account);
+    setExtrait([]);
     setExtraitLoading(true);
-    supabase.rpc('interrogation_tiers', { p_tenant_id: tenant!.id, p_tiers_id: account.tiers_id, p_tiers_type: type === 'fournisseur' ? 'supplier' : 'client' })
-      .then(({ data, error }) => {
-        if (error) toastError(error.message);
-        else setExtrait(data || []);
-        setExtraitLoading(false);
-      });
-  }
+    const { data, error } = await supabase.rpc('interrogation_tiers', {
+      p_tenant_id: tenant.id,
+      p_tiers_id: account.tiers_id,
+      p_tiers_type: apiType,
+    });
+    if (request !== extractRequest.current) return;
+    if (error) toastError(error.message);
+    else setExtrait((data ?? []) as ThirdPartyLine[]);
+    setExtraitLoading(false);
+  };
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <button onClick={() => { setType('client'); setSelected(null); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${type === 'client' ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-          Clients
-        </button>
-        <button onClick={() => { setType('fournisseur'); setSelected(null); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${type === 'fournisseur' ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-          Fournisseurs
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Balance list */}
-          <div className="min-w-0 border-t border-neutral-200">
-            <div className="px-1 md:px-4 py-3 bg-neutral-50 border-b border-neutral-200">
-              <h3 className="text-sm font-semibold text-slate-700">Balance des {type === 'client' ? 'clients' : 'fournisseurs'}</h3>
-            </div>
-            <AccountingTable footer={<AccountingPagination {...tiersPaging}/>}>
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 sticky top-0">
-                  <tr className="text-xs text-neutral-500 uppercase">
-                    <th className="px-1 md:px-3 py-2 text-left">Compte</th>
-                    <th className="px-1 md:px-3 py-2 text-left">Nom</th>
-                    <th className="px-1 md:px-3 py-2 text-right">Débit</th>
-                    <th className="px-1 md:px-3 py-2 text-right">Crédit</th>
-                    <th className="px-1 md:px-3 py-2 text-right">Solde</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--w-separator-l)]">
-                  {tiers.length === 0 && (
-                    <tr><td colSpan={5} className="px-1 md:px-4 py-8 text-center text-neutral-400">Aucun tiers trouvé</td></tr>
-                  )}
-                  {tiersPaging.rows.map((t: any) => (
-                    <tr key={t.account_code} onClick={() => loadExtrait(t)} className={`cursor-pointer hover:bg-brand-50/40 transition ${selected?.account_code === t.account_code ? 'bg-brand-50' : ''}`}>
-                      <td className="px-1 md:px-3 py-2 font-mono text-xs text-brand-700">{t.account_code}</td>
-                      <td className="px-1 md:px-3 py-2 text-neutral-700 truncate max-w-[140px]">{t.tiers_name}</td>
-                      <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(t.total_debit) > 0 ? Number(t.total_debit).toLocaleString('fr-FR') : '—'}</td>
-                      <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(t.total_credit) > 0 ? Number(t.total_credit).toLocaleString('fr-FR') : '—'}</td>
-                      <td className={`px-1 md:px-3 py-2 text-right font-mono text-xs font-semibold ${Number(t.solde) >= 0 ? 'text-neutral-900' : 'text-neutral-900'}`}>
-                        {Number(t.solde).toLocaleString('fr-FR')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </AccountingTable>
-          </div>
-
-          {/* Extrait de compte */}
-          <div className="min-w-0 border-t border-neutral-200">
-            <div className="px-1 md:px-4 py-3 bg-neutral-50 border-b border-neutral-200">
-              <h3 className="text-sm font-semibold text-slate-700">
-                {selected ? `Extrait — ${selected.account_code} ${selected.tiers_name}` : 'Sélectionnez un tiers'}
-              </h3>
-            </div>
-            {!selected ? (
-              <div className="flex items-center justify-center py-16 text-sm text-neutral-400">Cliquez sur un tiers pour voir son extrait</div>
-            ) : extraitLoading ? (
-              <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
-            ) : (
-              <AccountingTable footer={<AccountingPagination {...extraitPaging}/>}>
-                <table className="w-full text-sm">
-                  <thead className="bg-neutral-50 sticky top-0">
-                    <tr className="text-xs text-neutral-500 uppercase">
-                      <th className="px-1 md:px-3 py-2 text-left">Date</th>
-                      <th className="px-1 md:px-3 py-2 text-left">Pièce</th>
-                      <th className="px-1 md:px-3 py-2 text-left">Libellé</th>
-                      <th className="px-1 md:px-3 py-2 text-right">Débit</th>
-                      <th className="px-1 md:px-3 py-2 text-right">Crédit</th>
-                      <th className="px-1 md:px-3 py-2 text-right">Solde</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--w-separator-l)]">
-                    {extrait.length === 0 && (
-                      <tr><td colSpan={6} className="px-1 md:px-4 py-8 text-center text-neutral-400">Aucune écriture</td></tr>
-                    )}
-                    {extraitPaging.rows.map((e: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-[var(--w-surface-el)]/40">
-                        <td className="px-1 md:px-3 py-2 text-xs text-neutral-600">{formatDate(e.entry_date)}</td>
-                        <td className="px-1 md:px-3 py-2 text-xs"><button type="button" className="font-medium hover:underline" onClick={()=>work?.openPiece({entryNumber:e.entry_number})}>{e.entry_number}</button></td>
-                        <td className="px-1 md:px-3 py-2 text-neutral-700 text-xs">{e.label || '—'}</td>
-                        <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(e.debit) > 0 ? Number(e.debit).toLocaleString('fr-FR') : ''}</td>
-                        <td className="px-1 md:px-3 py-2 text-right font-mono text-xs">{Number(e.credit) > 0 ? Number(e.credit).toLocaleString('fr-FR') : ''}</td>
-                        <td className={`px-1 md:px-3 py-2 text-right font-mono text-xs font-semibold ${Number(e.solde_cumule) >= 0 ? 'text-neutral-900' : 'text-neutral-900'}`}>
-                          {Number(e.solde_cumule).toLocaleString('fr-FR')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </AccountingTable>
-            )}
-          </div>
-        </div>
-      )}
+  const category = type === 'client' ? 'clients' : 'fournisseurs';
+  return <section className="acc-third-parties space-y-3">
+    <div className="acc-tabs" role="group" aria-label="Type de tiers">
+      <button type="button" className="acc-tab" aria-pressed={type === 'client'} onClick={() => selectType('client')}>Clients</button>
+      <button type="button" className="acc-tab" aria-pressed={type === 'fournisseur'} onClick={() => selectType('fournisseur')}>Fournisseurs</button>
     </div>
-  );
+    <div className="acc-third-party-panels">
+      <section className="acc-third-party-pane" aria-label={`Balance des ${category}`}>
+        <h2 className="acc-section-title">Balance des {category}</h2>
+        <AccountingTable label={`Balance des ${category}`} footer={<AccountingPagination {...tiersPaging} disabled={loading} />}>
+          <table className="acc-third-party-table">
+            <thead><tr><th className="text-left">Tiers / compte</th><th className="text-right acc-amount-col">Débit</th><th className="text-right acc-amount-col">Crédit</th><th className="text-right">Solde (FCFA)</th></tr></thead>
+            <tbody>
+              {!loading && tiersPaging.rows.map(row => (
+                <tr key={`${row.tiers_id}:${row.account_code}`} data-selected={selected?.tiers_id === row.tiers_id}>
+                  <td><button type="button" className="acc-table-link" aria-pressed={selected?.tiers_id === row.tiers_id} onClick={() => void loadExtrait(row)}>{row.tiers_name}</button><span className="acc-table-meta">{row.account_code}</span><span className="acc-table-meta acc-amount-compact">D {formatMovement(row.total_debit)} · C {formatMovement(row.total_credit)}</span></td>
+                  <td className="text-right acc-amount-col">{formatMovement(row.total_debit)}</td>
+                  <td className="text-right acc-amount-col">{formatMovement(row.total_credit)}</td>
+                  <td className="text-right font-semibold">{formatAccountingAmount(row.solde)}</td>
+                </tr>
+              ))}
+              {(loading || !tiersPaging.total) && <tr><td colSpan={4} className="acc-table-empty" role="status">{loading ? 'Chargement de la balance…' : 'Aucun tiers à afficher.'}</td></tr>}
+            </tbody>
+          </table>
+        </AccountingTable>
+      </section>
+
+      {selected && <section className="acc-third-party-pane" aria-label="Extrait du tiers">
+        <div className="acc-section-title"><h2>{selected.tiers_name}</h2><span className="acc-table-meta">Extrait · {selected.account_code}</span></div>
+        <AccountingTable label="Mouvements du tiers" footer={<AccountingPagination {...extraitPaging} disabled={extraitLoading} />}>
+          <table className="acc-third-party-table">
+            <thead><tr><th className="text-left">Pièce / libellé</th><th className="text-right acc-amount-col">Débit</th><th className="text-right acc-amount-col">Crédit</th><th className="text-right">Solde (FCFA)</th></tr></thead>
+            <tbody>
+              {!extraitLoading && extraitPaging.rows.map((line, index) => (
+                <tr key={`${line.entry_number}:${index}`}>
+                  <td><button type="button" className="acc-table-link" onClick={() => work?.openPiece({entryNumber: line.entry_number})}>{line.entry_number}</button><span className="acc-table-meta">{formatDate(line.entry_date)}</span>{line.label && <span className="acc-table-meta">{line.label}</span>}<span className="acc-table-meta acc-amount-compact">D {formatMovement(line.debit)} · C {formatMovement(line.credit)}</span></td>
+                  <td className="text-right acc-amount-col">{formatMovement(line.debit)}</td>
+                  <td className="text-right acc-amount-col">{formatMovement(line.credit)}</td>
+                  <td className="text-right font-semibold">{formatAccountingAmount(line.solde_cumule)}</td>
+                </tr>
+              ))}
+              {(extraitLoading || !extraitPaging.total) && <tr><td colSpan={4} className="acc-table-empty" role="status">{extraitLoading ? 'Chargement de l’extrait…' : 'Aucune écriture pour ce tiers.'}</td></tr>}
+            </tbody>
+          </table>
+        </AccountingTable>
+      </section>}
+    </div>
+  </section>;
 }
 
 /* ===================== RECHERCHE ECRITURES ===================== */

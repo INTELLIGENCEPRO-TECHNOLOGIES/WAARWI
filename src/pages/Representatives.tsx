@@ -1,13 +1,14 @@
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Pencil, BarChart3, Users, X, Power, Check, BadgePercent, Download, Printer, Trash2, Filter } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { Plus, Loader2, Pencil, BarChart3, Users, X, Power, Check, Download, Printer, Trash2, SlidersHorizontal } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
-import { Modal, ConfirmDialog } from '../components/Modal';
+import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
-import { formatFCFA, formatDateTime } from '../lib/format';
+import { PageSearch } from '../components/PageSearch';
+import { formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { SearchableSelect } from '../components/SearchableSelect';
 import {
@@ -15,6 +16,7 @@ import {
   COMMISSION_TYPE_LABELS, COMMISSION_BASE_LABELS, repDisplayName, nextRepCode, effectiveRule,
 } from '../lib/repCommission';
 import { printHtmlReport } from '../lib/print';
+import './Representatives.css';
 
 type RepSale = {
   id: string; sale_number: string; total: number; discount: number; status: string;
@@ -25,10 +27,13 @@ type RepSale = {
 
 type Tab = 'list' | 'stats';
 
+const formatPeriodDate = (date: string) => formatDate(new Date(`${date}T12:00:00`));
+
 export function Representatives() {
   const { tenant, sites, profile } = useApp();
   const { can } = usePermissions();
   const { success, error } = useToast();
+  const formId = useId();
 
   const [tab, setTab] = useState<Tab>('list');
   const [loading, setLoading] = useState(true);
@@ -49,6 +54,7 @@ export function Representatives() {
     commission_rate: '', commission_fixed: '',
   });
   const [toDelete, setToDelete] = useState<SalesRepresentative | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Stats filters
   const [statRep, setStatRep] = useState('');
@@ -60,6 +66,9 @@ export function Representatives() {
 
   const canManage = can('rep_manage');
   const canSeeCommission = can('rep_commission_view');
+  const canViewStatistics = can('rep_stats_view');
+  const canExport = can('rep_export');
+  const activeTab = canViewStatistics ? tab : 'list';
 
   const load = async (silent = false) => {
     if (!tenant) return;
@@ -198,15 +207,27 @@ export function Representatives() {
   };
 
   const deleteRep = async () => {
-    if (!toDelete || !canManage) return;
+    if (!toDelete || !canManage || deleting) return;
     const used = repSales.some(s => s.representative_id === toDelete.id);
-    if (used) { error('Suppression impossible : ce représentant est lié à des ventes. Désactivez-le plutôt.'); setToDelete(null); return; }
-    const { error: e } = await supabase.from('sales_representatives').delete().eq('id', toDelete.id);
-    if (e) { error('Suppression impossible : ce représentant est lié à des documents.'); setToDelete(null); return; }
-    await logAudit('rep_deleted', toDelete.id, toDelete, null);
-    success('Représentant supprimé');
-    setToDelete(null);
-    load();
+    if (used) {
+      error('Ce représentant est lié à des ventes. Vous pouvez le désactiver.');
+      setToDelete(null);
+      return;
+    }
+    setDeleting(true);
+    try {
+      const { error: e } = await supabase.from('sales_representatives').delete().eq('id', toDelete.id);
+      if (e) {
+        error('Suppression impossible : ce représentant est lié à des documents.');
+        return;
+      }
+      await logAudit('rep_deleted', toDelete.id, toDelete, null);
+      success('Représentant supprimé');
+      load();
+    } finally {
+      setDeleting(false);
+      setToDelete(null);
+    }
   };
 
   // ── Stats ─────────────────────────────────────────────────────
@@ -298,352 +319,355 @@ export function Representatives() {
   };
 
   if (!can('rep_view')) {
-    return <div className="py-16 text-center text-sm text-slate-500">Vous n'avez pas accès à cette page.</div>;
+    return <p className="py-10 text-center text-sm text-[var(--w-text-sec)]">Vous n’avez pas accès à cette page.</p>;
   }
 
   const kpis = [
     { label: 'Ventes', value: String(kpi.count) },
-    { label: 'CA total', value: formatFCFA(kpi.ca) },
+    { label: 'Chiffre d’affaires', value: formatFCFA(kpi.ca) },
     { label: 'Remises', value: formatFCFA(kpi.remises) },
     { label: 'Panier moyen', value: formatFCFA(Math.round(kpi.panier)) },
     { label: 'Clients', value: String(kpi.clients) },
-    ...(canSeeCommission ? [{ label: 'Commission', value: formatFCFA(kpi.commission) }] : []),
+    ...(canSeeCommission ? [{ label: 'Commissions', value: formatFCFA(kpi.commission) }] : []),
   ];
 
+  const dateSummary = statFrom && statFrom !== statTo && statTo
+    ? `${formatPeriodDate(statFrom)} au ${formatPeriodDate(statTo)}`
+    : statFrom ? formatPeriodDate(statFrom) : '';
+  const statsSummary = [
+    dateSummary,
+    statRep ? repName(statRep) : '',
+    statSite ? siteName(statSite) : '',
+    statStatus === 'active' ? 'Ventes actives' : statStatus === 'cancelled' ? 'Ventes annulées' : '',
+  ].filter(Boolean).join(' · ');
+
+  const closeForm = () => { if (!saving) setFormOpen(false); };
+  const closeDelete = () => { if (!deleting) setToDelete(null); };
+  const hasRowActions = canViewStatistics || canManage;
+
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
-        <div className="flex items-start justify-between">
-          <h1 className="text-lg font-bold text-neutral-900 leading-tight">Représentants</h1>
+    <div className="rep-page">
+      <header className="rep-header">
+        <div className="rep-header-top">
+          <h1>Représentants</h1>
           {canManage && (
-            <button onClick={openCreate} className="shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all" title="Nouveau représentant">
-              <Plus className="w-3.5 h-3.5 text-white" />
+            <button type="button" onClick={openCreate} className="btn-primary rep-button" aria-label="Nouveau représentant">
+              <Plus size={16} aria-hidden="true" />
+              Nouveau
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par code, prénom, nom…"
-              className="w-input-ul w-full text-sm py-1.5" />
-          </div>
-          {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
-          {tab === 'stats' && can('rep_export') && (
-            <>
-              <button onClick={printReport} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition" title="Imprimer">
-                <Printer className="w-4 h-4" />
-              </button>
-              <button onClick={exportExcel} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition" title="Export Excel">
-                <Download className="w-4 h-4" />
-              </button>
-            </>
-          )}
-          {tab === 'stats' && (
-            <button onClick={() => setFiltersOpen(true)} className={`shrink-0 p-1.5 transition ${activeFilterCount > 0 ? 'text-brand-700' : 'text-neutral-400 hover:text-neutral-600'}`} title="Filtres">
-              <Filter className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-        {/* Tabs */}
-        <div className="flex items-center gap-3 text-[11px] font-semibold">
-          <button onClick={() => setTab('list')} className={`shrink-0 py-1 transition-all ${tab === 'list' ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>Liste</button>
-          {can('rep_stats_view') && (
-            <button onClick={() => setTab('stats')} className={`shrink-0 py-1 transition-all ${tab === 'stats' ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>Statistiques</button>
-          )}
-        </div>
-      </div>
+        {canViewStatistics && (
+          <nav className="rep-tabs" aria-label="Représentants">
+            <button type="button" aria-pressed={activeTab === 'list'} onClick={() => setTab('list')}>Liste</button>
+            <button type="button" aria-pressed={activeTab === 'stats'} onClick={() => setTab('stats')}>Statistiques</button>
+          </nav>
+        )}
+      </header>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-neutral-300" /></div>
-      ) : tab === 'list' ? (
-        <>
-          {!settings.enabled && (
-            <div className="text-[12px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2.5">
-              Les commissions sont désactivées. Activez-les dans <strong>Paramètres → Représentants & commissions</strong>.
-            </div>
+      {activeTab === 'list' ? (
+        <section className="rep-section" aria-label="Liste des représentants">
+          <PageSearch value={search} onChange={setSearch} placeholder="Rechercher par code ou nom…" />
+          {!settings.enabled && !loading && (
+            <p className="rep-note">Commissions désactivées dans Paramètres → Représentants et commissions.</p>
           )}
-          {filteredReps.length === 0 ? (
-            <EmptyState icon={Users} title="Aucun représentant" description="Créez votre premier représentant commercial." />
+          {loading ? (
+            <div className="rep-loading" role="status"><Loader2 size={16} className="animate-spin" /> Chargement des représentants…</div>
+          ) : filteredReps.length === 0 ? (
+            <EmptyState icon={Users} title={search.trim() ? 'Aucun résultat' : 'Aucun représentant'}
+              description={search.trim() ? 'Essayez un autre code ou nom.' : undefined} />
           ) : (
-            <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="bg-neutral-50 text-left text-[11px] uppercase tracking-wider text-neutral-400 border-b border-neutral-100">
-                      <th className="px-4 py-3 font-semibold">Code</th>
-                      <th className="px-4 py-3 font-semibold">Prénom</th>
-                      <th className="px-4 py-3 font-semibold">Nom</th>
-                      <th className="px-4 py-3 font-semibold text-right">Ventes</th>
-                      <th className="px-4 py-3 font-semibold text-right">CA généré</th>
-                      {canSeeCommission && <th className="px-4 py-3 font-semibold text-right">Commission</th>}
-                      <th className="px-4 py-3 font-semibold">Règle</th>
-                      <th className="px-4 py-3 font-semibold">Statut</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--w-separator-l)]">
-                    {filteredReps.map(r => {
-                      const a = aggByRep.get(r.id) || { count: 0, ca: 0, commission: 0, cancelled: 0 };
-                      const rule = effectiveRule(r, settings);
-                      return (
-                        <tr key={r.id} className="hover:bg-neutral-50/60 transition-colors">
-                          <td className="px-4 py-3 font-bold text-neutral-900 num">{r.code}</td>
-                          <td className="px-4 py-3 text-neutral-800">{r.first_name}</td>
-                          <td className="px-4 py-3 text-neutral-800">{r.last_name}</td>
-                          <td className="px-4 py-3 text-right num font-semibold">{a.count}</td>
-                          <td className="px-4 py-3 text-right num font-semibold">{formatFCFA(a.ca)}</td>
-                          {canSeeCommission && <td className="px-4 py-3 text-right num font-semibold text-emerald-700">{formatFCFA(a.commission)}</td>}
-                          <td className="px-4 py-3">
-                            <span className="inline-flex items-center gap-1 text-[11px] text-neutral-600">
-                              <BadgePercent className="w-3 h-3 text-neutral-400" />
-                              {r.commission_override
-                                ? (rule.commission_type === 'fixe' ? `${formatFCFA(rule.fixed_amount)} / vente` : `${rule.rate}% ${rule.commission_type === 'pct_marge' ? 'marge' : COMMISSION_BASE_LABELS[rule.commission_base]}`)
-                                : 'Règle globale'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`text-[11px] font-semibold ${r.status === 'actif' ? 'text-emerald-700' : 'text-neutral-400'}`}>
-                              {r.status === 'actif' ? 'Actif' : 'Inactif'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1">
-                              {can('rep_stats_view') && (
-                                <button onClick={() => { setStatRep(r.id); setTab('stats'); }} title="Statistiques"
-                                  className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500 transition-colors"><BarChart3 className="w-4 h-4" /></button>
-                              )}
-                              {canManage && (
-                                <>
-                                  <button onClick={() => openEdit(r)} title="Modifier"
-                                    className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500 transition-colors"><Pencil className="w-4 h-4" /></button>
-                                  <button onClick={() => toggleStatus(r)} title={r.status === 'actif' ? 'Désactiver' : 'Activer'}
-                                    className={`p-1.5 rounded-lg transition-colors ${r.status === 'actif' ? 'hover:bg-amber-50 text-amber-600' : 'hover:bg-emerald-50 text-emerald-600'}`}><Power className="w-4 h-4" /></button>
-                                  {(aggByRep.get(r.id)?.count || 0) === 0 && (aggByRep.get(r.id)?.cancelled || 0) === 0 && (
-                                    <button onClick={() => setToDelete(r)} title="Supprimer"
-                                      className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          {/* KPIs – flat, no borders, label | value separated by a line */}
-          <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap pb-1">
-            {kpis.map((k, i) => (
-              <div key={i} className="shrink-0 flex items-center gap-2">
-                <span className="text-slate-400">{k.label}</span>
-                <span className="w-px h-3 bg-slate-200" />
-                <span className="text-slate-900 num">{k.value}</span>
-              </div>
-            ))}
-          </div>
-
-          {kpi.cancelled > 0 && (
-            <div className="text-[12px] bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2">
-              {kpi.cancelled} vente(s) annulée(s) sur la période pour un total de {formatFCFA(kpi.cancelledTotal)} — exclues des indicateurs ci-dessus.
-            </div>
-          )}
-
-          {/* Detail table */}
-          {statSales.length === 0 ? (
-            <EmptyState icon={BarChart3} title="Aucune vente" description="Aucune vente avec représentant sur cette période." />
-          ) : (
-            <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="bg-neutral-50 text-left text-[11px] uppercase tracking-wider text-neutral-400 border-b border-neutral-100">
-                      <th className="px-4 py-3 font-semibold">N° document</th>
-                      <th className="px-4 py-3 font-semibold">Date</th>
-                      <th className="px-4 py-3 font-semibold">Représentant</th>
-                      <th className="px-4 py-3 font-semibold">Client</th>
-                      <th className="px-4 py-3 font-semibold">Magasin</th>
-                      <th className="px-4 py-3 font-semibold text-right">Montant</th>
-                      {canSeeCommission && <th className="px-4 py-3 font-semibold text-right">Commission</th>}
-                      <th className="px-4 py-3 font-semibold">Statut</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--w-separator-l)]">
-                    {statSales.slice(0, 300).map(s => (
-                      <tr key={s.id} className={`hover:bg-neutral-50/60 transition-colors ${s.status === 'cancelled' ? 'opacity-60' : ''}`}>
-                        <td className="px-4 py-2.5 font-semibold text-neutral-900 num">{s.sale_number}</td>
-                        <td className="px-4 py-2.5 text-neutral-500 whitespace-nowrap">{formatDateTime(s.created_at)}</td>
-                        <td className="px-4 py-2.5 text-neutral-800">{repName(s.representative_id)}</td>
-                        <td className="px-4 py-2.5 text-neutral-600">{s.customers?.name || '—'}</td>
-                        <td className="px-4 py-2.5 text-neutral-600">{siteName(s.site_id)}</td>
-                        <td className="px-4 py-2.5 text-right num font-semibold">{formatFCFA(Number(s.total || 0))}</td>
-                        {canSeeCommission && <td className="px-4 py-2.5 text-right num text-teal-700 font-semibold">{formatFCFA(Number(s.rep_commission?.amount || 0))}</td>}
-                        <td className="px-4 py-2.5">
-                          <span className={`text-[11px] font-semibold ${s.status === 'cancelled' ? 'text-red-600' : 'text-emerald-700'}`}>
-                            {s.status === 'cancelled' ? 'Annulée' : 'Active'}
-                          </span>
+            <table className="rep-table" aria-label="Représentants">
+              <thead>
+                <tr>
+                  <th scope="col">Représentant</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col" className="rep-number">Ventes</th>
+                  <th scope="col" className="rep-number">Chiffre d’affaires</th>
+                  {canSeeCommission && <th scope="col" className="rep-number">Commission</th>}
+                  <th scope="col">Règle</th>
+                  {hasRowActions && <th scope="col"><span className="sr-only">Actions</span></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredReps.map(rep => {
+                  const activity = aggByRep.get(rep.id) ?? { count: 0, ca: 0, commission: 0, cancelled: 0 };
+                  const rule = effectiveRule(rep, settings);
+                  const name = `${rep.first_name} ${rep.last_name}`;
+                  const statusAction = rep.status === 'actif' ? 'Désactiver' : 'Activer';
+                  const ruleLabel = !rep.commission_override ? 'Règle globale' : rule.commission_type === 'fixe'
+                    ? `${formatFCFA(rule.fixed_amount)} par vente`
+                    : `${rule.rate} % · ${rule.commission_type === 'pct_marge' ? 'Marge' : COMMISSION_BASE_LABELS[rule.commission_base]}`;
+                  return (
+                    <tr key={rep.id}>
+                      <th scope="row" className="rep-identity">
+                        <span className="rep-row-title">{name}</span>
+                        <span className="rep-row-meta num">{rep.code}</span>
+                      </th>
+                      <td className="rep-status">
+                        <span className={rep.status === 'actif' ? 'rep-status-active' : 'rep-status-muted'}>{rep.status === 'actif' ? 'Actif' : 'Inactif'}</span>
+                      </td>
+                      <td className="rep-number"><span className="rep-cell-label" aria-hidden="true">Ventes</span><span className="num">{activity.count}</span></td>
+                      <td className="rep-number"><span className="rep-cell-label" aria-hidden="true">Chiffre d’affaires</span><span className="num rep-amount">{formatFCFA(activity.ca)}</span></td>
+                      {canSeeCommission && <td className="rep-number"><span className="rep-cell-label" aria-hidden="true">Commission</span><span className="num rep-amount">{formatFCFA(activity.commission)}</span></td>}
+                      <td><span className="rep-cell-label" aria-hidden="true">Règle</span>{ruleLabel}</td>
+                      {hasRowActions && (
+                        <td className="rep-actions">
+                          <div>
+                            {canViewStatistics && (
+                              <button type="button" className="rep-row-action" title="Statistiques" aria-label={`Statistiques de ${name}`}
+                                onClick={() => { setStatRep(rep.id); setTab('stats'); }}>
+                                <BarChart3 size={15} aria-hidden="true" /><span>Statistiques</span>
+                              </button>
+                            )}
+                            {canManage && (
+                              <>
+                                <button type="button" className="rep-row-action" title="Modifier" aria-label={`Modifier ${name}`} onClick={() => openEdit(rep)}>
+                                  <Pencil size={15} aria-hidden="true" /><span>Modifier</span>
+                                </button>
+                                <button type="button" className="rep-row-action" title={statusAction} aria-label={`${statusAction} ${name}`} onClick={() => toggleStatus(rep)}>
+                                  <Power size={15} aria-hidden="true" /><span>{statusAction}</span>
+                                </button>
+                                {activity.count === 0 && activity.cancelled === 0 && (
+                                  <button type="button" className="rep-row-action rep-row-action-danger" title="Supprimer" aria-label={`Supprimer ${name}`} onClick={() => setToDelete(rep)}>
+                                    <Trash2 size={15} aria-hidden="true" /><span>Supprimer</span>
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {statSales.length > 300 && (
-                <div className="px-4 py-2 text-[11px] text-neutral-400 border-t border-neutral-100">300 premières lignes affichées — affinez les filtres ou exportez en Excel.</div>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
+      ) : (
+        <section className="rep-section" aria-label="Statistiques des représentants">
+          <div className="rep-toolbar">
+            <span className="rep-period">{statsSummary || 'Toutes les périodes'}</span>
+            <div className="rep-tools">
+              <button type="button" className="btn-secondary rep-button" onClick={() => setFiltersOpen(true)}>
+                <SlidersHorizontal size={15} aria-hidden="true" />
+                Filtres{activeFilterCount > 0 && <span className="num">({activeFilterCount})</span>}
+              </button>
+              {canExport && (
+                <>
+                  <button type="button" className="btn-secondary rep-button" onClick={printReport}><Printer size={15} aria-hidden="true" />Imprimer</button>
+                  <button type="button" className="btn-secondary rep-button" onClick={exportExcel}><Download size={15} aria-hidden="true" />Excel</button>
+                </>
               )}
             </div>
+          </div>
+          {loading ? (
+            <div className="rep-loading" role="status"><Loader2 size={16} className="animate-spin" /> Chargement des statistiques…</div>
+          ) : (
+            <>
+              <dl className="rep-kpis">
+                {kpis.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd className="num">{value}</dd></div>)}
+              </dl>
+              {kpi.cancelled > 0 && (
+                <p className="rep-note">
+                  {kpi.cancelled === 1 ? '1 vente annulée' : `${kpi.cancelled} ventes annulées`}
+                  {' · '}<span className="num rep-amount">{formatFCFA(kpi.cancelledTotal)}</span>
+                  {' · '}Hors indicateurs
+                </p>
+              )}
+              {statSales.length === 0 ? (
+                <EmptyState icon={BarChart3} title="Aucune vente" description="Aucune vente avec représentant ne correspond aux filtres." />
+              ) : (
+                <>
+                  <table className="rep-table" aria-label="Ventes par représentant">
+                    <thead>
+                      <tr>
+                        <th scope="col">Document</th>
+                        <th scope="col">Statut</th>
+                        <th scope="col">Représentant</th>
+                        <th scope="col">Client</th>
+                        <th scope="col">Magasin</th>
+                        <th scope="col" className="rep-number">Montant</th>
+                        {canSeeCommission && <th scope="col" className="rep-number">Commission</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {statSales.slice(0, 300).map(sale => (
+                        <tr key={sale.id}>
+                          <th scope="row" className="rep-identity">
+                            <span className="rep-row-title num">{sale.sale_number}</span>
+                            <span className="rep-row-meta"><time dateTime={sale.created_at}>{formatDateTime(sale.created_at)}</time></span>
+                          </th>
+                          <td className="rep-status">
+                            <span className={sale.status === 'cancelled' ? 'rep-status-muted' : 'rep-status-active'}>{sale.status === 'cancelled' ? 'Annulée' : 'Active'}</span>
+                          </td>
+                          <td><span className="rep-cell-label" aria-hidden="true">Représentant</span>{repName(sale.representative_id)}</td>
+                          <td><span className="rep-cell-label" aria-hidden="true">Client</span>{sale.customers?.name || '—'}</td>
+                          <td><span className="rep-cell-label" aria-hidden="true">Magasin</span>{siteName(sale.site_id)}</td>
+                          <td className="rep-number"><span className="rep-cell-label" aria-hidden="true">Montant</span><span className="num rep-amount">{formatFCFA(Number(sale.total || 0))}</span></td>
+                          {canSeeCommission && (
+                            <td className="rep-number"><span className="rep-cell-label" aria-hidden="true">Commission</span><span className="num rep-amount">{formatFCFA(Number(sale.rep_commission?.amount || 0))}</span></td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {statSales.length > 300 && <p className="rep-note">Les 300 premières lignes sont affichées. Affinez les filtres{canExport ? ' ou exportez les résultats en Excel' : ''}.</p>}
+                </>
+              )}
+            </>
           )}
-        </>
+        </section>
       )}
 
-      {/* Stats filters – same premium date range picker as Billing */}
       <PremiumDateRangePicker
-        open={filtersOpen}
+        open={activeTab === 'stats' && filtersOpen}
         onClose={() => setFiltersOpen(false)}
         from={statFrom}
         to={statTo}
-        onApply={(f, t) => { setStatFrom(f); setStatTo(t); setFiltersOpen(false); }}
+        onApply={(from, to) => { setStatFrom(from); setStatTo(to); setFiltersOpen(false); }}
         onReset={clearStatFilters}
         extraFilters={
-          <>
-            <div>
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-2"><Filter className="w-3.5 h-3.5" />Représentant</div>
-              <SearchableSelect
-                searchable
-                value={statRep}
-                onChange={setStatRep}
-                placeholder="Tous"
-                options={[{ value: '', label: 'Tous' }, ...reps.map(r => ({ value: r.id, label: repDisplayName(r) }))]}
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-2"><Filter className="w-3.5 h-3.5" />Magasin</div>
-              <SearchableSelect
-                searchable
-                value={statSite}
-                onChange={setStatSite}
-                placeholder="Tous"
-                options={[{ value: '', label: 'Tous' }, ...sites.map(s => ({ value: s.id, label: s.name }))]}
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-2"><Filter className="w-3.5 h-3.5" />Statut</div>
-              <SearchableSelect
-                searchable={false}
-                value={statStatus}
-                onChange={setStatStatus}
-                placeholder="Tous"
-                options={[{ value: '', label: 'Tous' }, { value: 'active', label: 'Actives' }, { value: 'cancelled', label: 'Annulées' }]}
-              />
-            </div>
-          </>
+          <div className="rep-filter-fields">
+            <SearchableSelect
+              label="Représentant"
+              variant="underline"
+              wrapLabels
+              searchable
+              value={statRep}
+              onChange={setStatRep}
+              options={[{ value: '', label: 'Tous les représentants' }, ...reps.map(rep => ({ value: rep.id, label: repDisplayName(rep) }))]}
+            />
+            <SearchableSelect
+              label="Magasin"
+              variant="underline"
+              wrapLabels
+              searchable
+              value={statSite}
+              onChange={setStatSite}
+              options={[{ value: '', label: 'Tous les magasins' }, ...sites.map(site => ({ value: site.id, label: site.name }))]}
+            />
+            <SearchableSelect
+              label="Statut"
+              variant="underline"
+              wrapLabels
+              searchable={false}
+              value={statStatus}
+              onChange={setStatStatus}
+              options={[{ value: '', label: 'Tous les statuts' }, { value: 'active', label: 'Actives' }, { value: 'cancelled', label: 'Annulées' }]}
+            />
+          </div>
         }
       />
 
-      {/* Create / Edit modal – compact, borderless */}
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Modifier le représentant' : 'Nouveau représentant'} size="md"
-        footer={<>
-          <button onClick={() => setFormOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveRep} disabled={saving} className="btn-icon-primary" title={editingId ? 'Enregistrer' : 'Créer'}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          </button>
-        </>}
+      <Modal
+        open={canManage && formOpen}
+        onClose={closeForm}
+        title={editingId ? 'Modifier le représentant' : 'Nouveau représentant'}
+        size="md"
+        variant="flat"
+        layer="top"
+        focusOnOpen
+        panelClassName="rep-sheet"
+        footer={
+          <>
+            <button type="button" onClick={closeForm} disabled={saving} className="btn-secondary rep-button"><X size={15} aria-hidden="true" />Annuler</button>
+            <button type="submit" form={formId} disabled={saving} className="btn-primary rep-button">
+              {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
+              {editingId ? 'Enregistrer' : 'Créer'}
+            </button>
+          </>
+        }
       >
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Code *</label>
-              <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="REP-001" className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5" />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Prénom *</label>
-              <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} placeholder="Awa" className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5" />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Nom *</label>
-              <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} placeholder="Ndiaye" className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5" />
-            </div>
+        <form id={formId} className="rep-form flat-form" onSubmit={event => { event.preventDefault(); void saveRep(); }}>
+          <div className="rep-name-fields">
+            <label className="rep-code-field">
+              <span className="label">Code</span>
+              <input required value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} className="input num" />
+            </label>
+            <label>
+              <span className="label">Prénom</span>
+              <input required value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} className="input" />
+            </label>
+            <label>
+              <span className="label">Nom</span>
+              <input required value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} className="input" />
+            </label>
           </div>
 
+          <label className="rep-check-row">
+            <input type="checkbox" checked={form.status === 'actif'} onChange={e => setForm(f => ({ ...f, status: e.target.checked ? 'actif' : 'inactif' }))} />
+            Représentant actif
+          </label>
+
           {can('rep_settings_edit') && (
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={form.commission_override}
-                  onChange={e => setForm(f => ({ ...f, commission_override: e.target.checked }))}
-                  className="w-3.5 h-3.5" />
-                <span className="text-[12px] font-semibold text-neutral-700">Règle de commission spécifique</span>
+            <>
+              <label className="rep-check-row">
+                <input type="checkbox" checked={form.commission_override} onChange={e => setForm(f => ({ ...f, commission_override: e.target.checked }))} />
+                Règle de commission spécifique
               </label>
               {form.commission_override && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Type</label>
-                      <SearchableSelect
-                        searchable={false}
-                        noBorder
-                        value={form.commission_type}
-                        onChange={v => setForm(f => ({ ...f, commission_type: v as any }))}
-                        options={Object.entries(COMMISSION_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))}
-                      />
-                    </div>
-                    {form.commission_type !== 'fixe' && (
-                      <div>
-                        <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Base</label>
-                        <SearchableSelect
-                          searchable={false}
-                          noBorder
-                          value={form.commission_base}
-                          onChange={v => setForm(f => ({ ...f, commission_base: v as any }))}
-                          options={Object.entries(COMMISSION_BASE_LABELS).map(([v, l]) => ({ value: v, label: l }))}
-                        />
-                      </div>
-                    )}
-                  </div>
+                <div className="rep-commission-fields">
+                  <SearchableSelect
+                    label="Type de commission"
+                    variant="underline"
+                    wrapLabels
+                    searchable={false}
+                    value={form.commission_type}
+                    onChange={value => setForm(f => ({ ...f, commission_type: value as RepCommissionSettings['commission_type'] }))}
+                    options={Object.entries(COMMISSION_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+                  />
+                  {form.commission_type !== 'fixe' && (
+                    <SearchableSelect
+                      label="Base de calcul"
+                      variant="underline"
+                      wrapLabels
+                      searchable={false}
+                      value={form.commission_base}
+                      onChange={value => setForm(f => ({ ...f, commission_base: value as RepCommissionSettings['commission_base'] }))}
+                      options={Object.entries(COMMISSION_BASE_LABELS).map(([value, label]) => ({ value, label }))}
+                    />
+                  )}
                   {form.commission_type === 'fixe' ? (
-                    <div>
-                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Montant (FCFA)</label>
-                      <input type="number" min="0" value={form.commission_fixed} onChange={e => setForm(f => ({ ...f, commission_fixed: e.target.value }))} className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5 num border-b border-neutral-100" />
-                    </div>
+                    <label>
+                      <span className="label">Montant (FCFA)</span>
+                      <input type="number" min="0" step="any" value={form.commission_fixed} onChange={e => setForm(f => ({ ...f, commission_fixed: e.target.value }))} className="input num" />
+                    </label>
                   ) : (
-                    <div>
-                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Taux (%)</label>
-                      <input type="number" min="0" step="0.01" value={form.commission_rate} onChange={e => setForm(f => ({ ...f, commission_rate: e.target.value }))} className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5 num border-b border-neutral-100" />
-                    </div>
+                    <label>
+                      <span className="label">Taux (%)</span>
+                      <input type="number" min="0" step="any" value={form.commission_rate} onChange={e => setForm(f => ({ ...f, commission_rate: e.target.value }))} className="input num" />
+                    </label>
                   )}
                 </div>
               )}
-            </div>
+            </>
           )}
-
-          {/* Status switch – bottom left, black/white */}
-          <div className="flex items-center justify-start pt-2">
-            <button
-              onClick={() => setForm(f => ({ ...f, status: f.status === 'actif' ? 'inactif' : 'actif' }))}
-              className="flex items-center gap-2 group"
-            >
-              <span className={`relative w-10 h-5 rounded-full transition-colors ${form.status === 'actif' ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${form.status === 'actif' ? 'left-5' : 'left-0.5'}`} />
-              </span>
-              <span className="text-[11px] font-semibold text-neutral-500">{form.status === 'actif' ? 'Actif' : 'Inactif'}</span>
-            </button>
-          </div>
-        </div>
+        </form>
       </Modal>
 
-      <ConfirmDialog
-        open={!!toDelete}
-        onClose={() => setToDelete(null)}
-        onConfirm={deleteRep}
+      <Modal
+        open={canManage && Boolean(toDelete)}
+        onClose={closeDelete}
         title="Supprimer le représentant"
-        message={`Supprimer définitivement ${toDelete ? repDisplayName(toDelete) : ''} ? Cette action est impossible si le représentant est lié à des ventes.`}
-        confirmLabel="Supprimer"
-        danger
-      />
+        size="sm"
+        variant="flat"
+        layer="top"
+        focusOnOpen
+        panelClassName="rep-sheet"
+        footer={
+          <>
+            <button type="button" onClick={closeDelete} disabled={deleting} className="btn-secondary rep-button"><X size={15} aria-hidden="true" />Annuler</button>
+            <button type="button" onClick={deleteRep} disabled={deleting} className="btn-danger rep-button">
+              {deleting ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Trash2 size={15} aria-hidden="true" />}
+              Supprimer
+            </button>
+          </>
+        }
+      >
+        <p className="rep-confirm">Supprimer définitivement <strong>{toDelete ? repDisplayName(toDelete) : ''}</strong> ?</p>
+      </Modal>
     </div>
   );
 }

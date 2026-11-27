@@ -399,55 +399,57 @@ export function Coffre() {
   const shownTo = Math.min(from + movements.length, total);
 
   return (
-    <div className="flex flex-col gap-0" style={{ minHeight: 'calc(100vh - 160px)' }}>
+    <div className="flex min-w-0 flex-col" style={{ minHeight: 'calc(100vh - 160px)' }}>
       {/* Header */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6 pt-3 sm:pt-4 lg:pt-6 bg-white shrink-0">
-        <div className="flex items-center gap-3 pb-3 border-b border-neutral-200">
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold tracking-tight text-neutral-900 leading-none">Coffre</h1>
-            <p className="mt-1 text-[11px] sm:text-xs text-neutral-500 truncate">{currentSite?.name || 'Point de vente'}</p>
+      <div className="sm:sticky sm:top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6 pt-3 sm:pt-4 lg:pt-6 bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-[var(--w-separator)] pb-3">
+          <div className="min-w-0 grow">
+            <h1 className="text-lg font-bold leading-tight text-[var(--w-text)]">Coffre</h1>
+            <p className="mt-0.5 break-words text-xs text-[var(--w-text-sec)]">{currentSite?.name || 'Point de vente'}</p>
           </div>
-          <div className="flex-1" />
-          {hasVault && canDeposit && (
-            <button onClick={() => setDepositOpen(true)} className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors">
-              <PlusCircle className="w-4 h-4" /><span className="hidden sm:inline">Dépôt manuel</span>
-            </button>
-          )}
-          {hasVault && canDeposit && (
-            <button onClick={() => setWithdrawOpen(true)} className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors">
-              <MinusCircle className="w-4 h-4" /><span className="hidden sm:inline">Retrait manuel</span>
-            </button>
-          )}
-          {hasVault && can('vault_transfer_to_cash') && (
-            <button onClick={() => setTransferOpen(true)} className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors">
-              <ArrowUpRight className="w-4 h-4" /><span className="hidden md:inline">Transférer vers la caisse</span>
-            </button>
-          )}
-          {hasVault && can('vault_pay_supplier') && (
-            <button onClick={openPay} className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors">
-              <Wallet className="w-4 h-4" /><span className="hidden md:inline">Régler un fournisseur</span>
-            </button>
-          )}
           {hasVault && (
-            <button onClick={handlePrint} disabled={printing} className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors disabled:opacity-40">
-              {printing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-              <span className="hidden sm:inline">Imprimer</span>
-            </button>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {canDeposit && (
+                <>
+                  <button onClick={() => setDepositOpen(true)} className="btn-secondary px-2.5 py-1.5 text-xs">
+                    <PlusCircle className="h-4 w-4" /> Dépôt manuel
+                  </button>
+                  <button onClick={() => setWithdrawOpen(true)} className="btn-secondary px-2.5 py-1.5 text-xs">
+                    <MinusCircle className="h-4 w-4" /> Retrait manuel
+                  </button>
+                </>
+              )}
+              {can('vault_transfer_to_cash') && (
+                <button onClick={() => setTransferOpen(true)} className="btn-secondary px-2.5 py-1.5 text-xs">
+                  <ArrowUpRight className="h-4 w-4" /> Vers la caisse
+                </button>
+              )}
+              {can('vault_pay_supplier') && (
+                <button onClick={openPay} className="btn-secondary px-2.5 py-1.5 text-xs">
+                  <Wallet className="h-4 w-4" /> Régler un fournisseur
+                </button>
+              )}
+              <button onClick={handlePrint} disabled={printing} className="btn-ghost px-2.5 py-1.5 text-xs disabled:opacity-50">
+                {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />} Imprimer
+              </button>
+            </div>
           )}
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4 py-2.5 flex-wrap">
+        <div className="flex flex-wrap items-center gap-1.5 py-2">
           <button
             onClick={() => setPickerOpen(v => !v)}
-            className="flex items-center gap-1.5 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 transition-colors whitespace-nowrap border-b border-transparent hover:border-neutral-300 pb-0.5"
+            aria-expanded={pickerOpen}
+            aria-label={`Période · ${labelRange(range)}`}
+            className="btn-ghost min-w-0 px-2.5 py-1.5 text-xs"
           >
-            <Calendar className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-            <span>{labelRange(range)}</span>
-            <ChevronDown className={`w-3 h-3 text-neutral-400 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
+            <Calendar className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 break-words text-left">{labelRange(range)}</span>
+            <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
           </button>
-          <button onClick={() => load()} className="flex items-center gap-1.5 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 transition-colors">
-            <RefreshCw className="w-3.5 h-3.5 text-neutral-400" /><span className="hidden sm:inline">Actualiser</span>
+          <button onClick={() => load()} className="btn-ghost px-2.5 py-1.5 text-xs">
+            <RefreshCw className="h-4 w-4" /> Actualiser
           </button>
           {loading && (
             <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-neutral-400">
@@ -458,7 +460,7 @@ export function Coffre() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 pt-5 pb-10">
+      <div className="flex-1 min-h-0 min-w-0 pt-5 pb-10">
         {loading && !report ? (
           <ReportSkeleton />
         ) : !hasVault ? (
@@ -470,7 +472,7 @@ export function Coffre() {
             />
             {(can('vault_adjust') || can('access_vault')) && (
               <div className="flex justify-center mt-4">
-                <button onClick={() => setInitOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 border-b border-neutral-300">
+                <button onClick={() => setInitOpen(true)} className="btn-primary text-sm">
                   <PlusCircle className="w-4 h-4" /> Initialiser le coffre
                 </button>
               </div>
@@ -548,15 +550,15 @@ export function Coffre() {
                 </ReportTable>
 
                 {total > PAGE_SIZE && (
-                  <div className="flex items-center justify-between gap-3 pt-3 mt-1 border-t border-neutral-200">
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--w-separator)] pt-3">
                     <span className="text-[11px] text-neutral-400 tabular-nums">{from + 1}–{shownTo} sur {total}</span>
                     <div className="flex items-center gap-1">
                       <button disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 disabled:opacity-30">
+                        className="btn-ghost gap-1 px-2 py-1.5 text-xs disabled:opacity-40">
                         <ChevronLeft className="w-3.5 h-3.5" /> Précédent
                       </button>
                       <button disabled={from + PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 disabled:opacity-30">
+                        className="btn-ghost gap-1 px-2 py-1.5 text-xs disabled:opacity-40">
                         Suivant <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -578,122 +580,122 @@ export function Coffre() {
 
       {/* Init modal */}
       <Modal open={initOpen} onClose={() => setInitOpen(false)} title="Initialiser le coffre" size="sm"
-        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
+        layer="top"
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2 text-sm">
             <button onClick={() => setInitOpen(false)} className="btn-secondary">Annuler</button>
-            <button onClick={submitInit} disabled={busy} className="btn">
+            <button onClick={submitInit} disabled={busy} className="btn-primary">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Initialiser
             </button>
           </div>
         }>
-        <div className="space-y-3 pt-2">
+        <div className="space-y-4">
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Solde initial</label>
-            <input type="number" min={0} value={initAmount} onChange={e => setInitAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
+            <label htmlFor="coffre-initAmount" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Solde initial (FCFA)</label>
+            <input id="coffre-initAmount" type="number" inputMode="numeric" min={0} value={initAmount} onChange={e => setInitAmount(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
           </div>
         </div>
       </Modal>
 
       {/* Manual deposit modal */}
       <Modal open={depositOpen} onClose={() => setDepositOpen(false)} title="Dépôt manuel au coffre" size="sm"
-        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
+        layer="top"
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2 text-sm">
             <button onClick={() => setDepositOpen(false)} className="btn-secondary">Annuler</button>
-            <button onClick={submitDeposit} disabled={busy} className="btn">
+            <button onClick={submitDeposit} disabled={busy} className="btn-primary">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Enregistrer
             </button>
           </div>
         }>
-        <div className="space-y-3 pt-2">
+        <div className="space-y-4">
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
-            <input type="number" min={0} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
+            <label htmlFor="coffre-depositAmount" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Montant (FCFA)</label>
+            <input id="coffre-depositAmount" type="number" inputMode="numeric" min={0} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Date effective</label>
-            <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} className="w-input-ul py-1.5 text-sm" />
+            <label htmlFor="coffre-depositDate" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Date effective</label>
+            <input id="coffre-depositDate" type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm" />
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Provenance / référence (facultatif)</label>
-            <input value={depositRef} onChange={e => setDepositRef(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="Ex. apport propriétaire" />
+            <label htmlFor="coffre-depositRef" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Provenance / référence (facultatif)</label>
+            <input id="coffre-depositRef" value={depositRef} onChange={e => setDepositRef(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm" placeholder="Ex. apport propriétaire" />
           </div>
         </div>
       </Modal>
 
       {/* Transfer modal */}
       <Modal open={transferOpen} onClose={() => setTransferOpen(false)} title="Transférer vers la caisse" size="sm"
-        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
+        layer="top"
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2 text-sm">
             <button onClick={() => setTransferOpen(false)} className="btn-secondary">Annuler</button>
-            <button onClick={submitTransfer} disabled={busy} className="btn">
+            <button onClick={submitTransfer} disabled={busy} className="btn-primary">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Transférer
             </button>
           </div>
         }>
-        <div className="space-y-3 pt-2">
+        <div className="space-y-4">
           <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
-            <input type="number" min={0} value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
+            <label htmlFor="coffre-transferAmount" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Montant (FCFA)</label>
+            <input id="coffre-transferAmount" type="number" inputMode="numeric" min={0} value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
-            <input value={transferRef} onChange={e => setTransferRef(e.target.value)} className="w-input-ul py-1.5 text-sm" />
+            <label htmlFor="coffre-transferRef" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Référence (facultatif)</label>
+            <input id="coffre-transferRef" value={transferRef} onChange={e => setTransferRef(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm" />
           </div>
         </div>
       </Modal>
 
       {/* Manual withdrawal modal */}
       <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Retrait manuel du coffre" size="sm"
-        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
+        layer="top"
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2 text-sm">
             <button onClick={() => setWithdrawOpen(false)} className="btn-secondary">Annuler</button>
-            <button onClick={submitWithdraw} disabled={busy} className="btn">
+            <button onClick={submitWithdraw} disabled={busy} className="btn-primary">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Enregistrer
             </button>
           </div>
         }>
-        <div className="space-y-3 pt-2">
+        <div className="space-y-4">
           <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
-            <input type="number" min={0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
+            <label htmlFor="coffre-withdrawAmount" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Montant (FCFA)</label>
+            <input id="coffre-withdrawAmount" type="number" inputMode="numeric" min={0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Date effective</label>
-            <input type="date" value={withdrawDate} onChange={e => setWithdrawDate(e.target.value)} className="w-input-ul py-1.5 text-sm" />
+            <label htmlFor="coffre-withdrawDate" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Date effective</label>
+            <input id="coffre-withdrawDate" type="date" value={withdrawDate} onChange={e => setWithdrawDate(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm" />
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Motif ou destination</label>
-            <input value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="Ex. dépôt à la banque" />
+            <label htmlFor="coffre-withdrawReason" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Motif ou destination</label>
+            <input id="coffre-withdrawReason" value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm" placeholder="Ex. dépôt à la banque" />
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
-            <input value={withdrawRef} onChange={e => setWithdrawRef(e.target.value)} className="w-input-ul py-1.5 text-sm" />
+            <label htmlFor="coffre-withdrawRef" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Référence (facultatif)</label>
+            <input id="coffre-withdrawRef" value={withdrawRef} onChange={e => setWithdrawRef(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm" />
           </div>
         </div>
       </Modal>
 
       {/* Supplier payment modal */}
       <Modal open={payOpen} onClose={() => setPayOpen(false)} title="Régler un fournisseur depuis le coffre" size="sm"
-        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
+        layer="top"
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2 text-sm">
             <button onClick={() => setPayOpen(false)} className="btn-secondary">Annuler</button>
-            <button onClick={submitPay} disabled={busy} className="btn">
+            <button onClick={submitPay} disabled={busy} className="btn-primary">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Régler
             </button>
           </div>
         }>
-        <div className="space-y-3 pt-2">
+        <div className="space-y-4">
           <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Fournisseur</label>
-            <select value={paySupplier} onChange={e => setPaySupplier(e.target.value)} className="w-input-ul py-1.5 text-sm">
+            <label htmlFor="coffre-paySupplier" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Fournisseur</label>
+            <select id="coffre-paySupplier" value={paySupplier} onChange={e => setPaySupplier(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm">
               <option value="">Sélectionner…</option>
               {suppliers.map(s => (
                 <option key={s.id} value={s.id}>{s.name}{s.balance ? ` — ${formatFCFA(s.balance)}` : ''}</option>
@@ -701,18 +703,18 @@ export function Coffre() {
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Mode de paiement</label>
-            <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="w-input-ul py-1.5 text-sm">
+            <label htmlFor="coffre-payMethod" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Mode de paiement</label>
+            <select id="coffre-payMethod" value={payMethod} onChange={e => setPayMethod(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm">
               {methods.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
-            <input type="number" min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
+            <label htmlFor="coffre-payAmount" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Montant (FCFA)</label>
+            <input id="coffre-payAmount" type="number" inputMode="numeric" min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
-            <input value={payRef} onChange={e => setPayRef(e.target.value)} className="w-input-ul py-1.5 text-sm" />
+            <label htmlFor="coffre-payRef" className="mb-1 block text-xs font-medium text-[var(--w-text-sec)]">Référence (facultatif)</label>
+            <input id="coffre-payRef" value={payRef} onChange={e => setPayRef(e.target.value)} className="w-input-ul min-w-0 py-2 text-sm" />
           </div>
         </div>
       </Modal>

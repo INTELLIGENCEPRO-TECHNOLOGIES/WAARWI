@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useCallback, useReducer } from 'react';
 import { Minus, Maximize2, Minimize2, X, LayoutGrid } from 'lucide-react';
 import { useWindowManager } from '../context/WindowManagerContext';
+import './window-surfaces.css';
 
 type Props = {
   id: string;
@@ -132,7 +133,7 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
 
   const { x, y, w, h } = maximized ? getArea() : win.rect;
 
-  const edgeCls = 'absolute z-10';
+  const edgeCls = 'waarwi-window-move absolute z-10';
   const cornerSize = 12;
   const edgeThick = 5;
 
@@ -141,65 +142,66 @@ export function DesktopWindow({ id, title, icon, children, onClose, initialRect,
       ref={containerRef}
       role="region"
       aria-label={title}
-      data-active={contained?active:undefined}
-      className={`${contained?'absolute acc-work-window':'fixed shadow-2xl'} flex flex-col bg-[var(--w-surface)] border border-[var(--w-separator)] overflow-hidden`}
+      data-active={contained ? active : win.zIndex === Math.max(...windows.filter(w => !w.minimized).map(w => w.zIndex))}
+      data-maximized={maximized}
+      className={`waarwi-window-surface waarwi-desktop-window ${contained ? 'absolute acc-work-window' : 'fixed'}`}
       style={{
         left: x, top: y, width: w, height: h,
         zIndex: win.zIndex,
-        borderRadius: contained||maximized ? 0 : 10,
+        borderRadius: contained || maximized ? 0 : 8,
         display: win.minimized ? 'none' : undefined,
       }}
       onPointerDown={e => {if(contained&&(e.target as HTMLElement).closest('[data-acc-window-control]'))return;focus(id);onActivate?.();}}
     >
       {/* Title bar */}
       <div
-        className="flex items-center gap-2 px-3 bg-[var(--w-surface-el)] border-b border-[var(--w-separator)] select-none shrink-0 cursor-grab active:cursor-grabbing"
+        className="waarwi-window-bar waarwi-window-move select-none cursor-grab active:cursor-grabbing"
         style={{ height: contained?32:HEADER_H }}
         onPointerDown={onPointerDownHeader}
         onPointerMove={onPointerMoveHeader}
-        onPointerUp={onPointerUpHeader} onPointerCancel={onPointerUpHeader}
+        onPointerUp={onPointerUpHeader} onPointerCancel={onPointerUpHeader} onLostPointerCapture={onPointerUpHeader}
         onDoubleClick={e => { if (!(e.target as HTMLElement).closest('button')) toggleMaximize(); }}
       >
         {icon && <span className="text-[var(--w-text-muted)] flex-shrink-0 [&>svg]:w-4 [&>svg]:h-4">{icon}</span>}
-        <span className="text-sm font-semibold text-[var(--w-text)] truncate flex-1">{title}</span>
+        <span className="waarwi-window-title" title={title}>{title}</span>
         {!contained && windows.filter(w => !w.minimized).length >= 2 && (
-          <button data-acc-window-control={contained?true:undefined} onClick={tileVisibleWindows} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors acc-tile-control" title="Répartir les fenêtres">
+          <button type="button" onClick={tileVisibleWindows} className="waarwi-window-button acc-tile-control" aria-label="Répartir les fenêtres" title="Répartir les fenêtres">
             <LayoutGrid className="w-3.5 h-3.5" />
           </button>
         )}
-        <button data-acc-window-control={contained?true:undefined} onClick={() => onMinimize?onMinimize():minimize(id)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" aria-label="Réduire" title="Réduire">
+        <button type="button" data-acc-window-control={contained?true:undefined} onClick={() => onMinimize?onMinimize():minimize(id)} className="waarwi-window-button" aria-label="Réduire" title="Réduire">
           <Minus className="w-3.5 h-3.5" />
         </button>
-        <button data-acc-window-control={contained?true:undefined} onClick={toggleMaximize} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors" aria-label={maximized ? 'Restaurer' : 'Agrandir'} title={maximized ? 'Restaurer' : 'Agrandir'}>
+        <button type="button" data-acc-window-control={contained?true:undefined} onClick={toggleMaximize} className="waarwi-window-button" aria-label={maximized ? 'Restaurer' : 'Agrandir'} title={maximized ? 'Restaurer' : 'Agrandir'}>
           {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
         </button>
-        <button data-acc-window-control={contained?true:undefined} onClick={onClose} className="p-1 rounded hover:bg-red-500/20 text-[var(--w-text-muted)] hover:text-red-500 transition-colors" aria-label="Fermer" title="Fermer">
+        <button type="button" data-acc-window-control={contained?true:undefined} onClick={onClose} className="waarwi-window-button" aria-label="Fermer" title="Fermer">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
+      <div className="flex-1 min-h-0 min-w-0 overflow-hidden">{children}</div>
 
       {/* Resize edges (hidden when maximized) */}
       {!maximized && <>
-        <div className={`${edgeCls} top-0 left-[${cornerSize}px] right-[${cornerSize}px] cursor-n-resize`} style={{ height: edgeThick, left: cornerSize, right: cornerSize }}
-          onPointerDown={e => onResizePointerDown('n', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
+        <div className={`${edgeCls} top-0 cursor-n-resize`} style={{ height: edgeThick, left: cornerSize, right: cornerSize }}
+          onPointerDown={e => onResizePointerDown('n', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} onLostPointerCapture={onResizePointerUp} />
         <div className={`${edgeCls} bottom-0 cursor-s-resize`} style={{ height: edgeThick, left: cornerSize, right: cornerSize }}
-          onPointerDown={e => onResizePointerDown('s', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
-        <div className={`${edgeCls} left-0 top-[${cornerSize}px] bottom-[${cornerSize}px] cursor-w-resize`} style={{ width: edgeThick, top: cornerSize, bottom: cornerSize }}
-          onPointerDown={e => onResizePointerDown('w', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('s', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} onLostPointerCapture={onResizePointerUp} />
+        <div className={`${edgeCls} left-0 cursor-w-resize`} style={{ width: edgeThick, top: cornerSize, bottom: cornerSize }}
+          onPointerDown={e => onResizePointerDown('w', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} onLostPointerCapture={onResizePointerUp} />
         <div className={`${edgeCls} right-0 cursor-e-resize`} style={{ width: edgeThick, top: cornerSize, bottom: cornerSize }}
-          onPointerDown={e => onResizePointerDown('e', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('e', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} onLostPointerCapture={onResizePointerUp} />
         {/* Corners */}
         <div className={`${edgeCls} top-0 left-0 cursor-nw-resize`} style={{ width: cornerSize, height: cornerSize }}
-          onPointerDown={e => onResizePointerDown('nw', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('nw', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} onLostPointerCapture={onResizePointerUp} />
         <div className={`${edgeCls} top-0 right-0 cursor-ne-resize`} style={{ width: cornerSize, height: cornerSize }}
-          onPointerDown={e => onResizePointerDown('ne', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('ne', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} onLostPointerCapture={onResizePointerUp} />
         <div className={`${edgeCls} bottom-0 left-0 cursor-sw-resize`} style={{ width: cornerSize, height: cornerSize }}
-          onPointerDown={e => onResizePointerDown('sw', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('sw', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} onLostPointerCapture={onResizePointerUp} />
         <div className={`${edgeCls} bottom-0 right-0 cursor-se-resize`} style={{ width: cornerSize, height: cornerSize }}
-          onPointerDown={e => onResizePointerDown('se', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} />
+          onPointerDown={e => onResizePointerDown('se', e)} onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp} onPointerCancel={onResizePointerUp} onLostPointerCapture={onResizePointerUp} />
       </>}
     </div>
   );
@@ -227,17 +229,19 @@ export function WindowTaskbar({ onBeforeRestore, activeSiteId }: { onBeforeResto
   if (minimized.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-10 bg-[var(--w-surface-el)]/95 backdrop-blur-md border-t border-[var(--w-separator)] flex items-center gap-1 px-2 z-[9999]">
+    <nav aria-label="Fenêtres réduites" className="waarwi-window-taskbar fixed inset-x-0 bottom-0 z-[9999] h-10">
       {minimized.map(w => (
         <button
           key={w.id}
+          type="button"
+          title={w.title}
           onClick={() => { onBeforeRestore?.(w.id); restore(w.id); focus(w.id); }}
-          className="flex items-center gap-1.5 px-3 h-7 rounded-md bg-[var(--w-hover)] hover:bg-[var(--w-active)] text-xs font-medium text-[var(--w-text)] transition-colors truncate max-w-[200px]"
+          className="waarwi-window-task"
         >
           {w.icon && <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 text-[var(--w-text-muted)]">{w.icon}</span>}
           <span className="truncate">{w.title}</span>
         </button>
       ))}
-    </div>
+    </nav>
   );
 }

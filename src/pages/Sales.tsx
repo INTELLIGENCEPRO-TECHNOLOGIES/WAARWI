@@ -1,7 +1,7 @@
 import type { VatAmounts } from '../lib/salesVat';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Calculator, Loader2, Plus, X, Calendar, Filter, Check, Pencil, Trash2, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, Ban, Wallet, RotateCcw } from 'lucide-react';
+import { Calculator, Loader2, Plus, X, Calendar, Filter, Check, Pencil, Trash2, ChevronLeft, ChevronRight, RefreshCw, Wallet, RotateCcw } from 'lucide-react';
 import { PageSearch } from '../components/PageSearch';
 import { supabase } from '../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
@@ -14,7 +14,6 @@ import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
-import { createPortal } from 'react-dom';
 import { DocSectionTitle } from '../components/DocLayout';
 import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
 import { DocumentEditor, type DocLineItem, type DocHeaderForm, type DocPaymentLine } from '../components/DocumentEditor';
@@ -586,20 +585,21 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const pageStart = page * PAGE_SIZE + 1;
   const pageEnd = Math.min((page + 1) * PAGE_SIZE, totalCount);
+  const canGoNext = hasMore && page + 1 < totalPages && !refreshing;
 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Page Header ───────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)]">
 
         {/* Row 1: Title */}
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Journal des ventes</h1>
 
         {/* Row 2: Stats */}
-        <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium">
           <span className="shrink-0 text-neutral-500 num">{totalCount} vente{totalCount > 1 ? 's' : ''}</span>
-          <span className="shrink-0 text-neutral-700 num">Total · {formatFCFA(serverTotals.sum_total)}</span>
-          <span className="shrink-0 text-neutral-700 num">Encaissé · {formatFCFA(serverTotals.sum_paid)}</span>
+          <span className="shrink-0 whitespace-nowrap text-neutral-700 num">Total · {formatFCFA(serverTotals.sum_total)}</span>
+          <span className="shrink-0 whitespace-nowrap text-neutral-700 num">Encaissé · {formatFCFA(serverTotals.sum_paid)}</span>
           {refreshing && <RefreshCw className="w-3 h-3 animate-spin text-neutral-400 shrink-0" />}
           {hasFilters && (
             <button
@@ -620,12 +620,13 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             <button
               onClick={() => setFiltersOpen(true)}
               className={`shrink-0 inline-flex items-center gap-1.5 pl-2 text-[12px] font-semibold transition-colors ${
-                activeFilterCount > 0 ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
+                activeFilterCount > 0 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-sec)] hover:text-[var(--w-text)]'
               }`}
               title="Filtres"
             >
               <Filter className="w-4 h-4" />
-              {activeFilterCount > 0 && <span className="num">{activeFilterCount}</span>}
+              <span>Filtres</span>
+              {activeFilterCount > 0 && <span className="num">({activeFilterCount})</span>}
             </button>
           }
         />
@@ -641,7 +642,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       ) : (
         <>
           {/* ── MOBILE: list ──────────────────────────────── */}
-          <div className="md:hidden count-up">
+          <div className="divide-y-0 lg:hidden">
             {sales.map(s => {
               const st = statusStyles(s.status, s);
               const payMethods = (s.sale_payments || []).map(p => p.method_name).join(', ');
@@ -650,23 +651,22 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                   key={s.id}
                   data-row-id={s.id}
                   onClick={() => openDetail(s)}
-                  className="w-full text-left px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors group active:scale-[0.995]"
+                  className="w-tr-hover w-full border-b border-[var(--w-separator-l)] px-2 py-3 text-left transition-colors"
                 >
-                  {/* Line 1: customer only */}
-                  <div className="text-xs font-medium text-neutral-700 truncate">{s.customers?.name || 'Client comptoir'}</div>
-                  {/* Line 2: invoice#, status, date */}
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{s.sale_number}</span>
-                    <span className={`text-[10px] font-semibold ${st.textColor} shrink-0`}>{st.label}</span>
-                    {s.accounting_status === 'accounted' && <span className="text-[9px] font-bold text-neutral-500 shrink-0">C</span>}
-                    <span className="text-xs text-neutral-400 shrink-0 num">{formatDateTime(s.created_at)}</span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="break-words text-sm font-semibold text-[var(--w-text)]">{s.customers?.name || 'Client comptoir'}</div>
+                      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-[var(--w-text-sec)]">
+                        <span className="doc-number break-all font-semibold">{s.sale_number}</span>
+                        <span className="num">{formatDateTime(s.created_at)}</span>
+                      </div>
+                    </div>
+                    <span className="num shrink-0 whitespace-nowrap text-sm font-semibold text-[var(--w-text)]">{formatFCFA(s.total)}</span>
                   </div>
-                  {/* Line 3: payment methods + amount */}
-                  <div className="flex items-center gap-1 mt-1.5">
-                    {payMethods && <span className="text-[10px] text-neutral-400 truncate max-w-[120px] shrink-0">{payMethods}</span>}
-                    <div className="flex-1" />
-                    <div className="w-px h-5 bg-neutral-200 mx-1" />
-                    <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(s.total)}</span>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                    <span className={st.textColor}>{st.label}</span>
+                    {s.accounting_status === 'accounted' && <span className="text-[var(--w-text-sec)]">Comptabilisée</span>}
+                    {payMethods && <span className="text-[var(--w-text-sec)]">{payMethods}</span>}
                   </div>
                 </button>
               );
@@ -674,9 +674,9 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           </div>
 
           {/* ── DESKTOP: table ─────────────────────────────────── */}
-          <div className="hidden md:block">
+          <div className="hidden lg:block">
             <table className="w-full text-sm">
-              <thead className="text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-slate-200">
+              <thead className="w-thead border-b border-[var(--w-separator)] text-xs font-semibold">
                 <tr>
                   <th className="px-4 py-2.5 text-left whitespace-nowrap">N° Vente</th>
                   <th className="px-4 py-2.5 text-left whitespace-nowrap">Date</th>
@@ -691,16 +691,16 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                 {sales.map(s => {
                   const st = statusStyles(s.status, s);
                   return (
-                    <tr key={s.id} data-row-id={s.id} className={`border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors cursor-pointer ${highlightId === s.id ? 'waarwi-flash' : ''}`} onClick={() => openDetail(s)}>
+                    <tr key={s.id} data-row-id={s.id} className={`w-tr-hover border-b border-[var(--w-separator-l)] transition-colors cursor-pointer ${highlightId === s.id ? 'waarwi-flash' : ''}`} onClick={() => openDetail(s)}>
                       <td className="px-4 py-1.5 doc-number text-[12px] font-bold text-neutral-700 whitespace-nowrap">{s.sale_number}</td>
                       <td className="px-4 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{formatDateTime(s.created_at)}</td>
-                      <td className="px-4 py-1.5 text-[12px] text-neutral-700 whitespace-nowrap">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
+                      <td className="px-4 py-1.5 text-[12px] text-neutral-700 break-words">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
                       <td className="px-4 py-1.5 text-center">
-                        <span className={`text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${st.textColor}`}>{st.label}</span>
+                        <span className={`text-xs font-medium whitespace-nowrap ${st.textColor}`}>{st.label}</span>
                       </td>
                       <td className="px-4 py-1.5 text-center hidden lg:table-cell">
                         {s.accounting_status === 'accounted' ? (
-                          <span className="text-[9px] font-bold text-neutral-600">OK</span>
+                          <span className="text-xs text-[var(--w-text-sec)]">Comptabilisée</span>
                         ) : (
                           <span className="text-[9px] text-neutral-300">—</span>
                         )}
@@ -709,7 +709,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                       <td className="px-4 py-1.5 text-right">
                         <button
                           onClick={(e) => { e.stopPropagation(); openDetail(s); }}
-                          className="text-[10px] font-semibold text-neutral-500 hover:text-brand-700 transition-colors"
+                          className="btn-ghost text-xs"
                           title="Voir détail"
                         >
                           Voir
@@ -724,22 +724,18 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
           {/* ── Pagination ───────────────────────────────────────── */}
           {totalCount > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-4 py-3 mt-3">
-              <div className="text-xs text-slate-500">
-                {pageStart}–{pageEnd} sur {totalCount}
-              </div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
-                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
-                  <ChevronLeft className="w-3.5 h-3.5" />
+            <nav aria-label="Pagination des ventes" className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--w-separator)] px-2 py-3">
+              <p className="num text-xs text-[var(--w-text-sec)]">{pageStart}–{pageEnd} sur {totalCount}</p>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0 || refreshing} className="btn-icon" aria-label="Page précédente">
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="px-3 py-1 rounded-lg text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200">{page + 1} / {totalPages}</span>
-                <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
-                  <ChevronRight className="w-3.5 h-3.5" />
+                <span className="num whitespace-nowrap text-xs text-[var(--w-text-sec)]">{page + 1} / {totalPages}</span>
+                <button onClick={() => setPage(p => p + 1)} disabled={!canGoNext} className="btn-icon" aria-label="Page suivante">
+                  <ChevronRight className="h-4 w-4" />
                 </button>
-                <button onClick={() => setPage(totalPages - 1)} disabled={!hasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
               </div>
-            </div>
+            </nav>
           )}
         </>
       )}
@@ -747,14 +743,14 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       {/* ── Filters Modal ────────────────────────────────────────── */}
       <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtres" size="sm"
         footer={<>
-          <button onClick={clearFilters} className="text-sm font-semibold text-neutral-500 hover:text-neutral-900 transition-colors px-2 py-1.5">Annuler</button>
-          <button onClick={() => setFiltersOpen(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-800 transition-colors active:scale-95">Appliquer</button>
+          <button onClick={clearFilters} className="btn-secondary text-xs">Réinitialiser</button>
+          <button onClick={() => setFiltersOpen(false)} className="btn-primary text-xs"><Check className="h-4 w-4" />Appliquer</button>
         </>}
       >
-        <div className="divide-y divide-neutral-100">
+        <div className="divide-y divide-[var(--w-separator)]">
           {/* Période */}
           <div className="pb-5">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[var(--w-text)]">
               <Calendar className="w-3.5 h-3.5 text-neutral-900" />Période
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -764,12 +760,10 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                   <button
                     key={o.value}
                     onClick={() => { setDateRange(o.value); if (o.value === 'custom') setPickerOpen(true); }}
-                    className={`relative py-2 text-sm font-semibold text-left transition-colors ${
-                      active ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-700'
-                    }`}
+                    aria-pressed={active}
+                    className={`w-option rounded-md px-2 py-2 text-left text-sm ${active ? 'w-option-selected font-semibold' : ''}`}
                   >
                     {o.label}
-                    {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900 rounded-full" />}
                   </button>
                 );
               })}
@@ -803,7 +797,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           </div>
           {/* Statut */}
           <div className="pt-5">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[var(--w-text)]">
               <Filter className="w-3.5 h-3.5 text-neutral-900" />Statut
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -813,12 +807,10 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                   <button
                     key={o.value}
                     onClick={() => setStatusFilter(o.value)}
-                    className={`relative py-2 text-sm font-semibold text-left transition-colors ${
-                      active ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-700'
-                    }`}
+                    aria-pressed={active}
+                    className={`w-option rounded-md px-2 py-2 text-left text-sm ${active ? 'w-option-selected font-semibold' : ''}`}
                   >
                     {o.label}
-                    {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900 rounded-full" />}
                   </button>
                 );
               })}
@@ -923,7 +915,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                 <DocSectionTitle title="Modifier les articles" count={editItems.length} />
                 <div className="space-y-2">
                   {editItems.map((item, idx) => (
-                    <div key={idx} className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
+                    <div key={idx} className="space-y-2 border-b border-[var(--w-separator-l)] py-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-semibold text-neutral-800 truncate flex-1">{item.name}</span>
                         <button onClick={() => removeEditItem(idx)} className="p-1 rounded-lg hover:bg-red-50 text-red-500" title="Retirer">
@@ -935,21 +927,21 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                           <label className="text-[9px] font-bold text-neutral-400 uppercase">Quantité</label>
                           <input type="number" min="0" step="any" value={item.quantity}
                             onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
-                            className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-center focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                            aria-label={`Quantité · ${item.name}`} className="w-input-ul w-full py-1.5 text-center text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                         </div>
                         <div>
                           <label className="text-[9px] font-bold text-neutral-400 uppercase">Prix unit.</label>
                           <input type="number" min="0" value={item.unit_price}
                             onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
-                            className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                            className="w-input-ul w-full py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                         </div>
                         <div>
                           <label className="text-[9px] font-bold text-neutral-400 uppercase">Remise</label>
                           <input type="number" min="0" value={item.discount}
                             onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
-                            className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                            className="w-input-ul w-full py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                         </div>
                       </div>
@@ -959,7 +951,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                     </div>
                   ))}
                 </div>
-                <div className="bg-neutral-50 rounded-xl p-3 text-right">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--w-separator)] py-3">
                   <span className="text-xs text-neutral-500">Nouveau total : </span>
                   <span className="text-sm font-bold text-neutral-900">
                     {formatFCFA(editItems.reduce((s, i) => s + (i.quantity * i.unit_price - (i.discount || 0)), 0))}
@@ -980,14 +972,11 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           </button>
         </>}
       >
-        <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <div className="w-12 h-12 flex items-center justify-center">
-            <AlertTriangle className="w-6 h-6 text-red-500" />
-          </div>
+        <div className="space-y-3">
           <p className="text-sm text-neutral-700 font-medium">
             Supprimer la facture <span className="font-bold">{selected?.sale_number}</span> ?
           </p>
-          <p className="text-xs text-neutral-500 max-w-xs">
+          <p className="text-xs text-[var(--w-text-sec)]">
             La facture reste conservée dans l'historique et le compte client avec son numéro, mais est marquée comme supprimée. Le stock sera restauré et la dette retirée du solde client. Une facture avec règlement, retour, avoir ou IPM ne peut pas être supprimée — utilisez l'annulation.
           </p>
           <div className="w-full text-left">
@@ -997,79 +986,66 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
               onChange={(e) => setDeleteReason(e.target.value)}
               placeholder="Indiquez le motif de la suppression…"
               rows={2}
-              className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-xs text-neutral-800 focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none"
+              className="w-textarea-ul w-full resize-y py-2 text-sm"
             />
           </div>
         </div>
       </Modal>
 
-      {/* Cancel confirmation modal */}
-      {cancelModal && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !cancelling) setCancelModal(null); }}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-[min(90vw,420px)] space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                <Ban className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900">Annuler la facture</h3>
-                <p className="text-xs text-neutral-500">Facture {cancelModal.sale_number} — {formatFCFA(Number(cancelModal.total))}</p>
-              </div>
-            </div>
-
+      <Modal open={!!cancelModal} onClose={() => { if (!cancelling) setCancelModal(null); }}
+        title="Annuler la facture" size="sm" layer="top"
+        footer={<>
+          <button type="button" disabled={cancelling} onClick={() => setCancelModal(null)} className="btn-secondary text-xs disabled:opacity-50">
+            Garder la facture
+          </button>
+          <button type="button" disabled={cancelling || !cancelReason.trim()} onClick={confirmCancelInvoice} className="btn-danger text-xs disabled:opacity-50">
+            {cancelling && <Loader2 className="h-4 w-4 animate-spin" />}
+            Annuler la facture
+          </button>
+        </>}
+      >
+        {cancelModal && (
+          <div className="space-y-3">
+            <p className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--w-separator)] pb-2 text-sm">
+              <strong className="doc-number">{cancelModal.sale_number}</strong>
+              <span className="num whitespace-nowrap font-semibold">{formatFCFA(Number(cancelModal.total))}</span>
+            </p>
             <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5 block">Motif d'annulation *</label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Indiquez le motif de l'annulation…"
-                rows={2}
-                className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-xs text-neutral-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 resize-none"
-              />
+              <label htmlFor="sale-cancel-reason" className="block text-xs text-[var(--w-text-sec)]">Motif d’annulation *</label>
+              <textarea id="sale-cancel-reason" value={cancelReason} onChange={event => setCancelReason(event.target.value)}
+                placeholder="Indiquez le motif…" rows={2} className="w-textarea-ul w-full resize-y py-2 text-sm" />
             </div>
 
             {cancelModal.paid > 0 && (
-              <div>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5 block">Gestion du paiement encaissé</label>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setCancelPaymentAction('keep_credit')}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${cancelPaymentAction === 'keep_credit' ? 'border-amber-400' : 'border-neutral-200 hover:bg-neutral-50'}`}
-                  >
-                    <Wallet className="w-4 h-4 text-amber-600 shrink-0" />
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold text-neutral-800">Conserver comme crédit client</div>
-                      <div className="text-[10px] text-neutral-500">L'argent reste encaissé et devient un crédit traçable</div>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setCancelPaymentAction('refund_cash')}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${cancelPaymentAction === 'refund_cash' ? 'border-red-400' : 'border-neutral-200 hover:bg-neutral-50'}`}
-                  >
-                    <RotateCcw className="w-4 h-4 text-red-500 shrink-0" />
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold text-neutral-800">Rembourser le client</div>
-                      <div className="text-[10px] text-neutral-500">Crée une sortie financière et diminue la caisse</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
+              <fieldset className="border-t border-[var(--w-separator)] pt-2">
+                <legend className="text-xs font-semibold">Paiement encaissé</legend>
+                <button type="button" onClick={() => setCancelPaymentAction('keep_credit')} aria-pressed={cancelPaymentAction === 'keep_credit'}
+                  className={`w-option flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${cancelPaymentAction === 'keep_credit' ? 'w-option-selected' : ''}`}>
+                  <Wallet className="h-4 w-4 shrink-0" />
+                  <span>
+                    <span className="block text-xs font-semibold">Conserver comme crédit client</span>
+                    <span className="block text-xs text-[var(--w-text-sec)]">Le paiement reste encaissé.</span>
+                  </span>
+                </button>
+                <button type="button" onClick={() => setCancelPaymentAction('refund_cash')} aria-pressed={cancelPaymentAction === 'refund_cash'}
+                  className={`w-option flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${cancelPaymentAction === 'refund_cash' ? 'w-option-selected' : ''}`}>
+                  <RotateCcw className="h-4 w-4 shrink-0" />
+                  <span>
+                    <span className="block text-xs font-semibold">Rembourser le client</span>
+                    <span className="block text-xs text-[var(--w-text-sec)]">Le montant est déduit de la caisse.</span>
+                  </span>
+                </button>
+              </fieldset>
             )}
 
-            <div className="bg-neutral-50 rounded-lg p-3 text-[10px] text-neutral-500 space-y-1">
-              <p>• Le stock sera restauré sur le dépôt source</p>
-              <p>• La garantie liée sera marquée comme annulée</p>
-              {cancelModal.ipm_ventes && cancelModal.ipm_ventes.length > 0 && <p>• L'opération IPM en attente sera annulée</p>}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button disabled={cancelling} onClick={() => setCancelModal(null)} className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded transition-colors disabled:opacity-50">Non, garder</button>
-              <button disabled={cancelling || !cancelReason.trim()} onClick={confirmCancelInvoice} className="px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">{cancelling && <Loader2 className="w-3 h-3 animate-spin" />}Oui, annuler</button>
-            </div>
+            <ul className="list-disc border-t border-[var(--w-separator)] pl-4 pt-2 text-xs text-[var(--w-text-sec)]">
+              <li>Le stock est restitué au dépôt source.</li>
+              <li>La garantie liée est annulée.</li>
+              {!!cancelModal.ipm_ventes?.length && <li>L’opération IPM en attente est annulée.</li>}
+            </ul>
           </div>
-        </div>,
-        document.body
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

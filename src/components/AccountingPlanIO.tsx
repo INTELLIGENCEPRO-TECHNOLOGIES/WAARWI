@@ -261,10 +261,10 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case 'created': return <span className="inline-flex items-center gap-1  text-[11px] font-medium text-emerald-700"><CheckCircle2 className="w-3 h-3" />Nouveau</span>;
-      case 'renamed': return <span className="inline-flex items-center gap-1  text-[11px] font-medium text-amber-700"><ArrowRight className="w-3 h-3" />Renommé</span>;
-      case 'unchanged': return <span className="inline-flex items-center gap-1  text-[11px] font-medium text-neutral-500">Inchangé</span>;
-      case 'error': return <span className="inline-flex items-center gap-1  text-[11px] font-medium text-red-700"><XCircle className="w-3 h-3" />Erreur</span>;
+      case 'created': return <span className="acc-status valid"><CheckCircle2 className="w-3 h-3" />Nouveau</span>;
+      case 'renamed': return <span className="acc-status"><ArrowRight className="w-3 h-3" />Renommé</span>;
+      case 'unchanged': return <span className="acc-status draft">Inchangé</span>;
+      case 'error': return <span className="acc-status cancelled"><XCircle className="w-3 h-3" />Erreur</span>;
       default: return null;
     }
   };
@@ -284,16 +284,18 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
               disabled={exporting || accounts.length === 0}
               className="btn-icon"
               title="Exporter le plan comptable"
+              aria-label="Exporter le plan comptable"
+              aria-expanded={showExportMenu}
             >
-              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             </button>
             {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 min-w-[180px] animate-in fade-in slide-in-from-top-1 duration-150">
-                <button onClick={() => doExport('xlsx')} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 transition">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Excel (.xlsx)
+              <div className="acc-export-menu">
+                <button onClick={() => doExport('xlsx')} className="acc-export-option">
+                  <FileSpreadsheet size={16} aria-hidden="true" /> Excel (.xlsx)
                 </button>
-                <button onClick={() => doExport('csv')} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 transition">
-                  <FileDown className="w-4 h-4 text-blue-600" /> CSV (UTF-8)
+                <button onClick={() => doExport('csv')} className="acc-export-option">
+                  <FileDown size={16} aria-hidden="true" /> CSV (UTF-8)
                 </button>
               </div>
             )}
@@ -301,7 +303,7 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
         )}
 
         {canManage && (
-          <button onClick={()=>work?work.openPlanImport():openImport()} className="btn-icon" title="Importer un plan comptable">
+          <button onClick={()=>work?work.openPlanImport():openImport()} className="btn-icon" title="Importer un plan comptable" aria-label="Importer un plan comptable">
             <Upload className="w-4 h-4" />
           </button>
         )}
@@ -320,32 +322,28 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
             </div>
 
             <div
-              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              className="acc-file-picker"
+              data-drag-over={dragOver}
+              onDragOver={e => { e.preventDefault(); if (!importing) setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-              className={`border border-dashed p-5 text-center transition-colors cursor-pointer ${
-                dragOver ? 'border-neutral-800 bg-neutral-50' : 'border-neutral-200 hover:border-neutral-300'
-              }`}
-              onClick={() => fileRef.current?.click()}
+              onDrop={e => { if (importing) e.preventDefault(); else onDrop(e); }}
             >
-              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }} />
-              {importing ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="w-8 h-8 text-neutral-400 animate-spin" />
-                  <p className="text-sm text-neutral-500">Analyse en cours...</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <Upload className="w-8 h-8 text-neutral-300" />
-                  <p className="text-sm text-neutral-600">Glissez-déposez un fichier ou cliquez pour parcourir</p>
-                  <p className="text-xs text-neutral-400">.xlsx, .xls, .csv</p>
-                </div>
-              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }}
+              />
+              <button type="button" className="btn-primary" disabled={importing} onClick={() => fileRef.current?.click()}>
+                {importing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                {importing ? 'Analyse en cours…' : 'Choisir le fichier'}
+              </button>
+              <span className="acc-table-meta">Vous pouvez aussi déposer le fichier ici.</span>
+              <button type="button" onClick={downloadTemplate} className="btn-secondary">
+                <FileSpreadsheet size={16} /> Télécharger le modèle
+              </button>
             </div>
-
-            <button onClick={downloadTemplate} className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-700 transition">
-              <FileSpreadsheet className="w-3.5 h-3.5" /> Télécharger le modèle d'import
-            </button>
           </div>
         )}
 
@@ -354,15 +352,15 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
             {fileName && (
               <div className="flex items-center gap-2 text-xs text-neutral-500">
                 <FileText className="w-3.5 h-3.5" />
-                <span className="truncate max-w-[300px] font-medium">{fileName}</span>
+                <span className="min-w-0 break-words font-medium">{fileName}</span>
               </div>
             )}
 
             <div className="acc-summary">
               <Stat label="Total" value={preview.total} />
-              <Stat label="Nouveaux" value={preview.created} color="emerald" />
-              <Stat label="Renommés" value={preview.renamed} color="amber" />
-              <Stat label="Erreurs" value={preview.error_count} color="red" />
+              <Stat label="Nouveaux" value={preview.created} />
+              <Stat label="Renommés" value={preview.renamed} />
+              <Stat label="Erreurs" value={preview.error_count} error />
             </div>
 
             {hasErrors && (
@@ -398,7 +396,7 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
                   </thead>
                   <tbody className="divide-y divide-neutral-50">
                     {pagedRows.map(r => (
-                      <tr key={r.line} className={r.status === 'error' ? '' : ''}>
+                      <tr key={r.line}>
                         <td className="px-3 py-1.5 text-neutral-400">L{r.line}</td>
                         <td className="px-3 py-1.5 font-mono text-neutral-600">{r.code}</td>
                         <td className="px-3 py-1.5 text-neutral-700 break-words" title={r.status === 'error' ? r.error : r.name}>
@@ -414,11 +412,11 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
               </div>
               {totalPages > 1 && (
                 <div className="flex items-center justify-between pt-1">
-                  <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="p-1 rounded hover:bg-neutral-100 disabled:opacity-30 transition">
+                  <button type="button" aria-label="Page précédente" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="acc-icon">
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <span className="text-[10px] text-neutral-400">{page + 1} / {totalPages}</span>
-                  <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="p-1 rounded hover:bg-neutral-100 disabled:opacity-30 transition">
+                  <button type="button" aria-label="Page suivante" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="acc-icon">
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -455,12 +453,9 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
-  const colors: Record<string, string> = {emerald:'text-neutral-900',amber:'text-neutral-900',red:'text-red-700'};
-  return (
-    <div className={`${color ? colors[color] : 'text-neutral-700'}`}>
-      <p className="text-[10px] font-medium opacity-70">{label}</p>
-      <p className="text-lg font-bold">{value}</p>
-    </div>
-  );
+function Stat({ label, value, error = false }: { label: string; value: number; error?: boolean }) {
+  return <div>
+    <span>{label}</span>
+    <strong className={error && value > 0 ? 'text-red-700' : undefined}>{value.toLocaleString('fr-FR')}</strong>
+  </div>;
 }

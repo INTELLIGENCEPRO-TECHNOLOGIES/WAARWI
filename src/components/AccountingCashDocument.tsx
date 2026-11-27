@@ -94,7 +94,7 @@ export function AccountingCashDocument({ tenantId, movementId, onClose, onSaving
             {document.sale_number && <span>Vente {document.sale_number}</span>}
             {document.used_amount != null && <span>Montant déjà utilisé {formatCurrency(Number(document.used_amount))}</span>}
           </div>
-          <div className="grid items-end gap-3 sm:grid-cols-2">
+          <div className="acc-fields acc-fields-2">
             <SearchableSelect variant="underline" label="Compte de contrepartie" value={account} onChange={setAccount}
               disabled={saving} options={review.accounts.map(option => ({
                 value: option.code, label: `${option.code} · ${option.name}`,

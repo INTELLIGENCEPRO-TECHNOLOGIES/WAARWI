@@ -33,6 +33,7 @@
   --w-field-border:  #e5e5e5;
   --w-text:          #0a0a0a;
   --w-text-sec:      #525252;
+  --w-text-secondary: var(--w-text-sec);
   --w-text-muted:    #737373;
   --w-text-disabled: #a3a3a3;
   --w-accent:        #0a0a0a;
@@ -67,6 +68,7 @@
   --w-field-border:  #303030;
   --w-text:          #F2F2F2;
   --w-text-sec:      #A7A7A7;
+  --w-text-secondary: var(--w-text-sec);
   --w-text-muted:    #747474;
   --w-text-disabled: #505050;
   --w-accent:        #303030;

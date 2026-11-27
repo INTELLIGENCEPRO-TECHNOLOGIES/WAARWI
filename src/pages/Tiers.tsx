@@ -1,6 +1,6 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Plus, Users, Truck, Loader2, CreditCard as Edit2, UserPlus, X, Calendar, FileText, Wallet, Info, ChevronRight, ChevronLeft, ShoppingBag, Check, Printer, Tag, Trash2, Download, Upload, Scale, RotateCcw, Save, Search, TrendingUp } from 'lucide-react';
+import { Plus, Users, Truck, Loader2, CreditCard as Edit2, UserPlus, X, Calendar, FileText, Wallet, Info, ChevronRight, ChevronLeft, ShoppingBag, Check, Printer, Tag, Trash2, Download, Upload, Scale, RotateCcw, Search, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
 import { fetchPrepayAvailable } from '../lib/customerCredit';
@@ -53,6 +53,14 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
   const { success, error } = useToast();
   const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
+
+  const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 639.98px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 639.98px)');
+    const onChange = () => setIsCompact(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
 
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
   const { windows: wmWindows, tileVisibleWindows, focus: focusWindow, updateTitle: updateWindowTitle, minimizeGroup, restore: restoreWindow } = useWindowManager();
@@ -459,6 +467,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
 
 
   // Import / Export
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [importRows, setImportRows] = useState<any[]>([]);
   const [importFilename, setImportFilename] = useState('');
@@ -843,13 +852,13 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
             </span>
             <span className="hidden md:inline">Actifs</span>
           </button>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-end gap-1">
             <button onClick={reconcileBalances} disabled={reconciling} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 disabled:opacity-40 transition-colors" title="Rapprochement des soldes"><RotateCcw className={`w-3.5 h-3.5 ${reconciling ? 'animate-spin' : ''}`} /><span className="hidden lg:inline">Rapprochement</span></button>
             <button onClick={exportTiers} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 transition-colors" title="Exporter"><Download className="w-3.5 h-3.5" /><span className="hidden lg:inline">Exporter</span></button>
             <button onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 transition-colors" title="Importer"><Upload className="w-3.5 h-3.5" /><span className="hidden lg:inline">Importer</span></button>
             <div className="w-px h-5 bg-[var(--w-separator)] mx-1" />
-            <button onClick={openCustCreate} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-black hover:text-brand-700 hover:bg-neutral-100 transition-colors ${tab === 'suppliers' ? 'hidden' : ''}`}><UserPlus className="w-4 h-4" /><span className="hidden lg:inline">Nouveau client</span></button>
-            <button onClick={openSupCreate} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-black hover:text-brand-700 hover:bg-neutral-100 transition-colors ${tab === 'customers' ? 'hidden' : ''}`}><Truck className="w-4 h-4" /><span className="hidden lg:inline">Nouveau fournisseur</span></button>
+            <button onClick={openCustCreate} aria-label="Nouveau client" className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-black hover:text-brand-700 hover:bg-neutral-100 transition-colors ${tab === 'suppliers' ? 'hidden' : ''}`}><UserPlus className="w-4 h-4" /><span className="hidden lg:inline">Nouveau client</span></button>
+            <button onClick={openSupCreate} aria-label="Nouveau fournisseur" className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-black hover:text-brand-700 hover:bg-neutral-100 transition-colors ${tab === 'customers' ? 'hidden' : ''}`}><Truck className="w-4 h-4" /><span className="hidden lg:inline">Nouveau fournisseur</span></button>
           </div>
         </div>
         {/* Row 2: search bar (mobile only) */}
@@ -866,12 +875,13 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
           )}
         </div>
         {/* Row 3: filter tabs (mobile only, wrapping) */}
-        <div className="sm:hidden mt-2 flex items-center divide-x divide-[var(--w-separator)]">
+        <div className="mt-2 flex items-center divide-x divide-[var(--w-separator)] md:hidden">
           {filterTabs.map(ft => (
             <button
               key={ft.k}
               onClick={() => { setTab(ft.k); setSelectedRow(null); }}
-              className={`flex-1 inline-flex items-center justify-center gap-1 px-2 py-1 text-[11px] font-semibold transition-colors ${tab === ft.k ? 'text-black' : 'text-[var(--w-text-disabled)]'}`}
+              aria-pressed={tab === ft.k}
+              className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 px-2 py-1 text-xs font-medium text-[var(--w-text-sec)] aria-pressed:bg-[var(--w-active)] aria-pressed:font-semibold aria-pressed:text-[var(--w-text)]"
             >
               {ft.l} <span className="num">{ft.count}</span>
             </button>
@@ -939,20 +949,20 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
                             else setCustView({ c: row.raw as Customer, key: 'info' });
                           } else setSupView({ s: row.raw as Supplier, key: 'info' });
                         }}
-                        className={`border-b border-[var(--w-separator-l)] cursor-pointer transition-colors ${isSelected ? 'bg-black text-white' : 'hover:bg-[var(--w-hover)]'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
+                        className={`border-b border-[var(--w-separator-l)] cursor-pointer transition-colors ${isSelected ? 'bg-[var(--w-active)]' : 'hover:bg-[var(--w-hover)]'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
                       >
-                        <td className={`px-3 py-2 font-mono text-[11px] ${isSelected ? 'text-slate-200' : 'text-[var(--w-text-muted)]'}`}>{row.accountCode || '—'}</td>
+                        <td className={`px-3 py-2 font-mono text-[11px] ${isSelected ? 'text-[var(--w-text-sec)]' : 'text-[var(--w-text-muted)]'}`}>{row.accountCode || '—'}</td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase ${isSelected ? 'text-slate-300' : row.type === 'customer' ? 'text-brand-700' : 'text-amber-600'}`}>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase ${isSelected ? 'text-[var(--w-text-sec)]' : row.type === 'customer' ? 'text-brand-700' : 'text-amber-600'}`}>
                             {row.type === 'customer' ? <Users className="w-3 h-3" /> : <Truck className="w-3 h-3" />}
                             <span className="hidden lg:inline">{row.type === 'customer' ? 'Client' : 'Fourn.'}</span>
                           </span>
                         </td>
-                        <td className={`px-3 py-2 font-medium ${isSelected ? 'text-white' : 'text-[var(--w-text)]'}`}>{row.name}</td>
-                        <td className={`px-3 py-2 ${isSelected ? 'text-slate-300' : 'text-[var(--w-text-muted)]'}`}>{row.phone || '—'}</td>
-                        <td className={`px-3 py-2 text-right font-semibold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
+                        <td className="px-3 py-2 font-medium text-[var(--w-text)]">{row.name}</td>
+                        <td className={`px-3 py-2 ${isSelected ? 'text-[var(--w-text-sec)]' : 'text-[var(--w-text-muted)]'}`}>{row.phone || '—'}</td>
+                        <td className={`px-3 py-2 text-right font-semibold num ${isSelected ? 'text-[var(--w-text)]' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
                           <div className="leading-tight">{formatFCFA(Math.abs(row.balance))}</div>
-                          <div className={`text-[9px] font-bold uppercase tracking-wide ${isSelected ? 'text-slate-300' : row.balance > 0 ? 'text-amber-500' : row.balance < 0 ? 'text-emerald-500' : 'text-slate-300'}`}>{row.balance > 0 ? 'Solde dû' : row.balance < 0 ? 'Crédit dispo.' : 'Solde'}</div>
+                          <div className={`text-[9px] font-bold uppercase tracking-wide ${isSelected ? 'text-[var(--w-text-sec)]' : row.balance > 0 ? 'text-amber-500' : row.balance < 0 ? 'text-emerald-500' : 'text-[var(--w-text-sec)]'}`}>{row.balance > 0 ? 'Solde dû' : row.balance < 0 ? 'Crédit dispo.' : 'Solde'}</div>
                         </td>
                       </tr>
                     );
@@ -968,14 +978,15 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
                     <button
                       key={`m-${row.type}-${row.id}`}
                       onClick={() => handleRowClick(row)}
-                      className={`w-full text-left px-3 py-2.5 transition-colors ${isSelected ? 'bg-black' : 'active:bg-[var(--w-hover)]'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
+                      aria-pressed={isSelected}
+                      className={`w-full text-left px-3 py-2.5 transition-colors ${isSelected ? 'bg-[var(--w-active)]' : 'active:bg-[var(--w-hover)]'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
                     >
                       <div className="flex items-start gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : 'text-[var(--w-text)]'}`} style={{ wordBreak: 'break-word' }}>
+                          <div className="break-words text-[13px] font-semibold leading-tight text-[var(--w-text)]">
                             {row.name}
                           </div>
-                          <div className={`text-[11px] mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0 ${isSelected ? 'text-[var(--w-text-disabled)]' : 'text-[var(--w-text-muted)]'}`}>
+                          <div className={`text-[11px] mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0 ${isSelected ? 'text-[var(--w-text-sec)]' : 'text-[var(--w-text-muted)]'}`}>
                             {row.accountCode && <span className="font-mono">{row.accountCode}</span>}
                             {row.accountCode && row.phone && <span className="text-[var(--w-text-disabled)]">|</span>}
                             {row.phone && <span>{row.phone}</span>}
@@ -983,10 +994,10 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className={`text-[12px] font-bold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
+                          <div className={`text-[12px] font-bold num ${isSelected ? 'text-[var(--w-text)]' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
                             {formatFCFA(Math.abs(row.balance))}
                           </div>
-                          <div className={`text-[9px] font-bold uppercase tracking-wide ${isSelected ? 'text-slate-300' : row.balance > 0 ? 'text-amber-500' : row.balance < 0 ? 'text-emerald-500' : 'text-slate-300'}`}>{row.balance > 0 ? 'Solde dû' : row.balance < 0 ? 'Crédit dispo.' : 'Solde'}</div>
+                          <div className={`text-[9px] font-bold uppercase tracking-wide ${isSelected ? 'text-[var(--w-text-sec)]' : row.balance > 0 ? 'text-amber-500' : row.balance < 0 ? 'text-emerald-500' : 'text-[var(--w-text-sec)]'}`}>{row.balance > 0 ? 'Solde dû' : row.balance < 0 ? 'Crédit dispo.' : 'Solde'}</div>
                         </div>
                       </div>
                     </button>
@@ -1050,74 +1061,50 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
         </div>
       </div>
 
-      {/* ── Mobile action modal (full screen) ── */}
       {selectedRow && (
-        <div className="sm:hidden fixed inset-0 z-[60] flex flex-col bg-[var(--w-surface)] animate-fade-in">
-          <div className="shrink-0 border-b border-[var(--w-separator)] px-3 py-3 flex items-center gap-3">
-            <button onClick={() => setSelectedRow(null)} className="p-1 -ml-1 text-[var(--w-text-muted)] hover:text-slate-800">
-              <X className="w-5 h-5" />
-            </button>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-[var(--w-text)]" style={{ wordBreak: 'break-word' }}>
-                {selectedRow.type === 'customer' ? (selectedRow.data as Customer).name : (selectedRow.data as Supplier).name}
-              </div>
-              <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">
-                {selectedRow.type === 'customer' ? 'Client' : 'Fournisseur'}
-                {(selectedRow.data as any).account_code && <span className="ml-1.5 font-mono">{(selectedRow.data as any).account_code}</span>}
-              </div>
+        <Modal open={visible && isCompact && !custView && !supView && !custOpen && !supOpen && !balanceOpen && !toDeactivateCust && !toDeactivateSup}
+          onClose={() => setSelectedRow(null)} title={selectedRow.data.name} size="sm" layer="top" focusOnOpen>
+          <div className="flex items-start justify-between gap-3 border-b border-[var(--w-separator)] pb-3 text-sm">
+            <div className="min-w-0 break-words text-[var(--w-text-sec)]">
+              {selectedRow.type === 'customer' ? 'Client' : 'Fournisseur'}
+              {(selectedRow.data as any).account_code && <span className="ml-2 font-mono">{(selectedRow.data as any).account_code}</span>}
             </div>
-            <div className={`text-sm font-bold num ${(selectedRow.data as any).balance > 0 ? 'text-amber-600' : (selectedRow.data as any).balance < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
-              {formatFCFA(Number((selectedRow.data as any).balance || 0))}
+            <div className="shrink-0 text-right">
+              <div className="text-xs text-[var(--w-text-muted)]">Solde</div>
+              <div className="num font-semibold">{formatFCFA(Number((selectedRow.data as any).balance || 0))}</div>
             </div>
           </div>
-          <div className="flex-1 overflow-auto">
-            <div>
-              <button onClick={() => { handleActionInterroger(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
-                <Info className="w-4 h-4 text-brand-700 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Interroger le compte</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Voir le détail comptable, commercial et statistiques</div></div>
+          <div className="divide-y divide-[var(--w-separator-l)]">
+            {[
+              { label: 'Interroger le compte', Icon: Info, action: handleActionInterroger },
+              { label: 'Positionner le solde', Icon: Scale, action: handleActionBalance },
+              ...(selectedRow.type === 'customer' ? [{ label: 'Tarifs d’exception', Icon: Tag, action: handleActionPricing }] : []),
+              { label: 'Saisir un règlement', Icon: Wallet, action: handleActionPayment },
+              { label: 'Documents', Icon: FileText, action: handleActionDocs },
+              { label: 'Modifier la fiche', Icon: Edit2, action: handleActionEdit },
+            ].map(({ label, Icon, action }) => (
+              <button key={label} type="button" onClick={action}
+                className="flex min-h-11 w-full items-center gap-3 px-1 py-2 text-left text-sm font-medium hover:bg-[var(--w-hover)] focus-visible:bg-[var(--w-hover)]">
+                <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--w-text-sec)]" /> {label}
               </button>
-              <button onClick={() => { handleActionBalance(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
-                <Scale className="w-4 h-4 text-brand-700 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Positionner le solde</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Ajuster manuellement le solde du tiers</div></div>
+            ))}
+            {can('delete_customers') && (
+              <button type="button" onClick={handleActionDeactivate}
+                className="flex min-h-11 w-full items-center gap-3 px-1 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50 focus-visible:bg-red-50">
+                <Trash2 aria-hidden="true" className="h-4 w-4 shrink-0" /> Supprimer
               </button>
-              {selectedRow.type === 'customer' && (
-                <button onClick={() => { handleActionPricing(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
-                  <Tag className="w-4 h-4 text-brand-700 shrink-0" />
-                  <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Tarifs d'exception</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Gérer les prix spéciaux pour ce client</div></div>
-                </button>
-              )}
-              <button onClick={() => { handleActionPayment(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
-                <Wallet className="w-4 h-4 text-brand-700 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Saisir un règlement</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Enregistrer un paiement reçu ou versé</div></div>
-              </button>
-              <button onClick={() => { handleActionDocs(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
-                <FileText className="w-4 h-4 text-brand-700 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Documents</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Consulter les factures et bons de commande</div></div>
-              </button>
-              <button onClick={() => { handleActionEdit(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
-                <Edit2 className="w-4 h-4 text-[var(--w-text-sec)] shrink-0" />
-                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Modifier la fiche</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Éditer les informations du tiers</div></div>
-              </button>
-              {can('delete_customers') && (
-                <button onClick={() => { handleActionDeactivate(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-neutral-100 active:bg-red-950/20 transition-colors text-left">
-                  <Trash2 className="w-4 h-4 text-red-500 shrink-0" />
-                  <div><div className="text-sm font-semibold text-red-600">Supprimer</div><div className="text-[11px] text-red-400 mt-0.5">Désactiver ou supprimer ce tiers</div></div>
-                </button>
-              )}
-            </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
-
-      {/* ── Modals (preserved) ── */}
 
       {/* Customer form */}
       <Modal open={custOpen} onClose={() => setCustOpen(false)} title={custEdit ? t('tiers.editCustomer') : t('tiers.addCustomer')}
         size="sm" layer="top" fullscreenMobile variant="flat"
         footer={<>
-          <button onClick={() => setCustOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveCust} disabled={saving} className="btn-icon-primary" title="Enregistrer">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          <button type="button" onClick={() => setCustOpen(false)} className="btn-secondary text-xs">Annuler</button>
+          <button type="button" onClick={saveCust} disabled={saving} className="btn-primary text-xs">
+            {saving && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />} Enregistrer
           </button>
         </>}>
         <div className="space-y-0 flat-form">
@@ -1204,9 +1191,9 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       <Modal open={supOpen} onClose={() => setSupOpen(false)} title={supEdit ? t('tiers.editSupplier') : t('tiers.addSupplier')}
         size="sm" layer="top" fullscreenMobile variant="flat"
         footer={<>
-          <button onClick={() => setSupOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveSup} disabled={saving} className="btn-icon-primary" title="Enregistrer">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          <button type="button" onClick={() => setSupOpen(false)} className="btn-secondary text-xs">Annuler</button>
+          <button type="button" onClick={saveSup} disabled={saving} className="btn-primary text-xs">
+            {saving && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />} Enregistrer
           </button>
         </>}>
         <div className="space-y-0 flat-form">
@@ -1341,9 +1328,9 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       {/* Import modal */}
       <Modal open={importExportOpen} onClose={() => setImportExportOpen(false)} title={`Importer des ${tab === 'suppliers' ? 'fournisseurs' : 'clients'}`} size="sm" layer="top" fullscreenMobile
         footer={importRows.length > 0 && !importResult ? <>
-          <button onClick={() => setImportExportOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={runImport} disabled={importing} className="btn-icon-primary" title="Importer">
-            {importing && <Loader2 className="w-4 h-4 animate-spin" />}
+          <button type="button" onClick={() => setImportExportOpen(false)} className="btn-secondary text-xs">Annuler</button>
+          <button type="button" onClick={runImport} disabled={importing} className="btn-primary text-xs">
+            {importing && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
             Importer {importRows.length} ligne{importRows.length > 1 ? 's' : ''}
           </button>
         </> : undefined}
@@ -1351,21 +1338,20 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
         <div className="space-y-0">
           {!importResult && (
             <>
-              <div className="flex items-center gap-2 pb-3 border-b border-neutral-100">
-                <button onClick={downloadTemplate} className="btn-icon" title="Télécharger le modèle">
-                  <Download className="w-4 h-4" />
+              <div className="flex flex-wrap items-center gap-2 border-b border-[var(--w-separator)] pb-3">
+                <button type="button" onClick={downloadTemplate} className="btn-secondary text-xs">
+                  <Download aria-hidden="true" className="h-4 w-4" /> Télécharger le modèle
                 </button>
-                <span className="text-xs text-[var(--w-text-muted)]">Télécharger le modèle</span>
               </div>
-              <div
-                className="py-8 text-center cursor-pointer"
+              <div className="flex flex-wrap items-center gap-2 py-3"
                 onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleImportFile(f); }}
-                onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.csv'; inp.onchange = () => { if (inp.files?.[0]) handleImportFile(inp.files[0]); }; inp.click(); }}
-              >
-                <Upload className="w-7 h-7 text-[var(--w-text-disabled)] mx-auto mb-2" />
-                <p className="text-sm font-semibold text-[var(--w-text)]">Glissez un fichier Excel ici</p>
-                <p className="text-xs text-[var(--w-text-disabled)] mt-1">ou cliquez pour parcourir (.xlsx, .xls, .csv)</p>
+                onDrop={e => { e.preventDefault(); const file = e.dataTransfer.files[0]; if (file) handleImportFile(file); }}>
+                <button type="button" className="btn-primary text-xs" onClick={() => importInputRef.current?.click()}>
+                  <Upload aria-hidden="true" className="h-4 w-4" /> Choisir un fichier
+                </button>
+                <p className="text-xs text-[var(--w-text-muted)]">Formats acceptés .xlsx, .xls et .csv.</p>
+                <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                  onChange={event => { const file = event.target.files?.[0]; if (file) handleImportFile(file); event.target.value = ''; }} />
               </div>
               {importFilename && (
                 <div className="flex items-center gap-2 py-2.5 border-y border-neutral-100">
@@ -1422,7 +1408,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
                   </div>
                 </div>
               )}
-              <button onClick={() => setImportExportOpen(false)} className="btn-icon w-full justify-center" title="Fermer"><X className="w-4 h-4" /></button>
+
             </div>
           )}
         </div>
@@ -1431,9 +1417,9 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       {/* Balance adjustment modal */}
       <Modal open={balanceOpen && !!balanceTarget} onClose={() => { setBalanceOpen(false); setBalanceTarget(null); }} title="Positionner le solde" size="sm" layer="top" fullscreenMobile
         footer={<>
-          <button onClick={() => setBalanceOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveBalance} disabled={savingBalance} className="btn-icon-primary" title="Valider">
-            {savingBalance ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          <button type="button" onClick={() => { setBalanceOpen(false); setBalanceTarget(null); }} className="btn-secondary text-xs">Annuler</button>
+          <button type="button" onClick={saveBalance} disabled={savingBalance} className="btn-primary text-xs">
+            {savingBalance && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />} Valider
           </button>
         </>}
       >
@@ -1868,11 +1854,11 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
   if (key === 'info') {
     const infoContent = (
       <>
-      <div className={windowed ? 'flex flex-col h-full overflow-hidden' : 'relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-[var(--w-surface)] rounded-none sm:rounded-lg border-0 sm:border border-[var(--w-separator)] shadow-none sm:shadow-lg flex flex-col overflow-hidden'}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2.5 border-b border-[var(--w-separator)] bg-[var(--w-surface-el)]">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--w-separator)] px-3 py-2 sm:px-4">
             <button onClick={() => goToCustomer(prevCust)} disabled={!prevCust} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client précédent"><ChevronLeft className="w-4 h-4" /></button>
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1 basis-24">
               <SearchableSelect variant="underline" searchable menuWidth={380} wrapLabels options={custOptions} value={activeCustomer.id} onChange={(id) => goToCustomer(customerList.find(x => x.id === id) || null)} placeholder="Rechercher un client…" />
             </div>
             <button onClick={() => goToCustomer(nextCust)} disabled={!nextCust} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client suivant"><ChevronRight className="w-4 h-4" /></button>
@@ -1896,42 +1882,11 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
                 )
               )}
             </div>
-            {!windowed && <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors"><X className="w-5 h-5" /></button>}
           </div>
 
-          {/* Body: left nav + content */}
-          <div className="flex-1 flex min-h-0">
-            {/* Left nav — desktop */}
-            <aside className="hidden md:flex flex-col w-44 shrink-0 bg-[var(--w-surface)] border-r border-[var(--w-separator-l)] py-3 px-2 gap-0">
-              {([
-                { k: 'comptable' as const, l: 'Comptable', icon: FileText },
-                { k: 'commerciale' as const, l: 'Commerciale', icon: ShoppingBag },
-                { k: 'statistiques' as const, l: 'Statistiques', icon: TrendingUp },
-              ]).map(t => (
-                <button key={t.k} onClick={() => setInfoTab(t.k)}
-                  className={`flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-[var(--w-text-disabled)] hover:text-black border-b-2 border-transparent'}`}>
-                  <t.icon className="w-3.5 h-3.5 shrink-0" />
-                  {t.l}
-                </button>
-              ))}
-            </aside>
-
-            {/* Mobile tabs */}
-            <div className="md:hidden absolute top-[3.25rem] left-0 right-0 z-10 bg-[var(--w-surface)] border-b border-[var(--w-separator-l)] px-3 py-1.5 flex gap-1.5">
-              {([
-                { k: 'comptable' as const, l: 'Comptable' },
-                { k: 'commerciale' as const, l: 'Commerciale' },
-                { k: 'statistiques' as const, l: 'Statistiques' },
-              ]).map(t => (
-                <button key={t.k} onClick={() => setInfoTab(t.k)}
-                  className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-[var(--w-text-disabled)] border-b-2 border-transparent'}`}>
-                  {t.l}
-                </button>
-              ))}
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 min-w-0 overflow-auto px-3 sm:px-4 pb-4 md:pt-4 pt-12">
+          <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+            <TierStatementTabs active={infoTab} onChange={setInfoTab} />
+            <div className="min-w-0 flex-1 overflow-auto px-3 pb-4 pt-3 sm:px-4">
               {loading ? (
                 <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>
               ) : (
@@ -2082,28 +2037,23 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     if (windowed) return infoContent;
 
     return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-0 sm:p-6">
-        <div className="absolute inset-0 bg-black/30 hidden sm:block" onClick={onClose} />
-        <div className="relative z-10 w-full h-full sm:h-[90vh] sm:max-w-5xl">
-          {infoContent}
-        </div>
-      </div>
+      <Modal open onClose={invoiceView ? () => setInvoiceView(null) : onClose} title={modalTitle} size="xl" layer="top" fullscreenMobile
+        panelClassName="sm:!h-[min(90dvh,850px)] [&>.waarwi-window-body]:!p-0">
+        {infoContent}
+      </Modal>
     );
   }
 
   return (
     <Modal open onClose={onClose} title={modalTitle} size={key === 'pricing' ? 'xl' : 'sm'} layer="top" fullscreenMobile
       panelClassName={key === 'payment' || key === 'docs' ? 'sm:!h-[500px]' : ''}
-      footer={
-        key === 'payment' ? (
-          <div className="flex items-center gap-2">
-            <button onClick={submitPayment} disabled={paying || !paySale || (Number(payAmount) || 0) <= 0} className="btn-icon" title="Valider">
-              {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          </div>
-        ) : <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-      }>
+      footer={key === 'payment' ? <>
+        <button type="button" onClick={onClose} className="btn-secondary text-xs">Annuler</button>
+        <button type="button" onClick={submitPayment} disabled={paying || !paySale || (Number(payAmount) || 0) <= 0} className="btn-primary text-xs">
+          {paying && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />} Valider
+        </button>
+      </> : undefined}>
+
 
       <div className="pb-3 border-b border-neutral-100">
         <div className="flex items-center justify-between">
@@ -2575,6 +2525,26 @@ function DocsView({ kpis, docs, dateFrom, dateTo, onOpenPicker, onClearDates, on
   );
 }
 
+type TierStatementTab = 'comptable' | 'commerciale' | 'statistiques';
+
+function TierStatementTabs({ active, onChange }: { active: TierStatementTab; onChange: (tab: TierStatementTab) => void }) {
+  const tabs = [
+    { key: 'comptable', label: 'Comptable', Icon: FileText },
+    { key: 'commerciale', label: 'Commerciale', Icon: ShoppingBag },
+    { key: 'statistiques', label: 'Statistiques', Icon: TrendingUp },
+  ] as const;
+  return (
+    <nav aria-label="Rubriques du compte" className="flex shrink-0 flex-wrap gap-1 border-b border-[var(--w-separator)] px-2 py-1.5 md:w-40 md:flex-col md:flex-nowrap md:border-b-0 md:border-r md:py-2">
+      {tabs.map(({ key, label, Icon }) => (
+        <button type="button" key={key} aria-pressed={active === key} onClick={() => onChange(key)}
+          className="flex min-h-9 items-center gap-2 rounded-sm px-2 text-left text-xs font-medium text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] aria-pressed:bg-[var(--w-active)] aria-pressed:font-semibold aria-pressed:text-[var(--w-text)]">
+          <Icon aria-hidden="true" className="hidden h-4 w-4 shrink-0 md:block" /> {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 /* ───────────────────────── Mobile full-screen supplier order detail ───────────────────────── */
 function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName, onClose, onPrint }: {
   order: any; items: any[]; payments: any[]; supplierName: string; onClose: () => void; onPrint: () => void;
@@ -2585,19 +2555,13 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
   const subtotal = validItems.reduce((s: number, i: any) => s + Number(i.total), 0);
 
   return (
-    <div className="fixed inset-0 z-[55] bg-white flex flex-col">
-      <div className="flex items-center justify-between px-4 h-12 border-b border-neutral-200 shrink-0">
-        <button onClick={onClose} className="p-1"><X className="w-5 h-5 text-[var(--w-text)]" /></button>
-        <div className="text-center flex-1 min-w-0">
-          <div className="text-sm font-bold text-[var(--w-text)] truncate">{order.order_number}</div>
-        </div>
-        <StatusBadgeOrder order={order} />
-      </div>
-
-      <div className="px-4 py-3 border-b border-neutral-100 space-y-1">
-        <div className="flex items-center gap-2 text-xs text-[var(--w-text)]">
+    <Modal open onClose={onClose} title={order.order_number} size="md" layer="top" fullscreenMobile focusOnOpen
+      footer={<button type="button" onClick={onPrint} className="btn-primary text-xs"><Printer aria-hidden="true" className="h-4 w-4" /> Imprimer</button>}>
+      <div className="space-y-1 border-b border-[var(--w-separator)] pb-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--w-text)]">
           <Truck className="w-3.5 h-3.5 text-[var(--w-text-disabled)]" />
-          <span className="font-medium">{supplierName}</span>
+          <span className="min-w-0 break-words font-medium">{supplierName}</span>
+          <StatusBadgeOrder order={order} />
         </div>
         <div className="flex items-center gap-1 text-xs text-[var(--w-text-muted)]">
           <Calendar className="w-3 h-3" />
@@ -2606,10 +2570,10 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="divide-y divide-neutral-100">
+        <div className="divide-y divide-[var(--w-separator-l)]">
           {validItems.map((item: any, idx: number) => (
-            <div key={idx} className="px-4 py-2.5">
-              <div className="text-sm font-medium text-neutral-800">{item.name}</div>
+            <div key={idx} className="py-2.5">
+              <div className="text-sm font-medium text-[var(--w-text)]">{item.name}</div>
               <div className="flex items-center justify-between mt-1">
                 <span className="text-xs text-[var(--w-text-muted)]">{Number(item.quantity_ordered)} x {formatFCFA(item.unit_price)}</span>
                 <span className="text-sm font-bold text-[var(--w-text)] num">{formatFCFA(item.total)}</span>
@@ -2618,7 +2582,7 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
           ))}
         </div>
 
-        <div className="px-4 py-3 border-t border-neutral-100 space-y-1.5">
+        <div className="py-3 border-t border-[var(--w-separator-l)] space-y-1.5">
           <div className="flex items-center justify-between text-xs text-[var(--w-text-muted)]">
             <span>Sous-total</span><span className="num font-semibold">{formatFCFA(subtotal)}</span>
           </div>
@@ -2638,7 +2602,7 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
         </div>
 
         {pays.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-neutral-100">
+          <div className="py-2.5 border-t border-[var(--w-separator-l)]">
             <div className="text-[10px] uppercase tracking-wider text-[var(--w-text-muted)] font-bold mb-1.5">Règlements</div>
             <div className="space-y-1">
               {pays.map((p: any, i: number) => (
@@ -2652,17 +2616,7 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
         )}
       </div>
 
-      <div className="border-t border-neutral-200 px-4 py-3 shrink-0 bg-white">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-[var(--w-text-muted)]">{validItems.length} article{validItems.length > 1 ? 's' : ''}</span>
-          <span className="text-base font-extrabold text-[var(--w-text)] num">{formatFCFA(order.total)}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="flex-1" />
-          <button onClick={onPrint} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -2859,53 +2813,23 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 
   if (key === 'info') {
     return (
-      <>
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4 animate-fade-in">
-        <div className="scrim" onClick={onClose} />
-        <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-[var(--w-surface)] sm:rounded-lg border border-[var(--w-separator)] shadow-lg flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="shrink-0 flex items-center gap-3 px-3 sm:px-4 py-2.5 border-b border-[var(--w-separator)] bg-white">
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-[var(--w-text)] truncate">{s.name}</div>
-              <div className="text-[10px] text-[var(--w-text-muted)] font-mono">{(s as any).account_code || ''}</div>
+      <Modal open onClose={onClose} title={modalTitle} size="xl" layer="top" fullscreenMobile
+        panelClassName="sm:!h-[min(90dvh,850px)] [&>.waarwi-window-body]:!p-0">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div className="flex shrink-0 items-start gap-3 border-b border-[var(--w-separator)] px-3 py-2.5 sm:px-4">
+            <div className="min-w-0 flex-1 break-words">
+              <div className="text-sm font-semibold text-[var(--w-text)]">{s.name}</div>
+              {(s as any).account_code && <div className="font-mono text-xs text-[var(--w-text-muted)]">{(s as any).account_code}</div>}
             </div>
-            <div className={`text-right shrink-0 text-black`}>
-              <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Solde</div>
-              <div className="text-sm font-bold num">{loading ? '...' : formatFCFA(supplierBalance)}</div>
+            <div className="shrink-0 text-right">
+              <div className="text-xs text-[var(--w-text-muted)]">Solde</div>
+              <div className="num text-sm font-semibold">{loading ? '…' : formatFCFA(supplierBalance)}</div>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors"><X className="w-5 h-5" /></button>
           </div>
 
-          {/* Body */}
-          <div className="flex-1 flex min-h-0">
-            <aside className="hidden md:flex flex-col w-44 shrink-0 bg-[var(--w-surface)] border-r border-[var(--w-separator-l)] py-3 px-2 gap-0">
-              {([
-                { k: 'comptable' as const, l: 'Comptable', icon: FileText },
-                { k: 'commerciale' as const, l: 'Commerciale', icon: ShoppingBag },
-                { k: 'statistiques' as const, l: 'Statistiques', icon: TrendingUp },
-              ]).map(t => (
-                <button key={t.k} onClick={() => setInfoTab(t.k)}
-                  className={`flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-[var(--w-text-disabled)] hover:text-black border-b-2 border-transparent'}`}>
-                  <t.icon className="w-3.5 h-3.5 shrink-0" />
-                  {t.l}
-                </button>
-              ))}
-            </aside>
-
-            <div className="md:hidden absolute top-[3.25rem] left-0 right-0 z-10 bg-[var(--w-surface)] border-b border-[var(--w-separator-l)] px-3 py-1.5 flex gap-1.5">
-              {([
-                { k: 'comptable' as const, l: 'Comptable' },
-                { k: 'commerciale' as const, l: 'Commerciale' },
-                { k: 'statistiques' as const, l: 'Statistiques' },
-              ]).map(t => (
-                <button key={t.k} onClick={() => setInfoTab(t.k)}
-                  className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-[var(--w-text-disabled)] border-b-2 border-transparent'}`}>
-                  {t.l}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 min-w-0 overflow-auto px-3 sm:px-4 pb-4 md:pt-4 pt-12">
+          <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+            <TierStatementTabs active={infoTab} onChange={setInfoTab} />
+            <div className="min-w-0 flex-1 overflow-auto px-3 pb-4 pt-3 sm:px-4">
               {loading ? (
                 <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>
               ) : (
@@ -3038,7 +2962,6 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
             </div>
           </div>
         </div>
-      </div>
 
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
 
@@ -3052,16 +2975,13 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
           onPrint={() => printOrder(orderView)}
         />
       )}
-      </>
+      </Modal>
     );
   }
 
   return (
     <Modal open onClose={onClose} title={modalTitle} size="sm" layer="top" fullscreenMobile
-      panelClassName={key === 'docs' ? 'sm:!h-[500px]' : ''}
-      footer={
-        <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-      }>
+      panelClassName={key === 'docs' ? 'sm:!h-[500px]' : ''}>
 
       <div className="pb-3 border-b border-neutral-100">
         <div className="flex items-center justify-between">

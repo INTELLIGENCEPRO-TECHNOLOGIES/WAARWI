@@ -2,11 +2,7 @@
 .acc-desktop{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;width:100%;overflow:hidden;background:var(--w-bg)}
 .acc-desktop-area{position:relative;isolation:isolate;flex:1;min-height:0;min-width:0;overflow:hidden;background:var(--w-bg)}
 .acc-desktop-home{position:absolute;inset:0;overflow:auto;padding:10px 18px 16px}
-.acc-desktop-area .acc-work-window{box-shadow:0 2px 9px #00000020;max-width:100%;max-height:100%}
-.acc-desktop-area .acc-work-window[data-active=true]{border-color:var(--w-text-sec)}
-.acc-desktop-area .acc-work-window>div:first-child{padding-left:10px;padding-right:4px}
-.acc-desktop-area .acc-work-window>div:first-child button{border-radius:0;min-width:28px;height:28px;display:grid;place-items:center}
-.acc-desktop-area .acc-work-window>div:first-child span{font-size:12px}
+.acc-desktop-area .acc-work-window{max-width:100%;max-height:100%}
 .acc-desktop-area .acc-work-window .acc-window-content{height:100%;min-width:0;min-height:0;overflow:auto;padding:0 12px 12px}
 .acc-window-content .accounting-workspace{--acc-head:0px;min-width:0}
 .acc-window-content .accounting-workspace .acc-body{padding-top:4px}
@@ -29,7 +25,7 @@
  .acc-desktop-area .acc-work-window{inset:0!important;width:100%!important;height:100%!important;max-height:100%;box-shadow:none;border:0!important}
  .acc-desktop-area .acc-work-window[data-active=false]{display:none!important}
  .acc-desktop-area .acc-work-window>div:first-child{cursor:default}
- .acc-desktop-area .acc-work-window>div:first-child button[title="Agrandir"],.acc-desktop-area .acc-work-window>div:first-child button[title="Restaurer"],.acc-desktop .acc-tile-control,.acc-desktop-area .acc-work-window>[class*="cursor-"][class*="absolute"]{display:none!important}
+ .acc-desktop-area .acc-work-window>div:first-child button[title="Agrandir"],.acc-desktop-area .acc-work-window>div:first-child button[title="Restaurer"],.acc-desktop-area .acc-work-window>div:first-child button[aria-label="Restaurer la taille"],.acc-desktop .acc-tile-control,.acc-desktop-area .acc-work-window>[class*="cursor-"][class*="absolute"]{display:none!important}
  .acc-desktop-area .acc-work-window .acc-window-content{padding:0 9px 12px}
  .acc-desktop-home{padding:4px 9px 12px}
  .acc-desktop-taskbar .acc-task-action span{display:none}
@@ -47,7 +43,6 @@
 .acc-desktop-area .acc-work-window .acc-window-content{container:acc-window / size;overscroll-behavior:contain;scrollbar-gutter:stable}
 .acc-desktop-area .acc-work-window>div:first-child{touch-action:none}
 .acc-desktop-area .acc-work-window>[class*="cursor-"][class*="absolute"]{touch-action:none}
-.acc-desktop-area .acc-work-window>div:first-child button:focus-visible{outline:2px solid var(--w-text);outline-offset:-2px}
 .acc-window-content .accounting-workspace .acc-table-scroll{max-height:clamp(90px,55cqh,58vh)}
 .acc-window-content .accounting-workspace .acc-form-scroll{max-height:clamp(100px,55cqh,58vh)}
 @container acc-window (max-width:660px){
@@ -66,8 +61,8 @@
 }
 @media(max-width:1023px){
  .acc-desktop-area .acc-work-window>div:first-child{touch-action:auto;height:40px!important}
- .acc-desktop-area .acc-work-window>div:first-child button{min-width:36px;height:36px}
- .acc-desktop-taskbar button{min-height:36px}
+ .acc-desktop-area .acc-work-window>div:first-child button{min-width:40px;height:40px}
+ .acc-desktop-taskbar button{min-height:40px}
 }
 @media print{
  .acc-desktop-area .acc-work-window .acc-window-content{container-type:normal;scrollbar-gutter:auto}

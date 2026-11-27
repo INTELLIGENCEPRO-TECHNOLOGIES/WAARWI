@@ -1,0 +1,280 @@
+/* Shared chrome for application dialogs, document panels and work windows. */
+body[data-waarwi-scroll-lock] {
+  overflow: hidden !important;
+}
+
+.waarwi-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  isolation: isolate;
+}
+
+.waarwi-overlay-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--w-overlay);
+}
+
+.waarwi-window-surface {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--w-text);
+  background: var(--w-surface);
+  border: 1px solid var(--w-separator);
+}
+
+.waarwi-dialog {
+  position: relative;
+  width: 100%;
+  max-height: calc(100vh - 12px);
+  max-height: calc(100dvh - 12px);
+  border-inline: 0;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+}
+
+.waarwi-dialog[data-mobile-layout="screen"] {
+  height: 100%;
+  max-height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+.waarwi-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 0;
+  min-height: 38px;
+  padding-inline: 12px 6px;
+  background: var(--w-surface);
+  border-bottom: 1px solid var(--w-separator);
+}
+
+.waarwi-window-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--w-text);
+  font-size: .875rem;
+  line-height: 1.25;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.waarwi-desktop-window .waarwi-window-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waarwi-window-button {
+  display: grid;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--w-text-sec);
+}
+
+.waarwi-window-button:hover {
+  color: var(--w-text);
+  background: var(--w-hover);
+}
+
+.waarwi-window-button:focus-visible,
+.waarwi-window-resizer:focus-visible,
+.waarwi-window-task:focus-visible {
+  outline: 2px solid var(--w-text);
+  outline-offset: -2px;
+}
+
+.waarwi-dialog .waarwi-window-bar,
+.waarwi-doc-panel .waarwi-window-bar {
+  min-height: 48px;
+  padding-inline: 16px 6px;
+}
+
+.waarwi-dialog .waarwi-window-button,
+.waarwi-doc-panel .waarwi-window-button {
+  width: 40px;
+  height: 40px;
+}
+
+.waarwi-window-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px;
+}
+
+.waarwi-window-footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--w-separator);
+  background: var(--w-surface);
+  padding: 10px 16px max(10px, env(safe-area-inset-bottom));
+}
+
+.waarwi-window-footer > .grid {
+  width: 100%;
+}
+
+.waarwi-dialog:not(:has(.waarwi-window-footer)) .waarwi-window-body {
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+}
+
+.waarwi-desktop-window {
+  box-shadow: 0 4px 18px rgb(0 0 0 / 10%);
+}
+
+.waarwi-desktop-window[data-active="true"] {
+  border-color: var(--w-text-muted);
+}
+
+.waarwi-desktop-window[data-maximized="true"] {
+  box-shadow: none;
+}
+
+.waarwi-window-move,
+.waarwi-window-resizer {
+  touch-action: none;
+}
+
+.waarwi-window-resizer {
+  display: none;
+  flex: none;
+  width: 8px;
+  place-items: center;
+  border-right: 1px solid var(--w-separator);
+  background: var(--w-surface-el2);
+  color: var(--w-text-muted);
+  cursor: col-resize;
+}
+
+.waarwi-window-resizer:hover {
+  background: var(--w-hover);
+  color: var(--w-text);
+}
+
+.waarwi-window-taskbar {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 3px 8px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  background: var(--w-surface);
+  border-top: 1px solid var(--w-separator);
+}
+
+.waarwi-window-task {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-width: 0;
+  max-width: 220px;
+  padding-inline: 10px;
+  border-radius: 4px;
+  color: var(--w-text-sec);
+  font-size: .75rem;
+  font-weight: 550;
+}
+
+.waarwi-window-task:hover {
+  color: var(--w-text);
+  background: var(--w-hover);
+}
+
+@media (min-width: 640px) {
+  .waarwi-overlay {
+    align-items: center;
+    padding: 16px;
+  }
+
+  .waarwi-dialog,
+  .waarwi-dialog[data-mobile-layout="screen"] {
+    height: auto;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    border: 1px solid var(--w-separator);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgb(0 0 0 / 12%);
+  }
+
+  .waarwi-dialog .waarwi-window-bar,
+  .waarwi-doc-panel .waarwi-window-bar {
+    min-height: 42px;
+    padding-inline: 18px 6px;
+  }
+
+  .waarwi-dialog .waarwi-window-button,
+  .waarwi-doc-panel .waarwi-window-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .waarwi-window-body {
+    padding: 16px 18px;
+  }
+
+  .waarwi-window-footer {
+    padding-block: 10px;
+    padding-inline: 18px;
+  }
+}
+
+
+@media (min-width: 1024px) {
+  .waarwi-doc-overlay {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: 0;
+  }
+
+  .waarwi-doc-overlay[data-docked="true"] {
+    left: var(--w-sidebar-w, 256px);
+  }
+
+  .waarwi-doc-overlay > .waarwi-overlay-scrim {
+    display: none;
+  }
+
+  .waarwi-doc-panel > .waarwi-window-resizer {
+    position: absolute;
+    inset-block: 0;
+    right: 100%;
+    display: grid;
+  }
+
+  .waarwi-doc-overlay > .waarwi-doc-panel {
+    flex: none;
+    width: var(--waarwi-doc-width, calc(100% - 8px));
+    max-width: calc(100% - 8px);
+    height: 100%;
+    max-height: 100%;
+    overflow: visible;
+    border-block: 0;
+    border-right: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

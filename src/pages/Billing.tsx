@@ -12,15 +12,13 @@ import type { VatAmounts } from '../lib/salesVat';
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useStickyOffset } from '../lib/useStickyOffset';
-import { createPortal } from 'react-dom';
-import { Plus, FileText, Loader2, Printer, CheckCircle, X, Receipt, RotateCcw, Wallet, Filter, Calendar, User, CreditCard, ArrowRight, Coins, MessageCircle, Link2, Search, FilePlus, ShieldCheck, ChevronLeft, ChevronRight, RefreshCw, Ban, ClipboardList } from 'lucide-react';
+import { Plus, FileText, Loader2, Printer, CheckCircle, X, Receipt, RotateCcw, Wallet, Filter, Calendar, User, CreditCard, ArrowRight, Coins, MessageCircle, Link2, Search, FilePlus, ShieldCheck, ChevronLeft, ChevronRight, RefreshCw, ClipboardList } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
-import { useTopLayer } from '../components/modalStack';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
@@ -255,13 +253,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [invoiceDetail, setInvoiceDetail] = useState<Invoice | null>(null);
   const [accountingBusy, setAccountingBusy] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
-  const payLayer = useTopLayer(payOpen);
-  useEffect(() => {
-    if (!payOpen) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && payLayer.isTop) setPayOpen(false); };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [payOpen, payLayer.isTop]);
   const [payMethod, setPayMethod] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [paying, setPaying] = useState(false);
@@ -421,7 +412,6 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   }, [currentSite?.id, isDesktop]);
 
   const [cancelTarget, setCancelTarget] = useState<Invoice | null>(null);
-  const cancelLayer = useTopLayer(!!cancelTarget);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelPaymentAction, setCancelPaymentAction] = useState<'keep_credit' | 'refund_cash' | 'none'>('none');
   const [invoiceSearchOpen, setInvoiceSearchOpen] = useState(false);
@@ -2183,7 +2173,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 }`}
               >
                 <span>{t.label}</span>
-                <span className="num text-xs font-medium text-[var(--w-text-secondary)]">{count}</span>
+                <span className="num text-xs font-medium text-[var(--w-text-sec)]">{count}</span>
               </button>
             );
           })}
@@ -2236,7 +2226,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                           <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{q.quote_number}</span>
                           <span className={`text-xs font-semibold ${st.pill} shrink-0`}>{st.label}</span>
-                          <span className="text-xs text-[var(--w-text-secondary)] shrink-0 num">{formatDate(q.created_at)}{q.valid_until ? ` · Valide ${formatDate(q.valid_until)}` : ''}</span>
+                          <span className="text-xs text-[var(--w-text-sec)] shrink-0 num">{formatDate(q.created_at)}{q.valid_until ? ` · Valide ${formatDate(q.valid_until)}` : ''}</span>
                         </div>
                         </button>
                         {/* Line 3: actions + amount */}
@@ -2268,12 +2258,12 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                     return (
                       <div key={q.id} onClick={() => openQuoteDetail(q)} className="flex items-center gap-3 px-2 py-2.5 hover:bg-[var(--w-hover)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
                         <span className="doc-number text-sm font-semibold text-[var(--w-text)] shrink-0 w-[6.5rem] truncate">{q.quote_number}</span>
-                        <span className="text-xs text-[var(--w-text-secondary)] shrink-0 tabular-nums hidden billing-extra w-24">{formatDate(q.created_at)}</span>
+                        <span className="text-xs text-[var(--w-text-sec)] shrink-0 tabular-nums hidden billing-extra w-24">{formatDate(q.created_at)}</span>
                         <span className="text-sm text-[var(--w-text)] truncate flex-1 min-w-0">{q.customers?.name || <span className="text-slate-400">—</span>}</span>
                         <span className={`text-xs leading-tight font-semibold ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
                         <span className="text-sm font-semibold text-[var(--w-text)] tabular-nums shrink-0 w-[6.5rem] text-right">{formatFCFA(q.total)}</span>
                         <div className="flex items-center gap-0.5 shrink-0 w-[4.5rem] justify-center" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => openQuoteDetail(q)} className="text-xs font-medium text-[var(--w-text-secondary)] hover:underline" title="Voir">Voir</button>
+                          <button onClick={() => openQuoteDetail(q)} className="text-xs font-medium text-[var(--w-text-sec)] hover:underline" title="Voir">Voir</button>
                           {q.status === 'accepted' && <button onClick={() => openConvert(q)} className="p-1 rounded hover:bg-brand-50 text-brand-700 transition" title="Convertir"><ArrowRight className="w-3.5 h-3.5" /></button>}
                           {q.status === 'draft' && <button onClick={() => changeQuoteStatus(q, 'sent')} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Envoyé"><CheckCircle className="w-3.5 h-3.5" /></button>}
                           {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={() => setQuoteToCancel(q)} className="p-1 rounded hover:bg-[var(--w-hover)] text-red-500 transition" title="Refuser"><X className="w-3.5 h-3.5" /></button>}
@@ -2307,8 +2297,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                           <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{inv.sale_number}</span>
                           <span className={`text-xs font-semibold ${st.pill} shrink-0`}>{st.label}</span>
-                          {inv.accounting_status === 'accounted' && <span className="text-xs text-[var(--w-text-secondary)]">Comptabilisée</span>}
-                          <span className="text-xs text-[var(--w-text-secondary)] shrink-0 num">{formatDateTime(inv.created_at)}</span>
+                          {inv.accounting_status === 'accounted' && <span className="text-xs text-[var(--w-text-sec)]">Comptabilisée</span>}
+                          <span className="text-xs text-[var(--w-text-sec)] shrink-0 num">{formatDateTime(inv.created_at)}</span>
                         </div>
                         </button>
                         {/* Line 3: icons + paid + amount */}
@@ -2341,7 +2331,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                     return (
                       <div key={inv.id} onClick={() => openInvoiceForView(inv)} className="flex items-center gap-3 px-2 py-2.5 hover:bg-[var(--w-hover)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
                         <span className="doc-number text-sm font-semibold text-[var(--w-text)] shrink-0 w-[6.5rem] truncate">{inv.sale_number}</span>
-                        <span className="text-xs text-[var(--w-text-secondary)] shrink-0 tabular-nums hidden billing-extra w-[7.5rem]">{formatDateTime(inv.created_at)}</span>
+                        <span className="text-xs text-[var(--w-text-sec)] shrink-0 tabular-nums hidden billing-extra w-[7.5rem]">{formatDateTime(inv.created_at)}</span>
                         <span className="text-sm text-[var(--w-text)] truncate flex-1 min-w-0">{inv.customers?.name || <span className="text-slate-400">Client comptoir</span>}</span>
                         <span className="text-sm font-semibold text-[var(--w-text)] tabular-nums shrink-0 w-[6.5rem] text-right">{formatFCFA(inv.total)}</span>
                         <span className="text-[11px] text-emerald-700 tabular-nums shrink-0 w-[5.5rem] text-right hidden billing-extra">{formatFCFA(inv.paid)}</span>
@@ -2353,7 +2343,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                         <div className="flex items-center gap-0.5 shrink-0 w-[4.5rem] justify-center" onClick={e => e.stopPropagation()}>
                           {inv.customers && <button onClick={() => quickWhatsApp(inv)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>}
                           <button onClick={() => quickCopy(inv)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => openInvoiceForView(inv)} className="text-xs font-medium text-[var(--w-text-secondary)] hover:underline" title="Voir">Voir</button>
+                          <button onClick={() => openInvoiceForView(inv)} className="text-xs font-medium text-[var(--w-text-sec)] hover:underline" title="Voir">Voir</button>
                         </div>
                       </div>
                     );
@@ -2393,7 +2383,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                           <span className={`text-xs font-semibold ${st.pill} shrink-0`}>{st.label}</span>
                         </div>
                         {/* Line 3: date + sale ref */}
-                        <div className="text-xs text-[var(--w-text-secondary)] num mt-0.5 truncate">
+                        <div className="text-xs text-[var(--w-text-sec)] num mt-0.5 truncate">
                           {formatDateTime(r.created_at)}{r.sales?.sale_number && <> · Vente {r.sales.sale_number}</>}
                         </div>
                         {/* Line 4: balance + amount */}
@@ -2425,14 +2415,14 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                     return (
                       <div key={r.id} onClick={() => openReturnDetail(r)} className="flex items-center gap-3 px-2 py-2.5 hover:bg-[var(--w-hover)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
                         <span className="doc-number text-sm font-semibold text-[var(--w-text)] shrink-0 w-[6.5rem] truncate">{r.return_number}</span>
-                        <span className="text-xs text-[var(--w-text-secondary)] shrink-0 tabular-nums hidden billing-extra w-[7.5rem]">{formatDateTime(r.created_at)}</span>
+                        <span className="text-xs text-[var(--w-text-sec)] shrink-0 tabular-nums hidden billing-extra w-[7.5rem]">{formatDateTime(r.created_at)}</span>
                         <span className="text-sm text-[var(--w-text)] truncate flex-1 min-w-0">{r.customers?.name || <span className="text-slate-400">—</span>}</span>
                         {tab === 'returns' && <span className="hidden billing-extra shrink-0 w-12 text-center">{r.restock ? <span className="text-xs text-[var(--w-text)]">Oui</span> : <span className="text-slate-400 text-[10px]">Non</span>}</span>}
                         {tab === 'credits' && <span className="hidden billing-extra shrink-0 w-[5.5rem] text-right text-[11px] text-slate-600 tabular-nums">{formatFCFA(used)}</span>}
                         <span className={`text-xs leading-tight font-semibold ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
                         <span className={`text-[12px] font-bold tabular-nums shrink-0 w-[6.5rem] text-right ${isCredit ? 'text-neutral-800' : 'text-red-700'}`}>{isCredit ? '' : '-'}{formatFCFA(r.total)}</span>
                         <div className="flex items-center shrink-0 w-12 justify-center">
-                          <button onClick={e => { e.stopPropagation(); openReturnDetail(r); }} className="text-xs font-medium text-[var(--w-text-secondary)] hover:underline" title="Voir">Voir</button>
+                          <button onClick={e => { e.stopPropagation(); openReturnDetail(r); }} className="text-xs font-medium text-[var(--w-text-sec)] hover:underline" title="Voir">Voir</button>
                         </div>
                       </div>
                     );
@@ -2668,7 +2658,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           title={mobileEditingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}
           editBlocked={mobileEditBlocked}
           onActivity={mobileLease.markActivity}
-          editLeaseBanner={mobileInvoiceMode==='edit'?<div className="px-3 pt-2"><DocumentEditLeaseBar lease={mobileLease} dirty={mobileDirty} saving={savingInvoice} label="cette facture" onSaveAndRelease={mobileSnapshot.ready?()=>void saveInvoice():undefined}/><InvoiceEditSnapshotBar state={mobileSnapshot}/></div>:undefined}
+          editLeaseBanner={mobileInvoiceMode==='edit'?<div><DocumentEditLeaseBar lease={mobileLease} dirty={mobileDirty} saving={savingInvoice} label="cette facture" onSaveAndRelease={mobileSnapshot.ready?()=>void saveInvoice():undefined}/><InvoiceEditSnapshotBar state={mobileSnapshot}/></div>:undefined}
           headerFields={[
             { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
             { key: 'doc_date', label: 'Date', type: 'date' as const },
@@ -2695,13 +2685,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           banner={isPharmacy && invoiceForm.customer_id && ipmBeneficiaire ? (
             <div className="px-4 py-2 bg-teal-50 border-b border-teal-200 space-y-2">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+                <ShieldCheck className="w-4 h-4 text-[var(--w-text-secondary)] shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-bold text-teal-800 truncate">
                     IPM — {ipmBeneficiaire.ipm_organismes?.nom} ({ipmTaux}%)
                   </p>
                   {invoiceEditorSubtotalRaw > 0 && (
-                    <p className="text-[10px] text-teal-600">
+                    <p className="text-xs text-[var(--w-text-sec)]">
                       Part IPM : {formatFCFA(ipmPartIpm)} · Part client : {formatFCFA(ipmPartClient)}
                     </p>
                   )}
@@ -2779,7 +2769,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           title={editingQuoteId ? 'Modifier le devis' : 'Nouveau devis'}
           editBlocked={quoteEditBlocked}
           onActivity={quoteLease.markActivity}
-          editLeaseBanner={editingQuoteId?<div className="px-3 pt-2"><DocumentEditLeaseBar lease={quoteLease} dirty={quoteDirty} saving={saving} label="ce devis" onSaveAndRelease={quoteSnapshot.ready?()=>void saveQuote():undefined}/><InvoiceEditSnapshotBar state={quoteSnapshot} document="devis"/></div>:undefined}
+          editLeaseBanner={editingQuoteId?<div><DocumentEditLeaseBar lease={quoteLease} dirty={quoteDirty} saving={saving} label="ce devis" onSaveAndRelease={quoteSnapshot.ready?()=>void saveQuote():undefined}/><InvoiceEditSnapshotBar state={quoteSnapshot} document="devis"/></div>:undefined}
           headerFields={[
             { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
             { key: 'valid_until', label: 'Valide jusqu\'au', type: 'date' },
@@ -2806,13 +2796,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           banner={isPharmacy && quoteForm.customer_id && quoteIpmBeneficiaire ? (
             <div className="px-4 py-2 bg-teal-50 border-b border-teal-200">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+                <ShieldCheck className="w-4 h-4 text-[var(--w-text-secondary)] shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-bold text-teal-800 truncate">
                     IPM — {quoteIpmBeneficiaire.ipm_organismes?.nom} ({quoteIpmTaux}%)
                   </p>
                   {quoteSubtotal > 0 && quoteIpmPartIpm > 0 && (
-                    <p className="text-[10px] text-teal-600">
+                    <p className="text-xs text-[var(--w-text-sec)]">
                       Part IPM : {formatFCFA(quoteIpmPartIpm)} · Part client : {formatFCFA(quoteIpmPartClient)}
                     </p>
                   )}
@@ -2945,7 +2935,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           return (
           <div className="space-y-4" onPointerDownCapture={convertLease.markActivity} onKeyDownCapture={convertLease.markActivity} onInputCapture={convertLease.markActivity}>
             <DocumentEditLeaseBar lease={convertLease} dirty={convertPayNow} saving={converting} label="ce devis"/>
-            {convertLoadError&&<div className="waarwi-edit-bar" role="alert"><span>{convertLoadError}</span><button type="button" className="btn-secondary" onClick={()=>setConvertRetry(n=>n+1)}>Réessayer</button></div>}
+            {convertLoadError&&<div className="waarwi-edit-bar" role="alert"><span className="waarwi-edit-main">{convertLoadError}</span><button type="button" className="btn-secondary" onClick={()=>setConvertRetry(n=>n+1)}>Réessayer</button></div>}
             <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Devis source</div>
@@ -2962,12 +2952,12 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
             {/* IPM Banner */}
             {convertIpmBeneficiaire && convertIpmCalc && (
-              <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 space-y-2">
+              <div className="border-y border-[var(--w-separator)] py-2.5 space-y-2">
                 <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+                  <ShieldCheck className="w-4 h-4 text-[var(--w-text-secondary)] shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-bold text-teal-800">{convertIpmBeneficiaire.ipm_organismes?.nom}</p>
-                    <p className="text-[10px] text-teal-600">
+                    <p className="text-xs font-semibold text-[var(--w-text)]">{convertIpmBeneficiaire.ipm_organismes?.nom}</p>
+                    <p className="text-xs text-[var(--w-text-sec)]">
                       Taux : {convertIpmCfg?.taux_defaut || 0}% — Part IPM : {formatFCFA(convertIpmCalc.part_ipm)} · Part client : {formatFCFA(convertIpmCalc.part_client)}
                     </p>
                   </div>
@@ -3058,14 +3048,14 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           <Modal open={tierPickerOpen} onClose={() => { setTierPickerOpen(false); setTierPickerArticle(null); }} title="Choisir le tarif" size="sm">
             <div className="space-y-2">
               <p className="text-xs text-slate-500 mb-3">Sélectionnez le tarif à appliquer pour <span className="font-semibold text-slate-700">{tierPickerArticle.name}</span></p>
-              <button onClick={() => addArticleWithSelectedTier('', defaultPrice)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all">
+              <button onClick={() => addArticleWithSelectedTier('', defaultPrice)} className="w-full text-left px-2.5 py-2.5 border-b border-[var(--w-separator)] hover:bg-[var(--w-hover)] transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-slate-900">Prix standard</span>
                   <span className="text-sm font-bold text-slate-900 num">{formatFCFA(defaultPrice)}</span>
                 </div>
               </button>
               {tiers.map(t => (
-                <button key={t.tier_name} onClick={() => addArticleWithSelectedTier(t.tier_name, t.price)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all">
+                <button key={t.tier_name} onClick={() => addArticleWithSelectedTier(t.tier_name, t.price)} className="w-full text-left px-2.5 py-2.5 border-b border-[var(--w-separator)] hover:bg-[var(--w-hover)] transition-colors">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-slate-900">{t.tier_name}</span>
                     <span className="text-sm font-bold text-brand-700 num">{formatFCFA(t.price)}</span>
@@ -3078,49 +3068,38 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       })()}
 
       {/* ── Register payment modal ───────────────────────────── */}
-      {payOpen && invoiceDetail && createPortal(
-        <div className="fixed inset-0 flex items-center justify-center bg-black/20" style={{ zIndex: payLayer.zIndex }} onClick={e => { if (e.target === e.currentTarget && !paying && payLayer.isTop) setPayOpen(false); }}>
-          <div className="bg-white w-full max-w-sm rounded-lg shadow-xl mx-4 flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
-            <div className="px-4 py-3 bg-neutral-900 rounded-t-lg flex items-center justify-between flex-shrink-0">
-              <div>
-                <h3 className="text-sm font-bold text-white">Encaisser la facture</h3>
-                <p className="text-[11px] text-neutral-400 mt-0.5">{invoiceDetail.sale_number}</p>
-              </div>
-              <button onClick={() => !paying && setPayOpen(false)} className="p-1 rounded hover:bg-white/10 text-neutral-400"><X className="w-4 h-4" /></button>
+      {visible && invoiceDetail && (
+        <Modal open={payOpen} onClose={() => !paying && setPayOpen(false)}
+          title="Encaisser la facture" size="sm" layer="top"
+          footer={<>
+            <button type="button" onClick={() => setPayOpen(false)} disabled={paying} className="btn-secondary">Annuler</button>
+            <button type="button" onClick={registerPayment} disabled={paying} className="btn-primary">
+              {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />} Encaisser
+            </button>
+          </>}
+        >
+          <fieldset disabled={paying} className="min-w-0 space-y-3">
+            <p className="text-xs font-medium text-[var(--w-text-sec)]">Facture {invoiceDetail.sale_number}</p>
+            <div className="flex items-baseline justify-between gap-3 border-b border-[var(--w-separator)] pb-2">
+              <span className="text-sm">Solde dû</span>
+              <strong className="num whitespace-nowrap text-base">{formatFCFA(invoiceDue)}</strong>
             </div>
-
-            <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
-              <div className="flex items-center justify-between px-2 py-2 border-b border-neutral-200">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Solde dû</div>
-                <div className="num text-base font-bold text-neutral-900">{formatFCFA(invoiceDue)}</div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1 block">Mode de règlement</label>
-                <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="w-full text-xs h-8 px-1 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors">
-                  {paymentMethods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1 block">Montant encaissé</label>
-                <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-full text-xs h-8 px-1 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors num font-bold" />
-                <div className="flex gap-1.5 mt-2">
-                  <button type="button" onClick={() => setPayAmount(String(invoiceDue))} className="text-[10px] font-bold px-2 py-1 rounded bg-[var(--w-bg-secondary)] hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] uppercase tracking-wider">Solde total</button>
-                  <button type="button" onClick={() => setPayAmount(String(Math.round(invoiceDue / 2)))} className="text-[10px] font-bold px-2 py-1 rounded bg-[var(--w-bg-secondary)] hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] uppercase tracking-wider">Moitié</button>
-                </div>
-              </div>
+            <label className="block space-y-1 text-sm font-medium">
+              Mode de règlement
+              <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="billing-field">
+                {paymentMethods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1 text-sm font-medium">
+              Montant encaissé
+              <input type="number" inputMode="decimal" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="billing-field num" />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setPayAmount(String(invoiceDue))} className="btn-secondary">Solde total</button>
+              <button type="button" onClick={() => setPayAmount(String(Math.round(invoiceDue / 2)))} className="btn-secondary">Moitié</button>
             </div>
-
-            <div className="px-4 py-3 border-t border-neutral-100 flex items-center justify-end gap-2 flex-shrink-0">
-              <button onClick={() => setPayOpen(false)} disabled={paying} className="px-3 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-40">Annuler</button>
-              <button onClick={registerPayment} disabled={paying} className="px-4 py-1.5 text-xs font-semibold bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-40 transition-colors flex items-center gap-1">
-                {paying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Coins className="w-3 h-3" />} Encaisser
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
+          </fieldset>
+        </Modal>
       )}
 
       {visible && creditOpen && invoiceDetail && (() => {
@@ -3239,70 +3218,41 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         />
       )}
 
-      {cancelTarget && createPortal(
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 p-4" style={{ zIndex: cancelLayer.zIndex }} onClick={(e) => { if (e.target === e.currentTarget && !cancelling && cancelLayer.isTop) { setCancelTarget(null); setCancelReason(''); } }}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-[min(90vw,420px)] space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0">
-                <Ban className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900">Annuler la facture</h3>
-                <p className="text-xs text-neutral-500">Facture {cancelTarget.sale_number} - {formatFCFA(Number(cancelTarget.total))}</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5 block">Motif d'annulation *</label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Indiquez le motif de l'annulation…"
-                rows={2}
-                className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-xs text-neutral-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 resize-none"
-              />
-            </div>
-
+      {visible && cancelTarget && (
+        <Modal open onClose={() => { if (!cancelling) { setCancelTarget(null); setCancelReason(''); } }}
+          title={`Annuler la facture ${cancelTarget.sale_number}`} size="sm" layer="top"
+          footer={<>
+            <button type="button" disabled={cancelling} onClick={() => { setCancelTarget(null); setCancelReason(''); }} className="btn-secondary">Retour</button>
+            <button type="button" disabled={cancelling || !cancelReason.trim()} onClick={confirmCancelInvoice} className="btn-primary">
+              {cancelling && <Loader2 className="w-4 h-4 animate-spin" />} Confirmer l’annulation
+            </button>
+          </>}
+        >
+          <fieldset disabled={cancelling} className="min-w-0 space-y-3">
+            <p className="flex items-baseline justify-between gap-3 border-b border-[var(--w-separator)] pb-2 text-sm">
+              <span>Total de la facture</span>
+              <strong className="num whitespace-nowrap">{formatFCFA(Number(cancelTarget.total))}</strong>
+            </p>
+            <label className="block space-y-1 text-sm font-medium">
+              Motif d’annulation *
+              <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={2} className="billing-field" />
+            </label>
             {Number(cancelTarget.paid) > 0 && (
-              <div>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5 block">Gestion du paiement encaissé</label>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setCancelPaymentAction('keep_credit')}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${cancelPaymentAction === 'keep_credit' ? 'border-amber-400' : 'border-neutral-200 hover:bg-neutral-50'}`}
-                  >
-                    <Wallet className="w-4 h-4 text-amber-600 shrink-0" />
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold text-neutral-800">Conserver comme crédit client</div>
-                      <div className="text-[10px] text-neutral-500">L'argent reste encaissé et devient un crédit traçable</div>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setCancelPaymentAction('refund_cash')}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${cancelPaymentAction === 'refund_cash' ? 'border-red-400' : 'border-neutral-200 hover:bg-neutral-50'}`}
-                  >
-                    <RotateCcw className="w-4 h-4 text-red-500 shrink-0" />
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold text-neutral-800">Rembourser le client</div>
-                      <div className="text-[10px] text-neutral-500">Crée une sortie financière et diminue la caisse</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
+              <fieldset className="space-y-1.5">
+                <legend className="text-sm font-medium">Paiement encaissé</legend>
+                <label className="billing-choice">
+                  <input type="radio" name="cancel-payment-billing" checked={cancelPaymentAction === 'keep_credit'} onChange={() => setCancelPaymentAction('keep_credit')} />
+                  <span>Conserver comme crédit client</span>
+                </label>
+                <label className="billing-choice">
+                  <input type="radio" name="cancel-payment-billing" checked={cancelPaymentAction === 'refund_cash'} onChange={() => setCancelPaymentAction('refund_cash')} />
+                  <span>Rembourser le client depuis la caisse</span>
+                </label>
+              </fieldset>
             )}
-
-            <div className="bg-neutral-50 rounded-lg p-3 text-[10px] text-neutral-500 space-y-1">
-              <p>• Le stock sera restauré sur le dépôt source</p>
-              <p>• La garantie liée sera marquée comme annulée</p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button disabled={cancelling} onClick={() => { setCancelTarget(null); setCancelReason(''); }} className="px-3 py-1.5 text-xs font-medium text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)] rounded transition-colors disabled:opacity-50">Non, garder</button>
-              <button disabled={cancelling || !cancelReason.trim()} onClick={confirmCancelInvoice} className="px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">{cancelling && <Loader2 className="w-3 h-3 animate-spin" />}Oui, annuler</button>
-            </div>
-          </div>
-        </div>,
-        document.body
+            <p className="text-xs text-[var(--w-text-sec)]">Le stock sera restitué au dépôt d’origine et la garantie liée sera annulée.</p>
+          </fieldset>
+        </Modal>
       )}
 
       {autoMode && tenant && currentSite && (

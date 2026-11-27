@@ -1,7 +1,7 @@
 name: Recette historique SQL locale (aucun déploiement)
 on:
   push:
-    branches: [main, codex/waarwi-comptabilite-suite, codex/waarwi-migration-alignment]
+    branches: [main, codex/waarwi-comptabilite-suite, codex/waarwi-migration-alignment, codex/waarwi-harmonisation]
     paths:
       - '.github/workflows/waarwi-historical-replay.yml'
       - 'scripts/pending-accounting/production-migration-versions.json'

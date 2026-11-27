@@ -1,39 +1,60 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 
-// Shared stack for "top-layer" modals opened above the desktop window system.
-// Each entry represents one open modal; the last entry is the visible top.
-// The base z-index sits above WindowTaskbar (z-[9999]) and every DesktopWindow.
-const BASE_Z = 10010;
-const stack: symbol[] = [];
+// Top layers are above both the window manager and its taskbar (z-index 9999).
+const TOP_Z = 10010;
+const BASE_Z = 50;
+const topStack: symbol[] = [];
+const baseStack: symbol[] = [];
 const listeners = new Set<() => void>();
+let scrollLocks = 0;
 
-function notify() {
-  listeners.forEach((fn) => fn());
-}
-
-export function useTopLayer(open: boolean): { isTop: boolean; zIndex: number } {
+function useLayer(open: boolean, layer: 'base' | 'top'): { isTop: boolean; zIndex: number } {
+  const stack = layer === 'top' ? topStack : baseStack;
+  const start = layer === 'top' ? TOP_Z : BASE_Z;
   const idRef = useRef<symbol | null>(null);
-  const [, force] = useState(0);
+  const [, refresh] = useState(0);
 
   useLayoutEffect(() => {
     if (!open) return;
-    const id = Symbol('modal');
+    const id = Symbol(layer);
     idRef.current = id;
     stack.push(id);
-    const listener = () => force((t) => t + 1);
+    const listener = () => refresh(version => version + 1);
     listeners.add(listener);
-    notify();
+    listeners.forEach(update => update());
+
     return () => {
-      const i = stack.indexOf(id);
-      if (i >= 0) stack.splice(i, 1);
+      const index = stack.indexOf(id);
+      if (index >= 0) stack.splice(index, 1);
       listeners.delete(listener);
       idRef.current = null;
-      notify();
+      listeners.forEach(update => update());
+    };
+  }, [open, layer, stack]);
+
+  const index = idRef.current ? stack.indexOf(idRef.current) : -1;
+  const isTop = open && index >= 0 && index === stack.length - 1 && (layer === 'top' || !topStack.length);
+  return { isTop, zIndex: start + Math.max(0, index) * (layer === 'top' ? 10 : 1) };
+}
+
+export function useTopLayer(open: boolean) {
+  return useLayer(open, 'top');
+}
+
+export function useBaseLayer(open: boolean) {
+  return useLayer(open, 'base');
+}
+
+export function useBodyScrollLock(open: boolean) {
+  useLayoutEffect(() => {
+    if (!open) return;
+    const body = document.body;
+    scrollLocks += 1;
+    body.setAttribute('data-waarwi-scroll-lock', '');
+
+    return () => {
+      scrollLocks -= 1;
+      if (!scrollLocks) body.removeAttribute('data-waarwi-scroll-lock');
     };
   }, [open]);
-
-  if (!open || !idRef.current) return { isTop: false, zIndex: BASE_Z };
-  const idx = stack.indexOf(idRef.current);
-  const isTop = idx === stack.length - 1;
-  return { isTop, zIndex: BASE_Z + Math.max(0, idx) * 10 };
 }

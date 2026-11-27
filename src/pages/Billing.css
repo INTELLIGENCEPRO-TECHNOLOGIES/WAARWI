@@ -15,3 +15,30 @@
 .billing-return-footer {
   padding-bottom: max(.75rem, env(safe-area-inset-bottom));
 }
+
+.billing-field {
+  display: block;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: .5rem .65rem;
+  color: var(--w-text);
+  background: var(--w-surface);
+  border: 1px solid var(--w-separator);
+  border-radius: .375rem;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.billing-field:focus-visible {
+  outline: 1px solid var(--w-text);
+  outline-offset: 1px;
+}
+
+.billing-choice {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  min-height: 2.5rem;
+  border-bottom: 1px solid var(--w-separator);
+  font-size: .875rem;
+}

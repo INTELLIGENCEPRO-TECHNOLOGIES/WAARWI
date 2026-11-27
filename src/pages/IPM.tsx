@@ -1,7 +1,7 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
-import { useEffect, useMemo, useState } from 'react';
-import { HeartPulse, Building2, FileText, Users, Receipt, CreditCard, AlertTriangle, Search, CreditCard as Edit2, Check, X, Loader2, Wallet, BarChart3, Ban, RefreshCw, Settings2, Printer } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { HeartPulse, Building2, FileText, Users, Receipt, CreditCard, AlertTriangle, Search, Pencil as Edit2, Check, X, Loader2, Wallet, BarChart3, Ban, RefreshCw, Settings2, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDate } from '../lib/format';
@@ -9,16 +9,16 @@ import { Modal } from '../components/Modal';
 
 type Section = 'dashboard' | 'organismes' | 'conventions' | 'beneficiaires' | 'bordereaux' | 'factures' | 'reglements' | 'rejets' | 'parametres';
 
-const SECTIONS: { key: Section; label: string; shortLabel: string; icon: any }[] = [
-  { key: 'dashboard', label: 'Vue', shortLabel: 'Vue', icon: BarChart3 },
-  { key: 'organismes', label: 'Organismes', shortLabel: 'Org.', icon: Building2 },
-  { key: 'conventions', label: 'Conventions', shortLabel: 'Conv.', icon: FileText },
-  { key: 'beneficiaires', label: 'Bénéficiaires', shortLabel: 'Bénéf.', icon: Users },
-  { key: 'bordereaux', label: 'Bordereaux', shortLabel: 'Bord.', icon: Receipt },
-  { key: 'factures', label: 'Factures', shortLabel: 'Fact.', icon: CreditCard },
-  { key: 'reglements', label: 'Règlements', shortLabel: 'Règl.', icon: Wallet },
-  { key: 'rejets', label: 'Rejets', shortLabel: 'Rejets', icon: AlertTriangle },
-  { key: 'parametres', label: 'Paramètres', shortLabel: 'Param.', icon: Settings2 },
+const SECTIONS: { key: Section; label: string; icon: typeof Building2 }[] = [
+  { key: 'dashboard', label: 'Vue d’ensemble', icon: BarChart3 },
+  { key: 'organismes', label: 'Organismes', icon: Building2 },
+  { key: 'conventions', label: 'Conventions', icon: FileText },
+  { key: 'beneficiaires', label: 'Bénéficiaires', icon: Users },
+  { key: 'bordereaux', label: 'Bordereaux', icon: Receipt },
+  { key: 'factures', label: 'Factures', icon: CreditCard },
+  { key: 'reglements', label: 'Règlements', icon: Wallet },
+  { key: 'rejets', label: 'Rejets', icon: AlertTriangle },
+  { key: 'parametres', label: 'Paramètres', icon: Settings2 },
 ];
 
 export function IPM() {
@@ -38,65 +38,42 @@ export function IPM() {
 
   if (dbReady === false) {
     return (
-      <div className="min-h-full flex items-center justify-center p-6">
-        <div className="max-w-md text-center">
-          <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="w-8 h-8 text-amber-500" />
-          </div>
-          <h2 className="text-lg font-bold text-neutral-900 mb-2">Module IPM en cours de configuration</h2>
-          <p className="text-sm text-neutral-600 mb-4">
-            Les tables de base de données pour le module IPM n'ont pas encore été créées.
-            Veuillez contacter l'administrateur de la plateforme pour finaliser l'installation.
-          </p>
-          <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200 text-left">
-            <p className="text-[11px] font-mono text-neutral-500">Erreur : table 'ipm_organismes' introuvable</p>
-          </div>
+      <section role="status" className="flex items-start gap-2 border-b border-[var(--w-separator)] py-3">
+        <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+        <div>
+          <h1 className="text-sm font-semibold text-[var(--w-text)]">Module IPM en cours de configuration</h1>
+          <p className="text-xs text-[var(--w-text-sec)]">Contactez l’administrateur pour terminer l’installation.</p>
         </div>
-      </div>
+      </section>
     );
   }
 
   if (dbReady === null) {
     return (
-      <div className="min-h-full flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-neutral-700" />
+      <div role="status" className="flex items-center gap-2 py-4 text-sm text-[var(--w-text-sec)]">
+        <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> Chargement de l’IPM…
       </div>
     );
   }
 
   return (
-    <div className="w-full bg-white">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-9 h-9 shrink-0 rounded-xl bg-neutral-900 flex items-center justify-center">
-          <HeartPulse className="w-5 h-5 text-white" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-base sm:text-lg font-bold text-neutral-900 truncate">IPM / Tiers payant</h1>
-          <p className="text-[11px] text-neutral-400 truncate">Organismes payeurs et créances</p>
-        </div>
-      </div>
-
-      {/* Tab navigation */}
-      <div className="overflow-x-auto scrollbar-hide -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 mb-4">
-        <div className="flex gap-1.5 w-max pb-2">
-          {SECTIONS.map(s => (
-            <button
-              key={s.key}
-              onClick={() => setSection(s.key)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
-                section === s.key
-                  ? 'bg-neutral-900 text-white'
-                  : 'bg-neutral-100 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
-              }`}
-            >
-              <s.icon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{s.label}</span>
-              <span className="sm:hidden">{s.shortLabel}</span>
+    <div className="w-full min-w-0">
+      <h1 className="mb-3 text-lg font-bold tracking-tight text-[var(--w-text)]">IPM / Tiers payant</h1>
+      <nav aria-label="Sections IPM" className="mb-4">
+        <select aria-label="Section IPM" value={section} onChange={event => setSection(event.target.value as Section)}
+          className="input min-h-11 text-sm lg:hidden">
+          {SECTIONS.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
+        </select>
+        <div className="hidden flex-wrap gap-x-1 border-b border-[var(--w-separator)] lg:flex">
+          {SECTIONS.map(({ key, label, icon: Icon }) => (
+            <button key={key} type="button" aria-current={section === key ? 'page' : undefined} onClick={() => setSection(key)}
+              className="inline-flex min-h-11 items-center gap-1.5 border-b-2 border-transparent px-2 py-2 text-xs font-medium text-[var(--w-text-sec)] transition-colors hover:text-[var(--w-text)] aria-[current=page]:border-[var(--w-text)] aria-[current=page]:font-semibold aria-[current=page]:text-[var(--w-text)]">
+              <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+              {label}
             </button>
           ))}
         </div>
-      </div>
+      </nav>
 
       {/* Content */}
       <div className="w-full">
@@ -179,92 +156,62 @@ function IpmDashboard({ tenantId }: { tenantId: string }) {
   if (loading) return <DashSkeleton />;
   if (!stats) return <EmptyIpm message="Aucune donnée IPM disponible" />;
 
+  const metrics = [
+    { label: 'Créances ouvertes', value: formatFCFA(stats.enAttente) },
+    { label: 'Montant réglé', value: formatFCFA(stats.totalRegle) },
+    { label: 'Reste à payer', value: formatFCFA(stats.resteAPayer) },
+    { label: 'Dossiers à transmettre', value: stats.dossiers },
+  ];
+  const alerts = [
+    { count: stats.conventionsExpirees, label: 'conventions expirées' },
+    { count: stats.benefExpires, label: 'bénéficiaires expirés' },
+    { count: stats.rejetsNouveaux, label: 'rejets à traiter' },
+  ].filter(alert => alert.count > 0);
+
   return (
-    <div className="space-y-4">
-      {/* Carte principale Créances IPM */}
-      <div className="bg-white rounded-xl border border-neutral-200 p-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Créances IPM</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <p className="text-[10px] text-neutral-500 mb-0.5">Créances ouvertes</p>
-            <p className="text-base font-bold text-neutral-900 tabular-nums">{formatFCFA(stats.enAttente)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-neutral-500 mb-0.5">Montant réglé</p>
-            <p className="text-base font-bold text-emerald-600 tabular-nums">{formatFCFA(stats.totalRegle)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-neutral-500 mb-0.5">Reste à payer</p>
-            <p className="text-base font-bold text-neutral-900 tabular-nums">{formatFCFA(stats.resteAPayer)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-neutral-500 mb-0.5">Dossiers à transmettre</p>
-            <p className="text-base font-bold text-neutral-900">{stats.dossiers}</p>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <section aria-labelledby="ipm-receivables">
+        <h2 id="ipm-receivables" className="border-b border-[var(--w-separator)] pb-2 text-sm font-semibold text-[var(--w-text)]">Créances IPM</h2>
+        <dl className="grid grid-cols-2 gap-x-2 sm:gap-x-4 lg:grid-cols-4">
+          {metrics.map(({ label, value }) => (
+            <div key={label} className="min-w-0 border-b border-[var(--w-separator)] py-2.5">
+              <dt className="text-xs text-[var(--w-text-sec)]">{label}</dt>
+              <dd className="num whitespace-nowrap text-[clamp(.75rem,3.4vw,1rem)] font-semibold text-[var(--w-text)]">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--w-text-sec)]">
+          <li><strong className="num">{stats.nbOrganismes}</strong> organismes actifs</li>
+          <li><strong className="num">{stats.nbBeneficiaires}</strong> bénéficiaires</li>
+        </ul>
+      </section>
 
-      {/* Alertes compactes */}
-      {(stats.conventionsExpirees > 0 || stats.benefExpires > 0 || stats.rejetsNouveaux > 0) && (
-        <div className="space-y-1.5">
-          {stats.conventionsExpirees > 0 && (
-            <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <p className="text-[11px] text-neutral-700"><span className="font-semibold">{stats.conventionsExpirees}</span> convention(s) expirée(s)</p>
-            </div>
-          )}
-          {stats.benefExpires > 0 && (
-            <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50">
-              <Ban className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <p className="text-[11px] text-neutral-700"><span className="font-semibold">{stats.benefExpires}</span> bénéficiaire(s) expiré(s)</p>
-            </div>
-          )}
-          {stats.rejetsNouveaux > 0 && (
-            <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50">
-              <X className="w-3.5 h-3.5 text-red-500 shrink-0" />
-              <p className="text-[11px] text-neutral-700"><span className="font-semibold">{stats.rejetsNouveaux}</span> rejet(s) à traiter</p>
-            </div>
-          )}
-        </div>
+      {alerts.length > 0 && (
+        <ul aria-label="Points de suivi" className="divide-y divide-[var(--w-separator)] border-y border-[var(--w-separator)]">
+          {alerts.map(({ count, label }) => (
+            <li key={label} className="flex items-center gap-2 py-2 text-xs text-[var(--w-text-sec)]">
+              <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-amber-700" />
+              <span><strong className="num text-[var(--w-text)]">{count}</strong> {label}</span>
+            </li>
+          ))}
+        </ul>
       )}
 
-      {/* Top Organismes */}
       {stats.topOrganismes.length > 0 && (
-        <div className="bg-white rounded-xl border border-neutral-200 p-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2.5">Top organismes</h3>
-          <div className="space-y-0">
-            {stats.topOrganismes.map((o: any, i: number) => (
-              <div key={i} className="flex items-center justify-between py-1.5 border-b border-[var(--w-separator-l)] last:border-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-4 h-4 rounded-full bg-neutral-100 text-neutral-600 text-[9px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-                  <span className="text-xs text-neutral-700 truncate">{o.nom}</span>
+        <section aria-labelledby="ipm-top-organismes">
+          <h2 id="ipm-top-organismes" className="border-b border-[var(--w-separator)] pb-2 text-sm font-semibold text-[var(--w-text)]">Principaux organismes</h2>
+          <ol className="list-decimal divide-y divide-[var(--w-separator)] pl-5 text-xs marker:text-[var(--w-text-muted)]">
+            {stats.topOrganismes.map((organisme: { nom: string; montant: number }, index: number) => (
+              <li key={index} className="py-2 pl-1">
+                <div className="flex items-baseline gap-3">
+                  <span className="min-w-0 flex-1 break-words text-[var(--w-text)]">{organisme.nom}</span>
+                  <span className="num shrink-0 whitespace-nowrap font-semibold text-[var(--w-text)]">{formatFCFA(organisme.montant)}</span>
                 </div>
-                <span className="text-xs font-bold text-neutral-900 tabular-nums shrink-0 ml-3">{formatFCFA(o.montant)}</span>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ol>
+        </section>
       )}
-
-      {/* Résumé */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="bg-white rounded-lg border border-neutral-200 px-3 py-2.5 text-center">
-          <p className="text-lg font-bold text-neutral-900">{stats.nbOrganismes}</p>
-          <p className="text-[9px] text-neutral-400 font-medium uppercase tracking-wide">Organismes actifs</p>
-        </div>
-        <div className="bg-white rounded-lg border border-neutral-200 px-3 py-2.5 text-center">
-          <p className="text-lg font-bold text-neutral-900">{stats.nbBeneficiaires}</p>
-          <p className="text-[9px] text-neutral-400 font-medium uppercase tracking-wide">Bénéficiaires</p>
-        </div>
-        <div className="bg-white rounded-lg border border-neutral-200 px-3 py-2.5 text-center">
-          <p className="text-lg font-bold text-emerald-600 tabular-nums">{formatFCFA(stats.totalRegle)}</p>
-          <p className="text-[9px] text-neutral-400 font-medium uppercase tracking-wide">Total encaissé</p>
-        </div>
-        <div className="bg-white rounded-lg border border-neutral-200 px-3 py-2.5 text-center">
-          <p className="text-lg font-bold text-neutral-900 tabular-nums">{formatFCFA(stats.resteAPayer)}</p>
-          <p className="text-[9px] text-neutral-400 font-medium uppercase tracking-wide">Créances ouvertes</p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -340,13 +287,13 @@ function IpmOrganismes({ tenantId }: { tenantId: string }) {
       ) : (
         <>
           {/* Mobile cards */}
-          <div className="space-y-2 lg:hidden">
+          <div className="divide-y divide-[var(--w-separator)] lg:hidden">
             {filtered.map(o => (
-              <div key={o.id} className="bg-white rounded-xl border border-neutral-200 p-3.5">
+              <div key={o.id} className="px-1 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-neutral-900 truncate">{o.nom}</p>
+                      <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{o.nom}</p>
                       <span className={`shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase ${o.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
                         {o.is_active ? 'Actif' : 'Inactif'}
                       </span>
@@ -366,7 +313,7 @@ function IpmOrganismes({ tenantId }: { tenantId: string }) {
             ))}
           </div>
           {/* Desktop table */}
-          <div className="hidden lg:block bg-white rounded-2xl border border-neutral-200 overflow-hidden">
+          <div className="hidden overflow-hidden border-y border-[var(--w-separator)] lg:block">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -409,8 +356,11 @@ function IpmOrganismes({ tenantId }: { tenantId: string }) {
       )}
 
       {showForm && (
-        <Modal open title={editing ? 'Modifier l\'organisme' : 'Nouvel organisme IPM'} onClose={() => setShowForm(false)}>
-          <div className="space-y-3 p-1">
+        <Modal open title={editing ? 'Modifier l\'organisme' : 'Nouvel organisme IPM'} onClose={() => setShowForm(false)}
+          footer={<IpmDialogActions onClose={() => setShowForm(false)} onSave={save} busy={saving}
+            disabled={!form.nom.trim()} label={editing ? 'Enregistrer' : 'Créer l’organisme'} />}
+        >
+          <div className="space-y-3">
             <FormField label="Nom de l'organisme *" value={form.nom} onChange={v => setForm({ ...form, nom: v })} />
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Code interne" value={form.code} onChange={v => setForm({ ...form, code: v })} />
@@ -424,12 +374,6 @@ function IpmOrganismes({ tenantId }: { tenantId: string }) {
             <FormField label="Contact facturation" value={form.contact_facturation} onChange={v => setForm({ ...form, contact_facturation: v })} />
             <FormField label="Conditions de paiement" value={form.conditions_paiement} onChange={v => setForm({ ...form, conditions_paiement: v })} />
             <FormField label="Observations" value={form.observations} onChange={v => setForm({ ...form, observations: v })} multiline />
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={save} disabled={saving || !form.nom.trim()} className="btn-icon-primary" title="Enregistrer">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editing ? 'Enregistrer' : 'Créer')}
-              </button>
-            </div>
           </div>
         </Modal>
       )}
@@ -549,15 +493,15 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
       {loading ? <TableSkeleton /> : filtered.length === 0 ? (
         <EmptyIpm message="Aucune convention IPM" action="Configurez vos conventions pour définir les taux de prise en charge" />
       ) : (
-        <div className="grid gap-3">
+        <div className="divide-y divide-[var(--w-separator)]">
           {filtered.map(c => {
             const expired = c.date_fin && c.date_fin < today;
             return (
-              <div key={c.id} className={`bg-white rounded-xl border p-4 transition-all hover:shadow-sm ${expired ? 'border-amber-200 bg-amber-50/30' : 'border-neutral-200'}`}>
+              <div key={c.id} className="px-1 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className="text-sm font-bold text-neutral-900 truncate">{c.nom}</h4>
+                      <h4 className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{c.nom}</h4>
                       {expired && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase">Expirée</span>}
                       {!c.is_active && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 uppercase">Inactive</span>}
                     </div>
@@ -585,15 +529,18 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
       )}
 
       {showForm && (
-        <Modal open title={editing ? 'Modifier la convention' : 'Nouvelle convention IPM'} onClose={() => setShowForm(false)} size="lg">
-          <div className="space-y-4 p-1 max-h-[70vh] overflow-y-auto">
+        <Modal open title={editing ? 'Modifier la convention' : 'Nouvelle convention IPM'} onClose={() => setShowForm(false)} size="lg"
+          footer={<IpmDialogActions onClose={() => setShowForm(false)} onSave={save} busy={saving}
+            disabled={!form.nom.trim() || !form.organisme_id} label={editing ? 'Enregistrer' : 'Créer la convention'} />}
+        >
+          <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Organisme IPM *</label>
-                <select value={form.organisme_id} onChange={e => setForm({ ...form, organisme_id: e.target.value })} className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:border-neutral-400 outline-none">
+              <label className="block min-w-0">
+                <span className="label text-xs">Organisme IPM *</span>
+                <select value={form.organisme_id} onChange={e => setForm({ ...form, organisme_id: e.target.value })} className="input min-h-10 py-2 text-sm">
                   {organismes.map(o => <option key={o.id} value={o.id}>{o.nom}</option>)}
                 </select>
-              </div>
+              </label>
               <FormField label="Nom de la convention *" value={form.nom} onChange={v => setForm({ ...form, nom: v })} />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -628,29 +575,29 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
             <fieldset className="border border-neutral-200 rounded-lg p-3">
               <legend className="text-[10px] font-bold text-neutral-400 uppercase px-1">Règles de calcul</legend>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Mode de calcul</label>
-                  <select value={form.mode_calcul} onChange={e => setForm({ ...form, mode_calcul: e.target.value })} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-xs focus:border-neutral-400 outline-none">
+                <label className="block min-w-0">
+                  <span className="label text-xs">Mode de calcul</span>
+                  <select value={form.mode_calcul} onChange={e => setForm({ ...form, mode_calcul: e.target.value })} className="input min-h-10 py-2 text-sm">
                     <option value="ligne_par_ligne">Ligne par ligne</option>
                     <option value="total_facture">Total facture</option>
                     <option value="articles_eligibles">Articles éligibles seuls</option>
                   </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Application du plafond</label>
-                  <select value={form.application_plafond} onChange={e => setForm({ ...form, application_plafond: e.target.value })} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-xs focus:border-neutral-400 outline-none">
+                </label>
+                <label className="block min-w-0">
+                  <span className="label text-xs">Application du plafond</span>
+                  <select value={form.application_plafond} onChange={e => setForm({ ...form, application_plafond: e.target.value })} className="input min-h-10 py-2 text-sm">
                     <option value="apres_calcul">Après calcul</option>
                     <option value="avant_calcul">Avant calcul</option>
                   </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Arrondi</label>
-                  <select value={form.mode_arrondi} onChange={e => setForm({ ...form, mode_arrondi: e.target.value })} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-xs focus:border-neutral-400 outline-none">
+                </label>
+                <label className="block min-w-0">
+                  <span className="label text-xs">Arrondi</span>
+                  <select value={form.mode_arrondi} onChange={e => setForm({ ...form, mode_arrondi: e.target.value })} className="input min-h-10 py-2 text-sm">
                     <option value="round">Arrondi standard</option>
                     <option value="floor">Arrondi inférieur</option>
                     <option value="ceil">Arrondi supérieur</option>
                   </select>
-                </div>
+                </label>
               </div>
               <div className="flex flex-wrap gap-4 mt-3">
                 <CheckboxField label="Permettre de forcer le montant IPM" checked={form.forcer_montant_ipm} onChange={v => setForm({ ...form, forcer_montant_ipm: v })} />
@@ -660,12 +607,6 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
               </div>
             </fieldset>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={save} disabled={saving || !form.nom.trim() || !form.organisme_id} className="btn-icon-primary" title="Enregistrer">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}
-              </button>
-            </div>
           </div>
         </Modal>
       )}
@@ -753,15 +694,15 @@ function IpmBeneficiaires({ tenantId }: { tenantId: string }) {
       {loading ? <TableSkeleton /> : filtered.length === 0 ? (
         <EmptyIpm message="Aucun bénéficiaire IPM" action="Associez un client à un organisme IPM" />
       ) : (
-        <div className="grid gap-2">
+        <div className="divide-y divide-[var(--w-separator)]">
           {filtered.map(b => {
             const expired = b.date_fin_couverture && b.date_fin_couverture < today;
             return (
-              <div key={b.id} className={`bg-white rounded-xl border p-3.5 ${expired || b.statut === 'expire' ? 'border-amber-200' : b.statut === 'suspendu' ? 'border-rose-200' : 'border-neutral-200'}`}>
+              <div key={b.id} className="px-1 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-neutral-900 truncate">{b.customers?.name || '-'}</p>
+                      <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{b.customers?.name || '-'}</p>
                       <span className={`shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${b.statut === 'actif' && !expired ? 'bg-emerald-100 text-emerald-700' : b.statut === 'suspendu' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
                         {expired ? 'Expiré' : b.statut}
                       </span>
@@ -784,66 +725,63 @@ function IpmBeneficiaires({ tenantId }: { tenantId: string }) {
       )}
 
       {showForm && (
-        <Modal open title={editing ? 'Modifier le bénéficiaire' : 'Nouveau bénéficiaire IPM'} onClose={() => setShowForm(false)} size="lg">
-          <div className="space-y-3 p-1 max-h-[70vh] overflow-y-auto">
-            <div>
-              <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Client *</label>
-              <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:border-neutral-400 outline-none">
+        <Modal open title={editing ? 'Modifier le bénéficiaire' : 'Nouveau bénéficiaire IPM'} onClose={() => setShowForm(false)} size="lg"
+          footer={<IpmDialogActions onClose={() => setShowForm(false)} onSave={save} busy={saving}
+            disabled={!form.customer_id || !form.organisme_id} label={editing ? 'Enregistrer' : 'Créer le bénéficiaire'} />}
+        >
+          <div className="space-y-3">
+            <label className="block min-w-0">
+              <span className="label text-xs">Client *</span>
+              <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} className="input min-h-10 py-2 text-sm">
                 <option value="">-- Sélectionner --</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}
               </select>
-            </div>
+            </label>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Organisme IPM *</label>
-                <select value={form.organisme_id} onChange={e => setForm({ ...form, organisme_id: e.target.value, convention_id: '' })} className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:border-neutral-400 outline-none">
+              <label className="block min-w-0">
+                <span className="label text-xs">Organisme IPM *</span>
+                <select value={form.organisme_id} onChange={e => setForm({ ...form, organisme_id: e.target.value, convention_id: '' })} className="input min-h-10 py-2 text-sm">
                   {organismes.map(o => <option key={o.id} value={o.id}>{o.nom}</option>)}
                 </select>
-              </div>
-              <div>
-                <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Convention</label>
-                <select value={form.convention_id} onChange={e => setForm({ ...form, convention_id: e.target.value })} className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:border-neutral-400 outline-none">
+              </label>
+              <label className="block min-w-0">
+                <span className="label text-xs">Convention</span>
+                <select value={form.convention_id} onChange={e => setForm({ ...form, convention_id: e.target.value })} className="input min-h-10 py-2 text-sm">
                   <option value="">-- Par défaut --</option>
                   {filteredConvs.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                 </select>
-              </div>
+              </label>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Matricule assuré" value={form.matricule} onChange={v => setForm({ ...form, matricule: v })} />
               <FormField label="Nom du titulaire" value={form.nom_titulaire} onChange={v => setForm({ ...form, nom_titulaire: v })} />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Lien avec titulaire</label>
-                <select value={form.lien_titulaire} onChange={e => setForm({ ...form, lien_titulaire: e.target.value })} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-xs focus:border-neutral-400 outline-none">
+              <label className="block min-w-0">
+                <span className="label text-xs">Lien avec titulaire</span>
+                <select value={form.lien_titulaire} onChange={e => setForm({ ...form, lien_titulaire: e.target.value })} className="input min-h-10 py-2 text-sm">
                   <option value="lui_meme">Lui-même</option>
                   <option value="conjoint">Conjoint</option>
                   <option value="enfant">Enfant</option>
                   <option value="parent">Parent</option>
                   <option value="autre">Autre</option>
                 </select>
-              </div>
+              </label>
               <FormField label="Début couverture" value={form.date_debut_couverture} onChange={v => setForm({ ...form, date_debut_couverture: v })} type="date" />
               <FormField label="Fin couverture" value={form.date_fin_couverture} onChange={v => setForm({ ...form, date_fin_couverture: v })} type="date" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Plafond individuel (FCFA)" value={form.plafond_individuel} onChange={v => setForm({ ...form, plafond_individuel: v })} type="number" placeholder="Selon convention" />
-              <div>
-                <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Statut</label>
-                <select value={form.statut} onChange={e => setForm({ ...form, statut: e.target.value })} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-xs focus:border-neutral-400 outline-none">
+              <label className="block min-w-0">
+                <span className="label text-xs">Statut</span>
+                <select value={form.statut} onChange={e => setForm({ ...form, statut: e.target.value })} className="input min-h-10 py-2 text-sm">
                   <option value="actif">Actif</option>
                   <option value="suspendu">Suspendu</option>
                   <option value="expire">Expiré</option>
                 </select>
-              </div>
+              </label>
             </div>
             <FormField label="Observations" value={form.observations} onChange={v => setForm({ ...form, observations: v })} multiline />
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={save} disabled={saving || !form.customer_id || !form.organisme_id} className="btn-icon-primary" title="Enregistrer">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}
-              </button>
-            </div>
           </div>
         </Modal>
       )}
@@ -1130,12 +1068,12 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
       ) : (
         <>
           {/* Mobile cards */}
-          <div className="space-y-2 lg:hidden">
+          <div className="divide-y divide-[var(--w-separator)] lg:hidden">
             {filteredBord.map(b => (
-              <div key={b.id} className="bg-white rounded-xl border border-neutral-200 p-3.5">
+              <div key={b.id} className="px-1 py-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-neutral-900 truncate">{b.ipm_organismes?.nom || '-'}</p>
+                    <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{b.ipm_organismes?.nom || '-'}</p>
                     <p className="text-[10px] text-neutral-400 mt-0.5">{b.numero}</p>
                   </div>
                   <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${statusColors[b.statut] || statusColors.brouillon}`}>
@@ -1163,7 +1101,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
             ))}
           </div>
           {/* Desktop table */}
-          <div className="hidden lg:block bg-white rounded-2xl border border-neutral-200 overflow-hidden">
+          <div className="hidden overflow-hidden border-y border-[var(--w-separator)] lg:block">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -1218,23 +1156,26 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
       )}
 
       {showCreate && (
-        <Modal open title="Générer un bordereau IPM" onClose={() => setShowCreate(false)} size="lg">
+        <Modal open title="Générer un bordereau IPM" onClose={() => setShowCreate(false)} size="lg"
+          footer={<IpmDialogActions onClose={() => setShowCreate(false)} onSave={createBordereau} busy={creating}
+            disabled={!selectedOrg || pendingVentes.length === 0} label={'Générer le bordereau'} />}
+        >
           <div className="space-y-4">
-            <div>
-              <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Organisme</label>
-              <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm">
+            <label className="block min-w-0">
+              <span className="label text-xs">Organisme</span>
+              <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="input min-h-10 py-2 text-sm">
                 <option value="">Sélectionnez un organisme</option>
                 {organismes.map(o => <option key={o.id} value={o.id}>{o.nom}</option>)}
               </select>
-            </div>
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Période du</label>
-                <input type="date" value={periodeDebut} onChange={e => setPeriodeDebut(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm" />
+                <input type="date" value={periodeDebut} onChange={e => setPeriodeDebut(e.target.value)} className="input min-h-10 py-2 text-sm" />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-neutral-500 mb-1 block">au</label>
-                <input type="date" value={periodeFin} onChange={e => setPeriodeFin(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm" />
+                <input type="date" value={periodeFin} onChange={e => setPeriodeFin(e.target.value)} className="input min-h-10 py-2 text-sm" />
               </div>
             </div>
             {selectedOrg && (
@@ -1263,13 +1204,6 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
                 )}
               </div>
             )}
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowCreate(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={createBordereau} disabled={creating || !selectedOrg || pendingVentes.length === 0}
-                className="btn-icon-primary" title="Générer le bordereau">
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-            </div>
           </div>
         </Modal>
       )}
@@ -1601,12 +1535,12 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
       ) : (
         <>
           {/* Mobile cards */}
-          <div className="space-y-2 lg:hidden">
+          <div className="divide-y divide-[var(--w-separator)] lg:hidden">
             {filteredFact.map(f => (
-              <div key={f.id} className="bg-white rounded-xl border border-neutral-200 p-3.5">
+              <div key={f.id} className="px-1 py-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-neutral-900 truncate">{f.ipm_organismes?.nom || '-'}</p>
+                    <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{f.ipm_organismes?.nom || '-'}</p>
                     <p className="text-[10px] text-neutral-400 mt-0.5">{f.numero} · {f.date_facture}</p>
                   </div>
                   <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${statusColors[f.statut] || 'bg-neutral-100 text-neutral-600'}`}>{f.statut.replace(/_/g, ' ')}</span>
@@ -1625,7 +1559,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
             ))}
           </div>
           {/* Desktop table */}
-          <div className="hidden lg:block bg-white rounded-2xl border border-neutral-200 overflow-hidden">
+          <div className="hidden overflow-hidden border-y border-[var(--w-separator)] lg:block">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -1667,15 +1601,18 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
       )}
 
       {showCreate && (
-        <Modal open title="Nouvelle facture IPM payeur" onClose={() => setShowCreate(false)} size="lg">
+        <Modal open title="Nouvelle facture IPM payeur" onClose={() => setShowCreate(false)} size="lg"
+          footer={<IpmDialogActions onClose={() => setShowCreate(false)} onSave={createFacture} busy={creating}
+            disabled={selectedBordereaux.length === 0} label={'Créer la facture'} />}
+        >
           <div className="space-y-4">
-            <div>
-              <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Organisme</label>
-              <select value={selectedOrg} onChange={e => { setSelectedOrg(e.target.value); setSelectedBordereaux([]); }} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm">
+            <label className="block min-w-0">
+              <span className="label text-xs">Organisme</span>
+              <select value={selectedOrg} onChange={e => { setSelectedOrg(e.target.value); setSelectedBordereaux([]); }} className="input min-h-10 py-2 text-sm">
                 <option value="">Sélectionnez un organisme</option>
                 {organismes.map(o => <option key={o.id} value={o.id}>{o.nom}</option>)}
               </select>
-            </div>
+            </label>
             {selectedOrg && (
               <div className="space-y-2">
                 {bordereaux.length === 0 ? (
@@ -1707,13 +1644,6 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
                 )}
               </div>
             )}
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowCreate(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={createFacture} disabled={creating || selectedBordereaux.length === 0}
-                className="btn-icon-primary" title="Créer la facture IPM">
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-            </div>
           </div>
         </Modal>
       )}
@@ -1842,12 +1772,12 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
       ) : (
         <>
           {/* Mobile cards */}
-          <div className="space-y-2 lg:hidden">
+          <div className="divide-y divide-[var(--w-separator)] lg:hidden">
             {filteredRegl.map(r => (
-              <div key={r.id} className="bg-white rounded-xl border border-neutral-200 p-3.5">
+              <div key={r.id} className="px-1 py-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-neutral-900 truncate">{r.ipm_organismes?.nom || '-'}</p>
+                    <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{r.ipm_organismes?.nom || '-'}</p>
                     <p className="text-[10px] text-neutral-400 mt-0.5">{r.date_reglement} · {r.mode_reglement}</p>
                   </div>
                   {r.ecart !== 0 && (
@@ -1864,7 +1794,7 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
             ))}
           </div>
           {/* Desktop table */}
-          <div className="hidden lg:block bg-white rounded-2xl border border-neutral-200 overflow-hidden">
+          <div className="hidden overflow-hidden border-y border-[var(--w-separator)] lg:block">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -1898,19 +1828,22 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
       )}
 
       {showCreate && (
-        <Modal open title="Enregistrer un règlement IPM" onClose={() => { setShowCreate(false); setPendingFactures([]); }} size="lg">
+        <Modal open title="Enregistrer un règlement IPM" onClose={() => { setShowCreate(false); setPendingFactures([]); }} size="lg"
+          footer={<IpmDialogActions onClose={() => { setShowCreate(false); setPendingFactures([]); }} onSave={createReglement} busy={creating}
+            disabled={!form.organisme_id || montantRecu <= 0 || pendingFactures.length === 0} label={'Enregistrer le règlement'} />}
+        >
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Organisme</label>
-                <select value={form.organisme_id} onChange={e => handleOrgChange(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm">
+              <label className="block min-w-0">
+                <span className="label text-xs">Organisme</span>
+                <select value={form.organisme_id} onChange={e => handleOrgChange(e.target.value)} className="input min-h-10 py-2 text-sm">
                   <option value="">Sélectionnez un organisme</option>
                   {organismes.map(o => <option key={o.id} value={o.id}>{o.nom}</option>)}
                 </select>
-              </div>
+              </label>
               <div>
                 <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Date du règlement</label>
-                <input type="date" value={form.date_reglement} onChange={e => setForm(f => ({ ...f, date_reglement: e.target.value }))} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm" />
+                <input type="date" value={form.date_reglement} onChange={e => setForm(f => ({ ...f, date_reglement: e.target.value }))} className="input min-h-10 py-2 text-sm" />
               </div>
             </div>
 
@@ -1982,29 +1915,22 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Mode de règlement</label>
-                    <select value={form.mode_reglement} onChange={e => setForm(f => ({ ...f, mode_reglement: e.target.value }))} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm">
+                  <label className="block min-w-0">
+                    <span className="label text-xs">Mode de règlement</span>
+                    <select value={form.mode_reglement} onChange={e => setForm(f => ({ ...f, mode_reglement: e.target.value }))} className="input min-h-10 py-2 text-sm">
                       <option value="virement">Virement bancaire</option>
                       <option value="cheque">Chèque</option>
                       <option value="especes">Espèces</option>
                     </select>
-                  </div>
+                  </label>
                   <div>
                     <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Référence</label>
-                    <input value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm" placeholder="N° chèque, ref virement..." />
+                    <input value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} className="input min-h-10 py-2 text-sm" placeholder="N° chèque, ref virement..." />
                   </div>
                 </div>
               </>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
-              <button onClick={() => { setShowCreate(false); setPendingFactures([]); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={createReglement} disabled={creating || !form.organisme_id || montantRecu <= 0 || pendingFactures.length === 0}
-                className="btn-icon-primary" title="Enregistrer le règlement">
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-            </div>
           </div>
         </Modal>
       )}
@@ -2230,15 +2156,15 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
       ) : (
         <>
           {/* Mobile cards */}
-          <div className="space-y-2 lg:hidden">
+          <div className="divide-y divide-[var(--w-separator)] lg:hidden">
             {ventes.map(v => {
               const ecart = Number(v.ecart_ipm || 0);
               const hasEcart = ecart !== 0 && v.date_retour_ipm;
               return (
-                <div key={v.id} className="bg-white rounded-xl border border-neutral-200 p-3.5">
+                <div key={v.id} className="px-1 py-3">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-neutral-900 truncate">{v.ipm_beneficiaires?.customers?.name || '-'}</p>
+                      <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{v.ipm_beneficiaires?.customers?.name || '-'}</p>
                       <p className="text-[10px] text-neutral-400 mt-0.5">{formatDate(v.date_vente)} · {v.ipm_organismes?.nom || '-'}</p>
                     </div>
                     <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold ${statutColor(v.statut)}`}>
@@ -2270,7 +2196,7 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
             })}
           </div>
           {/* Desktop table */}
-          <div className="hidden lg:block bg-white rounded-2xl border border-neutral-200 overflow-hidden">
+          <div className="hidden overflow-hidden border-y border-[var(--w-separator)] lg:block">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -2330,7 +2256,10 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
 
       {/* Modal saisie retour IPM */}
       {showRetour && selectedVente && (
-        <Modal open title="Saisir le retour IPM" onClose={() => setShowRetour(false)} size="lg">
+        <Modal open title="Saisir le retour IPM" onClose={() => setShowRetour(false)} size="lg"
+          footer={<IpmDialogActions onClose={() => setShowRetour(false)} onSave={saveRetour} busy={saving}
+            disabled={ecartCalc < 0 && !retourForm.motif_rejet} label={'Enregistrer le retour'} />}
+        >
           <div className="space-y-4">
             {/* Récapitulatif vente */}
             <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200">
@@ -2369,12 +2298,12 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
               <div>
                 <label className="text-[11px] font-medium text-neutral-600 mb-1 block">Date du retour IPM</label>
                 <input type="date" value={retourForm.date_retour} onChange={e => setRetourForm(f => ({ ...f, date_retour: e.target.value }))}
-                  className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm" />
+                  className="input min-h-10 py-2 text-sm" />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-neutral-600 mb-1 block">Référence règlement / bordereau</label>
                 <input type="text" value={retourForm.reference_reglement} onChange={e => setRetourForm(f => ({ ...f, reference_reglement: e.target.value }))}
-                  className="w-full h-9 px-3 rounded-lg border border-neutral-200 text-sm" placeholder="REF-..." />
+                  className="input min-h-10 py-2 text-sm" placeholder="REF-..." />
               </div>
             </div>
 
@@ -2420,13 +2349,6 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowRetour(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={saveRetour} disabled={saving || (ecartCalc < 0 && !retourForm.motif_rejet)}
-                className="btn-icon-primary" title="Enregistrer le retour">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-            </div>
           </div>
         </Modal>
       )}
@@ -2457,19 +2379,16 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
 
             <div>
               <p className="text-[11px] font-bold text-neutral-700 mb-2">Choisissez une action de régularisation :</p>
-              <div className="grid gap-2">
+              <div className="divide-y divide-[var(--w-separator)] border-y border-[var(--w-separator)]">
                 {ACTIONS_REGULARISATION.map(a => (
                   <button key={a.key} onClick={() => applyRegularisation(a.key)} disabled={saving}
-                    className="w-full text-left px-4 py-3 rounded-xl border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50/30 transition-all text-sm font-medium text-neutral-700">
+                    className="min-h-11 w-full px-2 py-2 text-left text-sm font-medium text-[var(--w-text)] transition-colors hover:bg-[var(--w-hover)] disabled:opacity-50">
                     {a.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <button onClick={() => setShowRegul(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-            </div>
           </div>
         </Modal>
       )}
@@ -2481,46 +2400,41 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
  * PARAMÈTRES IPM
  * ═══════════════════════════════════════════════════════════════════ */
 function IpmParametres(_props: { tenantId: string }) {
-  return (
-    <div className="space-y-5">
-      <div className="bg-white rounded-2xl border border-neutral-200 p-5">
-        <h3 className="text-sm font-bold text-neutral-900 mb-1">Configuration générale IPM</h3>
-        <p className="text-xs text-neutral-500 mb-4">Tous les paramètres IPM sont définis au niveau des conventions. Chaque convention porte ses propres taux, plafonds et règles de calcul.</p>
-        <div className="space-y-3">
-          <div className="p-3 rounded-lg border border-neutral-100 bg-neutral-50/50">
-            <p className="text-xs font-semibold text-neutral-700">Taux de prise en charge</p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Défini par convention, par famille d'articles, ou par article individuel via les règles de convention.</p>
-          </div>
-          <div className="p-3 rounded-lg border border-neutral-100 bg-neutral-50/50">
-            <p className="text-xs font-semibold text-neutral-700">Plafonds</p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Par facture, par jour, par mois ou annuel — configurable dans chaque convention.</p>
-          </div>
-          <div className="p-3 rounded-lg border border-neutral-100 bg-neutral-50/50">
-            <p className="text-xs font-semibold text-neutral-700">Documents obligatoires</p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Ordonnance, bon de prise en charge, matricule — activables convention par convention.</p>
-          </div>
-          <div className="p-3 rounded-lg border border-neutral-100 bg-neutral-50/50">
-            <p className="text-xs font-semibold text-neutral-700">Règles d'éligibilité</p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Articles/familles couverts ou exclus — gérés dans les règles de convention (onglet Conventions).</p>
-          </div>
-          <div className="p-3 rounded-lg border border-neutral-100 bg-neutral-50/50">
-            <p className="text-xs font-semibold text-neutral-700">Mode de calcul</p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Ligne par ligne, total facture, ou articles éligibles uniquement. Configurable par convention.</p>
-          </div>
-        </div>
-      </div>
+  const settings = [
+    ['Taux de prise en charge', "Défini par convention, par famille d'articles, ou par article individuel via les règles de convention."],
+    ['Plafonds', 'Par facture, par jour, par mois ou annuel — configurable dans chaque convention.'],
+    ['Documents obligatoires', 'Ordonnance, bon de prise en charge, matricule — activables convention par convention.'],
+    ["Règles d'éligibilité", 'Articles/familles couverts ou exclus — gérés dans les règles de convention (onglet Conventions).'],
+    ['Mode de calcul', 'Ligne par ligne, total facture, ou articles éligibles uniquement. Configurable par convention.'],
+  ];
+  const steps = [
+    'Configurez vos organismes IPM et leurs conventions',
+    'Associez vos clients bénéficiaires à un organisme/convention',
+    'Lors de la vente, le système calcule automatiquement la part IPM',
+    'Encaissez uniquement la part client, la part IPM devient une créance',
+    'Générez des bordereaux pour regrouper les ventes IPM',
+    "Facturez l'organisme IPM et suivez les règlements",
+  ];
 
-      <div className="bg-white rounded-2xl border border-neutral-200 p-5">
-        <h3 className="text-sm font-bold text-neutral-900 mb-3">Principe de fonctionnement</h3>
-        <ol className="space-y-2 text-xs text-neutral-600">
-          <li className="flex gap-2"><span className="shrink-0 w-5 h-5 rounded-full bg-neutral-50 text-neutral-800 text-[10px] font-bold flex items-center justify-center">1</span><span>Configurez vos organismes IPM et leurs conventions</span></li>
-          <li className="flex gap-2"><span className="shrink-0 w-5 h-5 rounded-full bg-neutral-50 text-neutral-800 text-[10px] font-bold flex items-center justify-center">2</span><span>Associez vos clients bénéficiaires à un organisme/convention</span></li>
-          <li className="flex gap-2"><span className="shrink-0 w-5 h-5 rounded-full bg-neutral-50 text-neutral-800 text-[10px] font-bold flex items-center justify-center">3</span><span>Lors de la vente, le système calcule automatiquement la part IPM</span></li>
-          <li className="flex gap-2"><span className="shrink-0 w-5 h-5 rounded-full bg-neutral-50 text-neutral-800 text-[10px] font-bold flex items-center justify-center">4</span><span>Encaissez uniquement la part client, la part IPM devient une créance</span></li>
-          <li className="flex gap-2"><span className="shrink-0 w-5 h-5 rounded-full bg-neutral-50 text-neutral-800 text-[10px] font-bold flex items-center justify-center">5</span><span>Générez des bordereaux pour regrouper les ventes IPM</span></li>
-          <li className="flex gap-2"><span className="shrink-0 w-5 h-5 rounded-full bg-neutral-50 text-neutral-800 text-[10px] font-bold flex items-center justify-center">6</span><span>Facturez l'organisme IPM et suivez les règlements</span></li>
+  return (
+    <div className="grid gap-6 xl:grid-cols-2">
+      <section aria-labelledby="ipm-config">
+        <h2 id="ipm-config" className="border-b border-[var(--w-separator)] pb-2 text-sm font-semibold text-[var(--w-text)]">Configuration IPM</h2>
+        <dl className="divide-y divide-[var(--w-separator)]">
+          {settings.map(([label, text]) => (
+            <div key={label} className="py-2.5">
+              <dt className="text-sm font-medium text-[var(--w-text)]">{label}</dt>
+              <dd className="text-xs text-[var(--w-text-sec)]">{text}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <section aria-labelledby="ipm-steps">
+        <h2 id="ipm-steps" className="border-b border-[var(--w-separator)] pb-2 text-sm font-semibold text-[var(--w-text)]">Principe de fonctionnement</h2>
+        <ol className="list-decimal space-y-2 py-2.5 pl-5 text-sm text-[var(--w-text-sec)]">
+          {steps.map(step => <li key={step} className="pl-1">{step}</li>)}
         </ol>
-      </div>
+      </section>
     </div>
   );
 }
@@ -2528,18 +2442,40 @@ function IpmParametres(_props: { tenantId: string }) {
 /* ═══════════════════════════════════════════════════════════════════
  * COMPOSANTS UTILITAIRES
  * ═══════════════════════════════════════════════════════════════════ */
+function IpmDialogActions({ onClose, onSave, busy, disabled, label }: {
+  onClose: () => void;
+  onSave: () => void;
+  busy: boolean;
+  disabled: boolean;
+  label: string;
+}) {
+  return (
+    <>
+      <button type="button" className="btn-secondary text-xs" onClick={onClose} disabled={busy}>
+        <X aria-hidden="true" className="h-4 w-4" /> Annuler
+      </button>
+      <button type="button" className="btn-primary text-xs" onClick={onSave} disabled={busy || disabled}>
+        {busy ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" className="h-4 w-4" />}
+        {label}
+      </button>
+    </>
+  );
+}
+
 function FormField({ label, value, onChange, type = 'text', placeholder, multiline }: {
-  label: string; value: string; onChange: (v: string) => void;
+  label: string; value: string; onChange: (value: string) => void;
   type?: string; placeholder?: string; multiline?: boolean;
 }) {
-  const cls = "w-full px-3 rounded-lg border border-neutral-200 text-sm focus:border-neutral-400 focus:ring-2 focus:ring-neutral-900/10 outline-none transition-all";
+  const id = useId();
   return (
-    <div>
-      <label className="text-[11px] font-medium text-neutral-500 mb-1 block">{label}</label>
+    <div className="min-w-0">
+      <label htmlFor={id} className="label text-xs">{label}</label>
       {multiline ? (
-        <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={`${cls} h-20 py-2 resize-none`} />
+        <textarea id={id} value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder}
+          rows={3} className="input resize-y text-sm" />
       ) : (
-        <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={`${cls} h-9`} />
+        <input id={id} type={type} value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder}
+          className="input min-h-10 py-2 text-sm" />
       )}
     </div>
   );
@@ -2556,12 +2492,12 @@ function CheckboxField({ label, checked, onChange }: { label: string; checked: b
 
 function EmptyIpm({ message, action }: { message: string; action?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4">
-      <div className="w-14 h-14 rounded-2xl bg-neutral-100 flex items-center justify-center mb-3">
-        <HeartPulse className="w-6 h-6 text-neutral-400" />
+    <div className="flex items-start gap-2.5 border-y border-[var(--w-separator)] px-1 py-4">
+      <HeartPulse aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--w-text-muted)]" />
+      <div>
+        <p className="text-sm font-medium text-[var(--w-text)]">{message}</p>
+        {action && <p className="text-xs text-[var(--w-text-sec)]">{action}</p>}
       </div>
-      <p className="text-sm font-semibold text-neutral-700 text-center">{message}</p>
-      {action && <p className="text-xs text-neutral-500 text-center mt-1">{action}</p>}
     </div>
   );
 }

@@ -2,28 +2,30 @@ import { Search, X } from 'lucide-react';
 
 interface PageSearchProps {
   value: string;
-  onChange: (v: string) => void;
+  onChange: (value: string) => void;
   placeholder?: string;
   onFocus?: () => void;
   onBlur?: () => void;
   rightSlot?: React.ReactNode;
 }
 
-export function PageSearch({ value, onChange, placeholder = 'Rechercher...', onFocus, onBlur, rightSlot }: PageSearchProps) {
+export function PageSearch({ value, onChange, placeholder = 'Rechercher…', onFocus, onBlur, rightSlot }: PageSearchProps) {
   return (
-    <div className="flex items-center gap-2 border-b border-neutral-200 pb-2">
-      <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+    <div className="flex min-w-0 items-center gap-2 border-b border-[var(--w-separator)] pb-1.5 focus-within:border-[var(--w-text-sec)]">
+      <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--w-text-muted)]" />
       <input
+        aria-label={placeholder}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={event => onChange(event.target.value)}
         onFocus={onFocus}
         onBlur={onBlur}
         placeholder={placeholder}
-        className="flex-1 min-w-0 bg-transparent text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
+        className="min-w-0 flex-1 bg-transparent py-0.5 text-[16px] text-[var(--w-text)] outline-none placeholder:text-[var(--w-text-muted)] sm:text-sm"
       />
       {value && (
-        <button onClick={() => onChange('')} className="shrink-0 p-0.5 text-neutral-400 hover:text-neutral-600 transition-colors">
-          <X className="w-4 h-4" />
+        <button type="button" aria-label="Effacer la recherche" title="Effacer la recherche" onClick={() => onChange('')}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-sm text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)] focus-visible:outline focus-visible:-outline-offset-2">
+          <X aria-hidden="true" className="h-4 w-4" />
         </button>
       )}
       {rightSlot}

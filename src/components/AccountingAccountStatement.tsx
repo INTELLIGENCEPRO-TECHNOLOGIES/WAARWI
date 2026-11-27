@@ -143,7 +143,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
    {accountError&&<p role="alert" className="text-xs text-red-700">{accountError}</p>}
    {accountBusy?<p role="status" className="text-xs text-neutral-500">Recherche…</p>:<div className="acc-account-picker">{accounts.map(a=><button type="button" key={a.code} aria-pressed={code===a.code} onClick={()=>{setCode(a.code);setChooseAccount(false);}}><strong>{a.code}</strong><span>{a.name}</span><small>{a.account_type==='auxiliary'?'Auxiliaire':'Général'}{a.is_active?'':' · Inactif'}</small></button>)}{!accounts.length&&<p className="text-xs text-neutral-500">Aucun compte trouvé.</p>}</div>}
    <div className="acc-pagination"><button className="acc-icon" aria-label="Comptes précédents" type="button" disabled={accountBusy||searchQuery.offset===0} onClick={()=>setSearchQuery(p=>({...p,offset:p.offset-24}))}><ChevronLeft size={17}/></button><span>Page {searchQuery.offset/24+1}</span><button className="acc-icon" aria-label="Comptes suivants" type="button" disabled={accountBusy||!accountMore} onClick={()=>setSearchQuery(p=>({...p,offset:p.offset+24}))}><ChevronRight size={17}/></button></div></div>}
-   <form className="grid gap-2 sm:grid-cols-4 sm:items-end" onSubmit={e=>{e.preventDefault();run();}}>
+   <form className="acc-fields acc-fields-4" onSubmit={e=>{e.preventDefault();run();}}>
     <label className="text-xs font-medium min-w-0">Compte sélectionné<input className="input mt-1 w-full" value={code} onChange={e=>setCode(e.target.value.trim())} required placeholder="Numéro exact"/></label>
     <label className="text-xs font-medium min-w-0">Du<input className="input mt-1 w-full" type="date" value={from} onChange={e=>setFrom(e.target.value)} required/></label>
     <label className="text-xs font-medium min-w-0">Au<input className="input mt-1 w-full" type="date" value={to} onChange={e=>setTo(e.target.value)} required/></label>
@@ -161,7 +161,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
    {canMatch&&(matchingOpen||!!release)&&<div className="space-y-3 border-b border-neutral-200 pb-3">
     <h3 className="text-sm font-semibold">Lettrage manuel</h3>
     <p className="text-xs text-neutral-600">Cochez les factures et règlements correspondants. Vous pouvez sélectionner des lignes sur plusieurs pages ; seuls les groupes exactement équilibrés sont acceptés.</p>
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+    <div className="acc-fields acc-fields-4 text-xs">
      <div>Lignes sélectionnées <strong className="block text-sm">{selected.length}</strong></div>
      <div>Débit <strong className="block text-sm break-words">{money(sumDebit/100)}</strong></div>
      <div>Crédit <strong className="block text-sm break-words">{money(sumCredit/100)}</strong></div>

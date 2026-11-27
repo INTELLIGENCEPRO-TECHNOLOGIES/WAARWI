@@ -1,7 +1,7 @@
 import { useRealtimeTick } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Loader2, Printer, Eye, Calendar, ChevronDown, Store, Check, ArrowLeft, RefreshCw,
+  Loader2, Printer, Eye, Calendar, ChevronDown, Store, ArrowLeft, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -57,7 +57,6 @@ export function Reports() {
   const [viewMode, setViewMode] = useState<'screen' | 'preview'>('screen');
 
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [siteDropOpen, setSiteDropOpen] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string | 'all'>('all');
   const [savingMargin, setSavingMargin] = useState(false);
   const [hideZeroBalances, setHideZeroBalances] = useState(false);
@@ -116,7 +115,6 @@ export function Reports() {
   const selectSite = (id: string | 'all') => {
     setSelectedSiteId(id);
     setScope(EMPTY_SCOPE);
-    setSiteDropOpen(false);
   };
 
   useEffect(() => {
@@ -276,98 +274,75 @@ export function Reports() {
   };
 
   return (
-    <div className="flex flex-col gap-0" style={{ minHeight: 'calc(100vh - 160px)' }}>
+    <div className="flex min-w-0 flex-col" style={{ minHeight: 'calc(100vh - 160px)' }}>
 
       {/* ── Header : title + context + actions ── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6 pt-3 sm:pt-4 lg:pt-6 bg-white shrink-0">
-        <div className="flex items-center gap-3 pb-3 border-b border-neutral-200">
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold tracking-tight text-neutral-900 leading-none">Rapports</h1>
-            <p className="mt-1 text-[11px] sm:text-xs text-neutral-500 truncate">{def.label} · {def.context}</p>
+      <div className="sm:sticky sm:top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6 pt-3 sm:pt-4 lg:pt-6 bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-[var(--w-separator)] pb-3">
+          <div className="min-w-0 flex-1 basis-48">
+            <h1 className="text-lg font-bold leading-tight text-[var(--w-text)]">Rapports</h1>
+            <p className="mt-0.5 break-words text-xs text-[var(--w-text-sec)]">{def.label} · {def.context}</p>
           </div>
-          <div className="flex-1" />
-          {!mobile && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {!mobile && (
+              <button onClick={openPreview} className="btn-secondary px-2.5 py-1.5 text-xs">
+                <Eye className="h-4 w-4" /> Aperçu
+              </button>
+            )}
             <button
-              onClick={openPreview}
-              className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1.5 text-[12px] font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
+              onClick={handlePrint}
+              className="btn-secondary px-2.5 py-1.5 text-xs"
             >
-              <Eye className="w-4 h-4" />
-              <span className="hidden md:inline">Aperçu</span>
+              <Printer className="h-4 w-4" /> Imprimer
             </button>
-          )}
-          <button
-            onClick={handlePrint}
-            className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors"
-          >
-            <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline">Imprimer</span>
-          </button>
+          </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-5 overflow-x-auto no-scrollbar border-b border-neutral-200">
+        <nav aria-label="Types de rapport" className="flex min-w-0 items-center gap-4 overflow-x-auto overscroll-x-contain border-b border-[var(--w-separator)] sm:gap-5">
           {REPORT_DEFS.map(d => {
             const active = reportType === d.key;
             return (
               <button
                 key={d.key}
                 onClick={() => { setReportType(d.key); setViewMode('screen'); }}
-                className={`relative shrink-0 py-2.5 text-[13px] transition-colors ${
-                  active ? 'text-neutral-900 font-semibold' : 'text-neutral-400 hover:text-neutral-600'
+                aria-current={active ? 'true' : undefined}
+                className={`shrink-0 border-b-2 py-2.5 text-[13px] transition-colors ${
+                  active ? 'border-[var(--w-text)] font-semibold text-[var(--w-text)]' : 'border-transparent text-[var(--w-text-sec)] hover:text-[var(--w-text)]'
                 }`}
               >
                 {d.label}
-                {active && <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-neutral-900" />}
               </button>
             );
           })}
-        </div>
+        </nav>
 
         {/* Filters */}
-        <div className="flex items-center gap-4 py-2.5 flex-wrap">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 py-2">
           <button
             onClick={() => setPickerOpen(v => !v)}
-            className="flex items-center gap-1.5 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 transition-colors whitespace-nowrap border-b border-transparent hover:border-neutral-300 pb-0.5"
+            aria-expanded={pickerOpen}
+            aria-label={`Période · ${labelRange(range)}`}
+            className="btn-ghost min-w-0 px-2.5 py-1.5 text-xs"
           >
-            <Calendar className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-            <span>{labelRange(range)}</span>
-            <ChevronDown className={`w-3 h-3 text-neutral-400 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
+            <Calendar className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 break-words text-left">{labelRange(range)}</span>
+            <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {sites.length > 1 && (
-            <div className="relative">
-              <button
-                onClick={() => setSiteDropOpen(v => !v)}
-                className="flex items-center gap-1.5 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 transition-colors whitespace-nowrap border-b border-transparent hover:border-neutral-300 pb-0.5"
+            <label className="flex min-w-0 max-w-full items-center gap-2 px-2.5 text-[var(--w-text-sec)]">
+              <Store className="h-4 w-4 shrink-0" />
+              <span className="sr-only">Point de vente</span>
+              <select
+                value={selectedSiteId}
+                onChange={e => selectSite(e.target.value)}
+                className="w-input-ul min-w-0 max-w-60 py-1.5 text-xs"
               >
-                <Store className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <span>{selectedSiteId === 'all' ? 'Tous les sites' : (selectedSite?.name || 'Site')}</span>
-                <ChevronDown className={`w-3 h-3 text-neutral-400 shrink-0 transition-transform ${siteDropOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {siteDropOpen && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setSiteDropOpen(false)} />
-                  <div className="absolute top-full left-0 mt-1 z-30 bg-white border border-neutral-200 shadow-lg py-1 min-w-[180px]">
-                    <button
-                      onClick={() => selectSite('all')}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] transition-colors ${selectedSiteId === 'all' ? 'text-neutral-900 font-semibold' : 'text-neutral-600 hover:bg-neutral-50'}`}
-                    >
-                      <span>Tous les sites</span>
-                      {selectedSiteId === 'all' && <Check className="w-3.5 h-3.5 ml-auto text-neutral-900" />}
-                    </button>
-                    {sites.map(s => (
-                      <button key={s.id}
-                        onClick={() => selectSite(s.id)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] transition-colors ${selectedSiteId === s.id ? 'text-neutral-900 font-semibold' : 'text-neutral-600 hover:bg-neutral-50'}`}
-                      >
-                        <span className="truncate">{s.name}</span>
-                        {selectedSiteId === s.id && <Check className="w-3.5 h-3.5 ml-auto text-neutral-900 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+                <option value="all">Tous les sites</option>
+                {sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}
+              </select>
+            </label>
           )}
 
           {multi && reportType === 'cash' && scopeOptions && (
@@ -375,28 +350,17 @@ export function Reports() {
           )}
 
           {def.hasMargin && (
-            <button
-              onClick={() => toggleMargin(!showMargin)}
-              disabled={savingMargin}
-              className="shrink-0 flex items-center gap-2 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 transition-colors disabled:opacity-40"
-            >
-              <span>Afficher les marges</span>
-              <span className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${showMargin ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${showMargin ? 'translate-x-4' : 'translate-x-0'}`} />
-              </span>
-            </button>
+            <label className="btn-ghost cursor-pointer px-2.5 py-1.5 text-xs">
+              <input type="checkbox" checked={showMargin} disabled={savingMargin} onChange={e => toggleMargin(e.target.checked)} className="h-4 w-4 shrink-0 accent-neutral-900" />
+              Afficher les marges
+            </label>
           )}
 
           {def.hasZeroToggle && (
-            <button
-              onClick={() => setHideZeroBalances(v => !v)}
-              className="shrink-0 flex items-center gap-2 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
-            >
-              <span>Masquer les soldes nuls</span>
-              <span className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${hideZeroBalances ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${hideZeroBalances ? 'translate-x-4' : 'translate-x-0'}`} />
-              </span>
-            </button>
+            <label className="btn-ghost cursor-pointer px-2.5 py-1.5 text-xs">
+              <input type="checkbox" checked={hideZeroBalances} onChange={e => setHideZeroBalances(e.target.checked)} className="h-4 w-4 shrink-0 accent-neutral-900" />
+              Masquer les soldes nuls
+            </label>
           )}
 
           {loading && matches && (
@@ -408,15 +372,15 @@ export function Reports() {
       </div>
 
       {/* ── Content ── */}
-      <div className="flex-1 min-h-0 pt-5">
+      <div className="flex-1 min-h-0 min-w-0 pt-5">
         {viewMode === 'preview' && !mobile ? (
           <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-neutral-200">
-              <button onClick={() => setViewMode('screen')} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-neutral-600 hover:text-neutral-900 transition-colors">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--w-separator)] pb-3">
+              <button onClick={() => setViewMode('screen')} className="btn-ghost px-2.5 py-1.5 text-xs">
                 <ArrowLeft className="w-4 h-4" /> Retour au rapport
               </button>
-              <span className="text-[12px] text-neutral-400">Aperçu avant impression — {def.label}</span>
-              <button onClick={handlePrint} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors">
+              <span className="text-xs text-[var(--w-text-sec)]">Aperçu avant impression · {def.label}</span>
+              <button onClick={handlePrint} className="btn-secondary px-2.5 py-1.5 text-xs">
                 <Printer className="w-4 h-4" /> Imprimer
               </button>
             </div>
@@ -442,9 +406,9 @@ export function Reports() {
         ) : (
           <div className="pb-10">
             {errorMsg && (
-              <div className="mb-5 flex items-center justify-between gap-3 border-l-2 border-neutral-900 pl-3 py-2">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-l-2 border-neutral-900 pl-3 py-2">
                 <p className="text-[12px] text-neutral-600">{errorMsg}</p>
-                <button onClick={reload} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-neutral-700 hover:text-neutral-900 shrink-0">
+                <button onClick={reload} className="btn-secondary shrink-0 px-2.5 py-1.5 text-xs">
                   <RefreshCw className="w-3.5 h-3.5" /> Réessayer
                 </button>
               </div>
