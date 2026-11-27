@@ -445,3 +445,38 @@
     font-size: .72rem;
   }
 }
+
+.article-input {
+  min-height: 2.25rem;
+}
+
+.article-category-row small {
+  display: block;
+  color: var(--w-text-sec);
+  font-size: .75rem;
+}
+
+.article-select > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.article-select > svg {
+  flex: none;
+}
+
+@media (max-width: 420px) {
+  .article-editor .article-tabs {
+    gap: .05rem .2rem;
+  }
+
+  .article-editor .article-tabs svg {
+    display: none;
+  }
+
+  .article-editor .waarwi-window-footer > .article-button {
+    flex: 1 1 0;
+    min-width: 0;
+    line-height: 1.2;
+  }
+}

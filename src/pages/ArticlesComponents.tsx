@@ -20,10 +20,11 @@ export function stockStatus(qty: number, min: number) {
 
 // ── Field & Form Primitives ────────────────────────────────
 
-export function Field({ label, children, hint, className = '' }: { label: string; children: ReactNode; hint?: string; className?: string }) {
+export function Field({ label, inputId, children, hint, className = '' }: { label: string; inputId?: string; children: ReactNode; hint?: string; className?: string }) {
   return (
     <div className={className}>
-      <label className="label mb-1 text-xs font-semibold">{label}</label>
+      {inputId ? <label className="label mb-1 text-xs font-semibold" htmlFor={inputId}>{label}</label>
+        : <span className="label mb-1 text-xs font-semibold">{label}</span>}
       {children}
       {hint && <p className="text-[11px] text-[var(--w-text-sec)] mt-1">{hint}</p>}
     </div>
@@ -61,7 +62,7 @@ export function PremiumSelect({ value, onChange, options, placeholder }: {
 
   return (
     <div className="relative" ref={ref}>
-      <button type="button" onClick={() => setOpen(!open)} onKeyDown={handleKey}
+      <button type="button" onClick={() => setOpen(!open)} onKeyDown={handleKey} aria-expanded={open}
         className={`article-select
           ${!value && placeholder ? 'text-[var(--w-text-muted)]' : 'text-[var(--w-text)]'}`}>
         <span className="min-w-0 break-words">{label}</span>
@@ -95,7 +96,7 @@ export function PriceInput({ value, onChange, placeholder }: { value: number | '
       value={displayVal}
       onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
       placeholder={placeholder || '0'}
-      className="bare-input text-sm num w-full py-1.5"
+      className="w-input-ul article-input num"
       min="0"
     />
     </>
@@ -308,6 +309,7 @@ export function InfosTab({ form, setForm, editing, categories, onGenerateRef, au
   createCategory?: (name: string, parentId: string | null) => Promise<string | null>;
 }) {
   const [catPickerOpen, setCatPickerOpen] = useState(false);
+  const prefix = useId();
 
   const handleCategoryChange = (v: string) => {
     const cat = categories.find(c => c.id === v);
@@ -334,12 +336,12 @@ export function InfosTab({ form, setForm, editing, categories, onGenerateRef, au
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Désignation *" className="sm:col-span-2">
-          <input data-field="designation" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bare-input text-sm" placeholder="Nom de l'article" autoFocus={!form.name} />
+        <Field label="Désignation *" inputId={prefix + '-name'} className="sm:col-span-2">
+          <input id={prefix + '-name'} data-field="designation" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-input-ul article-input" placeholder="Nom de l'article" autoFocus={!form.name} />
         </Field>
-        <Field label="Référence interne *">
+        <Field label="Référence interne *" inputId={prefix + '-ref'}>
           <div className="flex gap-2">
-            <input value={form.internal_ref || ''} onChange={e => setForm(f => ({ ...f, internal_ref: e.target.value }))} className="bare-input text-sm flex-1 font-mono" placeholder="REF-0001" />
+            <input id={prefix + '-ref'} value={form.internal_ref || ''} onChange={e => setForm(f => ({ ...f, internal_ref: e.target.value }))} className="w-input-ul article-input min-w-0 flex-1 font-mono" placeholder="REF-0001" />
             {!editing && <button type="button" onClick={onGenerateRef} className="btn-secondary article-button shrink-0">Générer</button>}
           </div>
         </Field>
@@ -351,22 +353,22 @@ export function InfosTab({ form, setForm, editing, categories, onGenerateRef, au
           </button>
         </Field>
         {autoMode && (
-          <Field label="Marque">
-            <input value={form.brand || ''} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className="bare-input text-sm" placeholder="Marque" />
+          <Field label="Marque" inputId={prefix + '-brand'}>
+            <input id={prefix + '-brand'} value={form.brand || ''} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className="w-input-ul article-input" placeholder="Marque" />
           </Field>
         )}
-        <Field label="Réf. OEM">
-          <input value={form.oem_ref || ''} onChange={e => setForm(f => ({ ...f, oem_ref: e.target.value }))} className="bare-input text-sm font-mono" placeholder="Référence fabricant" />
+        <Field label="Réf. OEM" inputId={prefix + '-oem'}>
+          <input id={prefix + '-oem'} value={form.oem_ref || ''} onChange={e => setForm(f => ({ ...f, oem_ref: e.target.value }))} className="w-input-ul article-input font-mono" placeholder="Référence fabricant" />
         </Field>
-        <Field label="Code-barres">
-          <input value={form.barcode || ''} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className="bare-input text-sm font-mono" placeholder="EAN / UPC" />
+        <Field label="Code-barres" inputId={prefix + '-barcode'}>
+          <input id={prefix + '-barcode'} value={form.barcode || ''} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className="w-input-ul article-input font-mono" placeholder="EAN / UPC" />
         </Field>
         <Field label="Unité">
           <PremiumSelect value={form.unit || 'pièce'} onChange={v => setForm(f => ({ ...f, unit: v }))}
             options={[{ value: 'unité', label: 'Unité' }, { value: 'pièce', label: 'Pièce' }, { value: 'paire', label: 'Paire' }, { value: 'lot', label: 'Lot' }, { value: 'kg', label: 'Kilogramme' }, { value: 'litre', label: 'Litre' }, { value: 'mètre', label: 'Mètre' }]} />
         </Field>
-        <Field label="Description" className="sm:col-span-2">
-          <textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="bare-input text-sm resize-none" placeholder="Description optionnelle" />
+        <Field label="Description" inputId={prefix + '-description'} className="sm:col-span-2">
+          <textarea id={prefix + '-description'} value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-textarea-ul" placeholder="Description optionnelle" />
         </Field>
       </div>
 
@@ -486,17 +488,17 @@ export function StockTab({ form, setForm, editing, currentArticle, stockMap }: {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Stock minimum (alerte)">
-              <input type="number" value={form.stock_min || ''} onChange={e => setForm(f => ({ ...f, stock_min: Number(e.target.value) }))} className="bare-input text-sm num" min="0" placeholder="0" />
+              <input type="number" value={form.stock_min || ''} onChange={e => setForm(f => ({ ...f, stock_min: Number(e.target.value) }))} className="w-input-ul article-input num" min="0" placeholder="0" />
             </Field>
             <Field label="Stock maximum">
-              <input type="number" value={form.stock_max || ''} onChange={e => setForm(f => ({ ...f, stock_max: Number(e.target.value) }))} className="bare-input text-sm num" min="0" placeholder="0" />
+              <input type="number" value={form.stock_max || ''} onChange={e => setForm(f => ({ ...f, stock_max: Number(e.target.value) }))} className="w-input-ul article-input num" min="0" placeholder="0" />
             </Field>
             <Field label="Emplacement">
-              <input value={form.location || ''} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className="bare-input text-sm" placeholder="Rayon / Étagère" />
+              <input value={form.location || ''} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className="w-input-ul article-input" placeholder="Rayon / Étagère" />
             </Field>
             {!editing && (
               <Field label="Stock initial">
-                <input type="number" value={form.stock_init || ''} onChange={e => setForm(f => ({ ...f, stock_init: Number(e.target.value) }))} className="bare-input text-sm num" min="0" placeholder="0" />
+                <input type="number" value={form.stock_init || ''} onChange={e => setForm(f => ({ ...f, stock_init: Number(e.target.value) }))} className="w-input-ul article-input num" min="0" placeholder="0" />
               </Field>
             )}
           </div>
@@ -529,10 +531,10 @@ export function CompatTab({ compats, brands, models, onAdd, onRemove, onUpdate }
               options={brands.map(b => ({ value: b.id, label: b.name }))} />
             <PremiumSelect value={c.model_id} onChange={v => onUpdate(i, { model_id: v })} placeholder="Modèle"
               options={models.filter(m => m.brand_id === c.brand_id).map(m => ({ value: m.id, label: m.name }))} />
-            <input type="number" value={c.year_start || ''} onChange={e => onUpdate(i, { year_start: Number(e.target.value) })} className="bare-input text-xs num" placeholder="Année début" />
-            <input type="number" value={c.year_end || ''} onChange={e => onUpdate(i, { year_end: Number(e.target.value) })} className="bare-input text-xs num" placeholder="Année fin" />
+            <input type="number" value={c.year_start || ''} onChange={e => onUpdate(i, { year_start: Number(e.target.value) })} className="w-input-ul article-input num" placeholder="Année début" />
+            <input type="number" value={c.year_end || ''} onChange={e => onUpdate(i, { year_end: Number(e.target.value) })} className="w-input-ul article-input num" placeholder="Année fin" />
           </div>
-          <input value={c.notes || ''} onChange={e => onUpdate(i, { notes: e.target.value })} className="bare-input text-xs" placeholder="Notes (motorisation, variante...)" />
+          <input value={c.notes || ''} onChange={e => onUpdate(i, { notes: e.target.value })} className="w-input-ul article-input" placeholder="Notes (motorisation, variante...)" />
           <button type="button" onClick={() => onRemove(i)} className="btn-ghost article-button" aria-label={`Retirer le véhicule ${i + 1}`}><Trash2 size={15} aria-hidden="true" />Retirer</button>
         </div>
       ))}
@@ -597,12 +599,12 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
   onPrev?: () => void; onNext?: () => void;
   editingIndex: number; totalCount: number;
 }) {
-  const BLOCKS: { key: TabKey; label: string; icon: any; short: string }[] = [
-    { key: 'infos', label: 'Informations', icon: Info, short: 'Infos' },
-    { key: 'prix', label: 'Prix et tarifs', icon: Tags, short: 'Prix' },
-    { key: 'stock', label: 'Stock', icon: Boxes, short: 'Stock' },
-    ...(autoMode ? [{ key: 'compat' as TabKey, label: 'Compatibilité véhicules', icon: Car, short: 'Véhicules' }] : []),
-    { key: 'image', label: 'Image', icon: Camera, short: 'Image' },
+  const BLOCKS: { key: TabKey; label: string; icon: typeof Info }[] = [
+    { key: 'infos', label: 'Infos', icon: Info },
+    { key: 'prix', label: 'Prix', icon: Tags },
+    { key: 'stock', label: 'Stock', icon: Boxes },
+    ...(autoMode ? [{ key: 'compat' as TabKey, label: 'Véhicules', icon: Car }] : []),
+    { key: 'image', label: 'Image', icon: Camera },
   ];
   const tabKeys = BLOCKS.map(b => b.key);
   const activeIdx = Math.max(0, tabKeys.indexOf(tab));
@@ -610,11 +612,9 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
 
   // Swipe gesture state
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const [slideDir, setSlideDir] = useState<'left' | 'right'>('right');
   const [dragX, setDragX] = useState(0);
 
-  const goToTab = (next: TabKey, dir: 'left' | 'right') => {
-    setSlideDir(dir);
+  const goToTab = (next: TabKey) => {
     setDragX(0);
     setTab(next);
   };
@@ -622,7 +622,7 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
   const goDelta = (delta: number) => {
     const nextIdx = activeIdx + delta;
     if (nextIdx < 0 || nextIdx >= tabKeys.length) return;
-    goToTab(tabKeys[nextIdx], delta > 0 ? 'left' : 'right');
+    goToTab(tabKeys[nextIdx]);
   };
 
   const onTouchStart = (e: React.TouchEvent) => {
@@ -678,7 +678,7 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
       )}
       <nav className="article-tabs" aria-label="Fiche article">
         {BLOCKS.map((block, index) => (
-          <button key={block.key} type="button" aria-pressed={index === activeIdx} onClick={() => goToTab(block.key, index > activeIdx ? 'left' : 'right')}>
+          <button key={block.key} type="button" aria-pressed={index === activeIdx} onClick={() => goToTab(block.key)}>
             <block.icon size={15} aria-hidden="true" />{block.label}
           </button>
         ))}
@@ -686,7 +686,7 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
       <div className="article-edit-body touch-pan-y"
         style={{ transform: dragX ? `translateX(${dragX * 0.35}px)` : undefined, transition: dragX ? 'none' : 'transform 0.24s cubic-bezier(0.22,1,0.36,1)' }}
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-        <div key={tab} className={slideDir === 'left' ? 'tab-slide-left' : 'tab-slide-right'}>
+        <div key={tab}>
           {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} createCategory={createCategory} />}
           {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={showPurchasePrice} showMargin={showMargin} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy} />}
           {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
@@ -991,10 +991,10 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
   const searchResults = useMemo(() => {
     if (!localSearch.trim()) return [];
     const q = localSearch.toLowerCase();
-    return filtered.filter(a => a.name.toLowerCase().includes(q) || a.internal_ref.toLowerCase().includes(q)).slice(0, 8);
+    return filtered.filter(a => a.name.toLowerCase().includes(q) || a.internal_ref?.toLowerCase().includes(q)).slice(0, 8);
   }, [localSearch, filtered]);
 
-  const BLOCKS: { key: TabKey; label: string; icon: any }[] = [
+  const BLOCKS: { key: TabKey; label: string; icon: typeof Info }[] = [
     { key: 'infos', label: 'Informations générales', icon: Info },
     { key: 'prix', label: 'Prix et tarifs', icon: Tags },
     { key: 'stock', label: 'Stock', icon: Boxes },
