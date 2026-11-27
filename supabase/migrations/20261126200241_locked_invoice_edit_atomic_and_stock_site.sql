@@ -12,7 +12,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
  PERFORM public._assert_document_edit_lease(p_tenant_id,'sale',p_sale_id::text,p_window_id,p_lock_token);
  PERFORM public._cs_assert_sale_usable(p_sale_id);
- IF NOT EXISTS(SELECT 1 FROM public.sales WHERE tenant_id=p_tenant_id AND id=p_sale_id AND source='billing' AND accounting_status='not_accounted' AND status NOT IN ('cancelled','deleted') AND deleted_at IS NULL) THEN RAISE EXCEPTION 'Cette facture ne peut plus être modifiée.' USING ERRCODE='55000';END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.sales WHERE tenant_id=p_tenant_id AND id=p_sale_id AND source IN ('billing','pos','quote') AND accounting_status='not_accounted' AND status NOT IN ('cancelled','deleted') AND deleted_at IS NULL) THEN RAISE EXCEPTION 'Cette facture ne peut plus être modifiée.' USING ERRCODE='55000';END IF;
  RETURN public._invoice_edit_snapshot(p_tenant_id,p_sale_id);
 END $$;
 CREATE OR REPLACE FUNCTION public.save_locked_invoice_edit(p_tenant_id uuid,p_sale_id uuid,p_window_id uuid,p_lock_token uuid,p_expected_version text,p_items jsonb,p_customer_id uuid,p_doc_header jsonb,p_representative_id uuid,p_rep_commission jsonb,p_release boolean DEFAULT false) RETURNS jsonb
