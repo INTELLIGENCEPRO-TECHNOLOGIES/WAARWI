@@ -133,8 +133,9 @@ jobs:
           expected=$(wc -l </tmp/waarwi-candidate_files.txt)
           while IFS= read -r file; do
             echo "Candidat $((count+1))/$expected : $(basename "$file")"
-            if ! docker exec -i -e PGPASSWORD=postgres "$db" psql -X -q -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -v SHOW_CONTEXT=never --single-transaction -f - < "$file" >/tmp/waarwi-candidate-last.log 2>&1; then
-              grep -E 'ERROR: *[0-9A-Z]{5}' /tmp/waarwi-candidate-last.log | tail -5 || true
+            if ! docker exec -i -e PGPASSWORD=postgres "$db" psql -X -q -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -v VERBOSITY=default -v SHOW_CONTEXT=never --single-transaction -f - < "$file" >/tmp/waarwi-candidate-last.log 2>&1; then
+              grep -E 'ERROR:.*(Ancre |Ancres )' /tmp/waarwi-candidate-last.log | tail -5 || true
+              grep -E 'ERROR:' /tmp/waarwi-candidate-last.log | cut -d: -f1-3 | tail -5 || true
               echo "Candidat en échec : $(basename "$file") ; $count précédents réussis." | tee -a "$GITHUB_STEP_SUMMARY"
               exit 1
             fi

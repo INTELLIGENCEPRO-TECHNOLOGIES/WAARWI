@@ -24,15 +24,12 @@ DO $p$
 DECLARE src text;a text;b text;n int;
 BEGIN
  src:=pg_get_functiondef('public.recalculate_customer_balance(uuid)'::regprocedure);
- a:=$a$SELECT COALESCE(SUM(total), 0) INTO v_sales
-FROM public.sales
-WHERE customer_id = p_customer_id AND tenant_id = v_tenant_id
-AND status <> 'cancelled' AND deleted_at IS NULL;$a$;
+ a:=$a$SELECT COALESCE\(SUM\(total\), 0\)[[:space:]]+INTO v_sales[[:space:]]+FROM public\.sales[[:space:]]+WHERE customer_id = p_customer_id AND tenant_id = v_tenant_id[[:space:]]+AND status <> 'cancelled' AND deleted_at IS NULL;$a$;
  b:=$b$SELECT COALESCE(SUM(public._ipm_patient_ceiling(s.tenant_id,s.id,s.total)), 0) INTO v_sales
 FROM public.sales s
 WHERE s.customer_id = p_customer_id AND s.tenant_id = v_tenant_id
 AND s.status <> 'cancelled' AND s.deleted_at IS NULL;$b$;
- n:=(length(src)-length(replace(src,a,'')))/length(a);IF n<>1 THEN RAISE EXCEPTION 'Ancre solde patient : %',n;END IF;EXECUTE replace(src,a,b);
+ SELECT count(*) INTO n FROM regexp_matches(src,a,'g');IF n<>1 THEN RAISE EXCEPTION 'Ancre solde patient : %',n;END IF;EXECUTE regexp_replace(src,a,b);
 
  src:=pg_get_functiondef('public.apply_credit_to_sale(uuid,uuid,numeric)'::regprocedure);
  a:=$a$v_remaining := GREATEST(0, COALESCE(v_sale.total, 0) - COALESCE(v_sale.paid, 0));$a$;
