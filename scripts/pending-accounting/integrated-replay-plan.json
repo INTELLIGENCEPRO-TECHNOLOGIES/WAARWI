@@ -1,5 +1,6 @@
 {
   "scope": "Recette locale uniquement. Base historique 516 versions; ne jamais exécuter en production depuis ce manifeste.",
+  "first_candidate_migration_version": "20261127020000",
   "exclude": [
     "20261124031000_apply_available_credits_to_direct_invoices.sql: même correctif déjà présent dans la version de production 20261124035116",
     "125/127/131/133/135/143: reconstruction partielle de la branche, inutile sur le socle complet",

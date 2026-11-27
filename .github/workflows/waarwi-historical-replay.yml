@@ -114,20 +114,59 @@ jobs:
           done </tmp/waarwi-replay-files.txt
           echo "$count/$expected migrations historiques rejouées." | tee -a "$GITHUB_STEP_SUMMARY"
           test "$count" -eq "$expected"
-      - name: Appliquer le lot candidat complet dans la même base jetable
+      - name: Emballer et appliquer les migrations candidates versionnées
         id: candidate
         run: |
           set -euo pipefail
           db=$(cat /tmp/waarwi-replay-container.txt)
           test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 0
           python3 - <<'PY'
-          import json,pathlib
-          plan=json.loads(pathlib.Path('scripts/pending-accounting/integrated-replay-plan.json').read_text())
-          for k in ('candidate_files','recipe_files'):
-              files=plan[k]
-              assert len(files)==len(set(files))
-              assert all(pathlib.Path(p).is_file() for p in files)
-              pathlib.Path('/tmp/waarwi-'+k+'.txt').write_text('\n'.join(files)+'\n')
+          import hashlib, json, os, pathlib, re
+          from datetime import datetime, timedelta
+
+          root = pathlib.Path('scripts/pending-accounting')
+          plan = json.loads((root / 'integrated-replay-plan.json').read_text())
+          history = json.loads((root / 'production-migration-versions.json').read_text())['versions']
+          for key in ('candidate_files', 'recipe_files'):
+              paths = plan[key]
+              assert paths and len(paths) == len(set(paths))
+              assert all(pathlib.Path(path).is_file() for path in paths)
+
+          first = datetime.strptime(plan['first_candidate_migration_version'], '%Y%m%d%H%M%S')
+          occupied = {p.name.split('_')[0] for p in pathlib.Path('supabase/migrations').glob('*.sql')}
+          bundle = pathlib.Path(os.environ['RUNNER_TEMP']) / 'waarwi-ordered-migrations'
+          migrations = bundle / 'migrations'
+          migrations.mkdir(parents=True, exist_ok=False)
+          entries = []
+          for index, source in enumerate(map(pathlib.Path, plan['candidate_files'])):
+              version = (first + timedelta(seconds=index)).strftime('%Y%m%d%H%M%S')
+              assert version > max(history) and version not in occupied, version
+              label = re.sub(r'^\d{14}_', '', source.stem)
+              label = re.sub(r'[^a-zA-Z0-9_]+', '_', label)
+              destination = migrations / f'{version}_{label}.sql'
+              content = source.read_bytes()
+              assert content.strip(), source
+              destination.write_bytes(content)
+              entries.append({
+                  'version': version,
+                  'source': str(source),
+                  'path': str(destination.relative_to(bundle)),
+                  'sha256': hashlib.sha256(content).hexdigest(),
+              })
+
+          (bundle / 'manifest.json').write_text(json.dumps({
+              'commit': os.environ['GITHUB_SHA'],
+              'scope': 'Candidat prépublication testé en base isolée',
+              'required_history': history,
+              'ordered_migrations': entries,
+          }, ensure_ascii=False, indent=2) + '\n')
+          (bundle / 'SHA256SUMS').write_text(''.join(
+              f"{entry['sha256']}  {entry['path']}\n" for entry in entries
+          ))
+          pathlib.Path('/tmp/waarwi-candidate_files.txt').write_text(''.join(
+              f"{bundle / entry['path']}\n" for entry in entries
+          ))
+          pathlib.Path('/tmp/waarwi-recipe_files.txt').write_text('\n'.join(plan['recipe_files']) + '\n')
           PY
           count=0
           expected=$(wc -l </tmp/waarwi-candidate_files.txt)
@@ -203,6 +242,15 @@ jobs:
           done </tmp/waarwi-local-recipe-files.txt
           echo "$count/$total recettes exécutées sans erreur SQL ; $failed échecs." | tee -a "$GITHUB_STEP_SUMMARY"
           test "$failed" -eq 0
+      - name: Vérifier les empreintes du lot rejoué
+        working-directory: ${{ runner.temp }}/waarwi-ordered-migrations
+        run: sha256sum --check SHA256SUMS
+      - name: Conserver le lot de migrations testé
+        uses: actions/upload-artifact@v4
+        with:
+          name: waarwi-migrations-candidates
+          path: ${{ runner.temp }}/waarwi-ordered-migrations
+          if-no-files-found: error
       - name: Publier les statuts du commit (sans déploiement)
         if: ${{ always() }}
         env:
