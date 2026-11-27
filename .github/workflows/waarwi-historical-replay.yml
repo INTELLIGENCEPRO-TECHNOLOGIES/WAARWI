@@ -170,19 +170,64 @@ jobs:
           ))
           pathlib.Path('/tmp/waarwi-recipe_files.txt').write_text('\n'.join(plan['recipe_files']) + '\n')
           PY
-          count=0
+          bundle_sql="$RUNNER_TEMP/waarwi-atomic-candidate.sql"
           expected=$(wc -l </tmp/waarwi-candidate_files.txt)
           while IFS= read -r file; do
-            echo "Candidat $((count+1))/$expected : $(basename "$file")"
-            if ! docker exec -i -e PGPASSWORD=postgres "$db" psql -X -q -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -v VERBOSITY=default -v SHOW_CONTEXT=never --single-transaction -f - < "$file" >/tmp/waarwi-candidate-last.log 2>&1; then
-              grep -E 'ERROR:.*(Ancre |Ancres )' /tmp/waarwi-candidate-last.log | tail -5 || true
-              grep -E 'ERROR:' /tmp/waarwi-candidate-last.log | cut -d: -f1-3 | tail -5 || true
-              echo "Candidat en échec : $(basename "$file") ; $count précédents réussis." | tee -a "$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
-            count=$((count+1))
-          done </tmp/waarwi-candidate_files.txt
-          echo "$count/$expected fichiers candidats appliqués." | tee -a "$GITHUB_STEP_SUMMARY"
+            printf '\n\\echo Migration %s\n' "$(basename "$file")"
+            cat "$file"
+            printf '\n'
+          done </tmp/waarwi-candidate_files.txt >"$bundle_sql"
+
+          run_transaction() {
+            docker exec -i -e PGPASSWORD=postgres "$db" psql -X -q -h 127.0.0.1 -U postgres -d postgres \
+              -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -v SHOW_CONTEXT=never --single-transaction -f -
+          }
+          current_business_state() {
+            docker exec -e PGPASSWORD=postgres "$db" psql -XAt -h 127.0.0.1 -U postgres -d postgres \
+              -v ON_ERROR_STOP=1 -c "SELECT
+                to_regprocedure('public.create_direct_invoice_atomic(uuid,jsonb,jsonb,jsonb,uuid,jsonb,uuid)'),
+                to_regclass('public.ipm_return_line_snapshots'),
+                (SELECT count(*) FROM public.sales),
+                (SELECT count(*) FROM public.journal_entries);"
+          }
+          schema_fingerprint() {
+            docker exec -e PGPASSWORD=postgres "$db" pg_dump -h 127.0.0.1 -U postgres -d postgres \
+              --schema=public --schema-only | sed '/^\\restrict /d; /^\\unrestrict /d' | sha256sum
+          }
+          validate_log() {
+            grep -E '^Migration |ERROR:' "$1" | tail -7
+          }
+          schema_before=$(schema_fingerprint)
+          business_before=$(current_business_state)
+
+          # Raise an exception only after the complete lot and deferred checks have run.
+          if {
+            cat "$bundle_sql"
+            cat <<'SQL'
+          SET CONSTRAINTS ALL IMMEDIATE;
+          DO $rollback_probe$
+          BEGIN
+            RAISE EXCEPTION 'Essai contrôlé : annuler le lot avant validation' USING ERRCODE = 'P0062';
+          END
+          $rollback_probe$;
+          SQL
+          } | run_transaction >"$RUNNER_TEMP/waarwi-atomic-rollback.log" 2>&1; then
+            echo 'La transaction aurait dû être annulée.'
+            exit 1
+          fi
+          validate_log "$RUNNER_TEMP/waarwi-atomic-rollback.log"
+          grep -q 'ERROR:  P0062:' "$RUNNER_TEMP/waarwi-atomic-rollback.log"
+          test "$(grep -c '^Migration ' "$RUNNER_TEMP/waarwi-atomic-rollback.log")" -eq "$expected"
+          test "$(schema_fingerprint)" = "$schema_before"
+          test "$(current_business_state)" = "$business_before"
+          echo "$expected migrations annulées après un échec simulé ; schéma public et compteurs métier restaurés." | tee -a "$GITHUB_STEP_SUMMARY"
+
+          if ! run_transaction <"$bundle_sql" >"$RUNNER_TEMP/waarwi-atomic-install.log" 2>&1; then
+            validate_log "$RUNNER_TEMP/waarwi-atomic-install.log"
+            exit 1
+          fi
+          test "$(grep -c '^Migration ' "$RUNNER_TEMP/waarwi-atomic-install.log")" -eq "$expected"
+          echo "$expected/$expected migrations candidates appliquées dans une seule transaction." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Préparer les données fictives de recette
         id: fixtures
         run: |
