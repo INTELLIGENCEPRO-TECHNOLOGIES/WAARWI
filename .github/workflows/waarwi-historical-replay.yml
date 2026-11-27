@@ -11,6 +11,7 @@ on:
       - 'scripts/pending-accounting/integrated-local-fixture.sql'
       - 'scripts/pending-accounting/*-candidate.sql'
       - 'scripts/pending-accounting/*-recipe.sql'
+      - 'tests/browser/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -85,6 +86,7 @@ jobs:
           test "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$db")" != host
           # Realtime must have initialized message partitions before network isolation.
           docker exec -e PGPASSWORD=postgres "$db" psql -X -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -Atc "select count(*) from pg_inherits where inhparent='realtime.messages'::regclass" | grep -Eq '^[1-9][0-9]*$'
+          (umask 077; supabase status --output env >"${RUNNER_TEMP}/waarwi-local-supabase.env")
           # Cut every network connection BEFORE executing any historic SQL (including pg_net/cron).
           for network in $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$db"); do
             docker network disconnect -f "$network" "$db"
@@ -242,6 +244,46 @@ jobs:
           done </tmp/waarwi-local-recipe-files.txt
           echo "$count/$total recettes exécutées sans erreur SQL ; $failed échecs." | tee -a "$GITHUB_STEP_SUMMARY"
           test "$failed" -eq 0
+      - name: Vérifier la facturation IPM sur ordinateur, mobile et lien public
+        id: browser
+        run: |
+          set -euo pipefail
+          db=$(cat /tmp/waarwi-replay-container.txt)
+          test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 0
+          local_net=waarwi-browser-internal
+          docker network create --internal "$local_net" >/dev/null
+          docker network connect --alias db --alias supabase_db_waarwi_history_replay "$local_net" "$db"
+          for component in auth rest; do
+            service="supabase_${component}_waarwi_history_replay"
+            docker network connect "$local_net" "$service"
+            docker restart "$service" >/dev/null
+          done
+          test "$(docker network inspect -f '{{.Internal}}' "$local_net")" = true
+          test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 1
+          echo 'Supabase local reconnecté sur un réseau interne sans sortie externe.'
+          local_env="$RUNNER_TEMP/waarwi-local-supabase.env"
+          read_local_key() {
+            sed -n "s/^$1=\"\(.*\)\"$/\1/p" "$local_env"
+          }
+          export VITE_SUPABASE_URL='http://127.0.0.1:54321'
+          export VITE_SUPABASE_ANON_KEY="$(read_local_key ANON_KEY)"
+          export RECIPE_SERVICE_ROLE_KEY="$(read_local_key SERVICE_ROLE_KEY)"
+          test -n "$VITE_SUPABASE_ANON_KEY" && test -n "$RECIPE_SERVICE_ROLE_KEY"
+          echo "::add-mask::$VITE_SUPABASE_ANON_KEY"
+          echo "::add-mask::$RECIPE_SERVICE_ROLE_KEY"
+          export RECIPE_DB_CONTAINER="$db"
+          browser_deps="$RUNNER_TEMP/waarwi-playwright"
+          npm ci --no-audit --no-fund
+          npm install --prefix "$browser_deps" --no-audit --no-fund playwright@1.56.1
+          "$browser_deps/node_modules/.bin/playwright" install --with-deps chromium
+          export PLAYWRIGHT_MODULE="$browser_deps/node_modules/playwright/index.mjs"
+          npm run build
+          npm run preview -- --host 127.0.0.1 --port 4173 >"$RUNNER_TEMP/waarwi-preview.log" 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          curl --silent --show-error --fail --retry 15 --retry-delay 1 --retry-connrefused 'http://127.0.0.1:4173/' >/dev/null
+          curl --silent --show-error --fail --retry 15 --retry-delay 1 --retry-connrefused 'http://127.0.0.1:54321/auth/v1/health' -H "apikey: $VITE_SUPABASE_ANON_KEY" >/dev/null
+          node tests/browser/billing-ipm.mjs
       - name: Vérifier les empreintes du lot rejoué
         working-directory: ${{ runner.temp }}/waarwi-ordered-migrations
         run: sha256sum --check SHA256SUMS
@@ -261,11 +303,12 @@ jobs:
           CANDIDATE: ${{ steps.candidate.outcome }}
           FIXTURES: ${{ steps.fixtures.outcome }}
           RECIPES: ${{ steps.recipes.outcome }}
+          BROWSER: ${{ steps.browser.outcome }}
         run: |
           node --input-type=module <<'JS'
           const url=process.env.GITHUB_API_URL+'/repos/'+process.env.GITHUB_REPOSITORY+'/statuses/'+process.env.GITHUB_SHA;
           const target=process.env.GITHUB_SERVER_URL+'/'+process.env.GITHUB_REPOSITORY+'/actions/runs/'+process.env.GITHUB_RUN_ID;
-          for(const name of ['inventory','initialize','replay','candidate','fixtures','recipes']){
+          for(const name of ['inventory','initialize','replay','candidate','fixtures','recipes','browser']){
             const outcome=process.env[name.toUpperCase()];
             const state=outcome==='success'?'success':outcome==='failure'?'failure':'error';
             const res=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify({state,context:'waarwi-history/'+name,description:outcome||'not run',target_url:target})});
