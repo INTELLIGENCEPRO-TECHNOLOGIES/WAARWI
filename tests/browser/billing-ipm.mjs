@@ -48,6 +48,12 @@ async function openInvoice(page) {
   await page.locator('input[type=email]').fill(email);
   await page.locator('input[type=password]').fill(password);
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
+  const dismissRelease = page.getByRole('button', { name: 'Plus tard', exact: true });
+  try {
+    await dismissRelease.click({ timeout: 6000 });
+  } catch (failure) {
+    if (failure.name !== 'TimeoutError' || await dismissRelease.isVisible()) throw failure;
+  }
   let nav = page.getByRole('button', { name: 'Facturation', exact: true }).filter({ visible: true }).first();
   try {
     await nav.waitFor({ state: 'visible', timeout: 6500 });
