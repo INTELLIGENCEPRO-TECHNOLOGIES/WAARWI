@@ -63,7 +63,8 @@
     "scripts/pending-accounting/144-ipm-line-allocation-candidate.sql",
     "scripts/pending-accounting/146-ipm-historical-line-snapshot-candidate.sql",
     "scripts/pending-accounting/147-direct-invoice-atomic-foundation-candidate.sql",
-    "scripts/pending-accounting/149-ipm-patient-receivable-separation-candidate.sql"
+    "scripts/pending-accounting/149-ipm-patient-receivable-separation-candidate.sql",
+    "scripts/pending-accounting/151-ipm-direct-invoice-atomic-candidate.sql"
   ],
   "recipe_files": [
     "scripts/pending-accounting/03-recipe.sql",
@@ -101,6 +102,7 @@
     "scripts/pending-accounting/142-durable-return-journal-restore-recipe.sql",
     "scripts/pending-accounting/145-ipm-line-allocation-recipe.sql",
     "scripts/pending-accounting/148-direct-invoice-atomic-foundation-recipe.sql",
-    "scripts/pending-accounting/150-ipm-patient-receivable-separation-recipe.sql"
+    "scripts/pending-accounting/150-ipm-patient-receivable-separation-recipe.sql",
+    "scripts/pending-accounting/152-ipm-direct-invoice-atomic-recipe.sql"
   ]
 }

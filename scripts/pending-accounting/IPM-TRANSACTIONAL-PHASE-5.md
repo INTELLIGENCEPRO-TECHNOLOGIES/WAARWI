@@ -1,0 +1,5 @@
+# Phase 5 — facture IPM directe atomique
+
+151/152 : même RPC candidat, objet ipm dans p_sale, calcul serveur de la convention active, contrôle des documents, TTC et règlements, enregistrement IPM et ventilation originale dans la transaction, réessai idempotent. Pour les factures à crédit, allocation FIFO des avoirs du même magasin seulement après création de la ventilation, plafonnée à la part patient ; aucune création de règlement IPM fictif. La primitive historique reste accessible comme auparavant, la nouvelle primitive sans allocation anticipée est privée.
+
+Recette : refus IPM omise, ordonnance absente, couverture incorrecte, surpaiement, stock insuffisant, rollback, règlement partiel, réessai après changement de convention, avoir sur facture à crédit. Pas de TVA IPM, plafonds périodiques/avant calcul, régularisation, autres imputations, retours, POS, comptabilisation ou raccordement UI à ce stade. Les statuts commerciaux restent à harmoniser avec la distinction patient/organisme. Les montants part_beneficiaire_payee à la création reflètent les règlements réels, distincts de l'imputation des avoirs. Aucune publication.
