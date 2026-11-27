@@ -6,6 +6,8 @@ BEGIN
  INSERT INTO public.tenants(id,name,enabled_modules) VALUES(t,'RECETTE FACTURE VERROU','["accounting"]'),(other,'RECETTE AUTRE','[]');
  INSERT INTO auth.users(id,email,aud,role) SELECT id,id::text||'@example.invalid','authenticated','authenticated' FROM unnest(ARRAY[u,u2,u3]) id;
  INSERT INTO public.profiles(id,tenant_id,role,site_access_mode,full_name,is_active) VALUES(u,t,'admin','all','Commercial A',true),(u2,t,'admin','all','Commercial B',true),(u3,other,'admin','all','Autre entreprise',true) ON CONFLICT(id) DO UPDATE SET tenant_id=excluded.tenant_id,role=excluded.role,site_access_mode=excluded.site_access_mode,is_active=true;
+ -- Separate the owner from the commercial operator exercising the invoice lease.
+ UPDATE public.tenants SET owner_user_id=u2 WHERE id=t;
  INSERT INTO public.sites(id,tenant_id,name,is_active) VALUES(s1,t,'Facturation',true),(s2,t,'Dépôt sortie',true),(s3,t,'Autre magasin',true);
  INSERT INTO public.customers(id,tenant_id,name,balance) VALUES(c,t,'Client recette',2000);
  INSERT INTO public.articles(id,tenant_id,name,internal_ref,track_stock,purchase_price) VALUES(a,t,'Article recette','REC',true,600);
@@ -18,9 +20,22 @@ BEGIN
  IF res->>'state' IS DISTINCT FROM 'held' THEN RAISE EXCEPTION 'Verrou initial absent';END IF;
  res:=public.load_locked_invoice_edit(t,f,w,tok);v:=res->>'version';olditems:=res->'items';
  items:=jsonb_build_array(jsonb_build_object('article_id',a,'name','Article recette','quantity',3,'unit_price',1000,'discount',0));
+ -- A commercial admin must not be able to change the structural site fields.
+ BEGIN
+  UPDATE public.sites SET is_warehouse=true,parent_site_id=s1 WHERE id=s2;
+  RAISE EXCEPTION 'Modification structurelle autorisée à un non-propriétaire';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  EXECUTE 'RESET ROLE';
+ PERFORM set_config('request.jwt.claim.sub',u2::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u2,'role','authenticated')::text,true);
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ IF NOT public.is_tenant_owner() THEN RAISE EXCEPTION 'Propriétaire fictif non reconnu'; END IF;
  UPDATE public.sites SET allow_negative_stock=true WHERE id=s1;
  UPDATE public.sites SET is_warehouse=true,parent_site_id=s1,allow_negative_stock=false WHERE id=s2;
+ EXECUTE 'RESET ROLE';
+ IF NOT EXISTS(SELECT 1 FROM public.sites WHERE id=s2 AND is_warehouse AND parent_site_id=s1 AND NOT allow_negative_stock) OR NOT EXISTS(SELECT 1 FROM public.sites WHERE id=s1 AND allow_negative_stock) THEN RAISE EXCEPTION 'Précondition dépôt non appliquée'; END IF;
+ PERFORM set_config('request.jwt.claim.sub',u::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);
  EXECUTE 'SET LOCAL ROLE authenticated';
  res:=public.save_locked_invoice_edit(t,f,w,tok,v,jsonb_set(items,'{0,quantity}','25'),c,'{}',NULL,NULL,true);
  EXECUTE 'RESET ROLE';

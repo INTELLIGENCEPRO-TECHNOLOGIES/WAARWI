@@ -74,8 +74,14 @@ BEGIN
  EXECUTE 'RESET ROLE';
  SELECT reconciled_at INTO STRICT proof_time FROM public.sale_return_lot_allocations WHERE tenant_id=t AND return_item_id=ri;
  IF (SELECT quantity FROM public.stock_levels WHERE tenant_id=t AND site_id=depot)<>3 OR (SELECT theoretical_amount FROM public.cash_sessions WHERE id=cs)<>7100 THEN RAISE EXCEPTION 'Rapprochement a modifié les soldes';END IF;
+ -- Provision the independent witness tenant as fixture setup, without tenant t's JWT.
+ PERFORM set_config('request.jwt.claim.sub','',true);
+ PERFORM set_config('request.jwt.claims','{}',true);
+ IF auth.uid() IS NOT NULL THEN RAISE EXCEPTION 'Identité précédente encore présente'; END IF;
  INSERT INTO public.tenants(id,name,enabled_modules,settings) VALUES(control_t,'RECETTE CONTROLE PREUVES','[]','{}');
  INSERT INTO public.customers(id,tenant_id,name,balance) VALUES(control_cust,control_t,'Client témoin',7000);
+ PERFORM set_config('request.jwt.claim.sub',u::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);
  INSERT INTO public.ipm_organismes(id,tenant_id,nom) VALUES(org,t,'IPM fictive');
  INSERT INTO public.ipm_conventions(id,tenant_id,organisme_id,nom,taux_defaut) VALUES(conv,t,org,'Convention fictive',80);
  INSERT INTO public.ipm_bordereaux(id,tenant_id,organisme_id,numero,periode_debut,periode_fin,total_part_ipm,nombre_factures,total_accepte,total_paye,total_rejete,total_ecart,nb_factures_rejetees) VALUES(bord,t,org,'BOR-REC-001',current_date-30,current_date,8000,1,7500,5000,500,500,1);

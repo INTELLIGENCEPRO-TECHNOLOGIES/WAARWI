@@ -3,6 +3,10 @@ DO $test$
 DECLARE k int;t uuid;u uuid;s uuid;d uuid;a uuid;c uuid;w uuid;q uuid;tok uuid;v text;r jsonb;src uuid;allowed boolean;
 BEGIN
  FOR k IN 1..6 LOOP
+  -- RESET ROLE does not clear the JWT identity from the previous iteration.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claims','{}',true);
+  IF auth.uid() IS NOT NULL THEN RAISE EXCEPTION 'Identité précédente encore présente'; END IF;
  t:=gen_random_uuid();u:=gen_random_uuid();s:=gen_random_uuid();d:=gen_random_uuid();a:=gen_random_uuid();c:=gen_random_uuid();w:=gen_random_uuid();src:=CASE WHEN k IN(1,4) THEN s ELSE d END;allowed:=k IN(1,2,5);
  INSERT INTO public.tenants(id,name,enabled_modules,settings) VALUES(t,'RECETTE NEGATIF '||k,'[]',jsonb_build_object('stock_method',CASE WHEN k=6 THEN 'lot' WHEN k=5 THEN 'cmup' ELSE 'none' END,'allow_negative_stock',k IN(3,4)));
  INSERT INTO auth.users(id,email,aud,role) VALUES(u,u::text||'@example.invalid','authenticated','authenticated');

@@ -10,6 +10,7 @@ on:
       - 'scripts/pending-accounting/integrated-replay-plan.json'
       - 'scripts/pending-accounting/integrated-local-fixture.sql'
       - 'scripts/pending-accounting/*-candidate.sql'
+      - 'scripts/pending-accounting/*-recipe.sql'
   workflow_dispatch:
 permissions:
   contents: read

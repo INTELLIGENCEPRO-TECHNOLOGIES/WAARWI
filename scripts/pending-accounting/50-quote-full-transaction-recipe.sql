@@ -4,6 +4,10 @@ DO $test$
 DECLARE scenario text;t uuid;u uuid;site uuid;depot uuid;art uuid;svc uuid;cust uuid;org uuid;conv uuid;ben uuid;reg uuid;cs uuid;pm uuid;rid uuid;lot1 uuid;lot2 uuid;badlot uuid;expired uuid;w uuid;qid uuid;tok uuid;v text;res jsonb;sid uuid;items jsonb;payments jsonb;ipm jsonb;assignments jsonb;bad jsonb;expected numeric;pay numeric;
 BEGIN
  FOREACH scenario IN ARRAY ARRAY['vat','lot','ipm'] LOOP
+  -- RESET ROLE does not clear the JWT identity from the previous iteration.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claims','{}',true);
+  IF auth.uid() IS NOT NULL THEN RAISE EXCEPTION 'Identité précédente encore présente'; END IF;
  t:=gen_random_uuid();u:=gen_random_uuid();site:=gen_random_uuid();depot:=gen_random_uuid();art:=gen_random_uuid();svc:=gen_random_uuid();cust:=gen_random_uuid();org:=gen_random_uuid();conv:=gen_random_uuid();ben:=gen_random_uuid();reg:=gen_random_uuid();cs:=gen_random_uuid();pm:=gen_random_uuid();rid:=gen_random_uuid();lot1:=gen_random_uuid();lot2:=gen_random_uuid();badlot:=gen_random_uuid();expired:=gen_random_uuid();w:=gen_random_uuid();ipm:=NULL;assignments:='{}';
  INSERT INTO public.tenants(id,name,enabled_modules,settings) VALUES(t,'RECETTE ATOMIQUE DEVIS '||scenario,'[]',jsonb_build_object('stock_method',CASE WHEN scenario='lot' THEN 'lot' ELSE 'none' END));
  INSERT INTO auth.users(id,email,aud,role) VALUES(u,u::text||'@example.invalid','authenticated','authenticated');
