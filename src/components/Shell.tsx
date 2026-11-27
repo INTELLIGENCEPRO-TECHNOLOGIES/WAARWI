@@ -1089,7 +1089,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           onClick={() => setMobileOpen(true)}
           className="lg:hidden fixed z-40 flex items-center justify-center transition-all active:scale-90"
           style={{
-            top: 'calc(env(safe-area-inset-top) + 14px)',
+            top: isAccounting ? 'env(safe-area-inset-top)' : 'calc(env(safe-area-inset-top) + 14px)',
             left: '12px',
             height: '48px',
             borderRadius: '0',
@@ -1127,11 +1127,11 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         <header
           className={`${isPlatformAdmin ? 'hidden' : 'lg:hidden'} sticky top-0 z-30 flex items-center border-b border-neutral-200 bg-white`}
           style={{
-            paddingTop: 'calc(env(safe-area-inset-top) + 12px)',
-            paddingBottom: '12px',
+            paddingTop: isAccounting ? 'env(safe-area-inset-top)' : 'calc(env(safe-area-inset-top) + 12px)',
+            paddingBottom: isAccounting ? '0' : '12px',
             paddingLeft: '108px',
             paddingRight: '12px',
-            minHeight: 'calc(76px + env(safe-area-inset-top))',
+            minHeight: isAccounting ? 'calc(48px + env(safe-area-inset-top))' : 'calc(76px + env(safe-area-inset-top))',
           }}
         >
           <div className="flex-1 min-w-0 px-2">
@@ -1192,7 +1192,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
           </div>
         </header>
 
-        {isAccounting&&<AccountingNavigation route={route} canAccess={routeVisible} onNavigate={handleRoute}/>}
+        {isAccounting&&<div className="hidden lg:contents"><AccountingNavigation route={route} canAccess={routeVisible} onNavigate={handleRoute}/></div>}
 
         {/* Desktop breadcrumb bar */}
         {!isAccounting && !isDashboard && !isPOS && !isTiers && !isPlatformAdmin && !isSuperAdmin && BREADCRUMB_MAP[route] && (
@@ -1218,7 +1218,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         </main>
 
         {/* Bottom nav */}
-        {!isPlatformAdmin && !(isPOS && posCartOpen) && (
+        {!isAccounting && !isPlatformAdmin && !(isPOS && posCartOpen) && (
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="pointer-events-auto">
             <div className="relative flex items-center justify-around h-[52px] bg-[var(--w-surface)] border-t border-neutral-200">

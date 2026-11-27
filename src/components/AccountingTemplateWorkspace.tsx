@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { CalendarDays, Pencil, Plus, Save, Trash2 } from 'lucide-react';
-import { useAccountingWindowId, mayCloseAccountingWindow, useAccountingWork } from '../context/AccountingWindowContext';
+import { useAccountingWindowId, mayCloseAccountingWindow, useAccountingMobile, useAccountingWork } from '../context/AccountingWindowContext';
 import { useAccountingJournals } from '../lib/accountingJournals';
 import {
   defaultTemplateLine, normalizeTemplateLine, templateError, validateTemplateShape,
@@ -51,39 +51,52 @@ function TemplateLineFields({ line, index, datalistId, update, remove, canRemove
   remove: () => void;
   canRemove: boolean;
 }) {
+  const mobile = useAccountingMobile();
   const number = index + 1;
   const displayAmount = line.amount_side === 'credit' ? line.credit : line.debit;
   function setAmountSide(side: AmountSide) {
     update({ amount_side: side, debit: side === 'debit' ? displayAmount : 0, credit: side === 'credit' ? displayAmount : 0 });
   }
 
-  return (
+  const fields = (
     <fieldset className="min-w-0 border-t border-[var(--w-separator)] pt-2 pb-3">
       <legend className="text-xs font-semibold pr-2">Ligne {number}</legend>
       <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.45fr)_auto]">
         <div className="min-w-0 space-y-1">
-          <label className="label">Compte
+          {mobile ? <SearchableSelect label="Compte" ariaLabel={`Règle du compte ligne ${number}`}
+            value={line.account_rule} searchable={false} clearable={false}
+            options={valueRules.map(rule=>({value:rule.value,label:rule.title,disabled:index===0&&rule.value==='repeat'}))}
+            onChange={value=>update({account_rule:value as ValueRule})}/> : <label className="label">Compte
             <select className="input mt-1 w-full" aria-label={`Règle du compte ligne ${number}`} value={line.account_rule}
               onChange={event => update({ account_rule: event.target.value as ValueRule })}>
               {valueRules.map(rule => <option key={rule.value} value={rule.value} disabled={index === 0 && rule.value === 'repeat'}>{rule.title}</option>)}
             </select>
-          </label>
+          </label>}
           {line.account_rule === 'fixed' && <input className="input w-full" list={datalistId} aria-label={`Compte fixe ligne ${number}`}
             value={line.account_code} onChange={event => update({ account_code: event.target.value })} autoComplete="off" placeholder="Code ou intitulé" />}
         </div>
         <div className="min-w-0 space-y-1">
-          <label className="label">Libellé
+          {mobile ? <SearchableSelect label="Libellé" ariaLabel={`Règle du libellé ligne ${number}`}
+            value={line.label_rule} searchable={false} clearable={false}
+            options={valueRules.map(rule=>({value:rule.value,label:rule.title,disabled:index===0&&rule.value==='repeat'}))}
+            onChange={value=>update({label_rule:value as ValueRule})}/> : <label className="label">Libellé
             <select className="input mt-1 w-full" aria-label={`Règle du libellé ligne ${number}`} value={line.label_rule}
               onChange={event => update({ label_rule: event.target.value as ValueRule })}>
               {valueRules.map(rule => <option key={rule.value} value={rule.value} disabled={index === 0 && rule.value === 'repeat'}>{rule.title}</option>)}
             </select>
-          </label>
+          </label>}
           {line.label_rule === 'fixed' && <input className="input w-full" aria-label={`Libellé fixe ligne ${number}`} maxLength={500}
             value={line.label} onChange={event => update({ label: event.target.value })} />}
         </div>
         <div className="min-w-0 space-y-1">
           <div className="grid grid-cols-2 gap-1.5">
-            <label className="label min-w-0">Montant
+            {mobile ? <SearchableSelect label="Montant" ariaLabel={`Règle du montant ligne ${number}`} value={line.amount_rule}
+              searchable={false} clearable={false}
+              options={amountRules.map(rule=>({value:rule.value,label:rule.title,disabled:index===0&&rule.value==='repeat'}))}
+              onChange={value=>{
+                const amount_rule=value as AmountRule;
+                update({amount_rule,amount_side:amount_rule==='balance'?'auto':line.amount_side==='auto'?'credit':line.amount_side});
+              }}/> : <label className="label min-w-0">Montant
               <select className="input mt-1 w-full" aria-label={`Règle du montant ligne ${number}`} value={line.amount_rule}
                 onChange={event => {
                   const amount_rule = event.target.value as AmountRule;
@@ -91,14 +104,17 @@ function TemplateLineFields({ line, index, datalistId, update, remove, canRemove
                 }}>
                 {amountRules.map(rule => <option key={rule.value} value={rule.value} disabled={index === 0 && rule.value === 'repeat'}>{rule.title}</option>)}
               </select>
-            </label>
-            <label className="label min-w-0">Sens
+            </label>}
+            {mobile ? <SearchableSelect label="Sens" ariaLabel={`Sens du montant ligne ${number}`} value={line.amount_side}
+              searchable={false} clearable={false}
+              options={line.amount_rule==='balance'?[{value:'auto',label:'Automatique'}]:[{value:'debit',label:'Débit'},{value:'credit',label:'Crédit'}]}
+              onChange={value=>setAmountSide(value as AmountSide)}/> : <label className="label min-w-0">Sens
               <select className="input mt-1 w-full" aria-label={`Sens du montant ligne ${number}`} value={line.amount_side}
                 onChange={event => setAmountSide(event.target.value as AmountSide)}>
                 <option value="debit">Débit</option><option value="credit">Crédit</option>
                 {line.amount_rule === 'balance' && <option value="auto">Automatique</option>}
               </select>
-            </label>
+            </label>}
           </div>
           {line.amount_rule === 'fixed' && <input className="input w-full" type="number" min="0" step="0.01" inputMode="decimal"
             aria-label={`Montant fixe ligne ${number} en FCFA`} value={displayAmount || ''}
@@ -110,6 +126,7 @@ function TemplateLineFields({ line, index, datalistId, update, remove, canRemove
       </div>
     </fieldset>
   );
+  return mobile?<details className="acc-mobile-template-line"><summary>Ligne {number}</summary>{fields}</details>:fields;
 }
 
 export function AccountingTemplateWorkspace({ tenantId, canManage, source }: {
@@ -117,6 +134,7 @@ export function AccountingTemplateWorkspace({ tenantId, canManage, source }: {
   canManage: boolean;
   source?: EntryTemplateSource;
 }) {
+  const mobile = useAccountingMobile();
   const work = useAccountingWork();
   const windowId = useAccountingWindowId();
   const datalistId = useId();
@@ -274,7 +292,11 @@ export function AccountingTemplateWorkspace({ tenantId, canManage, source }: {
             <input className="input mt-1 w-full" required maxLength={100} value={draft.name}
               onChange={event => setDraft({ ...draft, name: event.target.value })} />
           </label>
-          <label className="label">Journal
+          {mobile ? <SearchableSelect label="Journal" ariaLabel="Journal" value={draft.journal} clearable={false}
+            disabled={busy||draft.scheduled||journals.loading} wrapLabels
+            options={[{value:'',label:'Tous les journaux'},...journals.rows.filter(journal=>journal.is_active||journal.code===draft.journal).map(journal=>({value:journal.code,label:journal.code+' — '+journal.name+(!journal.is_active?' (désactivé)':''),disabled:!journal.is_active})),
+              ...(draft.journal&&!journals.rows.some(journal=>journal.code===draft.journal)?[{value:draft.journal,label:draft.journal}]:[])]}
+            onChange={value=>setDraft({...draft,journal:value})}/> : <label className="label">Journal
             <select className="input mt-1 w-full" value={draft.journal} disabled={draft.scheduled || journals.loading}
               onChange={event => setDraft({ ...draft, journal: event.target.value })}>
               <option value="">Tous les journaux</option>
@@ -283,7 +305,7 @@ export function AccountingTemplateWorkspace({ tenantId, canManage, source }: {
               ))}
               {draft.journal && !journals.rows.some(journal => journal.code === draft.journal) && <option value={draft.journal}>{draft.journal}</option>}
             </select>
-          </label>
+          </label>}
         </div>
         {draft.scheduled && <p className="text-xs text-[var(--w-text-sec)]">Le modèle est planifié dans ce journal.</p>}
         <label className="label">Libellé de l’écriture

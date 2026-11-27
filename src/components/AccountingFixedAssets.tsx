@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import { SearchableSelect } from './SearchableSelect';
 import {useApp} from '../context/AppContext';
 import {usePermissions} from '../lib/permissions';
-import {useAccountingWork,useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
+import {useAccountingMobile,useAccountingWork,useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
 import {supabase} from '../lib/supabase';
 import {AccountingTable,AccountingPagination,useAccountingPagination} from './AccountingWorkspace';
 import {Plus,Search,RefreshCw,Save,Download,Check} from './Icons';
@@ -23,6 +23,7 @@ const msg=(e:unknown)=>e&&typeof e==='object'&&'message'in e?String(e.message):'
 const fresh=():Form=>({code:'',name:'',location:'',service:today(),months:'',residual:'0',dep:'',expense:'',evidence:'',confirmed:false,source:null});
 const clean=(v:unknown)=>typeof v==='string'&&/^[\s\u0000-\u001f]*[=+@-]/.test(v)?"'"+v:v;
 export function AccountingFixedAssets(){
+ const mobile=useAccountingMobile();
  const {tenant}=useApp();const {can}=usePermissions();const work=useAccountingWork();const windowId=useAccountingWindowId();
  const manage=can('manage_accounting');
  const [search,setSearch]=useState(''),[term,setTerm]=useState(''),[status,setStatus]=useState('all'),[page,setPage]=useState(0),[size,setSize]=useState(20),[rev,setRev]=useState(0);
@@ -79,7 +80,22 @@ export function AccountingFixedAssets(){
  {exit&&<form className="space-y-2" onSubmit={e=>{e.preventDefault();dispose();}}>{previewBusy&&<p className="text-xs">Calcul de la sortie…</p>}{preview&&<div className="acc-summary"><div><span>Dotation complémentaire</span><strong>{money(preview.complement)} FCFA</strong></div><div><span>Cumul amorti</span><strong>{money(preview.cumulative)} FCFA</strong></div><div><span>Valeur nette à sortir</span><strong>{money(preview.net)} FCFA</strong></div></div>}{preview?.blocked&&<p className="text-xs text-red-700">Sortie bloquée : {preview.missing_prior} échéance(s) antérieure(s) non comptabilisée(s) ou dotations postérieures à la date.</p>}<label className="block text-xs">Compte de valeur comptable<select className="input w-full" value={exit.valueAccount} disabled={accountBusy||busy} onChange={e=>setExit({...exit,valueAccount:e.target.value})}><option value="">Choisir 81 ou 654</option>{valueOptions.map(a=><option key={a.code} value={a.code}>{a.code} — {a.name}</option>)}</select></label><label className="block text-xs">Justification de sortie<input className="input w-full" maxLength={500} value={exit.reason} onChange={e=>setExit({...exit,reason:e.target.value})}/></label><label className="flex items-start gap-2 text-xs"><input type="checkbox" checked={exit.confirmed} onChange={e=>setExit({...exit,confirmed:e.target.checked})}/>Je confirme qu’aucune dépréciation, réévaluation ou écriture de sortie n’existe déjà pour ce bien. Pour une cession, le prix et la fiscalité ont été comptabilisés séparément.</label><div className="acc-toolbar"><span className="acc-spacer"/><button className="btn-primary" disabled={busy||previewBusy||accountBusy||!exitValid}><Check size={15}/>Comptabiliser la sortie</button></div></form>}
  </section>}
  <AccountingTable footer={<AccountingPagination page={page} size={size} total={reg?.count??0} setPage={setPage} setSize={n=>{setSize(n);setPage(0);}} disabled={loading||busy}/>}>
- <table><thead><tr><th>Code / désignation</th><th>Mise en service</th><th className="text-right">Valeur brute</th><th className="text-right">Amort. comptabilisé</th><th className="text-right">VNC historique</th><th>État</th></tr></thead><tbody>{reg?.rows.map(a=><tr key={a.id} className={a.id===selected?'w-tr-active':''}><td><button className="font-medium hover:underline" type="button" disabled={busy} onClick={()=>{if(discard()){setSelected(a.id);setExit(null);setForm(null);}}}>{a.code} │ {a.name}</button><span className="block text-xs">{a.location} │ {a.asset_account}</span></td><td>{date(a.service_date)}</td><td className="text-right">{money(a.cost)}</td><td className="text-right">{money(a.posted)}</td><td className="text-right">{money(a.net)}</td><td>{a.disposed_on?'Sortie '+date(a.disposed_on):'En service'}</td></tr>)}{!reg?.rows.length&&<tr><td colSpan={6}>{loading?'Chargement…':'Aucune immobilisation.'}</td></tr>}</tbody></table></AccountingTable>
+ {mobile?<table className="acc-mobile-ledger">
+  <thead><tr><th scope="col">Bien</th><th scope="col" className="text-right">Valeur brute</th><th scope="col" className="text-right">VNC</th></tr></thead>
+  <tbody>{reg?.rows.map(asset=><tr key={asset.id} className={asset.id===selected?'w-tr-active':''}>
+   <td><details className="acc-mobile-line">
+    <summary>{asset.code}<span>{asset.name}</span></summary>
+    <span>Mise en service le {date(asset.service_date)}</span>
+    <span>{asset.disposed_on?'Sortie le '+date(asset.disposed_on):'En service'}</span>
+    <span>Amortissement comptabilisé {money(asset.posted)} FCFA</span>
+    <span>{asset.asset_account}{asset.location?' │ '+asset.location:''}</span>
+    <button type="button" disabled={busy} onClick={()=>{if(discard()){setSelected(asset.id);setExit(null);setForm(null);}}}>Ouvrir la fiche</button>
+   </details></td>
+   <td className="text-right">{money(asset.cost)}</td><td className="text-right">{money(asset.net)}</td>
+  </tr>)}
+  {!reg?.rows.length&&<tr><td colSpan={3}>{loading?'Chargement…':'Aucune immobilisation.'}</td></tr>}
+  </tbody>
+ </table>:<table><thead><tr><th>Code / désignation</th><th>Mise en service</th><th className="text-right">Valeur brute</th><th className="text-right">Amort. comptabilisé</th><th className="text-right">VNC historique</th><th>État</th></tr></thead><tbody>{reg?.rows.map(a=><tr key={a.id} className={a.id===selected?'w-tr-active':''}><td><button className="font-medium hover:underline" type="button" disabled={busy} onClick={()=>{if(discard()){setSelected(a.id);setExit(null);setForm(null);}}}>{a.code} │ {a.name}</button><span className="block text-xs">{a.location} │ {a.asset_account}</span></td><td>{date(a.service_date)}</td><td className="text-right">{money(a.cost)}</td><td className="text-right">{money(a.posted)}</td><td className="text-right">{money(a.net)}</td><td>{a.disposed_on?'Sortie '+date(a.disposed_on):'En service'}</td></tr>)}{!reg?.rows.length&&<tr><td colSpan={6}>{loading?'Chargement…':'Aucune immobilisation.'}</td></tr>}</tbody></table>}</AccountingTable>
  {detailBusy&&<p className="text-xs">Chargement de la fiche…</p>}
  {detail&&<section className="acc-section-head space-y-2"><div className="acc-toolbar"><strong className="text-sm">{detail.asset.code} — {detail.asset.name}</strong><span className="acc-spacer"/>{manage&&!detail.asset.disposed_on&&!form&&!exit&&<><button type="button" className="btn-primary" disabled={busy||!next||next.through_date>today()} onClick={post}><Check size={15}/>Comptabiliser la prochaine dotation</button><button type="button" className="btn-secondary" disabled={busy} onClick={()=>{setExit({date:today(),kind:'scrap',valueAccount:'',reason:'',source:null,confirmed:false});resetSource();}}>Sortir le bien</button></>}</div>
  <p className="text-xs">Acquisition <button type="button" className="underline" onClick={()=>piece(detail.acquisition_entry_id,detail.acquisition_piece)}>{detail.acquisition_piece}</button> │ {detail.asset.life_months} mois │ Résiduel {money(detail.asset.residual)} FCFA │ Amorti comptabilisé {money(detail.posted)} FCFA. {detail.asset.evidence}</p>

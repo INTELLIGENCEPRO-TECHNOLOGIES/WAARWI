@@ -15,3 +15,5 @@ export const useAccountingWork=()=>useContext(AccountingWorkContext);
 // null outside the accounting desktop; false for reduced/hidden windows.
 export const AccountingWindowVisible=createContext<boolean|null>(null);
 export const useAccountingWindowVisible=()=>useContext(AccountingWindowVisible);
+export const AccountingMobile=createContext(false);
+export const useAccountingMobile=()=>useContext(AccountingMobile);

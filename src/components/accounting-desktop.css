@@ -1,4 +1,38 @@
 /* Bureau comptable, confinement local au-dessous du menu en cascade. */
+.acc-mobile{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;color:var(--w-text);background:var(--w-bg)}
+.acc-mobile-header{display:flex;align-items:center;gap:8px;min-height:46px;padding:0 12px;border-bottom:1px solid var(--w-separator)}
+.acc-mobile-header h1{font-size:16px;font-weight:700;line-height:1.2}
+.acc-mobile-header button{width:44px;height:44px;display:grid;place-items:center;flex:none}
+.acc-mobile-page{container:acc-window / inline-size;flex:1;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:8px 12px}
+.acc-mobile-page[hidden]{display:none}
+.acc-mobile .accounting-workspace .acc-table-scroll,.acc-mobile .accounting-workspace .acc-form-scroll{max-height:none;min-height:0}
+.acc-mobile .accounting-workspace .acc-body{padding-top:0}
+.acc-mobile .accounting-workspace .acc-table-scroll tbody td{border-bottom:1px solid var(--w-separator)}
+.acc-mobile .accounting-workspace .acc-toolbar :is(.btn-primary,.btn-secondary){min-height:44px}
+.acc-mobile .accounting-workspace .acc-table-scroll :is(th,td).text-right{white-space:nowrap;font-variant-numeric:tabular-nums}
+.acc-mobile-menu h2{padding:12px 0 5px;font-size:13px;font-weight:700}
+.acc-mobile-menu button{display:block;width:100%;min-height:45px;text-align:left;border-bottom:1px solid var(--w-separator);font-size:14px}
+.acc-mobile-dock{display:flex;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom);border-top:1px solid var(--w-separator);background:var(--w-bg)}
+.acc-mobile-dock button{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;flex:1;min-height:48px;color:var(--w-text-sec);font-size:12px}
+.acc-mobile-dock button[aria-current=page]{color:var(--w-text);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.acc-mobile button:focus-visible,.acc-mobile summary:focus-visible{outline:2px solid var(--w-text);outline-offset:-2px}
+.acc-mobile-only{display:none}
+.acc-mobile .acc-mobile-only{display:block}
+.acc-mobile .acc-desktop-only{display:none!important}
+.acc-mobile .acc-mobile-filters{display:block;flex:1 1 145px;min-width:0}
+.acc-mobile .acc-mobile-filters summary{display:list-item;min-height:44px;cursor:pointer;padding:11px 6px;font-weight:650}
+.acc-mobile .acc-mobile-filters .acc-fields{padding:0 0 6px}
+.acc-mobile .acc-mobile-filters label{display:block;min-width:0}
+.acc-mobile .acc-mobile-filters input{width:100%;min-width:0}
+.acc-mobile-line summary{min-height:40px;align-content:center;cursor:pointer;font-weight:650}
+.acc-mobile-line span{display:block;color:var(--w-text-sec);font-size:12px}
+.acc-mobile-line button{display:block;min-height:42px;text-align:left;text-decoration:underline}
+.acc-mobile .acc-period-wide{display:none!important}
+.acc-mobile-ledger{width:100%}
+.acc-mobile-template-line{border-block-start:1px solid var(--w-separator)}
+.acc-mobile-template-line summary{min-height:44px;padding:12px 0;cursor:pointer;font-weight:650}
+.acc-mobile-template-line>fieldset{border:0;padding-top:0}
+.acc-mobile-template-line>fieldset>legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .acc-desktop{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;width:100%;overflow:hidden;background:var(--w-bg)}
 .acc-desktop-area{position:relative;isolation:isolate;flex:1;min-height:0;min-width:0;overflow:hidden;background:var(--w-bg)}
 .acc-desktop-home{position:absolute;inset:0;overflow:auto;padding:10px 18px 16px}

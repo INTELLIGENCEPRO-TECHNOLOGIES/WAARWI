@@ -1,6 +1,6 @@
 import {useEffect,useState} from 'react';
 import {useApp} from '../context/AppContext';
-import {useAccountingWork} from '../context/AccountingWindowContext';
+import {useAccountingMobile,useAccountingWork} from '../context/AccountingWindowContext';
 import {supabase} from '../lib/supabase';
 import {useRealtimeTick} from '../lib/useRealtimeData';
 import {AccountingTable,AccountingPagination} from './AccountingWorkspace';
@@ -17,6 +17,7 @@ const msg=(e:unknown)=>e&&typeof e==='object'&&'message'in e?String(e.message):'
 const date=(s:string)=>s.split('-').reverse().join('/');
 const clean=(v:unknown)=>typeof v==='string'&&/^[\s\u0000-\u001f]*[=+@-]/.test(v)?"'"+v:v;
 export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
+ const mobile=useAccountingMobile();
  const {tenant}=useApp();const work=useAccountingWork();const tick=useRealtimeTick(['journal_entries','journal_lines','accounts','accounting_fiscal_years']);
  const initial={from:today().slice(0,4)+'-01-01',to:today(),search:''};
  const [form,setForm]=useState(initial),[criteria,setCriteria]=useState(initial),[page,setPage]=useState(0),[size,setSize]=useState(20),[rev,setRev]=useState(0);
@@ -34,7 +35,10 @@ export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
  const balanceRows = (data?.rows ?? []).filter((row): row is Balance => !('line_id' in row));
  const ledgerRows = (data?.rows ?? []).filter((row): row is Ledger => 'line_id' in row);
  return <section className="acc-fill acc-period-books space-y-2">
- <form className="acc-toolbar acc-fixed" onSubmit={e=>{e.preventDefault();submit();}}><label className="text-xs">Du <input className="input" type="date" value={form.from} onChange={e=>setForm(p=>({...p,from:e.target.value}))}/></label><label className="text-xs">Au <input className="input" type="date" max={today()} value={form.to} onChange={e=>setForm(p=>({...p,to:e.target.value}))}/></label><input className="input flex-1 min-w-0" aria-label="Compte ou intitulé" placeholder="Compte ou intitulé" value={form.search} onChange={e=>setForm(p=>({...p,search:e.target.value}))}/><button className="btn-primary" disabled={loading||exporting}><Search size={15}/>Afficher</button><button type="button" className="btn-secondary" disabled={loading||exporting} onClick={()=>setRev(v=>v+1)}><RefreshCw size={15}/>Actualiser</button><button type="button" className="btn-secondary" disabled={!data||loading||exporting||changed} onClick={()=>void exportExcel()}><Download size={15}/>{exporting?'Export…':'Excel complet'}</button></form>
+ <form className="acc-toolbar acc-fixed" onSubmit={e=>{e.preventDefault();submit();}}>
+  {(()=>{const dates=<><label className="text-xs">Du <input className="input" type="date" value={form.from} onChange={e=>setForm(p=>({...p,from:e.target.value}))}/></label><label className="text-xs">Au <input className="input" type="date" max={today()} value={form.to} onChange={e=>setForm(p=>({...p,to:e.target.value}))}/></label></>;
+  return mobile?<details className="acc-mobile-filters"><summary>Période</summary><div className="acc-fields">{dates}</div></details>:dates;})()}
+  <input className="input flex-1 min-w-0" aria-label="Compte ou intitulé" placeholder="Compte ou intitulé" value={form.search} onChange={e=>setForm(p=>({...p,search:e.target.value}))}/><button className="btn-primary" disabled={loading||exporting}><Search size={15}/>Afficher</button><button type="button" className="btn-secondary" disabled={loading||exporting} onClick={()=>setRev(v=>v+1)}><RefreshCw size={15}/>Actualiser</button><button type="button" className="btn-secondary" disabled={!data||loading||exporting||changed} onClick={()=>void exportExcel()}><Download size={15}/>{exporting?'Export…':'Excel complet'}</button></form>
  {changed&&<p className="text-xs">Appliquez les critères pour actualiser l’état.</p>}
  {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
  {data&&<p className="text-xs text-neutral-600">{data.opening_mode==='fiscal'?'Report à nouveau arrêté de '+data.prior_year+' puis mouvements antérieurs à la période.':data.opening_mode==='provisional'?'Ouverture provisoire : exercice précédent non clôturé ; reprise continue des écritures depuis le dernier arrêté disponible. Les comptes de gestion peuvent conserver des soldes antérieurs.':'Premier exercice : solde issu des mouvements antérieurs à la période.'} Les reports ne sont pas des pièces supplémentaires.</p>}
@@ -44,7 +48,7 @@ export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
  {mode==='balance'?<table className="acc-period-wide"><thead><tr><th rowSpan={2}>Compte / intitulé</th><th colSpan={2} className="text-center">Ouverture</th><th colSpan={2} className="text-center">Mouvements</th><th colSpan={2} className="text-center">Clôture (FCFA)</th></tr><tr>{Array.from({length:3},(_,i)=><FragmentPair key={i}/>)}</tr></thead><tbody>{balanceRows.map(r=><tr key={r.account_code}><td><button type="button" className="font-medium hover:underline" onClick={()=>work?.openAccount(r.account_code)}>{r.account_code}</button><span className="block text-xs">{r.account_name}</span></td>{[Math.max(0,r.opening),Math.max(0,-r.opening),r.debit,r.credit,Math.max(0,r.closing),Math.max(0,-r.closing)].map((n,i)=><td className="text-right" key={i}>{amount(n)}</td>)}</tr>)}{!data?.rows.length&&<tr><td colSpan={7}>{loading?'Chargement…':'Aucun compte pour la sélection.'}</td></tr>}</tbody>{t&&<tfoot><tr><td>TOTAL</td>{[t.opening_debit,t.opening_credit,t.debit,t.credit,t.closing_debit,t.closing_credit].map((n,i)=><td key={i} className="text-right">{money(n)}</td>)}</tr></tfoot>}</table>:
  <table className="acc-period-wide"><thead><tr><th>Compte</th><th>Date / pièce</th><th>Libellé</th><th className="text-right">Débit</th><th className="text-right">Crédit</th><th className="text-right">Solde cumulé</th></tr></thead><tbody>{ledgerRows.map((r,i,all)=><LedgerRows key={r.line_id??r.account_code} row={r} first={i===0||all[i-1].account_code!==r.account_code} last={i===all.length-1||all[i+1].account_code!==r.account_code} openAccount={()=>work?.openAccount(r.account_code)} openPiece={()=>r.entry_number&&work?.openPiece({entryId:r.entry_id??undefined,entryNumber:r.entry_number})}/>)}{!data?.rows.length&&<tr><td colSpan={6}>{loading?'Chargement…':'Aucun compte pour la sélection.'}</td></tr>}</tbody></table>}
 
- <table className="acc-period-compact">
+ <table className="acc-period-compact acc-desktop-only">
   {mode === 'balance' ? <>
     <thead><tr><th scope="col" className="text-left">Compte</th><th scope="col" className="text-right">Montants (FCFA)</th></tr></thead>
     <tbody>
@@ -73,6 +77,19 @@ export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
   </>}
   {!data?.rows.length && <tbody><tr><td colSpan={2} className="acc-table-empty" role="status">{loading ? 'Chargement…' : 'Aucun compte pour la sélection.'}</td></tr></tbody>}
  </table>
+ {mobile&&<table className="acc-mobile-ledger"><thead><tr><th className="text-left">{mode==='ledger'?'Date / pièce':'Compte'}</th><FragmentPair/></tr></thead>
+  <tbody>
+   {!data?.rows.length&&<tr><td colSpan={3}>{loading?'Chargement…':'Aucun compte pour la sélection.'}</td></tr>}
+   {mode==='ledger'?ledgerRows.map(row=><tr key={row.line_id??row.account_code}>
+    <td><details className="acc-mobile-line"><summary>{row.entry_date?date(row.entry_date):'Ouverture'}<span>{row.entry_number??row.account_code}</span></summary>
+     <span>{row.account_code} · {row.account_name}</span><span>{row.label||row.reference}</span>
+     <span>Solde cumulé {dc(row.running_balance)}</span>
+     {row.entry_number&&<button type="button" onClick={()=>work?.openPiece({entryId:row.entry_id??undefined,entryNumber:row.entry_number!})}>Ouvrir la pièce</button>}
+     <button type="button" onClick={()=>work?.openAccount(row.account_code)}>Interroger le compte</button>
+    </details></td><td className="text-right">{amount(row.debit)}</td><td className="text-right">{amount(row.credit)}</td>
+   </tr>):balanceRows.map(row=><tr key={row.account_code}><td><details className="acc-mobile-line"><summary>{row.account_code}</summary><span>{row.account_name}</span><span>Ouverture {dc(row.opening)}</span><span>Clôture {dc(row.closing)}</span><button type="button" onClick={()=>work?.openAccount(row.account_code)}>Interroger le compte</button></details></td><td className="text-right">{amount(row.debit)}</td><td className="text-right">{amount(row.credit)}</td></tr>)}
+  </tbody>{t&&<tfoot><tr><td>Total période</td><td className="text-right">{money(t.debit)}</td><td className="text-right">{money(t.credit)}</td></tr></tfoot>}
+ </table>}
  </AccountingTable>
  </section>;
 }

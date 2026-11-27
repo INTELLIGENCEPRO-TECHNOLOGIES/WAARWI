@@ -30,7 +30,7 @@ import { AccountingSearch } from '../components/AccountingSearch';
 import { AccountingPeriodControls } from '../components/AccountingPeriodControls';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
-import {useAccountingWindowId,mayCloseAccountingWindow,useAccountingWork} from '../context/AccountingWindowContext';
+import {useAccountingWindowId,mayCloseAccountingWindow,useAccountingWork,useAccountingMobile} from '../context/AccountingWindowContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 import { formatDate } from '../lib/format';
@@ -106,6 +106,7 @@ export function Accounting({ section = 'plan', onNavigate, inWindow = false, onE
 
 /* ===================== PLAN COMPTABLE ===================== */
 function PlanTab() {
+  const mobile=useAccountingMobile();
   const work=useAccountingWork();
   const { tenant } = useApp();
   const { success, error } = useToast();
@@ -157,21 +158,21 @@ function PlanTab() {
 
   return (
     <div className="acc-fill space-y-3">
-      <div className="acc-toolbar acc-fixed">
+      {(!mobile||!open)&&<div className="acc-toolbar acc-fixed">
         <input aria-label="Rechercher un compte" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Code ou intitulé…" className="input flex-1 min-w-0 sm:max-w-xs"/>
         <SearchableSelect ariaLabel="Classe" className="acc-toolbar-select w-40" searchable={false} clearable={false}
           value={classFilter} onChange={setClassFilter}
           options={[{value:'',label:'Toutes les classes'}, ...Array.from({length:8},(_,i)=>({value:String(i+1),label:'Classe '+(i+1)}))]}/>
         <span className="acc-spacer"/><AccountingPlanIO accounts={planLoading||planError?[]:list} onImportDone={()=>{work?.refresh();void load();}}/>
         {canManage&&<button type="button" onClick={()=>{setEditing(null);setForm({});setOpen(true);}} className="btn-primary"><Plus size={16}/>Nouveau compte</button>}
-      </div>
+      </div>}
       {planError&&<p role="alert" className="text-xs text-red-700">{planError}</p>}{planLoading&&<p role="status" className="text-xs">Chargement du plan comptable…</p>}
-      <AccountingTable fill footer={<AccountingPagination {...paging} disabled={planLoading}/>}>
+      {(!mobile||!open)&&<AccountingTable fill footer={<AccountingPagination {...paging} disabled={planLoading}/>}>
         <table><thead><tr><th className="text-left">Compte</th><th className="text-left">Intitulé</th><th className="text-left hidden sm:table-cell">Classe</th><th className="text-right">Actions</th></tr></thead>
           <tbody>{paging.rows.map(a=><tr key={a.id}><td className="font-medium whitespace-nowrap"><button type="button" className="hover:underline" onClick={()=>work?.openAccount(a.code)}>{a.code}</button></td><td>{a.name}</td><td className="hidden sm:table-cell">{a.class}</td><td className="text-right">{canManage&&<button type="button" className="acc-icon" aria-label={'Modifier '+a.code} onClick={()=>{setEditing(a);setForm({...a});setOpen(true);}}><Edit2 size={16}/></button>}</td></tr>)}
           {!visible.length&&<tr><td colSpan={4} className="text-center text-neutral-500">Aucun compte correspondant.</td></tr>}</tbody>
         </table>
-      </AccountingTable>
+      </AccountingTable>}
 
       {open&&<section className="acc-section-head space-y-2"><div className="acc-toolbar"><strong className="text-sm">{editing?'Modifier le compte':'Nouveau compte'}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={saving} onClick={()=>setOpen(false)}>Annuler</button><button type="button" className="btn-primary" disabled={saving} onClick={save}>{saving?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Enregistrer</button></div><div className="acc-fields acc-fields-account">
           <div>
@@ -196,6 +197,7 @@ type JournalsTabProps = {
 };
 
 function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJournal,openTemplatesRequest}:JournalsTabProps={}) {
+  const mobile=useAccountingMobile();
   const windowId=useAccountingWindowId();
   const work=useAccountingWork();
   const { tenant, user } = useApp();
@@ -542,13 +544,16 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
   const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={()=>void save()} className="btn-primary" disabled={saving||!editLease.held||!isBalanced||!readyLines||accountLoading||!!accountError||journalCatalog.loading||!!journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
   if(entryOnly)return <section className="acc-entry-page">{entryForm}{entryFooter}</section>;
 
-    return (
-    <div className="acc-fill space-y-3">
-      <div className="acc-toolbar acc-fixed">
+    const journalFilters=<>
         <SearchableSelect ariaLabel="Journal" className="acc-toolbar-select w-52" searchable={false} clearable={false} wrapLabels
           value={journalType} options={journalFilterOptions} onChange={value=>{setJournalPage(0);setJournalType(value);}}/>
         <label>Du <input aria-label="Date de début" type="date" className="input w-auto" value={fromDate} onChange={e=>{setJournalPage(0);setFromDate(e.target.value);}}/></label>
         <label>Au <input aria-label="Date de fin" type="date" className="input w-auto" value={toDate} onChange={e=>{setJournalPage(0);setToDate(e.target.value);}}/></label>
+    </>;
+    return (
+    <div className="acc-fill space-y-3">
+      <div className="acc-toolbar acc-fixed">
+        {mobile?<details className="acc-mobile-filters"><summary>Filtres</summary><div className="acc-fields">{journalFilters}</div></details>:journalFilters}
         <span className="acc-spacer"/>
         {canView&&<button onClick={openExportModal} className="btn-secondary"><Download size={16}/>Exporter</button>}
         {canManage&&work&&<button type="button" onClick={()=>work.openEntry(journalOptions.some(j=>j.code===journalType&&j.active)?journalType:'',true)} className="btn-secondary"><FileText size={16}/>Appeler un modèle</button>}
@@ -556,14 +561,19 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
       </div>
       {journalError&&<p role="alert" className="text-sm text-red-700">{journalError}</p>}
       <AccountingTable fill label="Écritures du journal" footer={<AccountingPagination page={journalPage} size={journalSize} total={journalTotal} setPage={n=>{setContextRow(null);setJournalPage(n);}} setSize={n=>{setJournalPage(0);setJournalSize(n);}} disabled={loading}/>}>
-        <table><thead><tr><th className="text-left">Pièce</th><th className="text-left hidden md:table-cell">Date</th><th className="text-left hidden md:table-cell">Journal</th><th className="text-left">Libellé</th><th className="text-left hidden lg:table-cell">Statut</th><th className="text-right">Débit</th><th className="text-right hidden sm:table-cell">Crédit</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
+        <table><thead><tr><th className="text-left">{mobile?'Pièce / date':'Pièce'}</th><th className="text-left hidden md:table-cell acc-desktop-only">Date</th><th className="text-left hidden md:table-cell acc-desktop-only">Journal</th><th className="text-left acc-desktop-only">Libellé</th><th className="text-left hidden lg:table-cell">Statut</th><th className="text-right">Débit</th><th className={mobile?'text-right':'text-right hidden sm:table-cell'}>Crédit</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{loading?<tr><td colSpan={8} className="text-center"><Loader2 className="mx-auto animate-spin" size={20}/></td></tr>:entries.length===0?<tr><td colSpan={8} className="text-center text-neutral-500">Aucune écriture sur cette période.</td></tr>:entries.map(e=><tr key={e.id} onContextMenu={event=>{event.preventDefault();setContextRow({id:e.id,x:event.clientX,y:event.clientY});}}>
-          <td><button type="button" className="text-left font-medium underline-offset-2 hover:underline" onClick={()=>void openDetail(e)}>{e.entry_number}</button><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(e.entry_date)} │ {e.journal_type}</span></td>
-          <td className="hidden md:table-cell whitespace-nowrap">{formatDate(e.entry_date)}</td><td className="hidden md:table-cell">{e.journal_type}</td>
-          <td className="break-words">{e.description}<span className="block lg:hidden text-[11px] text-neutral-500">{e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
+          <td>{mobile?<details className="acc-mobile-line">
+           <summary>{e.entry_number}<span>{formatDate(e.entry_date)}</span></summary>
+           <span>{e.description}</span>
+           <span>{e.journal_type} │ {e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span>
+           <button type="button" onClick={()=>void openDetail(e)}>Ouvrir la pièce</button>
+          </details>:<button type="button" className="text-left font-medium underline-offset-2 hover:underline" onClick={()=>void openDetail(e)}>{e.entry_number}</button>}</td>
+          <td className="hidden md:table-cell whitespace-nowrap acc-desktop-only">{formatDate(e.entry_date)}</td><td className="hidden md:table-cell acc-desktop-only">{e.journal_type}</td>
+          <td className="break-words acc-desktop-only">{e.description}<span className="block lg:hidden text-[11px] text-neutral-500">{e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
           <td className="hidden lg:table-cell"><span className={'acc-status '+(e.status==='posted'?'valid':e.status==='cancelled'?'cancelled':'draft')}>{e.status==='posted'&&<Check size={13}/>} {e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
-          <td className="text-right">{Number(e.total_debit).toLocaleString('fr-FR')}<span className="block sm:hidden text-[10px] text-neutral-500">C : {Number(e.total_credit).toLocaleString('fr-FR')}</span></td>
-          <td className="text-right hidden sm:table-cell">{Number(e.total_credit).toLocaleString('fr-FR')}</td>
+          <td className="text-right">{Number(e.total_debit).toLocaleString('fr-FR')}{!mobile&&<span className="block sm:hidden text-[10px] text-neutral-500">C : {Number(e.total_credit).toLocaleString('fr-FR')}</span>}</td>
+          <td className={mobile?'text-right':'text-right hidden sm:table-cell'}>{Number(e.total_credit).toLocaleString('fr-FR')}</td>
           <td className="text-right"><AccountingRowActions piece={e.entry_number} onView={()=>openDetail(e)} onTemplate={canManage&&work&&e.status!=='cancelled'?()=>work.openPiece({entryId:e.id,entryNumber:e.entry_number,selectTemplateLines:true}):undefined} onReverse={canManage&&e.source_type==='manual'&&e.status==='posted'?()=>void openDetail(e,true):undefined} reverseDisabledReason={canManage?(e.source_type==='reversal'?'Pièce d’extourne':e.source_type!=='manual'?'Corriger la pièce d’origine':e.status!=='posted'?'Écriture non validée':undefined):'Droit de gestion requis'} anchor={contextRow&&contextRow.id===e.id?contextRow:undefined} onDismiss={()=>setContextRow(null)}/></td>
         </tr>)}</tbody></table>
       </AccountingTable>

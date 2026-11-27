@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useApp} from '../context/AppContext';
 import {usePermissions} from '../lib/permissions';
-import {useAccountingWork,type AccountingPieceRequest} from '../context/AccountingWindowContext';
+import {useAccountingMobile,useAccountingWork,type AccountingPieceRequest} from '../context/AccountingWindowContext';
 import {supabase} from '../lib/supabase';
 import {formatDate} from '../lib/format';
 import {AccountingEntryReversal} from './AccountingEntryReversal';
@@ -13,6 +13,7 @@ type Line={id:string;account_code:string;account_name:string;label:string;debit:
 const money=(n:number)=>Number(n).toLocaleString('fr-FR',{maximumFractionDigits:2});
 const status=(s:string)=>s==='posted'?'Validée':s==='cancelled'?'Annulée':'Brouillon';
 export function AccountingPiece({request,onPosted}:{request:AccountingPieceRequest;onPosted:()=>void}){
+ const mobile=useAccountingMobile();
  const {tenant}=useApp();const {can}=usePermissions();const work=useAccountingWork();
  const [entry,setEntry]=useState<Entry|null>(null),[lines,setLines]=useState<Line[]>([]),[busy,setBusy]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0);
  const paging=useAccountingPagination(lines,request.entryNumber);
@@ -89,7 +90,7 @@ export function AccountingPiece({request,onPosted}:{request:AccountingPieceReque
       <tr>
        {canCreateTemplate&&<th className="w-9 text-center"><input type="checkbox" aria-label="Sélectionner toutes les lignes" disabled={!lines.length} checked={lines.length>0&&selectedLines.length===lines.length} onChange={event=>selectAll(event.target.checked)}/></th>}
        <th className="text-left">Compte</th>
-       <th className="text-left">Intitulé / libellé</th>
+       {!mobile&&<th className="text-left">Intitulé / libellé</th>}
        <th className="text-right">Débit</th>
        <th className="text-right">Crédit</th>
       </tr>
@@ -101,14 +102,19 @@ export function AccountingPiece({request,onPosted}:{request:AccountingPieceReque
        setContext({x:event.clientX,y:event.clientY});
       }}>
        {canCreateTemplate&&<td className="text-center"><input type="checkbox" aria-label={'Sélectionner la ligne '+(paging.page*paging.size+index+1)} checked={selectedIds.has(line.id)} onChange={event=>setLineSelection(line.id,event.target.checked)}/></td>}
-       <td>{work ? <button type="button" className="font-medium hover:underline" title="Interroger le compte" onClick={()=>work.openAccount(line.account_code)}>{line.account_code}<Search size={12} className="inline ml-1"/></button> : line.account_code}</td>
-       <td>{line.account_name}<span className="block text-[11px] text-neutral-500">{line.label}</span></td>
+       <td>{mobile?<details className="acc-mobile-line">
+        <summary>{line.account_code}</summary>
+        <span>{line.account_name}</span>
+        {line.label&&<span>{line.label}</span>}
+        {work&&<button type="button" onClick={()=>work.openAccount(line.account_code)}>Interroger le compte</button>}
+       </details>:work ? <button type="button" className="font-medium hover:underline" title="Interroger le compte" onClick={()=>work.openAccount(line.account_code)}>{line.account_code}<Search size={12} className="inline ml-1"/></button> : line.account_code}</td>
+       {!mobile&&<td>{line.account_name}<span className="block text-[11px] text-neutral-500">{line.label}</span></td>}
        <td className="text-right">{Number(line.debit) ? money(line.debit) : '—'}</td>
        <td className="text-right">{Number(line.credit) ? money(line.credit) : '—'}</td>
       </tr>)}
-      {!lines.length&&<tr><td colSpan={canCreateTemplate?5:4}>Aucune ligne disponible.</td></tr>}
+      {!lines.length&&<tr><td colSpan={3+Number(canCreateTemplate)+Number(!mobile)}>Aucune ligne disponible.</td></tr>}
      </tbody>
-     <tfoot><tr><td colSpan={canCreateTemplate?3:2}>Total de la pièce (FCFA)</td><td className="text-right">{money(d)}</td><td className="text-right">{money(c)}</td></tr></tfoot>
+     <tfoot><tr><td colSpan={1+Number(canCreateTemplate)+Number(!mobile)}>Total de la pièce (FCFA)</td><td className="text-right">{money(d)}</td><td className="text-right">{money(c)}</td></tr></tfoot>
     </table>
    </AccountingTable>
    <div className="acc-toolbar"><span className="text-xs">{lines.length} ligne(s)</span><span className="acc-spacer"/><strong className="text-xs">{lines.length&&Math.abs(d-c)<0.005?'Équilibrée':'Écart : '+money(d-c)+' FCFA'}</strong></div>

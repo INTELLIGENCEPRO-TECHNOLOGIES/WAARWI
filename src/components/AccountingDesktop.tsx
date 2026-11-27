@@ -1,9 +1,9 @@
 import {useEffect,useRef,useState,useCallback,type RefObject,type ReactNode,type ComponentProps} from 'react';
 import {WindowManagerProvider,useWindowManager} from '../context/WindowManagerContext';
 import {DesktopWindow} from './DesktopWindow';
-import {BookOpen,LayoutGrid,Minus,X} from './Icons';
+import {ArrowLeft,BookOpen,LayoutGrid,Minus,MoreHorizontal,Search,X} from './Icons';
 import {Accounting} from '../pages/Accounting';
-import {AccountingWindowId as WindowId,AccountingWorkContext,AccountingWindowVisible,type AccountingWorkActions,type AccountingPieceRequest,useAccountingWork} from '../context/AccountingWindowContext';
+import {AccountingMobile,AccountingWindowId as WindowId,AccountingWorkContext,AccountingWindowVisible,type AccountingWorkActions,type AccountingPieceRequest,useAccountingWork} from '../context/AccountingWindowContext';
 import {AccountingPiece} from './AccountingPiece';
 import type {EntryTemplateSource} from './AccountingTemplateWorkspace';
 import {AccountingPlanIO} from './AccountingPlanIO';
@@ -20,6 +20,14 @@ const sections={
  acc_vat:['vat','Situation de TVA'],acc_cloture:['cloture','Clôtures mensuelles'],acc_fiscal:['fiscal','Exercices et RAN'],acc_financial:['financial','États financiers']
 } as const;
 type WorkRoute=keyof typeof sections;
+const mobileGroups=[
+ ['Écritures',['acc_journals','acc_entry','acc_search','acc_statement']],
+ ['Structure',['acc_plan','acc_journal_settings','acc_templates']],
+ ['Banque et contrôles',['acc_bank','acc_revision','acc_cloture','acc_fiscal']],
+ ['États',['acc_balance','acc_grandlivre','acc_tiers','acc_aging','acc_vat','acc_financial']],
+ ['Autres traitements',['acc_analytics','acc_assets']],
+ ['Aide',['acc_guide']],
+] as const;
 const isWork=(r:string):r is WorkRoute=>Object.prototype.hasOwnProperty.call(sections,r);
 type Props={route:Route;onNavigate:(r:Route)=>void;canAccess:(r:Route)=>boolean};
 export function AccountingDesktop(props:Props){
@@ -49,22 +57,26 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
  const [revision,setRevision]=useState(0);
  const nextRequest=useRef(0);
  const [compact,setCompact]=useState(()=>window.matchMedia('(max-width: 1023px)').matches);
+ const [mobileHistory,setMobileHistory]=useState<string[]>([]);
+ const mobilePage=mobileHistory[mobileHistory.length-1]??'acc_overview';
+ const mobileOpen=(id:string)=>setMobileHistory(previous=>previous[previous.length-1]===id?previous:[...previous.filter(page=>page!==id),id]);
+ const focusWork=(id:string)=>{if(compact)mobileOpen(id);else{wm.restore(id);setActive(id);}};
  useEffect(()=>{const mq=window.matchMedia('(max-width: 1023px)');const change=()=>setCompact(mq.matches);mq.addEventListener('change',change);return()=>mq.removeEventListener('change',change);},[]);
  const allowed=(w:Work)=>(w.kind!=='import'||can('manage_accounting'))&&canAccess(w.kind==='section'?w.route:w.kind==='account'?'acc_statement':w.kind==='import'?'acc_plan':w.kind==='entry'?'acc_entry':w.kind==='template'?'acc_templates':'acc_journals');
  const openRoute=useCallback((r:Route)=>{
-  if(r==='acc_overview'){wm.minimizeAll();setActive(null);return;}
+  if(r==='acc_overview'){if(compact)mobileOpen(r);else{wm.minimizeAll();setActive(null);}return;}
   if(!isWork(r)||!canAccess(r))return;
   setOpen(p=>p.some(w=>w.id===r)?p:[...p,{id:r,kind:'section',route:r,title:sections[r][1]}]);
-  wm.restore(r);setActive(r);
- },[wm.restore,wm.minimizeAll,canAccess]);
- useEffect(()=>{openRoute(route);},[route]);
+  focusWork(r);
+ },[wm.restore,wm.minimizeAll,canAccess,compact]);
+ useEffect(()=>{openRoute(route);},[route,compact]);
  useEffect(()=>{
   const handler=(e:Event)=>{const r=(e as CustomEvent<{route:Route}>).detail?.route;if(r)openRoute(r);};
   window.addEventListener('waarwi:accounting-open-window',handler);
   return()=>window.removeEventListener('waarwi:accounting-open-window',handler);
  },[openRoute]);
  useEffect(()=>{setOpen(p=>{const next=p.filter(allowed);return next.length===p.length?p:next;});},[canAccess]);
- const navigate=(r:string)=>{if(r==='acc_overview'||isWork(r)){openRoute(r);onNavigate(r as Route);}};
+ const navigate=(r:string)=>{if(r==='acc_overview'||isWork(r)){openRoute(r);if(!compact)onNavigate(r as Route);}};
  const openPiece=(request:AccountingPieceRequest)=>{
   if(!canAccess('acc_journals')||!request.entryNumber)return;
   const id='piece:'+request.entryNumber;
@@ -77,13 +89,13 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
    }
    return [...p,{id,kind:'piece',title:'Pièce '+request.entryNumber,request}];
   });
-  wm.restore(id);setActive(id);
+  focusWork(id);
  };
  const openAccount=(code:string)=>{
   if(!canAccess('acc_statement')||!code)return;const id='account:'+code;
-  setOpen(p=>p.some(w=>w.id===id)?p:[...p,{id,kind:'account',title:'Compte '+code,code}]);wm.restore(id);setActive(id);
+  setOpen(p=>p.some(w=>w.id===id)?p:[...p,{id,kind:'account',title:'Compte '+code,code}]);focusWork(id);
  };
- const openPlanImport=()=>{if(!canAccess('acc_plan')||!can('manage_accounting'))return;const id='plan:import';setOpen(p=>p.some(w=>w.id===id)?p:[...p,{id,kind:'import',title:'Import du plan comptable'}]);wm.restore(id);setActive(id);};
+ const openPlanImport=()=>{if(!canAccess('acc_plan')||!can('manage_accounting'))return;const id='plan:import';setOpen(p=>p.some(w=>w.id===id)?p:[...p,{id,kind:'import',title:'Import du plan comptable'}]);focusWork(id);};
  const openEntry=(journal:string,showTemplates=false)=>{
   if(!canAccess('acc_entry'))return;
   const id='entry:'+journal;
@@ -91,14 +103,13 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
   setOpen(previous=>previous.some(work=>work.id===id)
    ? previous.map(work=>work.id===id&&work.kind==='entry'&&showTemplatesRequest?{...work,showTemplates:showTemplatesRequest}:work)
    : [...previous,{id,kind:'entry',title:journal?'Saisie des écritures │ '+journal:'Saisie des écritures',journal,showTemplates:showTemplatesRequest}]);
-  wm.restore(id);
-  setActive(id);
+  focusWork(id);
  };
  const openTemplate=(source:EntryTemplateSource)=>{
   if(!canAccess('acc_templates')||!can('manage_accounting'))return;
   const id='template:'+ ++nextRequest.current;
   setOpen(previous=>[...previous,{id,kind:'template',title:'Nouveau modèle de saisie',source}]);
-  setActive(id);
+  if(compact)mobileOpen(id);else setActive(id);
  };
  const activate=(w:Work)=>{if(!allowed(w))return;setActive(w.id);wm.restore(w.id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);};
  const nextWindow=(id:string)=>{
@@ -119,6 +130,50 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
  const closeAll=()=>{if(!window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{}})))return;setOpen([]);setActive(null);onNavigate('acc_overview');};
  useEffect(()=>{const h=(e:Event)=>{switch((e as CustomEvent<{action:string}>).detail?.action){case 'home':navigate('acc_overview');break;case 'tile':tile();break;case 'cascade':cascade();break;case 'closeAll':closeAll();break;}};window.addEventListener('waarwi:accounting-window-action',h);return()=>window.removeEventListener('waarwi:accounting-window-action',h);});
  const actions={openPiece,openAccount,openPlanImport,openEntry,openTemplate,refresh:()=>setRevision(v=>v+1),revision};
+ const renderWork=(w:Work,onExit:()=>void)=>{
+  if(w.kind==='section')return <Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={onExit}/>;
+  if(w.kind==='entry')return <Accounting section="entry" inWindow initialJournal={w.journal} openTemplatesRequest={w.showTemplates} onNavigate={navigate} onExit={onExit}/>;
+  if(w.kind==='template')return <Accounting section="templates" inWindow templateSource={w.source}/>;
+  if(w.kind==='piece')return <AccountingPiece request={w.request} onPosted={actions.refresh}/>;
+  if(w.kind==='import')return <div className="accounting-workspace"><AccountingPlanIO accounts={[]} importOnly onClose={onExit} onImportDone={actions.refresh}/></div>;
+  return tenant&&<div className="accounting-workspace"><AccountWork tenantId={tenant.id} code={w.code} canManage={can('manage_accounting')} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>;
+ };
+ if(compact){
+  const works=open.filter(w=>mobileHistory.includes(w.id)&&allowed(w));
+  const current=works.find(w=>w.id===mobilePage);
+  const page=current?mobilePage:mobilePage==='more'?'more':'acc_overview';
+  const canLeave=()=>window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{windowId:page}}));
+  const back=()=>{
+   if(!canLeave())return;
+   setMobileHistory(previous=>previous.slice(0,-1));
+   if(current&&current.kind!=='section')setOpen(previous=>previous.filter(w=>w.id!==current.id));
+  };
+  const menu=()=>{
+   if(!canLeave())return;
+   mobileOpen('more');
+  };
+  const links=[['acc_overview','Accueil',LayoutGrid],['acc_journals','Journaux',BookOpen],['acc_search','Recherche',Search],['more','Plus',MoreHorizontal]] as const;
+  return <AccountingMobile.Provider value><AccountingWorkContext.Provider value={actions}><section className="acc-mobile" aria-label="Comptabilité mobile">
+   <header className="acc-mobile-header">
+    {page!=='acc_overview'&&<button type="button" aria-label="Retour" onClick={back}><ArrowLeft size={20}/></button>}
+    <h1>{current?.title??(page==='more'?'Modules comptables':'Comptabilité')}</h1>
+   </header>
+   <div className="acc-mobile-page" hidden={page!=='acc_overview'}><Accounting section="overview" inWindow onNavigate={navigate}/></div>
+   {page==='more'&&<div className="acc-mobile-page acc-mobile-menu">
+    {mobileGroups.map(([name,routes])=>routes.some(canAccess)&&<section key={name}><h2>{name}</h2>{routes.filter(canAccess).map(r=><button type="button" key={r} onClick={()=>navigate(r)}>{sections[r][1]}</button>)}</section>)}
+   </div>}
+   {works.map(w=><div key={w.id} hidden={page!==w.id} className="acc-mobile-page">
+    <WindowId.Provider value={w.id}><WindowScope actions={actions} visible={page===w.id}>{renderWork(w,back)}</WindowScope></WindowId.Provider>
+   </div>)}
+   <nav className="acc-mobile-dock" aria-label="Navigation comptable">
+    {links.filter(([id])=>id==='more'||canAccess(id)).map(([id,label,Icon])=><button type="button" key={id} aria-current={page===id?'page':undefined} onClick={()=>{
+     if(id==='more'){menu();return;}
+     if(page===id||!canLeave())return;
+     navigate(id);
+    }}><Icon size={19}/><span>{label}</span></button>)}
+   </nav>
+  </section></AccountingWorkContext.Provider></AccountingMobile.Provider>;
+ }
  return <AccountingWorkContext.Provider value={actions}><section className="acc-desktop" aria-label="Bureau comptable">
   <div className="acc-desktop-area" ref={area}>
    <div className="acc-desktop-home"><Accounting section="overview" onNavigate={navigate}/></div>
@@ -128,12 +183,7 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
       <WindowId.Provider value={id}>
         <WindowScope actions={actions} visible={!wm.windows.find(x=>x.id===id)?.minimized&&(!compact||selected===id)}>
           <div className="acc-window-content">
-            {w.kind==='section'&&<Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={()=>close(w)}/>}
-            {w.kind==='entry'&&<Accounting section="entry" inWindow initialJournal={w.journal} openTemplatesRequest={w.showTemplates} onNavigate={navigate} onExit={()=>close(w)}/>}
-            {w.kind==='template'&&<Accounting section="templates" inWindow templateSource={w.source}/>}
-            {w.kind==='piece'&&<AccountingPiece request={w.request} onPosted={()=>setRevision(v=>v+1)}/>}
-            {w.kind==='import'&&<div className="accounting-workspace"><AccountingPlanIO accounts={[]} importOnly onClose={()=>close(w)} onImportDone={()=>setRevision(v=>v+1)}/></div>}
-            {w.kind==='account'&&tenant&&<div className="accounting-workspace"><AccountWork tenantId={tenant.id} code={w.code} canManage={can('manage_accounting')} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>}
+            {renderWork(w,()=>close(w))}
           </div>
         </WindowScope>
       </WindowId.Provider>

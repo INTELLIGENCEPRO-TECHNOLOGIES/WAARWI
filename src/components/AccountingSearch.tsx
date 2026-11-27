@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {useApp} from '../context/AppContext';
 import {usePermissions} from '../lib/permissions';
-import {useAccountingWork} from '../context/AccountingWindowContext';
+import {useAccountingMobile,useAccountingWork} from '../context/AccountingWindowContext';
 import {useAccountingJournals} from '../lib/accountingJournals';
 import {supabase} from '../lib/supabase';
 import {formatDate} from '../lib/format';
@@ -15,6 +15,7 @@ const empty:Filters={piece:'',description:'',reference:'',account:'',journal:'',
 const money=(n:number)=>Number(n).toLocaleString('fr-FR',{maximumFractionDigits:2});
 const statusLabel=(s:string)=>s==='posted'?'Validée':s==='cancelled'?'Annulée':'Brouillon';
 export function AccountingSearch(){
+ const mobile=useAccountingMobile();
  const {tenant}=useApp();const {can}=usePermissions();const work=useAccountingWork();const journalCatalog=useAccountingJournals(tenant?.id,work?.revision??0);
  const [filters,setFilters]=useState<Filters>({...empty}),[applied,setApplied]=useState<Filters|null>(null),[page,setPage]=useState(0),[size,setSize]=useState(20),[total,setTotal]=useState(0),[rows,setRows]=useState<Row[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[revision,setRevision]=useState(0),[context,setContext]=useState<{id:string;x:number;y:number}|null>(null);
  const seq=useRef(0);const change=(k:keyof Filters,v:string)=>setFilters(f=>({...f,[k]:v}));
@@ -41,18 +42,22 @@ export function AccountingSearch(){
  const view=(r:Row,reverse=false)=>work?.openPiece({entryId:r.id,entryNumber:r.entry_number,reverse});
  const exportPage=()=>{const csv=[['Date','Pièce','Journal','Libellé','Référence','Débit','Crédit','Statut'],...rows.map(r=>[r.entry_date,r.entry_number,r.journal_type,r.description??'',r.reference??'',String(r.total_debit),String(r.total_credit),statusLabel(r.status)])].map(row=>row.map(v=>'"'+sanitizeCsvValue(v).replace(/"/g,'""')+'"').join(';')).join('\r\n');const url=URL.createObjectURL(new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='recherche-ecritures-page-'+(page+1)+'.csv';a.click();URL.revokeObjectURL(url);};
  const field=(k:keyof Filters,label:string,props:{type?:string;placeholder?:string}={})=><label className={'acc-search-field acc-search-'+k}><span>{label}</span><input className="input" value={filters[k]} onChange={e=>change(k,e.target.value)} type={props.type??'text'} placeholder={props.placeholder} {...(props.type==='number'?{min:0,step:'0.01'}:{})}/></label>;
+ const additionalFields=<>
+  {field('description','Libellé')}{field('account','N° de compte',{placeholder:'Compte exact'})}
+  <SearchableSelect label="Journal" className="acc-search-field acc-search-journal acc-filter-select" searchable={false} clearable={false} wrapLabels
+    value={filters.journal} onChange={value=>change('journal',value)}
+    options={[{value:'',label:'Tous'},...journalCatalog.rows.map(journal=>({value:journal.code,label:journal.code+' — '+journal.name+(journal.is_active?'':' (désactivé)')}))]}/>
+  {field('from','Du',{type:'date'})}{field('to','Au',{type:'date'})}
+ </>;
  return <div className="acc-fill acc-search-workspace">
   <form className="acc-search-form" onSubmit={e=>{e.preventDefault();submit();}}>
    <div className="acc-search-fields">
-    {field('piece','N° de pièce',{placeholder:'OD260…'})}{field('description','Libellé')}{field('account','N° de compte',{placeholder:'Compte exact'})}
-    <SearchableSelect label="Journal" className="acc-search-field acc-search-journal acc-filter-select" searchable={false} clearable={false} wrapLabels
-      value={filters.journal} onChange={value=>change('journal',value)}
-      options={[{value:'',label:'Tous'},...journalCatalog.rows.map(journal=>({value:journal.code,label:journal.code+' — '+journal.name+(journal.is_active?'':' (désactivé)')}))]}/>
-    {field('from','Du',{type:'date'})}{field('to','Au',{type:'date'})}
+    {field('piece','N° de pièce',{placeholder:'OD260…'})}{!mobile&&additionalFields}
    </div>
    <details className="acc-search-extra">
-    <summary>Filtres avancés{[filters.reference,filters.status,filters.min,filters.max].some(Boolean)&&' │ filtres renseignés'}</summary>
+    <summary>{mobile?'Filtres':'Filtres avancés'}{[filters.reference,filters.status,filters.min,filters.max,...(mobile?[filters.description,filters.account,filters.journal,filters.from,filters.to]:[])].some(Boolean)&&' │ filtres renseignés'}</summary>
     <div className="acc-search-fields">
+     {mobile&&additionalFields}
      {field('reference','Référence')}
      <SearchableSelect label="Statut" className="acc-search-field acc-search-status acc-filter-select" searchable={false} clearable={false}
        value={filters.status} onChange={value=>change('status',value)}
