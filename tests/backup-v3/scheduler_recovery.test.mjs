@@ -3,6 +3,32 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { client, migration } from './deps.mjs';
+import { forEachWithConcurrency } from '../../supabase/functions/backup-scheduler/worker-pool.ts';
+
+test('une archive lente laisse les autres entreprises avancer', { timeout: 1500 }, async () => {
+  const slow = Promise.withResolvers();
+  const laterTenant = Promise.withResolvers();
+  const completed = [];
+  let inProgress = 0;
+  let peak = 0;
+  const run = forEachWithConcurrency(['slow', 'first', 'later'], 2, async tenant => {
+    inProgress++;
+    peak = Math.max(peak, inProgress);
+    if (tenant === 'slow') await slow.promise;
+    completed.push(tenant);
+    inProgress--;
+    if (tenant === 'later') laterTenant.resolve();
+  });
+  try {
+    await laterTenant.promise;
+    assert.deepEqual(completed, ['first', 'later']);
+    assert.equal(peak, 2);
+  } finally {
+    slow.resolve();
+    await run;
+  }
+  assert.deepEqual(completed, ['first', 'later', 'slow']);
+});
 
 test('le planificateur reprend les tâches interrompues et publie les copies externes', async () => {
   const db = 'br_cron_' + randomUUID().replaceAll('-', '');

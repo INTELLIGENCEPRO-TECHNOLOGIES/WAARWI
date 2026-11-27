@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { forEachWithConcurrency } from "./worker-pool.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -575,243 +576,222 @@ Deno.serve(async (req: Request) => {
         if (sErr) return await abortRun(`skipped items: ${sErr.message}`, 0);
       }
 
-      const maxConcurrent = policy.max_concurrent || 2;
-      let succeeded = 0;
-      let failed = 0;
-      const succeededTenantIds: string[] = [];
-      const errors: {
-        tenant_id: string;
-        tenant_name: string;
-        error: string;
-      }[] = [];
+      async function completeRun() {
+        const maxConcurrent = policy.max_concurrent || 2;
+        let succeeded = 0;
+        let failed = 0;
+        const succeededTenantIds: string[] = [];
+        const errors: {
+          tenant_id: string;
+          tenant_name: string;
+          error: string;
+        }[] = [];
 
-      try {
-      for (let i = 0; i < eligible.length; i += maxConcurrent) {
-        const batch = eligible.slice(i, i + maxConcurrent);
-        const results = await Promise.allSettled(
-          batch.map(async (t: { id: string; name: string }) => {
-            const { error: runningErr } = await admin
-              .from("_br_schedule_run_items")
-              .update({
-                status: "running",
-                started_at: new Date().toISOString(),
-              })
-              .eq("run_id", run.id)
-              .eq("tenant_id", t.id);
-            if (runningErr) {
-              throw new Error(`item running: ${runningErr.message}`);
+        try {
+          await forEachWithConcurrency(eligible, maxConcurrent, async (t: { id: string; name: string }) => {
+            try {
+              const { error: runningErr } = await admin
+                .from("_br_schedule_run_items")
+                .update({ status: "running", started_at: new Date().toISOString() })
+                .eq("run_id", run.id)
+                .eq("tenant_id", t.id);
+              if (runningErr) throw new Error(`item running: ${runningErr.message}`);
+
+              const result = await backupTenantWithRetry(admin, t.id, "Sauvegarde planifiée", "auto");
+              if (!result.backup_id) throw new Error("Archive vérifiée non retournée");
+              const { error: doneErr } = await admin
+                .from("_br_schedule_run_items")
+                .update({
+                  status: "succeeded",
+                  backup_id: result.backup_id,
+                  finished_at: new Date().toISOString(),
+                  size_bytes: result.size_bytes || null,
+                  row_count: result.total_rows || null,
+                })
+                .eq("run_id", run.id)
+                .eq("tenant_id", t.id);
+              if (doneErr) throw new Error(`Sauvegarde ${result.backup_id} créée mais statut non enregistré : ${doneErr.message}`);
+
+              succeeded++;
+              succeededTenantIds.push(t.id);
+            } catch (error: unknown) {
+              failed++;
+              const message = error instanceof Error ? error.message : "Erreur inattendue";
+              errors.push({ tenant_id: t.id, tenant_name: t.name, error: message });
+              const { error: failUpdErr } = await admin
+                .from("_br_schedule_run_items")
+                .update({
+                  status: "failed",
+                  finished_at: new Date().toISOString(),
+                  error_message: message,
+                  retry_count: MAX_RETRIES,
+                })
+                .eq("run_id", run.id)
+                .eq("tenant_id", t.id);
+              if (failUpdErr) {
+                runErrors.push({ tenant_id: t.id, error: `item failed status: ${failUpdErr.message}` });
+              }
             }
-
-            const result = await backupTenantWithRetry(
-              admin,
-              t.id,
-              "Sauvegarde planifiée",
-              "auto",
-            );
-
-            const { error: doneErr } = await admin
-              .from("_br_schedule_run_items")
-              .update({
-                status: "succeeded",
-                backup_id: result.backup_id,
-                finished_at: new Date().toISOString(),
-                size_bytes: result.size_bytes || null,
-                row_count: result.total_rows || null,
-              })
-              .eq("run_id", run.id)
-              .eq("tenant_id", t.id);
-            if (doneErr) {
-              throw new Error(
-                `Sauvegarde ${result.backup_id ?? "?"} créée mais statut non enregistré : ${doneErr.message}`,
-              );
-            }
-
-          }),
-        );
-
-        for (let j = 0; j < results.length; j++) {
-          const r = results[j];
-          if (r.status === "fulfilled") {
-            succeeded++;
-            succeededTenantIds.push(
-              (batch[j] as { id: string }).id,
-            );
-          } else {
-            failed++;
-            const t = batch[j] as { id: string; name: string };
-            const errMsg =
-              r.reason instanceof Error ? r.reason.message : "Unknown";
-            errors.push({
-              tenant_id: t.id,
-              tenant_name: t.name,
-              error: errMsg,
-            });
-            const { error: failUpdErr } = await admin
-              .from("_br_schedule_run_items")
-              .update({
-                status: "failed",
-                finished_at: new Date().toISOString(),
-                error_message: errMsg,
-                retry_count: MAX_RETRIES,
-              })
-              .eq("run_id", run.id)
-              .eq("tenant_id", t.id);
-            if (failUpdErr) {
-              runErrors.push({
-                tenant_id: t.id,
-                tenant_name: t.name,
-                error: `item failed status: ${failUpdErr.message}`,
-              });
-            }
-          }
+          });
+        } catch (loopErr: unknown) {
+          return await abortRun(
+            loopErr instanceof Error ? loopErr.message : "Erreur inattendue",
+            succeeded,
+          );
         }
-      }
-      } catch (loopErr: unknown) {
-        return await abortRun(
-          loopErr instanceof Error ? loopErr.message : "Erreur inattendue",
-          succeeded,
-        );
-      }
 
-      const finalStatus: "completed" | "partial_failure" | "failed" =
-        failed === 0
-          ? "completed"
-          : succeeded === 0
-            ? "failed"
-            : "partial_failure";
-      runErrors.unshift(...errors);
-      // ---------- Retention cleanup ----------
-      // ONLY process tenants whose backup succeeded this run.
-      // ONLY delete kind='auto' with is_auto=true. Never touch platform_manual/manual/safety/import.
-      const retentionErrors: { tenant_id: string; error: string }[] = [];
-      if (body.keep_existing_backups !== true && succeededTenantIds.length > 0) {
-        const retentionDaily = policy.retention_daily || 7;
-        const retentionWeekly = policy.retention_weekly || 4;
-        const retentionMonthly = policy.retention_monthly || 6;
+        const finalStatus: "completed" | "partial_failure" | "failed" =
+          failed === 0
+            ? "completed"
+            : succeeded === 0
+              ? "failed"
+              : "partial_failure";
+        runErrors.unshift(...errors);
+        // ---------- Retention cleanup ----------
+        // ONLY process tenants whose backup succeeded this run.
+        // ONLY delete kind='auto' with is_auto=true. Never touch platform_manual/manual/safety/import.
+        const retentionErrors: { tenant_id: string; error: string }[] = [];
+        if (body.keep_existing_backups !== true && succeededTenantIds.length > 0) {
+          const retentionDaily = policy.retention_daily || 7;
+          const retentionWeekly = policy.retention_weekly || 4;
+          const retentionMonthly = policy.retention_monthly || 6;
 
-        for (const tid of succeededTenantIds) {
-          try {
-            const override = overrideMap.get(tid) as
-              | { custom_retention_daily: number | null }
-              | undefined;
-            const effectiveDaily =
-              override?.custom_retention_daily || retentionDaily;
+          for (const tid of succeededTenantIds) {
+            try {
+              const override = overrideMap.get(tid) as
+                | { custom_retention_daily: number | null }
+                | undefined;
+              const effectiveDaily =
+                override?.custom_retention_daily || retentionDaily;
 
-            const { data: autoBackups, error: abErr } = await admin
-              .from("tenant_backups")
-              .select("id, created_at")
-              .eq("tenant_id", tid)
-              .eq("status", "verified")
-              .eq("kind", "auto")
-              .eq("is_auto", true)
-              .order("created_at", { ascending: false });
-
-            if (abErr) {
-              retentionErrors.push({
-                tenant_id: tid,
-                error: `fetch: ${abErr.message}`,
-              });
-              continue;
-            }
-            if (!autoBackups || autoBackups.length === 0) continue;
-
-            const now = new Date();
-            const keepIds = new Set<string>();
-
-            for (
-              let d = 0;
-              d < Math.min(effectiveDaily, autoBackups.length);
-              d++
-            ) {
-              keepIds.add(autoBackups[d].id);
-            }
-
-            if (retentionWeekly > 0) {
-              for (let w = 1; w <= retentionWeekly; w++) {
-                const weekStart = new Date(now);
-                weekStart.setDate(weekStart.getDate() - w * 7);
-                const weekEnd = new Date(weekStart);
-                weekEnd.setDate(weekEnd.getDate() + 7);
-                const candidate = autoBackups.find(
-                  (b: { id: string; created_at: string }) => {
-                    const d = new Date(b.created_at);
-                    return d >= weekStart && d < weekEnd;
-                  },
-                );
-                if (candidate) keepIds.add(candidate.id);
-              }
-            }
-
-            if (retentionMonthly > 0) {
-              for (let m = 1; m <= retentionMonthly; m++) {
-                const monthStart = new Date(
-                  now.getFullYear(),
-                  now.getMonth() - m,
-                  1,
-                );
-                const monthEnd = new Date(
-                  now.getFullYear(),
-                  now.getMonth() - m + 1,
-                  1,
-                );
-                const candidate = autoBackups.find(
-                  (b: { id: string; created_at: string }) => {
-                    const d = new Date(b.created_at);
-                    return d >= monthStart && d < monthEnd;
-                  },
-                );
-                if (candidate) keepIds.add(candidate.id);
-              }
-            }
-
-            const toDelete = autoBackups
-              .filter((b: { id: string }) => !keepIds.has(b.id))
-              .map((b: { id: string }) => b.id);
-
-            if (toDelete.length > 0) {
-              const { error: delErr } = await admin
+              const { data: autoBackups, error: abErr } = await admin
                 .from("tenant_backups")
-                .delete()
-                .in("id", toDelete);
-              if (delErr) {
+                .select("id, created_at")
+                .eq("tenant_id", tid)
+                .eq("status", "verified")
+                .eq("kind", "auto")
+                .eq("is_auto", true)
+                .order("created_at", { ascending: false });
+
+              if (abErr) {
                 retentionErrors.push({
                   tenant_id: tid,
-                  error: `delete: ${delErr.message}`,
+                  error: `fetch: ${abErr.message}`,
                 });
+                continue;
               }
+              if (!autoBackups || autoBackups.length === 0) continue;
+
+              const now = new Date();
+              const keepIds = new Set<string>();
+
+              for (
+                let d = 0;
+                d < Math.min(effectiveDaily, autoBackups.length);
+                d++
+              ) {
+                keepIds.add(autoBackups[d].id);
+              }
+
+              if (retentionWeekly > 0) {
+                for (let w = 1; w <= retentionWeekly; w++) {
+                  const weekStart = new Date(now);
+                  weekStart.setDate(weekStart.getDate() - w * 7);
+                  const weekEnd = new Date(weekStart);
+                  weekEnd.setDate(weekEnd.getDate() + 7);
+                  const candidate = autoBackups.find(
+                    (b: { id: string; created_at: string }) => {
+                      const d = new Date(b.created_at);
+                      return d >= weekStart && d < weekEnd;
+                    },
+                  );
+                  if (candidate) keepIds.add(candidate.id);
+                }
+              }
+
+              if (retentionMonthly > 0) {
+                for (let m = 1; m <= retentionMonthly; m++) {
+                  const monthStart = new Date(
+                    now.getFullYear(),
+                    now.getMonth() - m,
+                    1,
+                  );
+                  const monthEnd = new Date(
+                    now.getFullYear(),
+                    now.getMonth() - m + 1,
+                    1,
+                  );
+                  const candidate = autoBackups.find(
+                    (b: { id: string; created_at: string }) => {
+                      const d = new Date(b.created_at);
+                      return d >= monthStart && d < monthEnd;
+                    },
+                  );
+                  if (candidate) keepIds.add(candidate.id);
+                }
+              }
+
+              const toDelete = autoBackups
+                .filter((b: { id: string }) => !keepIds.has(b.id))
+                .map((b: { id: string }) => b.id);
+
+              if (toDelete.length > 0) {
+                const { error: delErr } = await admin
+                  .from("tenant_backups")
+                  .delete()
+                  .in("id", toDelete);
+                if (delErr) {
+                  retentionErrors.push({
+                    tenant_id: tid,
+                    error: `delete: ${delErr.message}`,
+                  });
+                }
+              }
+            } catch (retErr: unknown) {
+              retentionErrors.push({
+                tenant_id: tid,
+                error:
+                  retErr instanceof Error ? retErr.message : "retention error",
+              });
             }
-          } catch (retErr: unknown) {
-            retentionErrors.push({
-              tenant_id: tid,
-              error:
-                retErr instanceof Error ? retErr.message : "retention error",
-            });
           }
         }
+
+        for (const re of retentionErrors) {
+          runErrors.push({ tenant_id: re.tenant_id, error: `retention: ${re.error}` });
+        }
+        const finalizeErr = await finalizeRun(finalStatus, { succeeded, failed });
+        if (finalizeErr) {
+          return json(
+            { error: `Run finalize failed: ${finalizeErr}`, run_id: run.id },
+            500,
+          );
+        }
+
+        return json({
+          success: true,
+          run_id: run.id,
+          tenants_total: tenants.length,
+          tenants_succeeded: succeeded,
+          tenants_failed: failed,
+          tenants_skipped: skipped,
+          errors,
+          retention_errors:
+            retentionErrors.length > 0 ? retentionErrors : undefined,
+        });
       }
 
-      for (const re of retentionErrors) {
-        runErrors.push({ tenant_id: re.tenant_id, error: `retention: ${re.error}` });
+      if (isCron) {
+        // pg_net can close its HTTP request before the batch completes.
+        // Keep the worker alive and track the outcome in the run history.
+        EdgeRuntime.waitUntil(completeRun().then((response) => {
+          if (!response.ok) console.error("Scheduled backup could not finish", run.id, response.status);
+        }).catch((error: unknown) => {
+          console.error("Scheduled backup worker stopped", run.id, error instanceof Error ? error.name : "Error");
+        }));
+        return json({ success: true, accepted: true, run_id: run.id }, 202);
       }
-      const finalizeErr = await finalizeRun(finalStatus, { succeeded, failed });
-      if (finalizeErr) {
-        return json(
-          { error: `Run finalize failed: ${finalizeErr}`, run_id: run.id },
-          500,
-        );
-      }
-
-      return json({
-        success: true,
-        run_id: run.id,
-        tenants_total: tenants.length,
-        tenants_succeeded: succeeded,
-        tenants_failed: failed,
-        tenants_skipped: skipped,
-        errors,
-        retention_errors:
-          retentionErrors.length > 0 ? retentionErrors : undefined,
-      });
+      return await completeRun();
     }
 
     // ============ GET RUNS HISTORY ============
