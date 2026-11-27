@@ -259,16 +259,21 @@ jobs:
           print('INSERT INTO supabase_migrations.schema_migrations(version) VALUES')
           print(',\n'.join(f"('{version}')" for version in versions) + ';')
           PY
-          docker exec "$db" mkdir -p /tmp/waarwi-sync/supabase
           cli_entry=$(readlink -f "$(command -v supabase)")
           cli_package=$(node -p 'require("node:module").createRequire(process.argv[1]).resolve("@supabase/cli-linux-x64/package.json")' "$cli_entry")
-          # The npm launcher is a symlink to JavaScript. Copy the packaged native CLI.
-          docker cp "$(dirname "$cli_package")/bin/supabase" "$db:/tmp/waarwi-sync/supabase-cli"
-          docker cp supabase/migrations "$db:/tmp/waarwi-sync/supabase/migrations"
-          printf 'project_id = "waarwi_history_sync"\n\n[db]\nmajor_version = 17\n' > "$RUNNER_TEMP/waarwi-sync.toml"
-          docker cp "$RUNNER_TEMP/waarwi-sync.toml" "$db:/tmp/waarwi-sync/supabase/config.toml"
-          docker exec -w /tmp/waarwi-sync "$db" ./supabase-cli db push --dry-run --include-all \
+          sync_project=$(mktemp -d "$RUNNER_TEMP/waarwi-sync.XXXXXX")
+          mkdir "$sync_project/supabase"
+          cp -R supabase/migrations "$sync_project/supabase/migrations"
+          printf 'project_id = "waarwi_history_sync"\n\n[db]\nmajor_version = 17\n' > "$sync_project/supabase/config.toml"
+          # Run the packaged glibc CLI in a compatible image, sharing only
+          # PostgreSQL's isolated network namespace and its loopback interface.
+          docker run --rm --network "container:$db" \
+            --mount "type=bind,source=$sync_project,target=/work,readonly" \
+            --mount "type=bind,source=$(dirname "$cli_package")/bin,target=/cli,readonly" \
+            --workdir /work --entrypoint /cli/supabase node:22-bookworm-slim \
+            db push --dry-run --include-all --skip-vault \
             --db-url 'postgresql://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable' 2>&1 | tee "$RUNNER_TEMP/waarwi-sync.log"
+          test "$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$db")" = 0
           grep -E '(Remote database|Linked project) is up to date\.' "$RUNNER_TEMP/waarwi-sync.log"
       - name: Préparer les données fictives de recette
         id: fixtures
