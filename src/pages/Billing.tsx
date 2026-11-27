@@ -1,3 +1,5 @@
+import { createDirectInvoice, trackedInvoiceItems } from '../lib/directInvoice';
+import { invoiceIpmShare, invoicePatientDue } from '../lib/invoiceSettlement';
 import './Billing.css';
 import { useSalePrice, type PriceLine } from '../lib/useSalePrice';
 import { formatVatAmount } from '../lib/salesVat';
@@ -70,6 +72,7 @@ type QuoteItem = {
 type Invoice = VatAmounts & {
   discount?: number;
   id: string; sale_number: string; total: number; paid: number; status: string;
+  ipm_patient_total?: number | null;
   customer_id: string | null;
   created_at: string;
   public_code?: string | null;
@@ -101,7 +104,7 @@ const QUOTE_STATUS: Record<string, { label: string; pill: string; dot: string }>
 
 function invoiceStatus(s: Invoice) {
   if (s.status === 'cancelled') return { label: 'Annulée', pill: 'text-red-600', dot: '' };
-  if (s.paid >= s.total)        return { label: 'Payée', pill: 'text-emerald-600', dot: '' };
+  if (invoicePatientDue(s) === 0) return { label: s.ipm_patient_total == null ? 'Payée' : 'Part patient réglée', pill: 'text-emerald-600', dot: '' };
   if (Number(s.paid) > 0)       return { label: 'Partiellement payée', pill: 'text-amber-600', dot: '' };
   if (s.status === 'validated' && Number(s.paid) === 0) return { label: 'À crédit', pill: 'text-slate-600', dot: '' };
   return { label: 'Validée', pill: 'text-neutral-700', dot: '' };
@@ -433,6 +436,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [invoiceIsCredit, setInvoiceIsCredit] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
+  const invoiceCreationInFlight = useRef(false);
+  const invoiceCreationRequest = useRef(crypto.randomUUID());
+  const [lotPickerInvoiceOpen, setLotPickerInvoiceOpen] = useState(false);
+  const invoiceStockItems = useMemo(() => trackedInvoiceItems(invoiceEditorItems, articles), [invoiceEditorItems, articles]);
   const [mobileInvoiceBaseline,setMobileInvoiceBaseline]=useState<InvoiceBaseline|null>(null);
   const mobileOriginalDraft=useRef<string|null>(null);
   const mobileEditSite=useRef<string|null>(null);
@@ -1097,6 +1104,10 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       const desc: InvoiceWindowDescriptor = { windowId: wid, invoiceId: null, mode: 'create', siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
       setInvoiceWindows(prev => { const next = new Map(prev); next.set(wid, desc); return next; });
     } else {
+      if (invoiceCreationInFlight.current) return;
+      invoiceCreationRequest.current = crypto.randomUUID();
+      setLotPickerInvoiceOpen(false);
+      setIpmDocuments({ numero_ordonnance: '', medecin: '', numero_bon: '' });
       setMobileInvoiceOpen(true);
       setMobileInvoiceMode('create');
       setMobileEditingInvoiceId(null);
@@ -1288,7 +1299,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     }
   };
 
-  const saveInvoice = async () => {
+  const saveInvoice = async (lots?: ArticleLotSelection[]) => {
+    if (savingInvoice || invoiceCreationInFlight.current) return;
     if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; }
     const valid = invoiceEditorItems.filter(i => i.name.trim());
@@ -1323,165 +1335,89 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       return;
     }
 
-    // IPM document validation
-    if (ipmBeneficiaire && ipmConfig && !ipmDocValidation.valide) {
+    const beneficiary = ipmBeneficiaire?.customer_id === invoiceForm.customer_id ? ipmBeneficiaire : null;
+    if (beneficiary && !ipmConfig) { error('Convention IPM indisponible.'); return; }
+    if (beneficiary && !ipmDocValidation.valide) {
       error(`Documents IPM manquants : ${ipmDocValidation.champs_manquants.join(', ')}`);
       return;
     }
-
     if (!invoicePricing.price) {
       error(invoicePricing.error || 'Le montant de la facture est en cours de calcul.');
       if (invoicePricing.error) invoicePricing.refresh();
       return;
     }
-    if (ipmBeneficiaire && invoicePricing.price.vat > 0) {
+    if (beneficiary && invoicePricing.price.enabled) {
       error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
       return;
     }
-    const invoiceTtc = invoicePricing.price.ttc;
-    const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
-    const totalPaid = invoiceIsCredit ? 0 : invoicePayList.reduce((s, p) => s + p.amount, 0);
-    const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : invoiceTtc;
-    if (!invoiceIsCredit && totalPaid > clientDueAmount) { error('Le montant payé dépasse la part client'); return; }
-
+    const total = invoicePricing.price.ttc;
+    const payments = invoiceIsCredit ? [] : invoicePayList;
+    const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    if (paid > (beneficiary ? total - ipmPartIpm : total)) {
+      error('Le montant payé dépasse la part client.');
+      return;
+    }
     if (invoiceIsCredit && !invoiceForm.customer_id) {
-      error('Un client est requis pour une facture à crédit');
+      error('Un client est requis pour une facture à crédit.');
+      return;
+    }
+    if (stockMethod === 'lot' && invoiceStockItems.length && !lots) {
+      setLotPickerInvoiceOpen(true);
       return;
     }
 
-    // Stock check if negative stock not allowed
-    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
-    const articleItems = valid.filter(i => i.article_id);
-    const trackedItems = articleItems.filter(i => {
-      const art = articles.find((a: any) => a.id === i.article_id);
-      return art && art.track_stock !== false;
-    });
-    if (!allowNeg && trackedItems.length > 0) {
-      const { data: stk } = await supabase.from('stock_levels')
-        .select('article_id, quantity')
-        .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-        .in('article_id', trackedItems.map(i => i.article_id!));
-      const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-      const insufficient = trackedItems.filter(i => (stockMap.get(i.article_id!) || 0) < i.quantity);
-      if (insufficient.length > 0) {
-        error(`Stock insuffisant: ${insufficient.map(i => i.name).join(', ')}`);
-        return;
-      }
-    }
-
+    invoiceCreationInFlight.current = true;
     setSavingInvoice(true);
     try {
-      const { data: numData } = await supabase.rpc('next_doc_number', {
-        p_tenant_id: tenant.id, p_kind: 'invoice', p_prefix: 'F',
-      });
-      const invNum = (numData as string) || ('F-' + Date.now());
-
-      let sessionId: string | null = null;
-      if (!invoiceIsCredit) {
-        const cashCtx = await getOperationalCashContext(currentSite.id);
-        sessionId = cashCtx.session?.id || null;
-        if (!sessionId && totalPaid > 0 && (cashCtx.multiEnabled || cashCtx.error)) throw new Error(missingSessionMessage(cashCtx, ''));
-      }
-
-      const status = invoiceIsCredit
-        ? (ipmBeneficiaire && ipmPartIpm > 0 && totalPaid >= clientDueAmount ? 'paid' : 'validated')
-        : (totalPaid >= clientDueAmount ? 'paid' : totalPaid > 0 ? 'partial' : 'validated');
-
-      const ipmCoverage = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartIpm : 0;
-      const effectivePaid = totalPaid + ipmCoverage;
-
-      const repSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, subtotal);
-      const newInvRepLabel = repLabelOf(invoiceForm.representative);
-
-      const { data: saleId, error: e } = await supabase.rpc('create_billing_sale_with_items', {
-        p_sale: {
-          site_id: currentSite.id,
-          customer_id: invoiceForm.customer_id || null,
-          sale_number: invNum, subtotal, discount: 0, total: invoiceTtc,
-          paid: effectivePaid, status,
-          note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
-          cash_session_id: sessionId,
-          representative_id: invoiceForm.representative || null,
-          rep_commission: repSnapshot,
-          doc_header: { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null },
+      const sale = await createDirectInvoice({
+        tenantId: tenant.id,
+        siteId: currentSite.id,
+        stockSiteId: billSourceSiteId || currentSite.id,
+        customerId: invoiceForm.customer_id || null,
+        representativeId: invoiceForm.representative || null,
+        total,
+        lines: valid,
+        payments,
+        lots: lots ?? [],
+        docHeader: {
+          doc_date: invoiceForm.doc_date || null,
+          delivery_date: invoiceForm.delivery_date || null,
+          reference: invoiceForm.reference || null,
+          warranty: invoiceForm.warranty || null,
+          representative: repLabelOf(invoiceForm.representative),
+          imei: invoiceForm.imei || null,
         },
-        p_items: valid.map(i => ({
-          article_id: i.article_id, name: i.name, quantity: i.quantity,
-          unit_price: i.unit_price, discount: i.discount, total: i.total,
-        })),
-        p_payments: invoiceIsCredit ? [] : invoicePayList.filter(p => p.amount > 0).map(p => ({
-          payment_method_id: p.method_id || null, amount: p.amount, reference: p.reference || '',
-        })),
-      });
-      if (e || !saleId) { invoicePricing.refresh(); error(e?.message || 'La facture n’a pas été enregistrée.'); return; }
-      const sale = { id: saleId as string };
+        ipm: beneficiary ? {
+          beneficiaryId: beneficiary.id,
+          organizationName: beneficiary.ipm_organismes?.nom,
+          expectedShare: ipmPartIpm,
+          documents: ipmDocuments,
+        } : undefined,
+      }, invoiceCreationRequest.current);
 
-      if (invoiceForm.customer_id) {
-        const unpaidAmount = invoiceTtc - effectivePaid;
-        if (unpaidAmount > 0) {
-          const { data: cust } = await supabase.from('customers').select('balance').eq('id', invoiceForm.customer_id).single();
-          await supabase.from('customers').update({ balance: Number(cust?.balance || 0) + unpaidAmount }).eq('id', invoiceForm.customer_id);
-        }
-      }
-
-      // Deduct stock
-      const stockSiteId = billSourceSiteId || currentSite.id;
-      for (const item of articleItems) {
-        if (!item.article_id) continue;
-        await supabase.rpc('adjust_stock', {
-          p_article_id: item.article_id,
-          p_site_id: stockSiteId,
-          p_quantity: -item.quantity,
-          p_movement_type: 'sale',
-          p_note: `Facture ${invNum}${invoiceIsCredit ? ' (credit)' : ''}`,
-        });
-      }
-
-
-
-      // Create IPM vente record if client is IPM beneficiary
-      if (ipmBeneficiaire && ipmPartIpm > 0) {
-        await supabase.from('ipm_ventes').insert({
-          tenant_id: tenant.id,
-          organisme_id: ipmBeneficiaire.organisme_id,
-          beneficiaire_id: ipmBeneficiaire.id,
-          convention_id: ipmBeneficiaire.convention_id || null,
-          sale_id: sale.id,
-          date_vente: new Date().toISOString().slice(0, 10),
-          part_ipm: ipmPartIpm,
-          part_client: ipmPartClient,
-          montant_total: invoiceTtc,
-          taux_prise_en_charge: ipmTaux,
-          montant_eligible: ipmResult?.montant_eligible || subtotal,
-          montant_non_eligible: ipmResult?.montant_non_eligible || 0,
-          plafond_applique: ipmResult?.plafond_atteint ? ipmConfig?.plafond_facture : null,
-          arrondi_applique: ipmConfig?.mode_arrondi || null,
-          part_beneficiaire_payee: Math.min(totalPaid, ipmPartClient),
-          statut: 'en_attente',
-          numero_ordonnance: ipmDocuments.numero_ordonnance || null,
-          medecin_prescripteur: ipmDocuments.medecin || null,
-          numero_bon_pec: ipmDocuments.numero_bon || null,
-        });
-      }
-
-      success(`Facture ${invNum} créée${invoiceIsCredit ? ' (à crédit)' : ''}${ipmBeneficiaire && ipmPartIpm > 0 ? ` · Part IPM: ${formatFCFA(ipmPartIpm)}` : ''}`);
-      setInvoicePostCreation({ saleNumber: invNum, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
-      setMobileEditingInvoiceId(sale.id);
-      setMobileInvoiceMode('view');
-      const [{ data: newFull }, { data: payments }] = await Promise.all([
+      success(`Facture ${sale.number} créée${invoiceIsCredit ? ' (à crédit)' : ''}`);
+      setInvoicePostCreation({ saleNumber: sale.number, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
+      const [{ data: newFull }, { data: savedPayments }] = await Promise.all([
         supabase.from('sales').select('*, customers(name, phone, address)').eq('id', sale.id).maybeSingle(),
         supabase.from('sale_payments').select('*').eq('sale_id', sale.id),
       ]);
-      if (newFull) setInvoiceDetail(newFull as Invoice);
-      if (payments) {
-        setInvoicePayList(payments.map(p => ({
-          method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: p.reference || '',
+      if (newFull) {
+        setInvoiceDetail(newFull as Invoice);
+        setMobileEditingInvoiceId(sale.id);
+        setMobileInvoiceMode('view');
+        if (savedPayments) setInvoicePayList(savedPayments.map(payment => ({
+          method_id: payment.payment_method_id || '', method_name: payment.method_name,
+          amount: Number(payment.amount), reference: payment.reference || '',
         })));
+      } else {
+        closeInvoiceEditor();
       }
-      loadTab(billPage, true);
-    } catch (err: any) {
-      error(err.message || 'Erreur');
+      void loadTab(billPage, true);
+    } catch (failure: any) {
+      if (failure?.code === '40001') invoicePricing.refresh();
+      error(failure?.message || 'La facture n’a pas été enregistrée.');
     } finally {
+      invoiceCreationInFlight.current = false;
       setSavingInvoice(false);
     }
   };
@@ -1631,14 +1567,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     const phoneRaw = (cust?.whatsapp || cust?.phone || '').replace(/[^0-9]/g, '');
     if (!phoneRaw) { error('Aucun numéro WhatsApp/téléphone pour ce client'); return; }
     const phone = phoneRaw.startsWith('221') ? phoneRaw : phoneRaw.length === 9 ? `221${phoneRaw}` : phoneRaw;
-    const due = Math.max(0, Number(target.total) - Number(target.paid));
+    const due = invoicePatientDue(target);
     const link = invoiceUrl(target);
     const msg = [
       `Bonjour ${cust?.name || ''},`,
       '',
       `Votre facture *${target.sale_number}* du ${formatDate(target.created_at)}.`,
       `*Total : ${formatFCFA(target.total)}*`,
-      due > 0 ? `Reste à payer : *${formatFCFA(due)}*` : 'Payée intégralement.',
+      target.ipm_patient_total == null ? '' : `Prise en charge IPM : *${formatFCFA(invoiceIpmShare(target) ?? 0)}*`,
+      due > 0 ? `Reste à payer : *${formatFCFA(due)}*` : target.ipm_patient_total == null ? 'Payée intégralement.' : 'Part patient réglée.',
       link ? `\nVoir la facture : ${link}` : '',
       '',
       'Merci.',
@@ -1725,7 +1662,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     const target = inv || invoiceDetail;
     if (!target) return;
     setInvoiceDetail(target);
-    const due = Math.max(0, Number(target.total) - Number(target.paid));
+    const due = invoicePatientDue(target);
     setPayAmount(String(due));
     setPayMethod(paymentMethods[0]?.id || '');
     setPayOpen(true);
@@ -1735,7 +1672,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (!invoiceDetail) return;
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'enregistrer des paiements'); return; }
     const amt = Number(payAmount);
-    if (!amt || amt <= 0) { error('Montant invalide'); return; }
+    if (!Number.isFinite(amt) || amt <= 0 || (invoiceDetail.ipm_patient_total != null && amt > invoicePatientDue(invoiceDetail))) {
+      error('Vérifiez le montant et le solde à régler.'); return;
+    }
     const pm = paymentMethods.find(p => p.id === payMethod);
     if (!pm) { error('Mode de règlement requis'); return; }
     if (!tenant || !currentSite) return;
@@ -1754,12 +1693,14 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       p_cash_session_id: sess.id,
     });
     if (e) { payingRef.current = false; setPaying(false); error(e.message); return; }
-    // Update IPM part_beneficiaire_payee if this is an IPM sale
-    const { data: ipmV } = await supabase.from('ipm_ventes').select('id, part_client').eq('sale_id', invoiceDetail.id).limit(1).maybeSingle();
-    if (ipmV) {
-      const { data: allPays } = await supabase.from('sale_payments').select('amount').eq('sale_id', invoiceDetail.id);
-      const totalPaidNow = (allPays || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-      await supabase.from('ipm_ventes').update({ part_beneficiaire_payee: Math.min(totalPaidNow, Number(ipmV.part_client)) }).eq('id', ipmV.id);
+    if (invoiceDetail.ipm_patient_total == null) {
+      const { data: ipmV } = await supabase.from('ipm_ventes').select('id, part_client')
+        .eq('sale_id', invoiceDetail.id).limit(1).maybeSingle();
+      if (ipmV) {
+        const { data: allPays } = await supabase.from('sale_payments').select('amount').eq('sale_id', invoiceDetail.id);
+        const totalPaidNow = (allPays || []).reduce((sum, payment) => sum + Number(payment.amount), 0);
+        await supabase.from('ipm_ventes').update({ part_beneficiaire_payee: Math.min(totalPaidNow, Number(ipmV.part_client)) }).eq('id', ipmV.id);
+      }
     }
     success('Paiement enregistré · imputé sur la caisse du jour');
     setPayOpen(false);
@@ -1784,7 +1725,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     setAvailableCredits(filtered as SaleReturn[]);
     const c = filtered[0] as SaleReturn | undefined;
     setCreditSelected(c?.id || '');
-    const due = Math.max(0, Number(invoice.total) - Number(invoice.paid));
+    const due = invoicePatientDue(invoice);
     const avail = c ? Number(c.total) - Number(c.credit_used || 0) : 0;
     setCreditAmount(String(Math.min(due, avail)));
     setApplyCreditError(null);
@@ -1795,7 +1736,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (!can('edit_invoices')) { setApplyCreditError('Vous n’avez pas la permission d’appliquer des avoirs.'); return; }
     const amt = Number(creditAmount);
     const credit = availableCredits.find(item => item.id === creditSelected);
-    const due = Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid));
+    const due = invoicePatientDue(invoiceDetail);
     const available = credit ? Number(credit.total) - Number(credit.credit_used ?? 0) : 0;
     if (!Number.isFinite(amt) || amt <= 0 || amt > Math.min(due, available)) {
       setApplyCreditError('Saisissez un montant positif dans la limite de l’avoir disponible et du solde dû.');
@@ -2040,7 +1981,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   ];
 
   const quotePreviewAction = 'clay-action inline-flex h-9 w-9 shrink-0 items-center justify-center';
-  const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
+  const invoiceDue = invoiceDetail ? invoicePatientDue(invoiceDetail) : 0;
 
   const pageContent = (
     <div className={isDesktop ? "billing-workspace h-full overflow-y-auto px-4 lg:px-5 pb-6 space-y-3" : "space-y-3 pb-6"}>
@@ -2353,7 +2294,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 <div className="md:hidden">
                   {filteredInvoices.map(inv => {
                     const st = invoiceStatus(inv);
-                    const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
+                    const solde = invoicePatientDue(inv);
                     return (
                       <div
                         key={inv.id}
@@ -2396,7 +2337,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   </div>
                   {filteredInvoices.map(inv => {
                     const st = invoiceStatus(inv);
-                    const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
+                    const solde = invoicePatientDue(inv);
                     return (
                       <div key={inv.id} onClick={() => openInvoiceForView(inv)} className="flex items-center gap-3 px-2 py-2.5 hover:bg-[var(--w-hover)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
                         <span className="doc-number text-sm font-semibold text-[var(--w-text)] shrink-0 w-[6.5rem] truncate">{inv.sale_number}</span>
@@ -2617,6 +2558,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             repSettings={repSettings}
             profileNames={profileNames}
             billSourceSiteId={billSourceSiteId}
+            stockMethod={stockMethod}
             onClose={() => closeInvoiceWindow(desc.windowId)}
             onSaved={() => loadTab(billPage, true)}
             onInvoiceCreated={handleInvoiceCreated}
@@ -2662,7 +2604,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         const listedInvoice = invoices[invoiceNavIdx];
         const viewInv = invoiceDetail?.id === mobileEditingInvoiceId ? invoiceDetail : listedInvoice?.id === mobileEditingInvoiceId ? listedInvoice : null;
         if (!viewInv) return null;
-        const invDue = Math.max(0, Number(viewInv.total) - Number(viewInv.paid));
+        const invDue = invoicePatientDue(viewInv);
         const isCancelled = viewInv.status === 'cancelled';
         const isAccounted = viewInv.accounting_status === 'accounted';
         return (
@@ -2702,6 +2644,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 items: pitems, subtotal: psubtotal, discount: Number(viewInv.discount ?? 0), vat: viewInv, total: Number(viewInv.total),
                 payments: invoicePayList.map(p => ({ method_name: p.method_name, amount: p.amount })),
                 paid: Number(viewInv.paid),
+                ipmPatientTotal: viewInv.ipm_patient_total,
                 issuedBy: creatorName((viewInv as any).user_id),
                 docHeader: invoiceForm.reference || invoiceForm.delivery_date || invoiceForm.warranty || invoiceForm.imei || repLabelOf(invoiceForm.representative) ? {
                   reference: invoiceForm.reference || null, delivery_date: invoiceForm.delivery_date || null,
@@ -2743,7 +2686,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           onRemoveItem={(idx) => setInvoiceEditorItems(p => p.filter((_, i) => i !== idx))}
           articles={articles}
           saving={savingInvoice}
-          onSave={saveInvoice}
+          onSave={() => void saveInvoice()}
           total={invoiceEditorSubtotal}
           vatSummary={invoicePricing.price?.enabled ? invoicePricing.price : undefined}
           saveLabel={mobileEditingInvoiceId ? 'Mettre à jour' : 'Enregistrer facture'}
@@ -3084,6 +3027,17 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           );
         })()}
       </Modal>
+
+      <LotPickerModal
+        open={lotPickerInvoiceOpen}
+        onClose={() => setLotPickerInvoiceOpen(false)}
+        items={invoiceStockItems}
+        siteId={billSourceSiteId || currentSite?.id}
+        strict
+        onConfirm={lots => { setLotPickerInvoiceOpen(false); if (mobileInvoiceOpen && mobileInvoiceMode === 'create') void saveInvoice(lots); }}
+        title="Sélection des lots de la facture"
+        confirmLabel="Confirmer et facturer"
+      />
 
       <LotPickerModal
         open={lotPickerConvertOpen}

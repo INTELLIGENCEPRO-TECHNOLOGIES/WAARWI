@@ -10,7 +10,9 @@ import { AlertTriangle } from 'lucide-react';
 import { loadFormDraft, clearFormDraft, saveFormDraft, scheduleSaveFormDraft, type OpInProgress } from '../../lib/draftRecovery';
 import { Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { getOperationalCashContext, missingSessionMessage } from '../../lib/cashSession';
+import { createDirectInvoice, trackedInvoiceItems } from '../../lib/directInvoice';
+import { invoiceIpmShare, invoicePatientDue } from '../../lib/invoiceSettlement';
+import { LotPickerModal, type ArticleLotSelection } from '../LotPickerModal';
 import { useApp } from '../../context/AppContext';
 import { usePermissions } from '../../lib/permissions';
 import { useToast } from '../../context/ToastContext';
@@ -29,6 +31,7 @@ type QuoteItem = {
 type Invoice = VatAmounts & {
   discount?: number;
   id: string; sale_number: string; total: number; paid: number; status: string;
+  ipm_patient_total?: number | null;
   customer_id: string | null;
   created_at: string;
   public_code?: string | null;
@@ -63,6 +66,7 @@ export type InvoiceEditorInstanceProps = {
   repSettings: RepCommissionSettings;
   profileNames: Record<string, string>;
   billSourceSiteId: string;
+  stockMethod: string;
   onClose: () => void;
   onSaved: () => void;
   onOpenNew: () => void;
@@ -85,7 +89,7 @@ export type InvoiceEditorInstanceProps = {
 
 const tenantForPrint = (t: any, site?: any): PrintTenant => buildPrintTenantForSite(t, site);
 
-export function InvoiceEditorInstance({ descriptor, articles, customers, invoices, paymentMethods, docSettings, autoMode, isPharmacy, activeReps, salesReps, repSettings, profileNames, billSourceSiteId, onClose, onSaved, onOpenNew, onInvoiceCreated, onOpenPay, onOpenCredit, onCancelInvoice, onComptabiliser, accountingBusy, onCopyLink, onWhatsApp, onReturnTransform, onSearchOpen, onVehiclePicker, onCreateArticle, onCreateCustomer }: InvoiceEditorInstanceProps) {
+export function InvoiceEditorInstance({ descriptor, articles, customers, invoices, paymentMethods, docSettings, autoMode, isPharmacy, activeReps, salesReps, repSettings, profileNames, billSourceSiteId, stockMethod, onClose, onSaved, onOpenNew, onInvoiceCreated, onOpenPay, onOpenCredit, onCancelInvoice, onComptabiliser, accountingBusy, onCopyLink, onWhatsApp, onReturnTransform, onSearchOpen, onVehiclePicker, onCreateArticle, onCreateCustomer }: InvoiceEditorInstanceProps) {
   const { tenant, currentSite, profile, user } = useApp();
   const { can } = usePermissions();
   const { success, error } = useToast();
@@ -116,6 +120,10 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
   const [payList, setPayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [isCredit, setIsCredit] = useState(false);
   const [saving, setSaving] = useState(false);
+  const creationInFlight = useRef(false);
+  const creationRequest = useRef(crypto.randomUUID());
+  const [lotPickerOpen, setLotPickerOpen] = useState(false);
+  const stockItems = useMemo(() => trackedInvoiceItems(items, articles), [items, articles]);
   const [invoiceBaseline,setInvoiceBaseline]=useState<InvoiceBaseline|null>(null);
   const originalDraft=useRef<string|null>(null);
   const [postCreation, setPostCreation] = useState<{ saleNumber: string; createdAt: string; createdBy: string } | null>(null);
@@ -154,6 +162,7 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       if (Array.isArray(d.data.payList)) setPayList(d.data.payList);
       if (typeof d.data.isCredit === 'boolean') setIsCredit(d.data.isCredit);
       if (d.data.ipmDocuments) setIpmDocuments(d.data.ipmDocuments);
+      if (typeof d.data.creationRequestId === 'string') creationRequest.current = d.data.creationRequestId;
       if (d.mode) setMode(d.mode as any);
       if (d.documentId && !editingInvoiceId) setEditingInvoiceId(d.documentId);
       if (d.opInProgress) { setRecoveredOp(d.opInProgress); opInProgressRef.current = d.opInProgress; }
@@ -171,7 +180,7 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       kind: 'invoice',
       documentId: editingInvoiceId,
       mode,
-      data: { invoiceForm, items, payList, isCredit, ipmDocuments, editingInvoiceId, invoiceBaseline },
+      data: { invoiceForm, items, payList, isCredit, ipmDocuments, editingInvoiceId, invoiceBaseline, creationRequestId: creationRequest.current },
       opInProgress: opInProgressRef.current,
     }, 400);
   }, [recoveryChecked, scope, siteMismatch, descriptor.windowId, mode, editingInvoiceId, invoiceForm, items, payList, isCredit, ipmDocuments, invoiceBaseline]);
@@ -367,12 +376,12 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
   };
 
   // ── Save invoice (create + edit) ──────────────────────────────
-  const saveInvoice = async () => {
+  const saveInvoice = async (lots?: ArticleLotSelection[]) => {
     if (recoveredOp) {
       error("Un enregistrement était en cours au moment du rechargement. Vérifiez si la facture existe déjà côté serveur, puis cliquez sur « J'ai vérifié » avant de relancer.");
       return;
     }
-    if (saving) return;
+    if (saving || creationInFlight.current) return;
     if (siteMismatch) { error('Cette facture appartient à un autre magasin. Revenez dans le magasin d\'origine pour enregistrer.'); return; }
     if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; }
@@ -389,7 +398,7 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       saveFormDraft(scope, {
         windowId: descriptor.windowId, kind: 'invoice',
         documentId: editingInvoiceId, mode,
-        data: { invoiceForm, items, payList, isCredit, ipmDocuments, editingInvoiceId, invoiceBaseline },
+        data: { invoiceForm, items, payList, isCredit, ipmDocuments, editingInvoiceId, invoiceBaseline, creationRequestId: creationRequest.current },
         opInProgress: 'save',
       });
       try {
@@ -417,162 +426,106 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       return;
     }
 
-    // IPM document validation
-    if (ipmBeneficiaire && ipmConfig && !ipmDocValidation.valide) {
+    const beneficiary = ipmBeneficiaire?.customer_id === invoiceForm.customer_id ? ipmBeneficiaire : null;
+    if (beneficiary && !ipmConfig) { error('Convention IPM indisponible.'); return; }
+    if (beneficiary && !ipmDocValidation.valide) {
       error(`Documents IPM manquants : ${ipmDocValidation.champs_manquants.join(', ')}`);
       return;
     }
-
     if (!pricing.price) {
       error(pricing.error || 'Le montant de la facture est en cours de calcul.');
       if (pricing.error) pricing.refresh();
       return;
     }
-    if (ipmBeneficiaire && pricing.price.vat > 0) {
+    if (beneficiary && pricing.price.enabled) {
       error('La répartition d’une facture avec TVA entre le client et l’IPM doit être validée.');
       return;
     }
-    const invoiceTtc = pricing.price.ttc;
-    const createSubtotal = valid.reduce((s, i) => s + Number(i.total), 0);
-    const createTotalPaid = isCredit ? 0 : payList.reduce((s, p) => s + p.amount, 0);
-    const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : invoiceTtc;
-    if (!isCredit && createTotalPaid > clientDueAmount) { error('Le montant payé dépasse la part client'); return; }
-
+    const total = pricing.price.ttc;
+    const payments = isCredit ? [] : payList;
+    const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    if (paid > (beneficiary ? total - ipmPartIpm : total)) {
+      error('Le montant payé dépasse la part client.');
+      return;
+    }
     if (isCredit && !invoiceForm.customer_id) {
-      error('Un client est requis pour une facture à crédit');
+      error('Un client est requis pour une facture à crédit.');
+      return;
+    }
+    if (stockMethod === 'lot' && stockItems.length && !lots) {
+      setLotPickerOpen(true);
       return;
     }
 
-    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
-    const articleItems = valid.filter(i => i.article_id);
-    const trackedItems = articleItems.filter(i => {
-      const art = articles.find((a: any) => a.id === i.article_id);
-      return art && art.track_stock !== false;
-    });
-    if (!allowNeg && trackedItems.length > 0) {
-      const { data: stk } = await supabase.from('stock_levels')
-        .select('article_id, quantity')
-        .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-        .in('article_id', trackedItems.map(i => i.article_id!));
-      const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-      const insufficient = trackedItems.filter(i => (stockMap.get(i.article_id!) || 0) < i.quantity);
-      if (insufficient.length > 0) {
-        error(`Stock insuffisant: ${insufficient.map(i => i.name).join(', ')}`);
-        return;
-      }
-    }
-
+    creationInFlight.current = true;
     setSaving(true);
+    opInProgressRef.current = 'save';
+    const draft = {
+      windowId: descriptor.windowId,
+      kind: 'invoice' as const,
+      documentId: null,
+      mode,
+      data: { invoiceForm, items, payList, isCredit, ipmDocuments, creationRequestId: creationRequest.current },
+    };
+    saveFormDraft(scope, { ...draft, opInProgress: 'save' });
     try {
-      const { data: numData } = await supabase.rpc('next_doc_number', {
-        p_tenant_id: tenant.id, p_kind: 'invoice', p_prefix: 'F',
-      });
-      const invNum = (numData as string) || ('F-' + Date.now());
-
-      let sessionId: string | null = null;
-      if (!isCredit) {
-        const cashCtx = await getOperationalCashContext(currentSite.id);
-        sessionId = cashCtx.session?.id || null;
-        if (!sessionId && createTotalPaid > 0 && (cashCtx.multiEnabled || cashCtx.error)) throw new Error(missingSessionMessage(cashCtx, ''));
-      }
-
-      const status = isCredit
-        ? (ipmBeneficiaire && ipmPartIpm > 0 && createTotalPaid >= clientDueAmount ? 'paid' : 'validated')
-        : (createTotalPaid >= clientDueAmount ? 'paid' : createTotalPaid > 0 ? 'partial' : 'validated');
-
-      const ipmCoverage = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartIpm : 0;
-      const effectivePaid = createTotalPaid + ipmCoverage;
-
-      const repSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, createSubtotal);
-      const newInvRepLabel = repLabelOf(invoiceForm.representative);
-
-      const { data: saleId, error: e } = await supabase.rpc('create_billing_sale_with_items', {
-        p_sale: {
-          site_id: currentSite.id,
-          customer_id: invoiceForm.customer_id || null,
-          sale_number: invNum, subtotal: createSubtotal, discount: 0, total: invoiceTtc,
-          paid: effectivePaid, status,
-          note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
-          cash_session_id: sessionId,
-          representative_id: invoiceForm.representative || null,
-          rep_commission: repSnapshot,
-          doc_header: { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null },
+      const sale = await createDirectInvoice({
+        tenantId: tenant.id,
+        siteId: currentSite.id,
+        stockSiteId: billSourceSiteId || currentSite.id,
+        customerId: invoiceForm.customer_id || null,
+        representativeId: invoiceForm.representative || null,
+        total,
+        lines: valid,
+        payments,
+        lots: lots ?? [],
+        docHeader: {
+          doc_date: invoiceForm.doc_date || null,
+          delivery_date: invoiceForm.delivery_date || null,
+          reference: invoiceForm.reference || null,
+          warranty: invoiceForm.warranty || null,
+          representative: repLabelOf(invoiceForm.representative),
+          imei: invoiceForm.imei || null,
         },
-        p_items: valid.map(i => ({
-          article_id: i.article_id, name: i.name, quantity: i.quantity,
-          unit_price: i.unit_price, discount: i.discount, total: i.total,
-        })),
-        p_payments: isCredit ? [] : payList.filter(p => p.amount > 0).map(p => ({
-          payment_method_id: p.method_id || null, amount: p.amount, reference: p.reference || '',
-        })),
-      });
-      if (e || !saleId) { pricing.refresh(); error(e?.message || 'La facture n’a pas été enregistrée.'); return; }
-      const sale = { id: saleId as string };
+        ipm: beneficiary ? {
+          beneficiaryId: beneficiary.id,
+          organizationName: beneficiary.ipm_organismes?.nom,
+          expectedShare: ipmPartIpm,
+          documents: ipmDocuments,
+        } : undefined,
+      }, creationRequest.current);
 
-      if (invoiceForm.customer_id) {
-        const unpaidAmount = invoiceTtc - effectivePaid;
-        if (unpaidAmount > 0) {
-          const { data: cust } = await supabase.from('customers').select('balance').eq('id', invoiceForm.customer_id).single();
-          await supabase.from('customers').update({ balance: Number(cust?.balance || 0) + unpaidAmount }).eq('id', invoiceForm.customer_id);
-        }
-      }
-
-      const stockSiteId = billSourceSiteId || currentSite.id;
-      for (const item of articleItems) {
-        if (!item.article_id) continue;
-        await supabase.rpc('adjust_stock', {
-          p_article_id: item.article_id,
-          p_site_id: stockSiteId,
-          p_quantity: -item.quantity,
-          p_movement_type: 'sale',
-          p_note: `Facture ${invNum}${isCredit ? ' (credit)' : ''}`,
-        });
-      }
-
-      if (ipmBeneficiaire && ipmPartIpm > 0) {
-        await supabase.from('ipm_ventes').insert({
-          tenant_id: tenant.id,
-          organisme_id: ipmBeneficiaire.organisme_id,
-          beneficiaire_id: ipmBeneficiaire.id,
-          convention_id: ipmBeneficiaire.convention_id || null,
-          sale_id: sale.id,
-          date_vente: new Date().toISOString().slice(0, 10),
-          part_ipm: ipmPartIpm,
-          part_client: ipmPartClient,
-          montant_total: invoiceTtc,
-          taux_prise_en_charge: ipmTaux,
-          montant_eligible: ipmResult?.montant_eligible || createSubtotal,
-          montant_non_eligible: ipmResult?.montant_non_eligible || 0,
-          plafond_applique: ipmResult?.plafond_atteint ? ipmConfig?.plafond_facture : null,
-          arrondi_applique: ipmConfig?.mode_arrondi || null,
-          part_beneficiaire_payee: Math.min(createTotalPaid, ipmPartClient),
-          statut: 'en_attente',
-          numero_ordonnance: ipmDocuments.numero_ordonnance || null,
-          medecin_prescripteur: ipmDocuments.medecin || null,
-          numero_bon_pec: ipmDocuments.numero_bon || null,
-        });
-      }
-
-      success(`Facture ${invNum} créée${isCredit ? ' (à crédit)' : ''}${ipmBeneficiaire && ipmPartIpm > 0 ? ` · Part IPM: ${formatFCFA(ipmPartIpm)}` : ''}`);
-      setPostCreation({ saleNumber: invNum, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
-      setEditingInvoiceId(sale.id);
-      setMode('view');
-      onInvoiceCreated?.(descriptor.windowId, sale.id, invNum);
-      const { data: newFull } = await supabase.from('sales').select('*, customers(name, phone, address)').eq('id', sale.id).maybeSingle();
-      if (newFull) setInvoiceDetail(newFull as any);
       clearFormDraft(scope, descriptor.windowId);
       opInProgressRef.current = null;
+      setPostCreation({ saleNumber: sale.number, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
+      setEditingInvoiceId(sale.id);
+      setMode('view');
+      onInvoiceCreated?.(descriptor.windowId, sale.id, sale.number);
+      const [{ data: newFull }, { data: savedPayments }] = await Promise.all([
+        supabase.from('sales').select('*, customers(name, phone, address)').eq('id', sale.id).maybeSingle(),
+        supabase.from('sale_payments').select('*').eq('sale_id', sale.id),
+      ]);
+      if (newFull) setInvoiceDetail(newFull);
+      if (savedPayments) setPayList(savedPayments.map(payment => ({
+        method_id: payment.payment_method_id || '', method_name: payment.method_name,
+        amount: Number(payment.amount), reference: payment.reference || '',
+      })));
+      success(`Facture ${sale.number} créée${isCredit ? ' (à crédit)' : ''}`);
       onSaved();
-    } catch (err: any) {
-      error(err.message || 'Erreur');
+    } catch (failure: any) {
+      if (failure?.code === '40001') pricing.refresh();
+      opInProgressRef.current = null;
+      saveFormDraft(scope, { ...draft, opInProgress: null });
+      error(failure?.message || 'La facture n’a pas été enregistrée.');
     } finally {
+      creationInFlight.current = false;
       setSaving(false);
     }
   };
 
   // ── Print ─────────────────────────────────────────────────────
   const handlePrint = () => {
-    const inv = invoiceDetail || invoices.find(i => i.id === editingInvoiceId);
+    const inv = invForLookup;
     if (!inv || !tenant) return;
     const pitems = items.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
     const psubtotal = pitems.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
@@ -586,13 +539,17 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       items: pitems, subtotal: psubtotal, discount: Number(inv.discount ?? 0), vat: inv, total: Number(inv.total),
       payments: payList.map(p => ({ method_name: p.method_name, amount: p.amount })),
       paid: Number(inv.paid),
+      ipmPatientTotal: inv.ipm_patient_total,
       issuedBy: creatorName((inv as any).user_id),
       docHeader: invoiceForm.reference || invoiceForm.delivery_date || invoiceForm.warranty || invoiceForm.imei || repLabelOf(invoiceForm.representative) ? { reference: invoiceForm.reference || null, delivery_date: invoiceForm.delivery_date || null, warranty: invoiceForm.warranty || null, representative: repLabelOf(invoiceForm.representative), imei: invoiceForm.imei || null } : null,
     });
   };
 
   // ── Render ────────────────────────────────────────────────────
-  const invForLookup = editingInvoiceId ? invoices.find(i => i.id === editingInvoiceId) : null;
+  const invForLookup: Invoice | null = editingInvoiceId
+    ? invoices.find(invoice => invoice.id === editingInvoiceId) ?? (invoiceDetail?.id === editingInvoiceId ? invoiceDetail : null)
+    : null;
+  const ipmShare = invForLookup ? invoiceIpmShare(invForLookup) : null;
 
   const listedPaid = invForLookup?.paid;
   useEffect(() => {
@@ -662,7 +619,7 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       vat={pricing.price?.enabled ? { vat_net_amount: pricing.price.ht, vat_amount: pricing.price.vat } : invoiceDetail ?? undefined}
       documentTotal={pricing.price?.ttc ?? invoiceDetail?.total}
       saving={saving}
-      onSave={editBlocked?undefined:saveInvoice}
+      onSave={editBlocked ? undefined : () => void saveInvoice()}
       onClose={onClose}
       hasPrev={mode==='view'&&navIdx > 0}
       hasNext={mode==='view'&&navIdx >= 0 && navIdx < invoices.length - 1}
@@ -673,7 +630,7 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       documentNumber={invForLookup?.sale_number || undefined}
       documentStatus={invForLookup?.status || undefined}
       accountingStatus={(invForLookup as any)?.accounting_status || undefined}
-      invoiceDue={editingInvoiceId ? Math.max(0, Number(invForLookup?.total || 0) - Number(invForLookup?.paid || 0)) : 0}
+      invoiceDue={invForLookup ? invoicePatientDue(invForLookup) : 0}
       docSettings={docSettings}
       autoMode={autoMode}
       onVehiclePicker={(idx: number | null) => onVehiclePicker(idx)}
@@ -685,7 +642,7 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       setIsCredit={setIsCredit}
       isPharmacy={isPharmacy}
       ipmLoading={ipmLoading}
-      ipmBeneficiaire={ipmBeneficiaire}
+      ipmBeneficiaire={mode === 'create' ? ipmBeneficiaire : null}
       ipmTaux={ipmTaux}
       ipmConvention={ipmConvention}
       ipmPartIpm={ipmPartIpm}
@@ -722,6 +679,23 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
       onTransformToReturn={mode==='view'&&editingInvoiceId ? async (config) => {
         await onReturnTransform(config, editingInvoiceId);
       } : undefined}
+    />
+    {mode === 'view' && invForLookup && ipmShare != null && (
+      <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 border-t border-[var(--w-separator-l)] px-3 py-2 text-xs tabular-nums">
+        <span>Part organisme à l’émission <strong>{formatFCFA(ipmShare)}</strong></span>
+        <span>Part patient à l’émission <strong>{formatFCFA(Number(invForLookup.ipm_patient_total))}</strong></span>
+        <span>Solde patient <strong>{formatFCFA(invoicePatientDue(invForLookup))}</strong></span>
+      </div>
+    )}
+    <LotPickerModal
+      open={lotPickerOpen}
+      onClose={() => setLotPickerOpen(false)}
+      items={stockItems}
+      siteId={billSourceSiteId || descriptor.siteId}
+      strict
+      onConfirm={lots => { setLotPickerOpen(false); if (mode === 'create' && !siteMismatch) void saveInvoice(lots); }}
+      title="Sélection des lots de la facture"
+      confirmLabel="Confirmer et facturer"
     />
     </div>
   );

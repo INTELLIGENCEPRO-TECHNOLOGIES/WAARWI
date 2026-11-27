@@ -66,7 +66,8 @@
     "scripts/pending-accounting/149-ipm-patient-receivable-separation-candidate.sql",
     "scripts/pending-accounting/151-ipm-direct-invoice-atomic-candidate.sql",
     "scripts/pending-accounting/153-ipm-exact-return-plan-candidate.sql",
-    "scripts/pending-accounting/155-ipm-unbilled-invoice-return-candidate.sql"
+    "scripts/pending-accounting/155-ipm-unbilled-invoice-return-candidate.sql",
+    "scripts/pending-accounting/157-ipm-billing-patient-amount-candidate.sql"
   ],
   "recipe_files": [
     "scripts/pending-accounting/03-recipe.sql",

@@ -1,6 +1,6 @@
 BEGIN;
 DO $test$
-DECLARE t uuid:=gen_random_uuid();u uuid:=gen_random_uuid();site uuid:=gen_random_uuid();art uuid:=gen_random_uuid();svc uuid:=gen_random_uuid();cust uuid:=gen_random_uuid();org uuid:=gen_random_uuid();conv uuid:=gen_random_uuid();ben uuid:=gen_random_uuid();reg uuid:=gen_random_uuid();cs uuid:=gen_random_uuid();pm uuid:=gen_random_uuid();key uuid:=gen_random_uuid();key2 uuid:=gen_random_uuid();sid uuid;sid2 uuid;normal uuid:=gen_random_uuid();cr uuid:=gen_random_uuid();header jsonb;items jsonb;payments jsonb;r jsonb;
+DECLARE t uuid:=gen_random_uuid();u uuid:=gen_random_uuid();site uuid:=gen_random_uuid();art uuid:=gen_random_uuid();svc uuid:=gen_random_uuid();cust uuid:=gen_random_uuid();org uuid:=gen_random_uuid();conv uuid:=gen_random_uuid();ben uuid:=gen_random_uuid();reg uuid:=gen_random_uuid();cs uuid:=gen_random_uuid();pm uuid:=gen_random_uuid();key uuid:=gen_random_uuid();key2 uuid:=gen_random_uuid();sid uuid;sid2 uuid;normal uuid:=gen_random_uuid();cr uuid:=gen_random_uuid();header jsonb;items jsonb;payments jsonb;r jsonb;public_token text;
 BEGIN
  INSERT INTO public.tenants(id,name,enabled_modules,settings) VALUES(t,'RECETTE FACTURE IPM DIRECTE','[]','{"stock_method":"none"}');
  INSERT INTO auth.users(id,email,aud,role) VALUES(u,u::text||'@example.invalid','authenticated','authenticated');
@@ -15,6 +15,8 @@ BEGIN
  INSERT INTO public.cash_registers(id,tenant_id,site_id,code,name) VALUES(reg,t,site,'C1','Caisse recette');
  INSERT INTO public.cash_sessions(id,tenant_id,site_id,user_id,cash_register_id,status,theoretical_amount) VALUES(cs,t,site,u,reg,'open',100);
  INSERT INTO public.payment_methods(id,tenant_id,name,code,payment_type,is_active) VALUES(pm,t,'Espèces','CASH','cash',true);
+ UPDATE public.tenants SET owner_user_id=u WHERE id=t;
+ INSERT INTO public.cash_register_assignments(tenant_id,cash_register_id,user_id,is_active,assigned_by) VALUES(t,reg,u,true,u);
  header:=jsonb_build_object('site_id',site,'customer_id',cust,'cash_session_id',cs,'total',2500,'ipm',jsonb_build_object('beneficiaire_id',ben,'expected_part_ipm',1600,'documents',jsonb_build_object('numero_ordonnance','ORD-152')));
  items:=jsonb_build_array(jsonb_build_object('article_id',art,'name','Médicament','quantity',2,'unit_price',1000,'discount',0),jsonb_build_object('article_id',svc,'name','Non éligible','quantity',1,'unit_price',500,'discount',0));
  payments:=jsonb_build_array(jsonb_build_object('payment_method_id',pm,'amount',400));
@@ -46,6 +48,50 @@ BEGIN
  SET CONSTRAINTS ALL IMMEDIATE;
  IF (SELECT paid FROM public.sales WHERE id=sid2)<>900 OR (SELECT credit_used FROM public.sale_returns WHERE id=cr)<>900 OR (SELECT count(*) FROM public.ipm_ventes WHERE tenant_id=t)<>2 OR (SELECT count(*) FROM public.ipm_sale_line_snapshots WHERE tenant_id=t)<>2 OR (SELECT sum(amount) FROM public.sale_payments WHERE sale_id=sid2 AND affects_balance=false)<>900 OR EXISTS(SELECT 1 FROM public.sale_payments WHERE sale_id=sid2 AND affects_balance=true) OR (SELECT theoretical_amount FROM public.cash_sessions WHERE id=cs)<>500 OR (SELECT quantity FROM public.stock_levels WHERE tenant_id=t AND article_id=art AND site_id=site)<>6 OR (SELECT balance FROM public.customers WHERE id=cust)<>1400 THEN RAISE EXCEPTION 'Facture IPM à crédit ou avoir incohérent';END IF;
  IF has_function_privilege('authenticated','public._create_billing_sale_without_credit_allocation(jsonb,jsonb,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'Primitive de facturation exposée';END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.sales WHERE id=sid AND ipm_patient_total=900 AND paid=400 AND status='partial')
+    OR NOT EXISTS(SELECT 1 FROM public.sales WHERE id=sid2 AND ipm_patient_total=900 AND paid=900 AND status='paid')
+    OR NOT EXISTS(SELECT 1 FROM public.sales WHERE id=normal AND ipm_patient_total IS NULL) THEN
+  RAISE EXCEPTION 'Part patient ou statut après imputation incohérent';
+ END IF;
+ UPDATE public.sales SET public_code=gen_random_uuid()::text WHERE id=sid RETURNING public_code INTO public_token;
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ r:=public.rpc_paginated_invoices(t,site,p_status_filter=>'partial');
+ IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(r->'rows') row
+                WHERE row->>'id'=sid::text AND (row->>'ipm_patient_total')::numeric=900) THEN
+  RAISE EXCEPTION 'Part patient absente du filtre des factures partiellement réglées : %',r;
+ END IF;
+ BEGIN
+  PERFORM public.register_sale_payment(sid,pm,'Espèces',501,'Dépassement',cs);
+  RAISE EXCEPTION 'Le paiement au-delà de la part patient a été accepté';
+ EXCEPTION WHEN invalid_parameter_value THEN
+  IF SQLERRM NOT LIKE 'Le règlement dépasse%' THEN RAISE;END IF;
+ END;
+ r:=public.register_sale_payment(sid,pm,'Espèces',500,'Solde patient',cs);
+ IF r->>'status' IS DISTINCT FROM 'paid' OR (r->>'paid')::numeric IS DISTINCT FROM 900 THEN
+  RAISE EXCEPTION 'Paiement du solde patient incohérent : %',r;
+ END IF;
+ r:=public.rpc_paginated_invoices(t,site,p_status_filter=>'paid');
+ IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(r->'rows') row
+                WHERE row->>'id'=sid::text AND (row->>'ipm_patient_total')::numeric=900)
+    OR (r->'totals'->>'count_paid')::integer<>2 THEN
+  RAISE EXCEPTION 'Classement des factures IPM réglées incohérent : %',r;
+ END IF;
+ EXECUTE 'RESET ROLE';
+ EXECUTE 'SET LOCAL ROLE anon';
+ r:=public.get_public_sale_invoice(public_token);
+ IF (r->'sale'->>'total')::numeric IS DISTINCT FROM 2500
+    OR (r->'sale'->>'ipm_patient_total')::numeric IS DISTINCT FROM 900
+    OR (r->'sale'->>'paid')::numeric IS DISTINCT FROM 900
+    OR r->'sale'->>'status' IS DISTINCT FROM 'paid' THEN
+  RAISE EXCEPTION 'Montants incohérents sur le lien de facture : %',r;
+ END IF;
+ EXECUTE 'RESET ROLE';
+ IF (SELECT theoretical_amount FROM public.cash_sessions WHERE id=cs) IS DISTINCT FROM 1000
+    OR (SELECT part_beneficiaire_payee FROM public.ipm_ventes WHERE sale_id=sid) IS DISTINCT FROM 900
+    OR (SELECT part_ipm FROM public.ipm_ventes WHERE sale_id=sid) IS DISTINCT FROM 1600
+    OR (SELECT count(*) FROM public.sale_payments WHERE sale_id=sid)<>2 THEN
+  RAISE EXCEPTION 'Caisse, règlement patient ou montant organisme incohérents';
+ END IF;
 END $test$;
 ROLLBACK;
 SELECT 'FACTURE_IPM_DIRECTE_ATOMIQUE_OK' AS resultat;

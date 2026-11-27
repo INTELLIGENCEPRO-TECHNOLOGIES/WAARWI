@@ -1,3 +1,4 @@
+import { invoiceIpmShare, invoicePatientDue } from '../lib/invoiceSettlement';
 import { clayTouchHandlers } from '../lib/clayTouch';
 import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import {
@@ -35,6 +36,7 @@ type Props = {
     sale_number: string;
     total: number;
     paid: number;
+    ipm_patient_total?: number | null;
     status: string;
     created_at: string;
     customer_id?: string | null;
@@ -83,10 +85,13 @@ export function MobileInvoiceDetail({
   onDelete,
   accountingBusy,
 }: Props) {
-  const stLabel = STATUS_LABELS[invoice.status] || invoice.status;
+  const ipmShare = invoiceIpmShare(invoice);
+  const stLabel = invoice.status === 'paid' && ipmShare != null
+    ? 'Part patient réglée'
+    : STATUS_LABELS[invoice.status] || invoice.status;
   const stColor = STATUS_COLORS[invoice.status] || 'text-slate-500';
   const customerName = invoice.customers?.name || 'Client comptoir';
-  const due = Math.max(0, Number(invoice.total) - Number(invoice.paid));
+  const due = invoicePatientDue(invoice);
   const validItems = items.filter(i => i.name.trim());
   const subtotal = validItems.reduce((s, i) => s + Number(i.total), 0);
   const hasVat = invoice.vat_net_amount != null;
@@ -176,6 +181,16 @@ export function MobileInvoiceDetail({
             <span>{hasVat ? 'Total TTC' : 'Total'}</span>
             <span className="num">{formatFCFA(invoice.total)}</span>
           </div>
+          {ipmShare != null && (
+            <>
+              <div className="flex justify-between gap-2 text-sm">
+                <span>Part organisme à l’émission</span><span className="num">{formatFCFA(ipmShare)}</span>
+              </div>
+              <div className="flex justify-between gap-2 text-sm">
+                <span>Part patient à l’émission</span><span className="num">{formatFCFA(Number(invoice.ipm_patient_total))}</span>
+              </div>
+            </>
+          )}
           {Number(invoice.paid) > 0 && (
             <div className="flex items-center justify-between text-xs text-emerald-600 font-medium">
               <span>Payé</span>
@@ -184,7 +199,7 @@ export function MobileInvoiceDetail({
           )}
           {due > 0 && (
             <div className="flex items-center justify-between text-xs text-amber-600 font-bold">
-              <span>Solde restant</span>
+              <span>{ipmShare == null ? 'Solde restant' : 'Solde patient'}</span>
               <span className="num">{formatFCFA(due)}</span>
             </div>
           )}

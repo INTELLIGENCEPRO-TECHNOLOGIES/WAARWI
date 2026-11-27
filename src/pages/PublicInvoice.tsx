@@ -1,3 +1,4 @@
+import { invoiceIpmShare, invoicePatientDue } from '../lib/invoiceSettlement';
 import { formatVatAmount, type VatAmounts } from '../lib/salesVat';
 import { useEffect, useState } from 'react';
 import { Loader2, Printer, AlertCircle } from 'lucide-react';
@@ -14,6 +15,7 @@ type publicPayload = {
     discount: number;
     total: number;
     paid: number;
+    ipm_patient_total?: number | null;
     note: string | null;
     doc_header?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; representative?: string | null } | null;
   };
@@ -60,6 +62,7 @@ export function PublicInvoice({ token }: { token: string }) {
       total: Number(data.sale.total),
       payments: data.payments.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(data.sale.paid),
+      ipmPatientTotal: data.sale.ipm_patient_total,
       docHeader: data.sale.doc_header ?? null,
     });
   };
@@ -80,8 +83,9 @@ export function PublicInvoice({ token }: { token: string }) {
   }
 
   const { sale, customer, tenant, items, payments } = data;
-  const due = Math.max(0, Number(sale.total) - Number(sale.paid));
-  const st = SALE_STATUS[sale.status] || { label: sale.status, color: 'text-neutral-500' };
+  const due = invoicePatientDue(sale);
+  const ipmShare = invoiceIpmShare(sale);
+  const st = sale.status === 'paid' && ipmShare != null ? { ...SALE_STATUS.paid, label: 'Part patient réglée' } : SALE_STATUS[sale.status] || { label: sale.status, color: 'text-neutral-500' };
   const dh = sale.doc_header;
 
   // Header fields for 2-column grid
@@ -202,6 +206,16 @@ export function PublicInvoice({ token }: { token: string }) {
                 <span className="text-[12px] font-bold uppercase tracking-wider text-neutral-700">{sale.vat_net_amount != null ? 'Total TTC' : 'Total'}</span>
                 <span className="text-xl font-black text-neutral-900 num">{sale.vat_net_amount != null ? formatVatAmount(sale.total) : formatFCFA(Number(sale.total))}</span>
               </div>
+              {ipmShare != null && (
+                <>
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span>Part organisme à l’émission</span><span className="num">{formatFCFA(ipmShare)}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span>Part patient à l’émission</span><span className="num">{formatFCFA(Number(sale.ipm_patient_total))}</span>
+                  </div>
+                </>
+              )}
               {Number(sale.paid) > 0 && (
                 <div className="flex items-center justify-between py-1.5 text-[12px]">
                   <span className="text-neutral-500">Déjà payé</span>
@@ -210,7 +224,7 @@ export function PublicInvoice({ token }: { token: string }) {
               )}
               {due > 0 && (
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-[12px] font-bold uppercase tracking-wider text-rose-600">Reste à payer</span>
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-rose-600">{ipmShare == null ? 'Reste à payer' : 'Solde patient'}</span>
                   <span className="text-lg font-black text-rose-600 num">{formatFCFA(due)}</span>
                 </div>
               )}

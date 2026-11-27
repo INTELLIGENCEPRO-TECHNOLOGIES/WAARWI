@@ -1,3 +1,4 @@
+import { invoiceIpmShare, invoicePatientDue } from './invoiceSettlement';
 import type { VatAmounts } from './salesVat';
 import { BUSINESS_TYPE_LABELS, mergeTicketHeaderConfig, mergeA4HeaderConfig } from './types';
 import type { TicketHeaderItem, TicketHeaderSize, A4HeaderConfig } from './types';
@@ -1134,6 +1135,7 @@ type CommercialDocOpts = {
   total: number;
   payments?: PrintPayment[];
   paid?: number;
+  ipmPatientTotal?: number | null;
   cashier?: string;
   issuedBy?: string;
   docHeader?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; imei?: string | null; representative?: string | null } | null;
@@ -1141,6 +1143,7 @@ type CommercialDocOpts = {
 
 function paymentStatusLabel(opts: CommercialDocOpts, paidAmount: number): string | undefined {
   if (!['FACTURE', 'BON DE COMMANDE'].includes(opts.docLabel)) return undefined;
+  if (opts.ipmPatientTotal != null && paidAmount >= opts.ipmPatientTotal) return 'PART PATIENT RÉGLÉE';
   return paidAmount >= opts.total ? 'PAYÉE' : paidAmount > 0 ? 'PARTIELLEMENT PAYÉE' : 'NON PAYÉE';
 }
 
@@ -1155,7 +1158,9 @@ export function printDocumentA4(opts: CommercialDocOpts) {
 async function printPagedDocument(opts: CommercialDocOpts, f: PagedFormat) {
   const t = opts.tenant;
   const paidAmount = typeof opts.paid === 'number' ? opts.paid : (opts.payments || []).reduce((s, p) => s + p.amount, 0);
-  const remaining = Math.max(0, opts.total - paidAmount);
+  const amounts = { total: opts.total, paid: paidAmount, ipm_patient_total: opts.ipmPatientTotal };
+  const remaining = invoicePatientDue(amounts);
+  const ipmShare = invoiceIpmShare(amounts);
   const status = paymentStatusLabel(opts, paidAmount);
   const isInvoiceType = status !== undefined;
   const hasDiscount = !!(opts.discount && opts.discount > 0);
@@ -1223,9 +1228,13 @@ async function printPagedDocument(opts: CommercialDocOpts, f: PagedFormat) {
         <div class="fin-row"><span>Total HT</span><span>${fmtMoney(opts.vat.vat_net_amount)} FCFA</span></div>
         <div class="fin-row"><span>TVA</span><span>${fmtMoney(opts.vat.vat_amount ?? 0)} FCFA</span></div>` : ''}
       <div class="fin-row grand"><span>${opts.docLabel === 'DEVIS' ? 'TOTAL HT' : 'TOTAL TTC'}</span><span>${masked ? MASK : `${fmtMoney(opts.total)} FCFA`}</span></div>
+      ${ipmShare != null ? `
+        <div class="fin-row"><span>Part organisme à l’émission</span><span>${masked ? MASK : `${fmtMoney(ipmShare)} FCFA`}</span></div>
+        <div class="fin-row"><span>Part patient à l’émission</span><span>${masked ? MASK : `${fmtMoney(Number(opts.ipmPatientTotal))} FCFA`}</span></div>
+      ` : ''}
       ${isInvoiceType ? `
         <div class="fin-row paid-row"><span>Règlement</span><span>${masked ? MASK : `${fmtMoney(paidAmount)} FCFA`}</span></div>
-        <div class="fin-row due-row"><span>Reste à payer</span><span>${masked ? MASK : `${fmtMoney(remaining)} FCFA`}</span></div>
+        <div class="fin-row due-row"><span>${ipmShare == null ? 'Reste à payer' : 'Solde patient'}</span><span>${masked ? MASK : `${fmtMoney(remaining)} FCFA`}</span></div>
       ` : ''}
     </div>
   </div>`;
