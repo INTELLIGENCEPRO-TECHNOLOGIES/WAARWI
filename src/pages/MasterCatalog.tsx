@@ -1,6 +1,5 @@
-import { useRealtimeRefresh } from '../lib/useRealtimeData';
-import { useRealtimeTick } from '../lib/useRealtimeData';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRealtimeRefresh, useRealtimeTick } from '../lib/useRealtimeData';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Loader2, Package, Check, Download, X, Filter, CheckCircle2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -44,6 +43,7 @@ export function MasterCatalog() {
   const [brandFilter, setBrandFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterId = useId();
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 60;
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -274,6 +274,7 @@ export function MasterCatalog() {
   };
 
   const clearFilters = () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
     setSearch(''); setSearchInput(''); setCategoryId(''); setSubcategoryId(''); setBrandFilter(''); setStatusFilter('all');
     setFiltersOpen(false);
   };
@@ -364,7 +365,7 @@ export function MasterCatalog() {
             {selected.size ? 'Importer la sélection' : 'Importer le catalogue'}
           </button>
         </div>
-        <PageSearch value={searchInput} onChange={handleSearchInput} placeholder="Désignation, marque ou référence…"
+        <PageSearch value={searchInput} onChange={handleSearchInput} placeholder="Rechercher un article…"
           rightSlot={<button type="button" className="btn-secondary article-button" onClick={() => setFiltersOpen(true)}>
             <Filter size={15} aria-hidden="true" />Filtres{activeFilterCount > 0 && <span className="num">({activeFilterCount})</span>}
           </button>}
@@ -457,35 +458,35 @@ export function MasterCatalog() {
           <button type="button" onClick={() => setFiltersOpen(false)} className="btn-primary article-button"><Check size={15} aria-hidden="true" />Appliquer</button>
         </>}>
         <div className="space-y-3 flat-form">
-          <label className="block">
-            <span className="label">Catégorie</span>
-            <select value={categoryId} onChange={event => { setCategoryId(event.target.value); setSubcategoryId(''); }} className="input text-sm">
+          <div>
+            <label htmlFor={filterId + '-category'} className="label">Catégorie</label>
+            <select id={filterId + '-category'} value={categoryId} onChange={event => { setCategoryId(event.target.value); setSubcategoryId(''); }} className="input text-sm">
               <option value="">Toutes les catégories</option>
               {rootCategories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
-          </label>
-          {subcategories.length > 0 && <label className="block">
-            <span className="label">Sous-catégorie</span>
-            <select value={subcategoryId} onChange={event => setSubcategoryId(event.target.value)} className="input text-sm">
+          </div>
+          {subcategories.length > 0 && <div>
+            <label htmlFor={filterId + '-subcategory'} className="label">Sous-catégorie</label>
+            <select id={filterId + '-subcategory'} value={subcategoryId} onChange={event => setSubcategoryId(event.target.value)} className="input text-sm">
               <option value="">Toutes les sous-catégories</option>
               {subcategories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
-          </label>}
-          <label className="block">
-            <span className="label">Marque</span>
-            <select value={brandFilter} onChange={event => setBrandFilter(event.target.value)} className="input text-sm">
+          </div>}
+          <div>
+            <label htmlFor={filterId + '-brand'} className="label">Marque</label>
+            <select id={filterId + '-brand'} value={brandFilter} onChange={event => setBrandFilter(event.target.value)} className="input text-sm">
               <option value="">Toutes les marques</option>
               {brands.map(brand => <option key={brand} value={brand}>{brand}</option>)}
             </select>
-          </label>
-          <label className="block">
-            <span className="label">Statut d’import</span>
-            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as FilterStatus)} className="input text-sm">
+          </div>
+          <div>
+            <label htmlFor={filterId + '-status'} className="label">Statut d’import</label>
+            <select id={filterId + '-status'} value={statusFilter} onChange={event => setStatusFilter(event.target.value as FilterStatus)} className="input text-sm">
               <option value="all">Tous</option>
               <option value="available">Disponibles</option>
               <option value="imported">Déjà importés</option>
             </select>
-          </label>
+          </div>
         </div>
       </Modal>
 
