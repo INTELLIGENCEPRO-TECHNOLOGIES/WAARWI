@@ -546,9 +546,11 @@ export function InvoiceEditorInstance({ descriptor, articles, customers, invoice
   };
 
   // ── Render ────────────────────────────────────────────────────
-  const invForLookup: Invoice | null = editingInvoiceId
-    ? invoices.find(invoice => invoice.id === editingInvoiceId) ?? (invoiceDetail?.id === editingInvoiceId ? invoiceDetail : null)
-    : null;
+  const listedInvoice = editingInvoiceId ? invoices.find(invoice => invoice.id === editingInvoiceId) : undefined;
+  const fullInvoice = editingInvoiceId && invoiceDetail?.id === editingInvoiceId ? invoiceDetail as Invoice : null;
+  const invForLookup: Invoice | null = listedInvoice
+    ? { ...fullInvoice, ...listedInvoice, customers: fullInvoice?.customers ?? listedInvoice.customers }
+    : fullInvoice;
   const ipmShare = invForLookup ? invoiceIpmShare(invForLookup) : null;
 
   const listedPaid = invForLookup?.paid;
