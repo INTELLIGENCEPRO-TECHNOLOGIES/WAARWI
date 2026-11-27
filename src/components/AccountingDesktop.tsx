@@ -5,6 +5,7 @@ import {BookOpen,LayoutGrid,Minus,X} from './Icons';
 import {Accounting} from '../pages/Accounting';
 import {AccountingWindowId as WindowId,AccountingWorkContext,AccountingWindowVisible,type AccountingWorkActions,type AccountingPieceRequest,useAccountingWork} from '../context/AccountingWindowContext';
 import {AccountingPiece} from './AccountingPiece';
+import type {EntryTemplateSource} from './AccountingTemplateWorkspace';
 import {AccountingPlanIO} from './AccountingPlanIO';
 import {AccountingAccountStatement} from './AccountingAccountStatement';
 import {useApp} from '../context/AppContext';
@@ -12,6 +13,7 @@ import {usePermissions} from '../lib/permissions';
 import type {Route} from './Shell';
 import './accounting-desktop.css';
 const sections={
+ acc_templates:['templates','Modèles de saisie'],acc_guide:['guide','Guide de la comptabilité'],
  acc_journal_settings:['journal_settings','Codes journaux'],acc_entry:['entry','Saisie des écritures'],acc_plan:['plan','Plan comptable'],acc_journals:['journals','Journaux comptables'],
  acc_analytics:['analytics','Analytique et budgets'],acc_assets:['assets','Immobilisations et amortissements'],acc_revision:['revision','Révision comptable'],acc_aging:['aging','Balance âgée et échéances'],acc_balance:['balance','Balance générale'],acc_grandlivre:['grandlivre','Grand livre'],acc_tiers:['tiers','Balance des tiers'],
  acc_search:['search','Recherche des écritures'],acc_statement:['statement','Interrogation et lettrage'],acc_bank:['bank','Rapprochement bancaire'],
@@ -33,15 +35,22 @@ function WindowScope({visible,actions,children}:{visible:boolean;actions:Account
 function AccountWork({tenantId,code,canManage,onView}:{tenantId:string;code:string;canManage:boolean;onView:ComponentProps<typeof AccountingAccountStatement>['onView']}){
  const work=useAccountingWork();return <AccountingAccountStatement tenantId={tenantId} initialAccount={code} canManage={canManage} refreshRevision={work?.revision??0} onView={onView}/>;
 }
-type Work={id:string;title:string;kind:'section';route:WorkRoute}|{id:string;title:string;kind:'piece';request:AccountingPieceRequest}|{id:string;title:string;kind:'account';code:string}|{id:string;title:string;kind:'import'};
+type Work =
+ | {id:string;title:string;kind:'section';route:WorkRoute}
+ | {id:string;title:string;kind:'piece';request:AccountingPieceRequest}
+ | {id:string;title:string;kind:'account';code:string}
+ | {id:string;title:string;kind:'import'}
+ | {id:string;title:string;kind:'entry';journal:string;showTemplates?:number}
+ | {id:string;title:string;kind:'template';source:EntryTemplateSource};
 function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLDivElement>}){
  const wm=useWindowManager();const {tenant}=useApp();const {can}=usePermissions();
  const [open,setOpen]=useState<Work[]>([]);
  const [active,setActive]=useState<string|null>(null);
  const [revision,setRevision]=useState(0);
+ const nextRequest=useRef(0);
  const [compact,setCompact]=useState(()=>window.matchMedia('(max-width: 1023px)').matches);
  useEffect(()=>{const mq=window.matchMedia('(max-width: 1023px)');const change=()=>setCompact(mq.matches);mq.addEventListener('change',change);return()=>mq.removeEventListener('change',change);},[]);
- const allowed=(w:Work)=>(w.kind!=='import'||can('manage_accounting'))&&canAccess(w.kind==='section'?w.route:w.kind==='account'?'acc_statement':w.kind==='import'?'acc_plan':'acc_journals');
+ const allowed=(w:Work)=>(w.kind!=='import'||can('manage_accounting'))&&canAccess(w.kind==='section'?w.route:w.kind==='account'?'acc_statement':w.kind==='import'?'acc_plan':w.kind==='entry'?'acc_entry':w.kind==='template'?'acc_templates':'acc_journals');
  const openRoute=useCallback((r:Route)=>{
   if(r==='acc_overview'){wm.minimizeAll();setActive(null);return;}
   if(!isWork(r)||!canAccess(r))return;
@@ -59,7 +68,15 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
  const openPiece=(request:AccountingPieceRequest)=>{
   if(!canAccess('acc_journals')||!request.entryNumber)return;
   const id='piece:'+request.entryNumber;
-  setOpen(p=>{const old=p.find(w=>w.id===id);if(old?.kind==='piece')return request.reverse&&!old.request.reverse?p.map(w=>w.id===id?{...old,request:{...old.request,reverse:true}}:w):p;return [...p,{id,kind:'piece',title:'Pièce '+request.entryNumber,request}];});
+  if(request.selectTemplateLines)request={...request,templateSelectionRequest:++nextRequest.current};
+  setOpen(p=>{
+   const old=p.find(w=>w.id===id);
+   if(old?.kind==='piece'){
+    if(!request.reverse&&!request.selectTemplateLines)return p;
+    return p.map(w=>w.id===id?{...old,request:{...old.request,...request}}:w);
+   }
+   return [...p,{id,kind:'piece',title:'Pièce '+request.entryNumber,request}];
+  });
   wm.restore(id);setActive(id);
  };
  const openAccount=(code:string)=>{
@@ -67,6 +84,22 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
   setOpen(p=>p.some(w=>w.id===id)?p:[...p,{id,kind:'account',title:'Compte '+code,code}]);wm.restore(id);setActive(id);
  };
  const openPlanImport=()=>{if(!canAccess('acc_plan')||!can('manage_accounting'))return;const id='plan:import';setOpen(p=>p.some(w=>w.id===id)?p:[...p,{id,kind:'import',title:'Import du plan comptable'}]);wm.restore(id);setActive(id);};
+ const openEntry=(journal:string,showTemplates=false)=>{
+  if(!canAccess('acc_entry'))return;
+  const id='entry:'+journal;
+  const showTemplatesRequest=showTemplates?++nextRequest.current:undefined;
+  setOpen(previous=>previous.some(work=>work.id===id)
+   ? previous.map(work=>work.id===id&&work.kind==='entry'&&showTemplatesRequest?{...work,showTemplates:showTemplatesRequest}:work)
+   : [...previous,{id,kind:'entry',title:journal?'Saisie des écritures · '+journal:'Saisie des écritures',journal,showTemplates:showTemplatesRequest}]);
+  wm.restore(id);
+  setActive(id);
+ };
+ const openTemplate=(source:EntryTemplateSource)=>{
+  if(!canAccess('acc_templates')||!can('manage_accounting'))return;
+  const id='template:'+ ++nextRequest.current;
+  setOpen(previous=>[...previous,{id,kind:'template',title:'Nouveau modèle de saisie',source}]);
+  setActive(id);
+ };
  const activate=(w:Work)=>{if(!allowed(w))return;setActive(w.id);wm.restore(w.id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);};
  const nextWindow=(id:string)=>{
   const next=wm.windows.filter(w=>w.id!==id&&!w.minimized).sort((a,b)=>b.zIndex-a.zIndex).map(w=>open.find(o=>o.id===w.id)).find((w):w is Work=>!!w&&allowed(w));
@@ -85,14 +118,25 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
  const cascade=()=>{const a=wm.getArea();visible.slice().sort((x,y)=>x.zIndex-y.zIndex).forEach((w,i)=>{const offset=16+(i%6)*22;wm.setMaximized(w.id,false);wm.updateRect(w.id,{x:Math.min(offset,Math.max(0,a.w-320)),y:Math.min(offset,Math.max(0,a.h-170)),w:Math.min(1100,Math.max(1,a.w-offset-18)),h:Math.min(730,Math.max(1,a.h-offset-18))});});};
  const closeAll=()=>{if(!window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{}})))return;setOpen([]);setActive(null);onNavigate('acc_overview');};
  useEffect(()=>{const h=(e:Event)=>{switch((e as CustomEvent<{action:string}>).detail?.action){case 'home':navigate('acc_overview');break;case 'tile':tile();break;case 'cascade':cascade();break;case 'closeAll':closeAll();break;}};window.addEventListener('waarwi:accounting-window-action',h);return()=>window.removeEventListener('waarwi:accounting-window-action',h);});
- const actions={openPiece,openAccount,openPlanImport,refresh:()=>setRevision(v=>v+1),revision};
+ const actions={openPiece,openAccount,openPlanImport,openEntry,openTemplate,refresh:()=>setRevision(v=>v+1),revision};
  return <AccountingWorkContext.Provider value={actions}><section className="acc-desktop" aria-label="Bureau comptable">
   <div className="acc-desktop-area" ref={area}>
    <div className="acc-desktop-home"><Accounting section="overview" onNavigate={navigate}/></div>
    {open.filter(allowed).map((w,index)=>{
     const a=wm.getArea();const offset=18+(index%5)*22;const id=w.id;
-    return <DesktopWindow key={id} id={id} title={w.title} contained active={selected===id} onActivate={()=>{setActive(id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);}} minW={320} minH={170} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(w.kind==='piece'?850:1150,Math.max(1,a.w-offset-22)),h:Math.min(760,Math.max(1,a.h-offset-22))}} onClose={()=>close(w)} onMinimize={()=>minimize(w)}>
-      <WindowId.Provider value={id}><WindowScope actions={actions} visible={!wm.windows.find(x=>x.id===id)?.minimized&&(!compact||selected===id)}><div className="acc-window-content">{w.kind==='section'?<Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={()=>close(w)}/>:w.kind==='piece'?<AccountingPiece request={w.request} onPosted={()=>setRevision(v=>v+1)}/>:w.kind==='import'?<div className="accounting-workspace"><AccountingPlanIO accounts={[]} importOnly onClose={()=>close(w)} onImportDone={()=>setRevision(v=>v+1)}/></div>:tenant&&<div className="accounting-workspace"><AccountWork tenantId={tenant.id} code={w.code} canManage={can('manage_accounting')} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>}</div></WindowScope></WindowId.Provider>
+    return <DesktopWindow key={id} id={id} title={w.title} contained active={selected===id} onActivate={()=>{setActive(id);if(w.kind==='section'&&route!==w.route)onNavigate(w.route);}} minW={320} minH={170} startMaximized={w.kind==='section'||w.kind==='entry'} initialRect={{x:Math.min(offset,Math.max(0,a.w-400)),y:Math.min(offset,Math.max(0,a.h-270)),w:Math.min(w.kind==='piece'?850:1150,Math.max(1,a.w-offset-22)),h:Math.max(1,a.h-offset-22)}} onClose={()=>close(w)} onMinimize={()=>minimize(w)}>
+      <WindowId.Provider value={id}>
+        <WindowScope actions={actions} visible={!wm.windows.find(x=>x.id===id)?.minimized&&(!compact||selected===id)}>
+          <div className="acc-window-content">
+            {w.kind==='section'&&<Accounting section={sections[w.route][0]} inWindow onNavigate={navigate} onExit={()=>close(w)}/>}
+            {w.kind==='entry'&&<Accounting section="entry" inWindow initialJournal={w.journal} openTemplatesRequest={w.showTemplates} onNavigate={navigate} onExit={()=>close(w)}/>}
+            {w.kind==='template'&&<Accounting section="templates" inWindow templateSource={w.source}/>}
+            {w.kind==='piece'&&<AccountingPiece request={w.request} onPosted={()=>setRevision(v=>v+1)}/>}
+            {w.kind==='import'&&<div className="accounting-workspace"><AccountingPlanIO accounts={[]} importOnly onClose={()=>close(w)} onImportDone={()=>setRevision(v=>v+1)}/></div>}
+            {w.kind==='account'&&tenant&&<div className="accounting-workspace"><AccountWork tenantId={tenant.id} code={w.code} canManage={can('manage_accounting')} onView={r=>openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}/></div>}
+          </div>
+        </WindowScope>
+      </WindowId.Provider>
     </DesktopWindow>;
    })}
   </div>

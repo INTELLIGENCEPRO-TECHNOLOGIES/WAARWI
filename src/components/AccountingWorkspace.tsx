@@ -1,6 +1,6 @@
 import {useState,useEffect,useRef,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
-import {ChevronLeft,ChevronRight,MoreHorizontal,Eye,Copy,ArrowRightLeft} from './Icons';
+import {ChevronLeft,ChevronRight,MoreHorizontal,Eye,Copy,ArrowRightLeft,FileText} from './Icons';
 
 export function useAccountingPagination<T>(rows:T[],resetKey:string){
  const [size,setSize]=useState(20);
@@ -18,13 +18,13 @@ export function AccountingPagination({page,size,total,setPage,setSize,disabled=f
   <div className="acc-page-buttons"><button type="button" aria-label="Page précédente" className="acc-icon" disabled={disabled||page===0} onClick={()=>setPage(page-1)}><ChevronLeft size={17}/></button><span>{page+1} / {pages}</span><button type="button" aria-label="Page suivante" className="acc-icon" disabled={disabled||page+1>=pages} onClick={()=>setPage(page+1)}><ChevronRight size={17}/></button></div>
  </nav>;
 }
-export function AccountingTable({ children, footer, label = 'Tableau comptable' }: { children: ReactNode; footer?: ReactNode; label?: string }) {
- return <div className="acc-table-frame">
+export function AccountingTable({ children, footer, label = 'Tableau comptable', fill = false }: { children: ReactNode; footer?: ReactNode; label?: string; fill?: boolean }) {
+ return <div className={fill ? "acc-table-frame acc-table-fill" : "acc-table-frame"} data-fill={fill || undefined}>
   <div className="acc-table-scroll" role="region" tabIndex={0} aria-label={label}>{children}</div>
   {footer}
  </div>;
 }
-export function AccountingRowActions({piece,onView,onReverse,reverseDisabledReason,anchor,onDismiss}:{piece:string;onView:()=>void;onReverse?:()=>void;reverseDisabledReason?:string;anchor?:{x:number;y:number};onDismiss?:()=>void}){
+export function AccountingRowActions({piece,onView,onReverse,reverseDisabledReason,onTemplate,anchor,onDismiss}:{piece:string;onView:()=>void;onReverse?:()=>void;reverseDisabledReason?:string;onTemplate?:()=>void;anchor?:{x:number;y:number};onDismiss?:()=>void}){
  const [local,setLocal]=useState(false);
  const [copied,setCopied]=useState(false);
  const ref=useRef<HTMLDivElement>(null);
@@ -42,6 +42,6 @@ export function AccountingRowActions({piece,onView,onReverse,reverseDisabledReas
  const copy=async()=>{try{await navigator.clipboard.writeText(piece);setCopied(true);}catch{setCopied(false);}};
  const bounds=buttonRef.current?.getBoundingClientRect();
  const x=anchor?.x??bounds?.right??0,y=anchor?.y??bounds?.bottom??0;
- return <><button ref={buttonRef} type="button" className="acc-icon" aria-label={'Actions '+piece} aria-expanded={active} onClick={()=>{if(active)dismiss();else{setCopied(false);setLocal(true);}}}><MoreHorizontal size={18}/></button>{active&&createPortal(<div className="accounting-workspace acc-context-root"><div ref={ref} className="acc-context" style={{left:Math.max(8,Math.min(x-190,window.innerWidth-224)),top:Math.max(8,Math.min(y,window.innerHeight-190)),zIndex:10000}} onClick={e=>e.stopPropagation()}>
- <span className="acc-context-label">{piece}</span><button type="button" onClick={()=>{dismiss();onView();}}><Eye size={16}/>Consulter la pièce</button><button type="button" onClick={()=>void copy()}><Copy size={16}/>{copied?'Numéro copié':'Copier le numéro'}</button>{(onReverse||reverseDisabledReason)&&<><div style={{borderTop:'1px solid var(--w-separator)',margin:'3px 0'}}/><button type="button" disabled={!onReverse} title={reverseDisabledReason} onClick={()=>{dismiss();onReverse?.();}}><ArrowRightLeft size={16}/><span>Extourner l’écriture{reverseDisabledReason&&<small style={{display:'block',fontSize:10}}>{reverseDisabledReason}</small>}</span></button></>}</div></div>,document.body)}</>;
+ return <><button ref={buttonRef} type="button" className="acc-icon" aria-label={'Actions '+piece} aria-expanded={active} onClick={()=>{if(active)dismiss();else{setCopied(false);setLocal(true);}}}><MoreHorizontal size={18}/></button>{active&&createPortal(<div className="accounting-workspace acc-context-root"><div ref={ref} className="acc-context" style={{left:Math.max(8,Math.min(x-210,window.innerWidth-224)),top:Math.max(8,Math.min(y,window.innerHeight-190)),zIndex:10000}} onClick={e=>e.stopPropagation()}>
+ <span className="acc-context-label">{piece}</span><button type="button" onClick={()=>{dismiss();onView();}}><Eye size={16}/>Consulter la pièce</button><button type="button" onClick={()=>void copy()}><Copy size={16}/>{copied?'Numéro copié':'Copier le numéro'}</button>{onTemplate&&<button type="button" onClick={()=>{dismiss();onTemplate();}}><FileText size={16}/>Créer un modèle de saisie</button>}{(onReverse||reverseDisabledReason)&&<><div style={{borderTop:'1px solid var(--w-separator)',margin:'3px 0'}}/><button type="button" disabled={!onReverse} title={reverseDisabledReason} onClick={()=>{dismiss();onReverse?.();}}><ArrowRightLeft size={16}/><span>Extourner l’écriture{reverseDisabledReason&&<small style={{display:'block',fontSize:10}}>{reverseDisabledReason}</small>}</span></button></>}</div></div>,document.body)}</>;
 }

@@ -11,6 +11,7 @@ import { formatFCFA, formatNum } from '../lib/format';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS } from './DocumentSettingsTab';
 import { type SalesRepresentative, repDisplayName } from '../lib/repCommission';
 import { type IpmDocuments as IpmDocsType } from '../lib/ipm';
+import './document-editor.css';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -179,18 +180,9 @@ function getWidthTier(w: number): WidthTier {
 
 // ─── Column width constants (strict grid) ────────────────────────
 
-const COL_MIN_WIDTHS: Record<string, number> = {
-  article: 100,
-  designation: 120,
-  qty: 60,
-  unit_price: 90,
-  discount: 80,
-  total: 90,
-};
-
-const COL_PREFERRED_WIDTHS: Record<string, number> = {
+const COL_WIDTHS: Record<DocColumn['key'], number> = {
   article: 140,
-  designation: 0,
+  designation: 120,
   qty: 72,
   unit_price: 110,
   discount: 90,
@@ -206,18 +198,13 @@ const COL_ALIGN: Record<string, string> = {
   total: 'text-right',
 };
 
-function colStyle(key: string): React.CSSProperties {
-  if (key === 'designation') return { flex: '1 1 0%', minWidth: COL_MIN_WIDTHS.designation };
-  return { width: COL_PREFERRED_WIDTHS[key], minWidth: COL_MIN_WIDTHS[key], flexShrink: 0 };
+function colStyle(key: DocColumn['key']): React.CSSProperties {
+  if (key === 'designation') return { flex: '1 1 0%', minWidth: COL_WIDTHS.designation };
+  return { width: COL_WIDTHS[key], flexShrink: 0 };
 }
 
 function colAlignCls(key: string) {
   return COL_ALIGN[key] || 'text-left';
-}
-
-function needsHScroll(containerW: number, colCount: number): boolean {
-  const minTotal = 32 + colCount * 90 + 32;
-  return containerW < minTotal;
 }
 
 // ─── Doc type labels ─────────────────────────────────────────────
@@ -288,8 +275,14 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const containerW = useContainerWidth(containerRef);
   const tier: WidthTier = getWidthTier(containerW);
-  const hScroll = needsHScroll(containerW, cols.length);
-  const minRowWidth = hScroll ? Math.max(580, cols.length * 90 + 64) : undefined;
+  // Include the line number, row actions, padding and the vertical scrollbar.
+  const lineWidth = cols.reduce((width, col) => width + COL_WIDTHS[col.key], canEdit ? 96 : 64);
+  const compactLines = containerW < lineWidth;
+  const lineCell = (col: DocColumn) => ({
+    'data-document-cell': col.key,
+    'data-document-label': col.label,
+    style: compactLines ? undefined : colStyle(col.key),
+  });
 
   // Lock body scroll — only when NOT embedded (another window may be open)
   useEffect(() => {
@@ -408,7 +401,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-colors text-[var(--w-text)]';
 
   return (
-    <div ref={containerRef} className={props.embedded ? 'flex flex-col h-full bg-[var(--w-bg)]' : 'fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in'}>
+    <div ref={containerRef} className={`flex min-w-0 flex-col bg-[var(--w-bg)] ${props.embedded ? 'h-full w-full' : 'fixed inset-0 z-[60] animate-fade-in'}`}>
 
       {/* ═══ Title bar ═══ */}
       <div className={`flex items-center justify-between px-4 border-b border-[var(--w-separator)] flex-shrink-0 ${clayPreview ? 'min-h-11 flex-wrap gap-1.5 bg-[var(--w-surface)] py-1.5' : tier === 'compact' ? 'flex-wrap gap-y-1 py-1.5' : 'h-11'}`}
@@ -511,7 +504,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
       {(isView || props.editLinesOnly) && headerForm.customer_id && (
         <div className="px-4 py-1.5 border-b border-[var(--w-separator-l)] bg-[var(--w-surface-el2)] flex-shrink-0">
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] [overflow-wrap:anywhere] [&>span]:min-w-0">
             {headerForm.customer_id && <span className="font-medium text-[var(--w-text)]">{customers.find((c: any) => c.id === headerForm.customer_id)?.name || ''}</span>}
             {headerForm.doc_date && <span className="text-[var(--w-text-muted)]">Date: {headerForm.doc_date}</span>}
             {headerForm.reference && <span className="text-[var(--w-text-muted)]">Ref: {headerForm.reference}</span>}
@@ -541,9 +534,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
         />
       )}
 
-      {/* ═══ Column headers ═══ */}
-      <div className="flex-shrink-0 border-b border-[var(--w-separator)] bg-[var(--w-hover)] overflow-x-auto de-hscroll">
-        <div className="flex items-center px-2 h-7" style={minRowWidth ? { minWidth: minRowWidth } : undefined}>
+      <div className="document-editor-lines min-h-0 min-w-0 flex-1" data-compact={compactLines}>
+        {/* ═══ Column headers ═══ */}
+        {!compactLines && <div className="shrink-0 border-b border-[var(--w-separator)] bg-[var(--w-hover)]">
+          <div className="flex h-7 items-center px-2">
           <div className="w-8 shrink-0" />
           {cols.map(col => (
             <div key={col.key} className={`px-2 text-[10px] font-bold text-[var(--w-text-sec)] uppercase tracking-wider ${colAlignCls(col.key)}`} style={colStyle(col.key)}>
@@ -551,20 +545,20 @@ export function DocumentEditor(props: DocumentEditorProps) {
             </div>
           ))}
           {canEdit && <div className="w-8 shrink-0" />}
-        </div>
-      </div>
+          </div>
+        </div>}
 
       {/* ═══ Input row (create/edit only) ═══ */}
       {canEdit && (
-        <div className={`flex-shrink-0 border-b-2 border-[var(--w-separator)] bg-[var(--w-hover)] overflow-x-auto de-hscroll ${itemsLocked ? 'pointer-events-none opacity-30' : ''}`}>
+        <div className={`shrink-0 border-b border-[var(--w-separator)] bg-[var(--w-hover)] ${itemsLocked ? 'pointer-events-none opacity-30' : ''}`}>
           {itemsLocked ? (
             <div className="flex items-center justify-center py-3 gap-2">
               <Lock className="w-4 h-4 text-[var(--w-text-disabled)]" />
               <span className="text-xs text-[var(--w-text-disabled)]">Validez l'en-tête</span>
             </div>
           ) : (
-            <div className="flex items-center px-2 py-1" style={minRowWidth ? { minWidth: minRowWidth } : undefined}>
-              <div className="w-8 shrink-0 text-center">
+            <div className="document-editor-line document-editor-line-input items-center px-2 py-1">
+              <div className="document-editor-line-marker w-8 shrink-0 text-center">
                 {editingIdx !== null ? (
                   <button onClick={cancelEdit} className="p-0.5 rounded hover:bg-[var(--w-active)] text-[var(--w-text-disabled)]" title="Annuler"><X className="w-3 h-3" /></button>
                 ) : (
@@ -572,10 +566,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 )}
               </div>
               {cols.map(col => {
-                const st = colStyle(col.key);
+                const cell = lineCell(col);
                 switch (col.key) {
                   case 'article': return (
-                    <div key="article" className="px-1" style={st}>
+                    <div key="article" className="px-1" {...cell}>
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--w-text-disabled)] pointer-events-none" />
                         <input
@@ -586,7 +580,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
                             if (inputRow.article_id) setInputRow(p => ({ ...p, article_id: null, name: '', unit_price: 0 }));
                           }}
                           onKeyDown={handleArticleKeyDown}
-                          placeholder="Ref / article..."
+                          aria-label={col.label}
+                          placeholder="Réf. / article…"
                           className={inputCls + ' pl-7'}
                           autoComplete="off"
                         />
@@ -594,60 +589,64 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     </div>
                   );
                   case 'designation': return (
-                    <div key="designation" className="px-1" style={st}>
+                    <div key="designation" className="px-1" {...cell}>
                       <input
                         value={inputRow.name}
                         onChange={e => setInputRow(p => ({ ...p, name: e.target.value }))}
                         onKeyDown={handleInputKey}
-                        placeholder="Designation"
+                        aria-label={col.label}
+                        placeholder="Désignation"
                         className={inputCls}
                         readOnly={!!inputRow.article_id}
                       />
                     </div>
                   );
                   case 'qty': return (
-                    <div key="qty" className="px-1" style={st}>
+                    <div key="qty" className="px-1" {...cell}>
                       <QtyInput
                         ref={inputQtyRef}
                         value={inputRow.quantity}
                         onValueChange={n => setInputRow(p => ({ ...p, quantity: n }))}
                         onKeyDown={handleInputKey}
+                        aria-label={col.label}
                         className={inputCls + ' text-center'}
                       />
                     </div>
                   );
                   case 'unit_price': return (
-                    <div key="unit_price" className="px-1" style={st}>
+                    <div key="unit_price" className="px-1" {...cell}>
                       <input
                         type="number"
                         value={inputRow.unit_price || ''}
                         onChange={e => setInputRow(p => ({ ...p, unit_price: Number(e.target.value) || 0 }))}
                         onKeyDown={handleInputKey}
+                        aria-label={col.label}
                         className={inputCls + ' text-right num'}
                       />
                     </div>
                   );
                   case 'discount': return (
-                    <div key="discount" className="px-1" style={st}>
+                    <div key="discount" className="px-1" {...cell}>
                       <input
                         type="number"
                         value={inputRow.discount || ''}
                         onChange={e => setInputRow(p => ({ ...p, discount: Number(e.target.value) || 0 }))}
                         onKeyDown={handleInputKey}
+                        aria-label={col.label}
                         className={inputCls + ' text-right num'}
                       />
                     </div>
                   );
                   case 'total': return (
-                    <div key="total" className="px-1 text-right" style={colStyle(col.key)}>
+                    <div key="total" className="px-1 text-right" {...cell}>
                       <span className="text-xs font-bold text-[var(--w-text)] num leading-7">{formatNum(calc(inputRow.quantity, inputRow.unit_price, inputRow.discount))}</span>
                     </div>
                   );
                   default: return null;
                 }
               })}
-              <div className="w-8 shrink-0 text-center">
-                <button onClick={commitRow} disabled={!inputRow.name.trim() || inputRow.unit_price <= 0} className="p-1 rounded bg-[var(--w-accent)] text-[var(--w-accent-text)] disabled:opacity-20 hover:bg-[var(--w-accent-hover)] transition-colors" title="Valider (Entree)"><Check className="w-3 h-3" /></button>
+              <div className="document-editor-line-actions w-8 shrink-0 text-center">
+                <button type="button" onClick={commitRow} disabled={!inputRow.name.trim() || inputRow.unit_price <= 0} className="inline-flex items-center gap-1 rounded bg-[var(--w-accent)] p-1 text-[var(--w-accent-text)] transition-colors hover:bg-[var(--w-accent-hover)] disabled:opacity-20" title="Valider la ligne (Entrée)"><Check aria-hidden="true" className="h-3 w-3" /><span className="document-editor-line-action-label">Valider la ligne</span></button>
               </div>
             </div>
           )}
@@ -655,7 +654,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       )}
 
       {/* ═══ Validated rows (scrollable) ═══ */}
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="document-editor-line-list min-h-0">
         {validItems.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-[var(--w-text-disabled)] text-xs select-none">
             {canEdit ? 'Saisissez un article et appuyez Entrée' : 'Aucun article'}
@@ -668,39 +667,38 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 <div
                   key={vIdx}
                   onClick={() => { if (canEdit && !isEditingThis) startEdit(vIdx); }}
-                  className={`flex items-center px-2 border-b border-[var(--w-separator-l)] transition-colors group ${
+                  className={`document-editor-line document-editor-line-saved items-center px-2 border-b border-[var(--w-separator-l)] transition-colors group ${
                     canEdit ? 'cursor-pointer' : ''
                   } ${isEditingThis ? 'bg-amber-50/50' : vIdx % 2 === 1 ? 'bg-[var(--w-hover)]' : ''} ${canEdit && !isEditingThis ? 'hover:bg-[var(--w-hover)]' : ''}`}
-                  style={{ height: 28, ...(minRowWidth ? { minWidth: minRowWidth } : {}) }}
                 >
-                  <div className="w-8 shrink-0 text-center">
+                  <div className="document-editor-line-marker w-8 shrink-0 text-center">
                     <span className="text-[10px] text-[var(--w-text-disabled)] group-hover:text-[var(--w-text-muted)] tabular-nums">{vIdx + 1}</span>
                   </div>
                   {cols.map(col => {
                     const base = `px-2 text-xs truncate ${colAlignCls(col.key)}`;
-                    const st = colStyle(col.key);
+                    const cell = lineCell(col);
                     switch (col.key) {
                       case 'article': return (
-                        <div key="article" className={`${base} text-[var(--w-text-muted)]`} style={st}>
+                        <div key="article" className={`${base} text-[var(--w-text-muted)]`} {...cell}>
                           {it.article_id ? (articles.find((a: any) => a.id === it.article_id)?.internal_ref || '—') : '—'}
                         </div>
                       );
                       case 'designation': return (
-                        <div key="designation" className={`${base} font-medium text-[var(--w-text)]`} style={st}>
+                        <div key="designation" className={`${base} font-medium text-[var(--w-text)]`} {...cell}>
                           {it.name}
                           {it.tier_name && <span className="text-[9px] text-[var(--w-text-disabled)] ml-1">{it.tier_name}</span>}
                         </div>
                       );
-                      case 'qty': return <div key="qty" className={`${base} text-[var(--w-text-sec)] num`} style={st}>{it.quantity}</div>;
-                      case 'unit_price': return <div key="unit_price" className={`${base} text-[var(--w-text-sec)] num`} style={st}>{formatNum(it.unit_price)}</div>;
-                      case 'discount': return <div key="discount" className={`${base} text-[var(--w-text-disabled)] num`} style={st}>{it.discount > 0 ? formatNum(it.discount) : '—'}</div>;
-                      case 'total': return <div key="total" className={`${base} font-semibold text-[var(--w-text)] num`} style={st}>{formatNum(it.total)}</div>;
+                      case 'qty': return <div key="qty" className={`${base} text-[var(--w-text-sec)] num`} {...cell}>{it.quantity}</div>;
+                      case 'unit_price': return <div key="unit_price" className={`${base} text-[var(--w-text-sec)] num`} {...cell}>{formatNum(it.unit_price)}</div>;
+                      case 'discount': return <div key="discount" className={`${base} text-[var(--w-text-disabled)] num`} {...cell}>{it.discount > 0 ? formatNum(it.discount) : '—'}</div>;
+                      case 'total': return <div key="total" className={`${base} font-semibold text-[var(--w-text)] num`} {...cell}>{formatNum(it.total)}</div>;
                       default: return null;
                     }
                   })}
                   {canEdit && (
-                    <div className="w-8 shrink-0 text-center">
-                      <button onClick={e => { e.stopPropagation(); removeItem(vIdx); }} className="p-0.5 rounded text-[var(--w-text-disabled)] hover:text-[var(--w-error)] hover:bg-[var(--w-hover)] opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3 h-3" /></button>
+                    <div className="document-editor-line-actions w-8 shrink-0 text-center">
+                      <button type="button" aria-label={`Retirer ${it.name}`} onClick={e => { e.stopPropagation(); removeItem(vIdx); }} className="inline-flex items-center gap-1 rounded p-0.5 text-[var(--w-text-disabled)] hover:bg-[var(--w-hover)] hover:text-[var(--w-error)] focus-visible:opacity-100"><Trash2 aria-hidden="true" className="h-3 w-3" /><span className="document-editor-line-action-label">Retirer</span></button>
                     </div>
                   )}
                 </div>
@@ -729,6 +727,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           />
         )}
       </div>
+      </div>
 
       {/* ═══ Footer ═══ */}
       <div className="border-t border-[var(--w-separator)] bg-[var(--w-surface)] px-4 py-2 flex flex-col gap-1 flex-shrink-0">
@@ -740,12 +739,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
             </div>
           );
         })()}
-        <div className={`flex items-center ${tier === 'compact' ? 'flex-col gap-1 items-stretch' : 'justify-between'}`}>
+        <div className={`flex min-w-0 flex-wrap items-center gap-y-1 ${tier === 'compact' ? 'flex-col items-stretch' : 'justify-between'}`}>
         <span className="text-[11px] text-[var(--w-text-muted)] tabular-nums">
           {validItems.length} ligne{validItems.length !== 1 ? 's' : ''}
           {(payments?.length || 0) > 0 && ` · ${payments!.length} règl.`}
         </span>
-        <div className={`flex items-center gap-0 divide-x divide-[var(--w-separator)] ${tier === 'compact' ? 'flex-wrap justify-end' : ''}`}>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-y-1 divide-x divide-[var(--w-separator)] [&>span]:whitespace-nowrap">
           {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-xs font-bold text-teal-600 num px-3 min-w-[80px] text-right">IPM {formatFCFA(ipmPartIpm)}</span>}
           {ipmBeneficiaire && ipmPartIpm > 0 && <span className={`text-xs font-bold text-[var(--w-text-sec)] num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>Client {formatFCFA(ipmPartClient)}</span>}
           {totalPaid > 0 && <span className={`text-xs font-bold text-emerald-600 num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>Payé {formatFCFA(totalPaid)}</span>}

@@ -100,7 +100,7 @@ export function MobileInvoiceDetail({
   const iconAction = 'clay-action inline-flex h-9 w-9 shrink-0 items-center justify-center';
 
   return (
-    <div className="fixed inset-0 z-[55] bg-white flex flex-col" {...clayTouchHandlers}>
+    <div className="fixed inset-0 z-[55] flex min-w-0 flex-col bg-white" {...clayTouchHandlers}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 border-b border-neutral-200 shrink-0">
         <button onClick={onClose} aria-label="Fermer" className={iconAction}><X className="w-5 h-5" /></button>
@@ -111,10 +111,10 @@ export function MobileInvoiceDetail({
       </div>
 
       {/* Invoice info */}
-      <div className="px-4 py-3 border-b border-neutral-100 space-y-1">
+      <div className="min-w-0 space-y-1 border-b border-neutral-100 px-4 py-3 [overflow-wrap:anywhere]">
         <div className="flex items-center gap-2 text-xs text-neutral-700">
-          <User className="w-3.5 h-3.5 text-neutral-400" />
-          <span className="font-medium">{customerName}</span>
+          <User className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+          <span className="min-w-0 font-medium">{customerName}</span>
         </div>
         <div className="flex items-center gap-4 text-xs text-neutral-500">
           <span className="flex items-center gap-1">
@@ -145,17 +145,17 @@ export function MobileInvoiceDetail({
       </div>
 
       {/* Items */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className="divide-y divide-neutral-100">
           {validItems.map((item, idx) => (
             <div key={idx} className="px-4 py-2.5">
-              <div className="text-sm font-medium text-neutral-800">{item.name}</div>
-              <div className="flex items-center justify-between mt-1">
+              <div className="text-sm font-medium text-neutral-800 [overflow-wrap:anywhere]">{item.name}</div>
+              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                 <span className="text-xs text-neutral-500">
                   {item.quantity} x {formatFCFA(item.unit_price)}
                   {item.discount > 0 && <span className="text-amber-600 font-medium ml-2">-{formatFCFA(item.discount)}</span>}
                 </span>
-                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(item.total)}</span>
+                <span className="num whitespace-nowrap text-sm font-bold text-neutral-900">{formatFCFA(item.total)}</span>
               </div>
             </div>
           ))}
@@ -211,9 +211,9 @@ export function MobileInvoiceDetail({
             <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-1.5">Paiements</div>
             <div className="space-y-1">
               {payments.map((p, i) => (
-                <div key={i} className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-600">{p.method_name}</span>
-                  <span className="text-neutral-900 font-semibold num">{formatFCFA(p.amount)}</span>
+                <div key={i} className="flex flex-wrap items-center justify-between gap-x-2 text-xs">
+                  <span className="min-w-0 text-neutral-600 [overflow-wrap:anywhere]">{p.method_name}</span>
+                  <span className="num whitespace-nowrap font-semibold text-neutral-900">{formatFCFA(p.amount)}</span>
                 </div>
               ))}
             </div>
@@ -223,7 +223,7 @@ export function MobileInvoiceDetail({
 
       {/* Footer actions */}
       <div className="border-t border-neutral-200 px-4 py-3 shrink-0 bg-white">
-        <div className="flex items-center justify-between mb-2">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2">
           {onComptabiliser && !isAccounted && !isCancelled && (
             <button onClick={onComptabiliser} disabled={accountingBusy} className="clay-action inline-flex min-h-9 items-center gap-1.5 px-2.5 text-sm font-semibold disabled:opacity-60" title="Comptabiliser">
               {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
@@ -232,7 +232,7 @@ export function MobileInvoiceDetail({
           )}
           {isAccounted && <span className="inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-neutral-700"><BookOpen className="w-4 h-4" />Comptabilisé</span>}
           {!isAccounted && !onComptabiliser && <span className="text-xs text-neutral-500">{validItems.length} article{validItems.length > 1 ? 's' : ''}</span>}
-          <span className="text-base font-extrabold text-neutral-900 num">{formatFCFA(invoice.total)}</span>
+          <span className="num whitespace-nowrap text-base font-extrabold text-neutral-900">{formatFCFA(invoice.total)}</span>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {onEdit && !isCancelled && !isAccounted && (

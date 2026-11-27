@@ -127,10 +127,20 @@ export function MobileBillingWizard({
       </div>
 
       {editLeaseBanner&&<div className="flex-shrink-0">{editLeaseBanner}</div>}
-      {editBlocked?<div className="flex-1 overflow-y-auto px-4 py-3"><p className="text-xs text-neutral-500 mb-3">Consultation uniquement. Vos lignes restent dans cette fenêtre.</p>{validItems.map((item,i)=><div key={i} className="py-2 border-b border-neutral-200 flex justify-between gap-2 text-sm"><span>{item.name} × {item.quantity}</span><strong className="whitespace-nowrap">{formatFCFA(item.total)}</strong></div>)}</div>:<>
+      {editBlocked ? (
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-3">
+          <p className="mb-3 text-xs text-neutral-500">Consultation uniquement. Vos lignes restent dans cette fenêtre.</p>
+          {validItems.map((item, i) => (
+            <div key={i} className="flex flex-wrap items-baseline justify-between gap-x-2 border-b border-neutral-200 py-2 text-sm">
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{item.name} × {item.quantity}</span>
+              <strong className="num whitespace-nowrap">{formatFCFA(item.total)}</strong>
+            </div>
+          ))}
+        </div>
+      ) : <>
       {banner && <div className="flex-shrink-0">{banner}</div>}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {step === 1 && (
           <Step1Header
             fields={headerFields}
@@ -226,7 +236,7 @@ export function MobileBillingWizard({
                   onClick={() => { onAddItem(a.id); setSearchOpen(false); }}
                   className="w-full flex items-start gap-2.5 text-left active:scale-[0.98] transition-all px-4 py-2.5 hover:bg-[var(--w-hover)]"
                 >
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                     <div className="text-[12px] font-semibold text-neutral-900 leading-snug">{a.name}</div>
                     {a.internal_ref && <div className="text-[10px] font-mono text-neutral-400 mt-0.5">{a.internal_ref}</div>}
                   </div>
@@ -354,13 +364,13 @@ function Step2Articles({ items, allItems, onEdit }: {
             onClick={() => onEdit(realIdx)}
             className="w-full text-left px-4 py-2.5 active:scale-[0.98] transition-all flex flex-col gap-1"
           >
-            <p className="text-[13px] font-semibold text-neutral-900 leading-snug w-full">{item.name}</p>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+            <p className="w-full text-[13px] font-semibold leading-snug text-neutral-900 [overflow-wrap:anywhere]">{item.name}</p>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+              <div className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-neutral-500">
                 <span>{item.quantity} x <span className="font-bold text-neutral-700 num">{formatFCFA(item.unit_price)}</span></span>
                 {item.discount > 0 && <span className="text-amber-600 font-medium">-{formatFCFA(item.discount)}</span>}
               </div>
-              <span className="text-[12px] font-black text-neutral-900 num">{formatFCFA(item.total)}</span>
+              <span className="num whitespace-nowrap text-[12px] font-black text-neutral-900">{formatFCFA(item.total)}</span>
             </div>
           </button>
         );
@@ -427,7 +437,7 @@ function EditArticlePanel({ item, idx, onUpdate, onRemove, onClose }: {
       <div className="bg-white rounded-t-2xl shadow-2xl animate-sheet-up pb-safe flex flex-col">
         <div className="px-4 pt-3 pb-2">
           <div className="flex items-start justify-between mb-2">
-            <p className="text-[13px] font-bold text-neutral-900 leading-snug line-clamp-2 flex-1 pr-2">{item.name}</p>
+            <p className="min-w-0 flex-1 pr-2 text-[13px] font-bold leading-snug text-neutral-900 [overflow-wrap:anywhere]">{item.name}</p>
             <div className="flex items-center gap-1 flex-shrink-0">
               <button onClick={onRemove} className="p-1.5 rounded-lg text-red-500 hover:bg-[var(--w-hover)] active:scale-90 transition-all">
                 <Trash2 className="w-4 h-4" />

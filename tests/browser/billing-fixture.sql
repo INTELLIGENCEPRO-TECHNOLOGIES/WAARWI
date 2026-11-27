@@ -9,18 +9,24 @@ DECLARE
  beneficiary uuid:=gen_random_uuid(); register_id uuid:=gen_random_uuid(); session_id uuid:=gen_random_uuid();
  method uuid:=gen_random_uuid(); sale uuid; result jsonb;
  token text:=replace(gen_random_uuid()::text,'-','');
+ article_name text:='Article recette navigateur ' || repeat('DésignationDeCatalogueSansEspaces', 4);
 BEGIN
  INSERT INTO public.tenants(id,name,enabled_modules,settings,approval_status)
- VALUES(t,'RECETTE NAVIGATEUR IPM','["dashboard","billing","articles","stock","sales","pos","ipm"]','{"stock_method":"none"}','approved');
+ VALUES(t,'RECETTE NAVIGATEUR IPM','["dashboard","billing","articles","stock","sales","pos","ipm","accounting"]','{"stock_method":"none"}','approved');
  PERFORM waarwi_recipe.provision_enterprise(t);
  INSERT INTO public.profiles(id,tenant_id,role,site_access_mode,full_name,is_active)
  VALUES(actor,t,'admin','all','Recette navigateur',true)
  ON CONFLICT(id) DO UPDATE SET tenant_id=excluded.tenant_id,role=excluded.role,site_access_mode=excluded.site_access_mode,is_active=true;
  UPDATE public.tenants SET owner_user_id=actor WHERE id=t;
+ INSERT INTO public.accounts(tenant_id,code,name,class)
+ VALUES(t,'6310000','Frais bancaires de recette',6),(t,'5210000','Banque de recette',5)
+ ON CONFLICT(tenant_id,code) DO NOTHING;
+ INSERT INTO public.document_settings(tenant_id,doc_type,allow_edit)
+ VALUES(t,'invoice',true) ON CONFLICT(tenant_id,doc_type) DO UPDATE SET allow_edit=excluded.allow_edit;
  INSERT INTO public.sites(id,tenant_id,name,is_active,allow_negative_stock) VALUES(site,t,'Pharmacie de recette',true,false);
  INSERT INTO public.customers(id,tenant_id,name) VALUES(patient,t,'Patient recette navigateur');
  INSERT INTO public.articles(id,tenant_id,internal_ref,name,sale_price,purchase_price,track_stock,ipm_eligible)
- VALUES(article,t,'NAV-001','Article recette navigateur',2500,500,true,true);
+ VALUES(article,t,'NAV-001',article_name,2500,500,true,true);
  INSERT INTO public.stock_levels(tenant_id,article_id,site_id,quantity) VALUES(t,article,site,10);
  INSERT INTO public.ipm_organismes(id,tenant_id,nom) VALUES(org,t,'Organisme recette navigateur');
  INSERT INTO public.ipm_conventions(id,tenant_id,organisme_id,nom,taux_defaut,mode_calcul,mode_arrondi)
@@ -41,7 +47,7 @@ BEGIN
  result:=public.create_direct_invoice_atomic(t,
    jsonb_build_object('site_id',site,'customer_id',patient,'cash_session_id',session_id,'total',2500,
      'ipm',jsonb_build_object('beneficiaire_id',beneficiary,'expected_part_ipm',1600)),
-   jsonb_build_array(jsonb_build_object('article_id',article,'name','Article recette navigateur','quantity',1,'unit_price',2500,'discount',0)),
+   jsonb_build_array(jsonb_build_object('article_id',article,'name',article_name,'quantity',1,'unit_price',2500,'discount',0)),
    jsonb_build_array(jsonb_build_object('payment_method_id',method,'amount',400)),site,'{}',gen_random_uuid());
  EXECUTE 'RESET ROLE';
  sale:=(result->>'sale_id')::uuid;

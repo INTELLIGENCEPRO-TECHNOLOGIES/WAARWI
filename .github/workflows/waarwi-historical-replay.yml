@@ -1,7 +1,7 @@
 name: Recette historique SQL locale (aucun déploiement)
 on:
   push:
-    branches: [main, codex/waarwi-comptabilite-suite, codex/waarwi-migration-alignment, codex/waarwi-harmonisation]
+    branches: [main, codex/waarwi-comptabilite-suite, codex/waarwi-migration-alignment, codex/waarwi-harmonisation, codex/waarwi-accounting-refonte]
     paths:
       - '.github/workflows/waarwi-historical-replay.yml'
       - 'scripts/pending-accounting/production-migration-versions.json'
@@ -320,6 +320,7 @@ jobs:
           assert seen==targets, (seen,targets)
           pathlib.Path('/tmp/waarwi-local-recipe-files.txt').write_text('\n'.join(paths)+'\n')
           PY
+          printf '%s\n' 'scripts/pending-accounting/accounting-entry-template-rules-recipe.sql' >> /tmp/waarwi-local-recipe-files.txt
           total=$(wc -l </tmp/waarwi-local-recipe-files.txt)
           count=0
           failed=0

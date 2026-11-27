@@ -7,7 +7,7 @@ type Leaf={route:Route;label:string;icon:typeof BookOpen};
 type Group={label:string;items:(Leaf|{label:string;children:Leaf[]})[]};
 const groups:Group[]=[
  {label:'Fichier',items:[{route:'acc_overview',label:'Accueil comptable',icon:LayoutDashboard}]},
- {label:'Structure',items:[{route:'acc_plan',label:'Plan comptable',icon:BookOpen},{route:'acc_journal_settings',label:'Codes journaux',icon:FileText}]},
+ {label:'Structure',items:[{route:'acc_plan',label:'Plan comptable',icon:BookOpen},{route:'acc_journal_settings',label:'Codes journaux',icon:FileText},{route:'acc_templates',label:'Modèles de saisie',icon:FileText}]},
  {label:'Traitement',items:[
   {label:'Écritures',children:[{route:'acc_entry',label:'Saisie des écritures',icon:Plus},{route:'acc_journals',label:'Journaux comptables',icon:FileText}]},
   {label:'Consultation',children:[{route:'acc_search',label:'Recherche des écritures',icon:Search},{route:'acc_statement',label:'Interrogation et lettrage',icon:Search}]},
@@ -23,7 +23,8 @@ const groups:Group[]=[
   {route:'acc_tiers',label:'Balance des tiers',icon:Users},{route:'acc_aging',label:'Balance âgée et échéances',icon:FileText},
   {route:'acc_vat',label:'Situation de TVA',icon:FileText},
   {route:'acc_financial',label:'États financiers',icon:FileText}
- ]}
+ ]},
+ {label:'Aide',items:[{route:'acc_guide',label:'Guide de la comptabilité',icon:BookOpen}]}
 ];
 const leaves=groups.flatMap(g=>g.items.flatMap(i=>'children' in i?i.children:[i]));
 export function AccountingNavigation({route,onNavigate,canAccess}:{route:Route;onNavigate:(r:Route)=>void;canAccess:(r:Route)=>boolean}){

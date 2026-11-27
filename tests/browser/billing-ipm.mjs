@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAccountingTemplates } from './accounting-templates.mjs';
 
 const api = new URL(process.env.VITE_SUPABASE_URL);
 const app = new URL('http://127.0.0.1:4173');
@@ -43,7 +44,7 @@ async function browserPage(browser, viewport) {
   return context.newPage();
 }
 
-async function openInvoice(page) {
+async function signIn(page) {
   await page.goto(app.href);
   await page.locator('input[type=email]').fill(email);
   await page.locator('input[type=password]').fill(password);
@@ -54,6 +55,10 @@ async function openInvoice(page) {
   } catch (failure) {
     if (failure.name !== 'TimeoutError' || await dismissRelease.isVisible()) throw failure;
   }
+}
+
+async function openInvoice(page) {
+  await signIn(page);
   let nav = page.getByRole('button', { name: 'Facturation', exact: true }).filter({ visible: true }).first();
   try {
     await nav.waitFor({ state: 'visible', timeout: 6500 });
@@ -103,6 +108,30 @@ try {
   await visible(lease.getByText('Accès libéré', { exact: true }), 'Libération du verrou');
   console.log('Facturation mobile : verrou compact, aucune modification du document');
 
+  const journal = await browserPage(browser, { width: 320, height: 760 });
+  await signIn(journal);
+  await journal.getByRole('button', { name: 'Menu', exact: true }).filter({ visible: true }).first().click();
+  const salesNav = journal.getByRole('button', { name: 'Journal des ventes', exact: true }).filter({ visible: true }).first();
+  if (!await salesNav.isVisible()) {
+    await journal.getByRole('button', { name: 'Caisse', exact: true, expanded: false }).filter({ visible: true }).first().click();
+  }
+  await visible(salesNav, 'Navigation Journal des ventes');
+  await salesNav.click();
+  const saleRow = journal.getByText(fixture.number, { exact: true }).filter({ visible: true }).first();
+  await visible(saleRow, 'Vente dans le journal');
+  await saleRow.click();
+  await journal.getByTitle('Modifier', { exact: true }).filter({ visible: true }).first().click();
+  const journalEditor = journal.getByRole('dialog', { name: `Modifier la vente ${fixture.number}`, exact: true });
+  await visible(journalEditor.getByRole('spinbutton', { name: /^Quantité · / }), 'Article chargé sous verrou dans le journal');
+  const dimensions = await journalEditor.locator('.waarwi-window-body').evaluate(body => ({
+    client: body.clientWidth, content: body.scrollWidth, document: document.documentElement.scrollWidth,
+  }));
+  assert.equal(dimensions.client, 320);
+  assert.ok(dimensions.content <= dimensions.client + 1, `Défilement horizontal dans le journal : ${JSON.stringify(dimensions)}`);
+  assert.equal(dimensions.document, 320);
+  await journalEditor.getByRole('button', { name: 'Libérer', exact: true }).click();
+  await visible(journalEditor.getByText('Accès libéré', { exact: true }), 'Libération du verrou dans le journal');
+  console.log('Journal des ventes sur écran de 320 px : éditeur sans défilement horizontal');
 
   const publicPage = await browserPage(browser, { width: 390, height: 844 });
   await publicPage.goto(new URL(`/inv/${fixture.token}`, app).href);
@@ -112,6 +141,8 @@ try {
   assert.equal(queryError, null);
   assert.deepEqual(invoice, { total: 2500, paid: 900, ipm_patient_total: 900, status: 'paid' });
   console.log('Lien public : ventilation et statut cohérents après encaissement');
+
+  await verifyAccountingTemplates(desktop);
 } finally {
   await browser.close();
 }

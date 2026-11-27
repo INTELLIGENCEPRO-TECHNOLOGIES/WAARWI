@@ -694,7 +694,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                     <tr key={s.id} data-row-id={s.id} className={`w-tr-hover border-b border-[var(--w-separator-l)] transition-colors cursor-pointer ${highlightId === s.id ? 'waarwi-flash' : ''}`} onClick={() => openDetail(s)}>
                       <td className="px-4 py-1.5 doc-number text-[12px] font-bold text-neutral-700 whitespace-nowrap">{s.sale_number}</td>
                       <td className="px-4 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{formatDateTime(s.created_at)}</td>
-                      <td className="px-4 py-1.5 text-[12px] text-neutral-700 break-words">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
+                      <td className="px-4 py-1.5 text-[12px] text-neutral-700 [overflow-wrap:anywhere]">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
                       <td className="px-4 py-1.5 text-center">
                         <span className={`text-xs font-medium whitespace-nowrap ${st.textColor}`}>{st.label}</span>
                       </td>
@@ -850,9 +850,9 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
       {/* ── Desktop: Full-screen DocumentEditor (view + edit mode) ─── */}
       {open && isDesktop && selected && (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
-          {editing && <div className="shrink-0 px-3 pt-2">{editBanner}</div>}
-          <div className="min-h-0 flex-1">
+        <div data-sales-invoice className="fixed inset-0 z-[60] flex min-w-0 flex-col bg-[var(--w-bg)] animate-fade-in" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
+          {editing && <div className="min-w-0 shrink-0 px-3 pt-2">{editBanner}</div>}
+          <div className="min-h-0 min-w-0 flex-1">
             <DocumentEditor
               key={editing ? `${selected.id}-${lockedSale?.version ?? 'pending'}` : selected.id}
               embedded
@@ -899,68 +899,67 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       )}
 
       {/* ── Mobile Edit Panel (shown when editing on mobile) ────────── */}
-      <DocPanel open={open && editing && !isDesktop} onClose={stopEdit} title={selected ? `Vente ${selected.sale_number}` : ''}
+      <DocPanel open={open && editing && !isDesktop} fullscreenMobile onClose={stopEdit} title={selected ? `Modifier la vente ${selected.sale_number}` : ''}
         footer={<>
-          <button onClick={stopEdit} disabled={savingEdit} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveEdit} disabled={!editReady || savingEdit} className="btn-icon-primary" title="Enregistrer">
-            {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          <button type="button" onClick={stopEdit} disabled={savingEdit} className="btn-secondary text-xs">Annuler</button>
+          <button type="button" onClick={saveEdit} disabled={!editReady || savingEdit} className="btn-primary text-xs">
+            {savingEdit && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />} Enregistrer
           </button>
         </>}
       >
-        {selected && (() => {
-          return (
-            <div className="space-y-3" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
+        {selected && (
+            <div className="min-w-0 space-y-3" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
               {editBanner}
-              <fieldset disabled={!editReady || savingEdit} className="space-y-3">
+              <fieldset disabled={!editReady || savingEdit} className="min-w-0 space-y-3">
                 <DocSectionTitle title="Modifier les articles" count={editItems.length} />
                 <div className="space-y-2">
                   {editItems.map((item, idx) => (
-                    <div key={idx} className="space-y-2 border-b border-[var(--w-separator-l)] py-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-neutral-800 truncate flex-1">{item.name}</span>
-                        <button onClick={() => removeEditItem(idx)} className="p-1 rounded-lg hover:bg-red-50 text-red-500" title="Retirer">
-                          <Trash2 className="w-3.5 h-3.5" />
+                    <div key={idx} className="min-w-0 space-y-2 border-b border-[var(--w-separator-l)] py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 flex-1 text-xs font-semibold text-[var(--w-text)] [overflow-wrap:anywhere]">{item.name}</span>
+                        <button type="button" onClick={() => removeEditItem(idx)} className="btn-icon-danger shrink-0" aria-label={`Retirer ${item.name}`}>
+                          <Trash2 aria-hidden="true" className="h-4 w-4" />
                         </button>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="text-[9px] font-bold text-neutral-400 uppercase">Quantité</label>
+                        <label className="min-w-0 text-xs font-medium text-[var(--w-text-sec)]">
+                          Quantité
                           <input type="number" min="0" step="any" value={item.quantity}
                             onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
-                            aria-label={`Quantité · ${item.name}`} className="w-input-ul w-full py-1.5 text-center text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            aria-label={`Quantité · ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-neutral-400 uppercase">Prix unit.</label>
+                        </label>
+                        <label className="min-w-0 text-xs font-medium text-[var(--w-text-sec)]">
+                          Prix unitaire
                           <input type="number" min="0" value={item.unit_price}
                             onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
-                            className="w-input-ul w-full py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            aria-label={`Prix unitaire · ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-neutral-400 uppercase">Remise</label>
+                        </label>
+                        <label className="min-w-0 text-xs font-medium text-[var(--w-text-sec)]">
+                          Remise
                           <input type="number" min="0" value={item.discount}
                             onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
-                            className="w-input-ul w-full py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            aria-label={`Remise · ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
-                        </div>
+                        </label>
                       </div>
-                      <div className="text-right text-[11px] font-bold text-neutral-700">
-                        Sous-total : {formatFCFA(item.quantity * item.unit_price - (item.discount || 0))}
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-xs text-[var(--w-text-sec)]">
+                        <span>Total de la ligne</span>
+                        <strong className="num whitespace-nowrap text-[var(--w-text)]">{formatFCFA(item.quantity * item.unit_price - (item.discount || 0))}</strong>
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--w-separator)] py-3">
-                  <span className="text-xs text-neutral-500">Nouveau total : </span>
-                  <span className="text-sm font-bold text-neutral-900">
+                  <span className="text-xs text-[var(--w-text-sec)]">Nouveau total</span>
+                  <span className="num whitespace-nowrap text-sm font-bold text-[var(--w-text)]">
                     {formatFCFA(editItems.reduce((s, i) => s + (i.quantity * i.unit_price - (i.discount || 0)), 0))}
                   </span>
                 </div>
               </fieldset>
             </div>
-          );
-        })()}
+        )}
       </DocPanel>
 
       {/* Delete confirmation */}

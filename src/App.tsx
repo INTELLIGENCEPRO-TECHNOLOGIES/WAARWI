@@ -211,7 +211,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
   coffre: 'vault',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_analytics: 'accounting', acc_assets: 'accounting', acc_revision: 'accounting', acc_aging: 'accounting', acc_journal_settings: 'accounting', acc_overview: 'accounting', acc_entry: 'accounting', acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting', acc_financial: 'accounting',
+  acc_analytics: 'accounting', acc_assets: 'accounting', acc_revision: 'accounting', acc_aging: 'accounting', acc_journal_settings: 'accounting', acc_overview: 'accounting', acc_entry: 'accounting', acc_templates: 'accounting', acc_guide: 'accounting', acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting', acc_vat: 'accounting', acc_statement: 'accounting', acc_bank: 'accounting', acc_fiscal: 'accounting', acc_financial: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer', settings: 'settings', reports: 'reports',
   representatives: 'billing',
 };
@@ -237,6 +237,8 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
   acc_journal_settings: 'view_accounting',
   acc_overview: 'view_accounting',
   acc_entry: 'manage_accounting',
+  acc_templates: 'view_accounting',
+  acc_guide: 'view_accounting',
   acc_plan: 'view_accounting',
   acc_journals: 'view_accounting',
   acc_balance: 'view_accounting',

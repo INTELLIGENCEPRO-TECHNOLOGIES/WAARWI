@@ -132,7 +132,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   const blob=new Blob(['\uFEFF'+rows.map(r=>r.map(csv).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='Compte-'+request.code+'-'+request.from+'-'+request.to+'-page-'+(request.offset/50+1)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  };
- return <section className="space-y-4 min-w-0">
+ return <section className="acc-fill space-y-4 min-w-0">
   <div className="space-y-2">
    <div className="acc-toolbar"><button type="button" className="btn-secondary" aria-expanded={chooseAccount} onClick={()=>setChooseAccount(v=>!v)}><Search size={16}/>Choisir un compte</button><span className="text-xs text-neutral-500">{code||'Aucun compte sélectionné'}</span></div>
    {chooseAccount&&<div className="space-y-2">
@@ -153,7 +153,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
   </div>
   {busy&&<p role="status" className="text-sm text-neutral-500 py-6 text-center">Chargement du compte…</p>}
   {error&&<p role="alert" className="text-sm text-red-700 break-words">{error}</p>}
-  {result&&request&&<div className="space-y-4">
+  {result&&request&&<div className="acc-fill space-y-4">
    <div className="flex flex-wrap justify-between gap-2 items-center"><div><h2 className="text-sm font-semibold break-words">{result.account.code} · {result.account.name}</h2><p className="text-xs text-neutral-500">{formatDate(request.from)} au {formatDate(request.to)} · Écritures validées</p></div><button className="btn btn-secondary" onClick={download}>Exporter cette page (CSV)</button></div>
    <div className="acc-summary">{[['Solde initial',balance(result.opening_balance)],['Débit période',money(result.total_debit)],['Crédit période',money(result.total_credit)],['Solde final',balance(result.closing_balance)]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
    <p className="text-xs text-neutral-500">D : débiteur · C : créditeur. {result.opening_mode==='fiscal'?'Solde d’ouverture arrêté de l’exercice, puis mouvements validés.':result.opening_mode==='provisional'?'Ouverture provisoire depuis le dernier arrêté disponible, exercice précédent non clôturé.':'Historique continu des écritures validées, sans arrêté précédent.'}</p>
@@ -180,7 +180,7 @@ export function AccountingAccountStatement({tenantId,onView,initialAccount='',ca
     {writeError&&<p role="alert" className="text-xs text-red-700 break-words">{writeError}</p>}
     {notice&&<p role="status" className="text-xs text-neutral-700">{notice}</p>}
    </div>}
-   <AccountingTable><table><thead><tr>{canMatch&&<th className="text-left"><span className="sr-only">Sélection</span></th>}<th className="text-left">Pièce / libellé</th><th className="text-right">Débit</th><th className="text-right">Crédit</th><th className="text-right hidden sm:table-cell">Solde</th><th className="text-center">Lettrage</th></tr></thead><tbody>
+   <AccountingTable fill><table><thead><tr>{canMatch&&<th className="text-left"><span className="sr-only">Sélection</span></th>}<th className="text-left">Pièce / libellé</th><th className="text-right">Débit</th><th className="text-right">Crédit</th><th className="text-right hidden sm:table-cell">Solde</th><th className="text-center">Lettrage</th></tr></thead><tbody>
     {!result.rows.length&&<tr><td colSpan={canMatch?6:5} className="text-center text-neutral-500">Aucun mouvement dans cette période.</td></tr>}
     {result.rows.map(r=><tr key={r.line_id}>{canMatch&&<td>{!r.match_group_id&&<input type="checkbox" aria-label={'Sélectionner '+r.entry_number} checked={!!chosen[r.line_id]} disabled={saving||changed||(!chosen[r.line_id]&&selected.length>=100)} onChange={()=>toggle(r)}/>}</td>}
      <td><button type="button" className="font-medium underline-offset-2 hover:underline text-left break-words" onClick={()=>onView(r)}>{r.entry_number}</button><span className="block text-[11px] text-neutral-500">{formatDate(r.entry_date)} · {r.journal_type}</span><span className="block text-[11px] break-words">{r.label||r.description}</span><span className="block sm:hidden text-[11px] text-neutral-500">Solde : {balance(r.running_balance)}</span></td>

@@ -52,6 +52,8 @@
     "accountingAnalytics":"Analytics and budgets",
     "accountingOverview": "Accounting overview",
     "accountingEntry": "Journal entry",
+    "accountingTemplates": "Journal entry templates",
+    "accountingGuide": "Accounting guide",
     "vatReport": "VAT statement",
     "accountStatement": "Account inquiry",
     "bankReconciliation": "Bank reconciliation",

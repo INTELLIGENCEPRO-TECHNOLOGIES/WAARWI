@@ -1,0 +1,16 @@
+.acc-guide {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+.acc-guide-frame {
+  flex: 1;
+  width: 100%;
+  min-height: min(56dvh, 520px);
+  border: 1px solid var(--w-separator);
+  border-radius: 4px;
+  background: var(--w-surface);
+}

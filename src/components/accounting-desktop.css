@@ -3,11 +3,17 @@
 .acc-desktop-area{position:relative;isolation:isolate;flex:1;min-height:0;min-width:0;overflow:hidden;background:var(--w-bg)}
 .acc-desktop-home{position:absolute;inset:0;overflow:auto;padding:10px 18px 16px}
 .acc-desktop-area .acc-work-window{max-width:100%;max-height:100%}
-.acc-desktop-area .acc-work-window .acc-window-content{height:100%;min-width:0;min-height:0;overflow:auto;padding:0 12px 12px}
+.acc-desktop-area .acc-work-window .acc-window-content {
+  container: acc-window / size;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 12px 8px;
+}
 .acc-window-content .accounting-workspace{--acc-head:0px;min-width:0}
 .acc-window-content .accounting-workspace .acc-body{padding-top:4px}
-.acc-window-content .accounting-workspace .acc-table-scroll{max-height:58vh}
-.acc-window-content .accounting-workspace .acc-entry-page{min-height:0}
 .acc-desktop-taskbar{display:flex;align-items:center;gap:4px;flex-shrink:0;min-height:35px;padding:2px 6px;border-top:1px solid var(--w-separator);background:var(--w-surface-el);color:var(--w-text)}
 .acc-desktop-taskbar button{background:transparent;border:0;display:flex;align-items:center;gap:6px;padding:5px 7px;font-size:12px;min-height:29px;color:inherit}
 .acc-desktop-taskbar button:focus-visible{outline:2px solid var(--w-text);outline-offset:-2px}
@@ -26,7 +32,7 @@
  .acc-desktop-area .acc-work-window[data-active=false]{display:none!important}
  .acc-desktop-area .acc-work-window>div:first-child{cursor:default}
  .acc-desktop-area .acc-work-window>div:first-child button[title="Agrandir"],.acc-desktop-area .acc-work-window>div:first-child button[title="Restaurer"],.acc-desktop-area .acc-work-window>div:first-child button[aria-label="Restaurer la taille"],.acc-desktop .acc-tile-control,.acc-desktop-area .acc-work-window>[class*="cursor-"][class*="absolute"]{display:none!important}
- .acc-desktop-area .acc-work-window .acc-window-content{padding:0 9px 12px}
+ .acc-desktop-area .acc-work-window .acc-window-content{padding:0 9px 8px}
  .acc-desktop-home{padding:4px 9px 12px}
  .acc-desktop-taskbar .acc-task-action span{display:none}
  .acc-desktop-tasks .acc-task{max-width:175px}
@@ -39,12 +45,58 @@
  .acc-desktop-area .acc-work-window[data-active=true]>div,.acc-desktop-area .acc-work-window .acc-window-content{height:auto!important;overflow:visible!important}
 }
 
-/* The actual window, not the monitor, determines the available work area. */
-.acc-desktop-area .acc-work-window .acc-window-content{container:acc-window / size;overscroll-behavior:contain;scrollbar-gutter:stable}
+/* Le tableau principal suit la taille de sa fenêtre, y compris en mosaïque. */
+.acc-window-content > .accounting-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.acc-window-content .accounting-workspace > .acc-body,
+.acc-window-content .accounting-workspace .acc-fill {
+  display: flex;
+  flex: 1 0 0px;
+  flex-direction: column;
+  min-width: 0;
+}
+.acc-window-content .accounting-workspace .acc-fill > :not(.acc-fill, .acc-table-fill) {
+  flex-shrink: 0;
+}
+.acc-window-content .accounting-workspace .acc-table-scroll,
+.acc-window-content .accounting-workspace .acc-form-scroll {
+  max-height: max(9rem, 100cqh);
+}
+.acc-window-content .accounting-workspace .acc-table-fill {
+  display: flex;
+  flex: 1 0 0px;
+  flex-direction: column;
+  min-height: 7.5rem;
+}
+/* Les lignes défilent dans le tableau sans agrandir les commandes. */
+.acc-window-content .accounting-workspace .acc-table-fill > .acc-table-scroll {
+  contain: size;
+  flex: 1 1 0px;
+  min-height: 0;
+  max-height: none;
+}
+.acc-window-content .accounting-workspace .acc-table-fill > .acc-pagination {
+  flex-shrink: 0;
+}
+.acc-window-content .accounting-workspace .acc-fill > :is(.acc-third-party-panels, .acc-financial-panels) {
+  flex: 1 0 0px;
+  grid-auto-rows: minmax(10rem, 1fr);
+  min-height: 0;
+}
+.acc-window-content .accounting-workspace .acc-third-party-panels > .acc-third-party-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.acc-window-content .accounting-workspace .acc-entry-page {
+  flex: 1 0 auto;
+  min-height: 0;
+}
 .acc-desktop-area .acc-work-window>div:first-child{touch-action:none}
 .acc-desktop-area .acc-work-window>[class*="cursor-"][class*="absolute"]{touch-action:none}
-.acc-window-content .accounting-workspace .acc-table-scroll{max-height:clamp(90px,55cqh,58vh)}
-.acc-window-content .accounting-workspace .acc-form-scroll{max-height:clamp(100px,55cqh,58vh)}
 @container acc-window (max-width:660px){
  .acc-window-content .accounting-workspace .acc-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .acc-window-content .accounting-workspace .acc-months{grid-template-columns:repeat(3,minmax(0,1fr));gap:0 8px}
@@ -65,6 +117,15 @@
  .acc-desktop-taskbar button{min-height:40px}
 }
 @media print{
- .acc-desktop-area .acc-work-window .acc-window-content{container-type:normal;scrollbar-gutter:auto}
- .acc-window-content .accounting-workspace .acc-table-scroll,.acc-window-content .accounting-workspace .acc-form-scroll{max-height:none;overflow:visible}
+ .acc-desktop-area .acc-work-window .acc-window-content{container-type:normal}
+ .acc-window-content > .accounting-workspace,
+ .acc-window-content .accounting-workspace > .acc-body,
+ .acc-window-content .accounting-workspace .acc-fill,
+ .acc-window-content .accounting-workspace .acc-table-fill {
+   display: block;
+   height: auto;
+   min-height: 0;
+ }
+ .acc-window-content .accounting-workspace .acc-table-scroll,
+ .acc-window-content .accounting-workspace .acc-form-scroll{contain:none;max-height:none;overflow:visible}
 }

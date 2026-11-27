@@ -1,0 +1,355 @@
+.acc-bank-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  gap: 8px;
+}
+
+.acc-bank-phases, .acc-bank-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.acc-bank-phases {
+  flex: none;
+  border-bottom: 1px solid var(--w-separator);
+  padding: 1px 0 0;
+}
+
+.acc-bank-phases button, .acc-bank-switch button {
+  background: transparent;
+  border: 0;
+  color: var(--w-text-sec);
+  min-height: 34px;
+  padding: 5px 10px;
+  font-size: .82rem;
+  font-weight: 600;
+}
+
+.acc-bank-help {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  padding: 4px 5px;
+  color: var(--w-text-sec);
+  font-size: .73rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.acc-bank-help:hover { color: var(--w-text); }
+
+.acc-bank-phases button {
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.acc-bank-phases button[aria-current="step"] {
+  color: var(--w-text);
+  border-bottom-color: currentColor;
+}
+
+.acc-bank-switch {
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid var(--w-separator);
+  border-radius: 5px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.acc-bank-switch button {
+  min-height: 30px;
+  border-radius: 3px;
+  padding: 4px 9px;
+}
+
+.acc-bank-switch button[aria-pressed="true"] {
+  color: var(--w-text);
+  background: var(--w-active);
+  box-shadow: inset 0 0 0 1px var(--w-separator);
+}
+
+.acc-bank-phases button:disabled, .acc-bank-switch button:disabled, .acc-bank-link:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.acc-bank-phases button:hover:not(:disabled), .acc-bank-switch button:hover:not(:disabled) {
+  color: var(--w-text);
+  background: var(--w-hover);
+}
+
+.acc-bank-phases button:focus-visible, .acc-bank-switch button:focus-visible, .acc-bank-link:focus-visible {
+  outline: 2px solid var(--w-text);
+  outline-offset: -2px;
+}
+
+.acc-bank-screen, .acc-bank-table-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  gap: 8px;
+}
+
+.acc-bank-toolbar, .acc-bank-footer, .acc-bank-context, .acc-bank-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.acc-bank-toolbar, .acc-bank-footer {
+  flex: none;
+  justify-content: space-between;
+}
+
+.acc-bank-toolbar h2, .acc-bank-toolbar h3, .acc-bank-context h2, .acc-bank-fieldset h3, .acc-bank-review h3 {
+  font-size: .9rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.acc-bank-context {
+  flex: none;
+  padding: 1px 0 7px;
+  border-bottom: 1px solid var(--w-separator);
+}
+
+.acc-bank-context > div:first-child { flex: 1 1 130px; min-width: 0; }
+.acc-bank-context .acc-bank-status { flex: none; }
+
+.acc-bank-account, .acc-bank-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+.acc-bank-account { flex: 1 1 210px; max-width: 32rem; }
+.acc-bank-field .input, .acc-bank-account .input { width: 100%; max-width: 100%; min-width: 0; }
+.acc-bank-field input[type="date"] { padding-inline: 5px; }
+
+.acc-bank-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--w-text-sec);
+  font-size: .74rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.acc-bank-status::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.acc-bank-status[data-status="final"]::before { background: currentColor; }
+.acc-bank-status[data-status="cancelled"] { color: var(--w-text-muted); }
+
+.acc-bank-message {
+  padding: 5px 8px;
+  border-left: 2px solid var(--w-separator);
+  color: var(--w-text-sec);
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+}
+
+.acc-bank-message[data-tone="error"] { border-color: var(--w-danger, #b91c1c); color: var(--w-danger, #b91c1c); }
+.acc-bank-message[data-tone="warning"] { border-color: var(--w-warning, #a35a10); }
+.acc-bank-message strong { margin-right: .35em; }
+
+.acc-bank-footer {
+  border-top: 1px solid var(--w-separator);
+  padding: 6px 0 0;
+  color: var(--w-text);
+}
+
+.acc-bank-footer p {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: .8rem;
+}
+
+.acc-bank-footer p strong, .acc-bank-balances dd, .acc-bank-checks dd, .acc-bank-amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.acc-bank-workspace .acc-table-scroll td.acc-bank-amount { overflow-wrap: normal; }
+
+.acc-bank-form-body, .acc-bank-review {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
+}
+
+.acc-bank-fieldset {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+}
+
+.acc-bank-fieldset + .acc-bank-fieldset {
+  border-top: 1px solid var(--w-separator);
+  margin-top: 12px;
+  padding-top: 9px;
+}
+
+.acc-bank-form-grid, .acc-bank-draft-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 7px;
+  min-width: 0;
+}
+
+.acc-bank-draft-row {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.8fr) minmax(0, 1fr) auto;
+  border-bottom: 1px solid var(--w-separator);
+  padding-bottom: 7px;
+}
+
+.acc-bank-fieldset > button { justify-self: start; }
+.acc-bank-form-body .acc-bank-import .acc-toolbar label { min-width: 0; }
+.acc-bank-form-body .acc-bank-import .input { max-width: 100%; }
+
+.acc-bank-hint {
+  color: var(--w-text-sec);
+  font-size: .76rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.acc-bank-guidance { min-width: 0; }
+.acc-bank-guidance h3 { margin-bottom: 2px; }
+
+.acc-bank-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(9rem, 1fr);
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 9rem;
+  gap: 14px;
+}
+
+.acc-bank-workspace .acc-table-fill {
+  min-height: 68px;
+}
+
+.acc-bank-workspace .acc-table-fill .acc-table-scroll {
+  min-height: 36px;
+}
+
+.acc-bank-table-panel .acc-bank-toolbar { min-height: 35px; }
+.acc-bank-table-panel .acc-bank-toolbar .input { min-height: 30px; max-width: 100%; }
+.acc-bank-choice { width: 31px; }
+.acc-bank-table-panel input[type="radio"], .acc-bank-workspace input[type="checkbox"] { accent-color: var(--w-text); }
+
+.acc-bank-selection {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  gap: 2px;
+  font-size: .75rem;
+  color: var(--w-text-sec);
+}
+
+.acc-bank-selection strong { color: var(--w-text); font-weight: 650; }
+
+.acc-bank-link {
+  background: transparent;
+  border: 0;
+  color: var(--w-text-sec);
+  font-size: .75rem;
+  font-weight: 600;
+  padding: 4px 5px;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.acc-bank-link:hover:not(:disabled) { color: var(--w-text); }
+
+.acc-bank-inline {
+  display: block;
+  text-align: left;
+  padding-left: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.acc-bank-mobile-switch { display: none; }
+
+.acc-bank-review dl { margin: 5px 0 13px; }
+.acc-bank-review dl div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  border-bottom: 1px solid var(--w-separator);
+  padding: 7px 0;
+  font-size: .83rem;
+}
+.acc-bank-review dl dt { min-width: 0; overflow-wrap: anywhere; }
+.acc-bank-review dl dd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--w-text);
+  font-weight: 600;
+}
+.acc-bank-checks div[data-ok="false"] dd { color: var(--w-danger, #b91c1c); }
+.acc-bank-review .acc-bank-message { margin-top: 7px; }
+
+@container acc-window (max-width: 730px) {
+  .acc-bank-pair { grid-template-columns: minmax(0, 1fr); }
+  .acc-bank-mobile-switch { display: flex; }
+  .acc-bank-workspace .acc-bank-pair .acc-bank-table-panel[data-mobile-visible="false"] { display: none; }
+  .acc-bank-form-grid, .acc-bank-draft-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container acc-window (max-width: 390px) {
+  .acc-bank-toolbar { gap: 4px; }
+  .acc-bank-phases button, .acc-bank-switch button { padding-inline: 7px; }
+  .acc-bank-table-panel .acc-bank-toolbar .input { width: auto; }
+  .acc-bank-footer { gap: 4px; }
+  .acc-bank-footer > .acc-bank-actions { flex: 1 1 100%; }
+  .acc-bank-draft-row { padding-bottom: 9px; }
+}
+
+@supports not (container-type: size) {
+  @media (max-width: 760px) {
+    .acc-bank-pair { grid-template-columns: minmax(0, 1fr); }
+    .acc-bank-mobile-switch { display: flex; }
+    .acc-bank-workspace .acc-bank-pair .acc-bank-table-panel[data-mobile-visible="false"] { display: none; }
+    .acc-bank-form-grid, .acc-bank-draft-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+}
+
+@media print {
+  .acc-bank-workspace .acc-bank-phases, .acc-bank-workspace .acc-bank-footer, .acc-bank-mobile-switch { display: none !important; }
+  .acc-bank-form-body, .acc-bank-review { overflow: visible; }
+}

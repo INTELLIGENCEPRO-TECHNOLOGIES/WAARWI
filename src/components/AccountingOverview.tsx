@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {useAccountingWork} from '../context/AccountingWindowContext';
 import {supabase} from '../lib/supabase';
 import {formatDate} from '../lib/format';
-import {ArrowRight,Plus,BookOpen,Scale,Search,FileText,Lock,RefreshCw} from './Icons';
+import {ArrowRight,ArrowRightLeft,Plus,BookOpen,Scale,Search,FileText,Lock,RefreshCw} from './Icons';
 type Entry={id:string;entry_number:string;entry_date:string;journal_type:string;description:string;total_debit:number;status:string};
 type Data={total:number;posted:number;draft:number;recent:Entry[]};
 export function AccountingOverview({tenantId,canManage,onNavigate}:{tenantId:string;canManage:boolean;onNavigate:(route:string)=>void}){
@@ -14,9 +14,9 @@ export function AccountingOverview({tenantId,canManage,onNavigate}:{tenantId:str
  const err=all.error??posted.error??draft.error??recent.error;if(err)throw err;
  if(active)setData({total:all.count??0,posted:posted.count??0,draft:draft.count??0,recent:(recent.data??[]) as Entry[]});
  }catch(e){if(active)setError(e&&typeof e==='object'&&'message' in e?String(e.message):'Impossible de charger la situation.');}})();return()=>{active=false;};},[tenantId,revision,work?.revision]);
- const shortcuts=[{route:'acc_journals',label:'Journaux',icon:BookOpen},{route:'acc_balance',label:'Balance générale',icon:Scale},{route:'acc_statement',label:'Interrogation des comptes',icon:Search},{route:'acc_financial',label:'États financiers',icon:FileText},{route:'acc_cloture',label:'Clôtures',icon:Lock}];
+ const shortcuts=[{route:'acc_journals',label:'Journaux',icon:BookOpen},{route:'acc_templates',label:'Modèles de saisie',icon:FileText},{route:'acc_bank',label:'Rapprochement bancaire',icon:ArrowRightLeft},{route:'acc_balance',label:'Balance générale',icon:Scale},{route:'acc_statement',label:'Interrogation des comptes',icon:Search},{route:'acc_financial',label:'États financiers',icon:FileText},{route:'acc_cloture',label:'Clôtures',icon:Lock}];
  return <section className="space-y-3">
- <div className="acc-toolbar"><span className="text-xs text-neutral-500">Situation comptable · tous exercices</span><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>setRevision(n=>n+1)}><RefreshCw size={16}/>Actualiser</button>{canManage&&<button type="button" className="btn-primary" onClick={()=>onNavigate('acc_entry')}><Plus size={16}/>Nouvelle écriture</button>}</div>
+ <div className="acc-toolbar"><span className="text-xs text-neutral-500">Situation comptable · tous exercices</span><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>setRevision(n=>n+1)}><RefreshCw size={16}/>Actualiser</button><button type="button" className="btn-secondary" onClick={()=>onNavigate('acc_guide')}><BookOpen size={16}/>Guide de la comptabilité</button>{canManage&&<button type="button" className="btn-primary" onClick={()=>onNavigate('acc_entry')}><Plus size={16}/>Nouvelle écriture</button>}</div>
  {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
  <div className="acc-summary">{[['Écritures',data?.total],['Validées',data?.posted],['Brouillons',data?.draft]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value===undefined?'—':Number(value).toLocaleString('fr-FR')}</strong></div>)}</div>
  <div className="acc-overview-links"><h2 className="text-sm font-semibold">Accès directs</h2>{shortcuts.map(({route,label,icon:Icon})=><button key={route} type="button" onClick={()=>onNavigate(route)}><Icon size={17}/><span>{label}</span><ArrowRight size={15}/></button>)}</div>

@@ -131,6 +131,9 @@
 .accounting-workspace .acc-search-from,.accounting-workspace .acc-search-to,.accounting-workspace .acc-search-min,.accounting-workspace .acc-search-max{grid-column:span 2}
 .accounting-workspace .acc-search-field input[type=number]{appearance:textfield;text-align:right}
 .accounting-workspace .acc-search-field input[type=number]::-webkit-inner-spin-button,.accounting-workspace .acc-search-field input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.accounting-workspace .acc-search-extra { min-width: 0; border-top: 1px solid var(--w-separator-l); }
+.accounting-workspace .acc-search-extra summary { width: fit-content; padding: 5px 0; font-size: 12px; font-weight: 550; cursor: pointer; }
+.accounting-workspace .acc-search-extra summary:focus-visible { outline: 2px solid var(--w-text); outline-offset: 3px; }
 .accounting-workspace .acc-search-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:7px 0}
 .accounting-workspace .acc-search-actions .acc-spacer{flex:1}
 .accounting-workspace .acc-search-result-label{padding:8px 0;font-size:11px;color:var(--w-text-sec)}
@@ -151,7 +154,7 @@
 @container (max-width: 480px){
  .accounting-workspace .acc-search-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
  .accounting-workspace .acc-search-field{grid-column:span 1}
- .accounting-workspace .acc-search-description{grid-column:1/-1}
+ .accounting-workspace .acc-search-description{grid-column:span 1}
  .accounting-workspace .acc-search-field input[type=date]{max-width:100%}
  .accounting-workspace .acc-search-actions .btn-primary,.accounting-workspace .acc-search-actions .btn-secondary{padding:5px 7px;font-size:11px}
  .accounting-workspace .acc-search-workspace table td,.accounting-workspace .acc-search-workspace table th{padding:6px 4px;font-size:11px}
