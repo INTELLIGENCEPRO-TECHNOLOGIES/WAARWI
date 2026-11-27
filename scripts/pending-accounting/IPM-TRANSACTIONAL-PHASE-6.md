@@ -1,0 +1,5 @@
+# Phase 6 — préparation exacte des retours IPM
+
+153/154 : diagnostic existant conservé pour les ventes historiques, plan exact sur les ventilations serveur d'origine, contrôle des quantités cumulées et des preuves des retours antérieurs. Nouveau registre privé de ventilations par ligne de retour, inclus au registre de sauvegarde et protégé contre une archive ancienne sans preuve. Le scénario 154 utilise des lignes de retour fictives pour vérifier les cumuls et ne simule pas un remboursement opérationnel.
+
+Aucune mutation financière ou stock par le diagnostic. Le moteur d'exécution n'est pas encore raccordé : il doit conserver le TTC du retour tout en limitant l'avoir au patient, traiter les règlements et acomptes, les retours avec ou sans restitution physique, le bordereau brouillon et les documents émis/règlements/rejets. Le blocage des retours IPM ordinaires reste en vigueur sur le candidat. Les nouvelles preuves doivent être écrites atomiquement avec le retour. La restauration effective de ce nouveau registre et la concurrence restent à tester. Aucune publication.
