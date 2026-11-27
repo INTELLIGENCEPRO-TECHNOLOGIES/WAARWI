@@ -33,6 +33,13 @@ export const backupStatusLabels: Record<string, string> = {
   abandoned: 'Interrompue',
 };
 
+export const backupCopyStatusLabels: Record<string, string> = {
+  pending: 'En attente',
+  in_progress: 'En cours',
+  confirmed: 'Vérifiée',
+  failed: 'En échec',
+};
+
 export async function requestBackupV3(label: string, companyId?: string) {
   const { error } = await supabase.rpc('br_v3_backup_request', {
     p_request_id: crypto.randomUUID(),
