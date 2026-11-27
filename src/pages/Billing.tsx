@@ -1821,7 +1821,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   // ── Returns ──────────────────────────────────────────────────
   const returnTotal = returnLines.filter(i => i.selected).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
 
-  const prepareVatReturn = async (saleId: string, siteId: string, lines: (ReturnLotLine & { item_id: string })[],
+  const prepareInvoiceReturn = async (saleId: string, siteId: string, lines: (ReturnLotLine & { item_id: string })[],
     reason: string, restock: boolean, issueCredit: boolean, showError: (message: string) => void = error) => {
     if(lines.some(line=>!returnLotAllocation(line,restock).valid)){showError('Vérifiez les quantités retournées par lot.');return null;}
     const items = lines.map(line => ({ sale_item_id: line.item_id, quantity: line.quantity, lots:returnLotAllocation(line,restock).lots }));
@@ -1850,7 +1850,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     setSaving(true);
 
     const { data: sale } = await supabase.from('sales')
-      .select('id, customer_id, sale_number, site_id, vat_net_amount, customers(name, phone, address)')
+      .select('id, customer_id, sale_number, site_id, customers(name, phone, address)')
       .eq('id', returnForm.sale_id).maybeSingle();
     if (!sale) { setReturnError('Facture introuvable.'); setSaving(false); return; }
     if (returnMode === 'avoir' && !sale.customer_id) {
@@ -1859,114 +1859,24 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       return;
     }
 
-    if (sale.vat_net_amount != null) {
-      const ret = await prepareVatReturn(sale.id, sale.site_id, sel, returnForm.reason, returnForm.restock, returnMode === 'avoir', setReturnError);
-      setSaving(false);
-      if (!ret) return;
-      setReturnOpen(false);
-      setReturnForm({ sale_id: '', reason: '', restock: true });
-      setReturnLines([]);
-      if (mobileInvoiceOpen && mobileEditingInvoiceId === sale.id && returnMode === 'avoir') void reloadInvoice(sale.id);
-      else void loadTab(billPage, true);
-      await openReturnDetail({ ...ret, customers: Array.isArray(sale.customers) ? sale.customers[0] ?? null : sale.customers, sales: { sale_number: sale.sale_number } });
-      success(ret.status === 'approved' ? 'Avoir fiscal émis.' : 'Retour enregistré. Choisissez le mode de remboursement.');
-      return;
-    }
-
-    // Check if sale has IPM coverage
-    const { data: ipmVente, error: ipmCheckError } = await supabase.from('ipm_ventes')
-      .select('id, part_ipm, part_client, montant_total, bordereau_id, statut')
-      .eq('sale_id', returnForm.sale_id)
-      .limit(1)
-      .maybeSingle();
-    if (ipmCheckError) { setReturnError(ipmCheckError.message); setSaving(false); return; }
-    if (!ipmVente) {
-      const ret=await prepareVatReturn(sale.id,sale.site_id,sel,returnForm.reason,returnForm.restock,returnMode==='avoir',setReturnError);
-      setSaving(false);
-      if (!ret) return;
-      setReturnOpen(false);setReturnForm({sale_id:'',reason:'',restock:true});setReturnLines([]);
-      if (mobileInvoiceOpen && mobileEditingInvoiceId===sale.id && returnMode==='avoir') void reloadInvoice(sale.id);
-      else void loadTab(billPage,true);
-      await openReturnDetail({...ret,customers:Array.isArray(sale.customers)?sale.customers[0]??null:sale.customers,sales:{sale_number:sale.sale_number}});
-      success(ret.refund_method==='avoir'?'Avoir créé.':'Retour enregistré. Choisissez le mode de remboursement.');
-      return;
-    }
-    // IPM : parcours historique conservé jusqu'à validation du traitement atomique spécifique.
-
-
-    // For IPM sales, refund only client portion
-    let refundTotal = returnTotal;
-    if (ipmVente && ipmVente.montant_total > 0) {
-      const ipmRatio = Number(ipmVente.part_client) / Number(ipmVente.montant_total);
-      refundTotal = Math.round(returnTotal * ipmRatio);
-    }
-
-    const { data: numData } = await supabase.rpc('next_doc_number', {
-      p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET',
-    });
-    const rNum = (numData as string) || ('RET-' + Date.now());
-    const { data: ret, error: e } = await supabase.from('sale_returns').insert({
-      tenant_id: tenant.id, site_id: currentSite.id,
-      sale_id: returnForm.sale_id, customer_id: sale.customer_id || null,
-      return_number: rNum, total: refundTotal,
-      refund_method: 'pending', reason: returnForm.reason,
-      restock: returnForm.restock, status: 'pending',
-    }).select().single();
-    if (e || !ret) { setReturnError(e?.message || 'Le document n’a pas été enregistré.'); setSaving(false); return; }
-    await supabase.from('sale_return_items').insert(sel.map(i => ({
-      tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, sale_item_id: i.item_id, name: i.name,
-      quantity: i.quantity, unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, total: i.quantity * i.unit_price,
-    })));
-    if (returnForm.restock) {
-      for (const item of sel) {
-        await supabase.rpc('adjust_stock', {
-          p_article_id: item.article_id, p_site_id: billSourceSiteId || currentSite.id,
-          p_quantity: item.quantity, p_movement_type: 'return_customer',
-          p_note: `Retour ${rNum}`,
-        });
-      }
-    }
-
-    // IPM bordereau handling
-    if (ipmVente) {
-      const saleTotal = Number(ipmVente.montant_total);
-      const isFullReturn = returnTotal >= saleTotal;
-      if (isFullReturn) {
-        // Full return: remove from bordereau and cancel the ipm_vente
-        await supabase.from('ipm_ventes').update({
-          statut: 'annulee',
-          bordereau_id: null,
-        }).eq('id', ipmVente.id);
-      } else {
-        // Partial return: recalculate IPM amounts
-        const newTotal = saleTotal - returnTotal;
-        const oldRatio = Number(ipmVente.part_ipm) / saleTotal;
-        const newPartIpm = Math.round(newTotal * oldRatio);
-        const newPartClient = newTotal - newPartIpm;
-        await supabase.from('ipm_ventes').update({
-          montant_total: newTotal,
-          part_ipm: newPartIpm,
-          part_client: newPartClient,
-          bordereau_id: null, // Remove from existing bordereau, needs regeneration
-        }).eq('id', ipmVente.id);
-      }
-    }
-
+    const ret = await prepareInvoiceReturn(
+      sale.id, sale.site_id, sel, returnForm.reason, returnForm.restock, returnMode === 'avoir', setReturnError,
+    );
     setSaving(false);
+    if (!ret) return;
     setReturnOpen(false);
     setReturnForm({ sale_id: '', reason: '', restock: true });
     setReturnLines([]);
-    await loadTab(billPage, true);
-    if (returnMode === 'avoir') {
-      const { error: avErr } = await supabase.rpc('approve_return_as_avoir', { p_return_id: ret.id });
-      if (!avErr) success('Avoir créé.');
-      await openReturnDetail({ ...ret, customers: Array.isArray(sale.customers) ? sale.customers[0] ?? null : sale.customers, sales: { sale_number: sale.sale_number } });
-      if (avErr) setReturnDetailError(avErr.message);
-      void loadTab(billPage, true);
-      return;
-    }
-    success('Retour enregistré. Choisissez le mode de remboursement.');
-    void openReturnDetail({ ...ret, customers: Array.isArray(sale.customers) ? sale.customers[0] ?? null : sale.customers, sales: { sale_number: sale.sale_number } });
+    if (mobileInvoiceOpen && mobileEditingInvoiceId === sale.id && returnMode === 'avoir') void reloadInvoice(sale.id);
+    else void loadTab(billPage, true);
+    await openReturnDetail({
+      ...ret,
+      customers: Array.isArray(sale.customers) ? sale.customers[0] ?? null : sale.customers,
+      sales: { sale_number: sale.sale_number },
+    });
+    success(ret.refund_method === 'avoir'
+      ? (ret.vat_net_amount != null ? 'Avoir fiscal émis.' : 'Avoir créé.')
+      : ret.status === 'approved' ? 'Retour enregistré.' : 'Retour enregistré. Choisissez le mode de remboursement.');
   };
 
   const refreshReturnStatus = async (id: string) => {
@@ -2725,84 +2635,20 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               if (sel.length === 0) { error('Sélectionnez au moins un article'); return; }
               setSaving(true);
               const { data: sourceInvoice } = await supabase.from('sales')
-                .select('id, sale_number, site_id, vat_net_amount, customers(name, phone, address)')
+                .select('id, sale_number, site_id, customers(name, phone, address)')
                 .eq('id', saleId).maybeSingle();
               if (!sourceInvoice) { error('Facture introuvable'); setSaving(false); return; }
-              if (sourceInvoice.vat_net_amount != null) {
-                const ret = await prepareVatReturn(saleId, sourceInvoice.site_id, sel, config.reason, config.restock, false);
-                setSaving(false);
-                if (!ret) return;
-                closeInvoiceWindow(desc.windowId);
-                await loadTab(billPage, true);
-                await openReturnDetail({ ...ret, customers: Array.isArray(sourceInvoice.customers) ? sourceInvoice.customers[0] ?? null : sourceInvoice.customers, sales: { sale_number: sourceInvoice.sale_number } });
-                success('Retour enregistré. Choisissez le mode de remboursement.');
-                return;
-              }
-              const localReturnTotal = sel.reduce((s: number, i: any) => s + Number(i.quantity) * Number(i.unit_price), 0);
-              const { data: ipmVente, error: ipmCheckError } = await supabase.from('ipm_ventes')
-                .select('id, part_ipm, part_client, montant_total, bordereau_id, statut')
-                .eq('sale_id', saleId).limit(1).maybeSingle();
-              if(ipmCheckError){error(ipmCheckError.message);setSaving(false);return;}
-              if(!ipmVente){
-                const ret=await prepareVatReturn(saleId,sourceInvoice.site_id,sel,config.reason,config.restock,false);
-                setSaving(false);
-                if(!ret)return;
-                closeInvoiceWindow(desc.windowId);
-                await loadTab(billPage,true);
-                await openReturnDetail({...ret,customers:Array.isArray(sourceInvoice.customers)?sourceInvoice.customers[0]??null:sourceInvoice.customers,sales:{sale_number:sourceInvoice.sale_number}});
-                success('Retour enregistré. Choisissez le mode de remboursement.');
-                return;
-              }
-              // IPM : parcours historique conservé jusqu'à validation du traitement atomique spécifique.
-
-              let refundTotal = localReturnTotal;
-              if (ipmVente && ipmVente.montant_total > 0) {
-                const ipmRatio = Number(ipmVente.part_client) / Number(ipmVente.montant_total);
-                refundTotal = Math.round(localReturnTotal * ipmRatio);
-              }
-              const { data: numData } = await supabase.rpc('next_doc_number', { p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET' });
-              const rNum = (numData as string) || ('RET-' + Date.now());
-              const { data: sale } = await supabase.from('sales').select('id, customer_id, sale_number, customers(name, phone, address)').eq('id', saleId).maybeSingle();
-              if (!sale) { error('Facture introuvable'); setSaving(false); return; }
-              const { data: ret, error: e } = await supabase.from('sale_returns').insert({
-                tenant_id: tenant.id, site_id: currentSite.id,
-                sale_id: saleId, customer_id: sale.customer_id || null,
-                return_number: rNum, total: refundTotal,
-                refund_method: 'pending', reason: config.reason,
-                restock: config.restock, status: 'pending',
-              }).select().single();
-              if (e || !ret) { error(e?.message || 'Erreur'); setSaving(false); return; }
-              await supabase.from('sale_return_items').insert(sel.map((i: any) => ({
-                tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, sale_item_id: i.item_id, name: i.name,
-                quantity: i.quantity, unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, total: i.quantity * i.unit_price,
-              })));
-              if (config.restock) {
-                for (const item of sel) {
-                  await supabase.rpc('adjust_stock', {
-                    p_article_id: item.article_id, p_site_id: billSourceSiteId || currentSite.id,
-                    p_quantity: item.quantity, p_movement_type: 'return_customer',
-                    p_note: `Retour ${rNum}`,
-                  });
-                }
-              }
-              if (ipmVente) {
-                const saleTotal = Number(ipmVente.montant_total);
-                if (localReturnTotal >= saleTotal) {
-                  await supabase.from('ipm_ventes').update({ statut: 'annulee', bordereau_id: null }).eq('id', ipmVente.id);
-                } else {
-                  const newTotal = saleTotal - localReturnTotal;
-                  const oldRatio = Number(ipmVente.part_ipm) / saleTotal;
-                  await supabase.from('ipm_ventes').update({
-                    montant_total: newTotal, part_ipm: Math.round(newTotal * oldRatio),
-                    part_client: newTotal - Math.round(newTotal * oldRatio), bordereau_id: null,
-                  }).eq('id', ipmVente.id);
-                }
-              }
+              const ret = await prepareInvoiceReturn(saleId, sourceInvoice.site_id, sel, config.reason, config.restock, false);
               setSaving(false);
-              success('Retour enregistré — choisissez le mode de remboursement');
+              if (!ret) return;
               closeInvoiceWindow(desc.windowId);
               await loadTab(billPage, true);
-              openReturnDetail({ ...ret, customers: sale?.customers || null, sales: { sale_number: sale.sale_number } } as SaleReturn);
+              await openReturnDetail({
+                ...ret,
+                customers: Array.isArray(sourceInvoice.customers) ? sourceInvoice.customers[0] ?? null : sourceInvoice.customers,
+                sales: { sale_number: sourceInvoice.sale_number },
+              });
+              success(ret.status === 'approved' ? 'Retour enregistré.' : 'Retour enregistré. Choisissez le mode de remboursement.');
             }}
             onSearchOpen={() => setInvoiceSearchOpen(true)}
             onVehiclePicker={(idx) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
