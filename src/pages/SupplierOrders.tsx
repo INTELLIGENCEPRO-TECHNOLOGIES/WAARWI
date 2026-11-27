@@ -1113,7 +1113,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
                     <div className="flex items-baseline justify-end gap-2 mt-0.5 text-[11px] flex-wrap">
                       <span className={`font-semibold ${payColor}`}>{payLabel}</span>
                       {o.status !== 'cancelled' && (
-                        <span className="text-neutral-500 num whitespace-nowrap">Payé {formatFCFA(o.paid)} · Reste <span className="font-semibold text-neutral-900">{formatFCFA(remaining)}</span></span>
+                        <span className="text-neutral-500 num whitespace-nowrap">Payé {formatFCFA(o.paid)} │ Reste <span className="font-semibold text-neutral-900">{formatFCFA(remaining)}</span></span>
                       )}
                     </div>
                   </div>

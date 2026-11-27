@@ -28,10 +28,10 @@ function PriorReturnMatch({item,onDone}:{item:PriorReturn;onDone:()=>void}){
   finally{setSaving(false);}
  };
  return <div className="min-w-0 rounded border border-neutral-200 p-3 space-y-2">
-  <div className="text-xs font-semibold break-words">{item.return_number} · {item.name} · {item.quantity}</div>
-  <p className="text-xs text-neutral-600">{item.restock?'Ancien retour physique':'Ancien retour sans remise en stock'} · {new Date(item.created_at).toLocaleDateString('fr-FR')}</p>
+  <div className="text-xs font-semibold break-words">{item.return_number} │ {item.name} │ {item.quantity}</div>
+  <p className="text-xs text-neutral-600">{item.restock?'Ancien retour physique':'Ancien retour sans remise en stock'} │ {new Date(item.created_at).toLocaleDateString('fr-FR')}</p>
   {!item.source_complete?<p className="text-xs text-amber-800">Rapprochez d'abord les sorties d'origine de la vente. Si aucune preuve n'existe, ne choisissez pas de lot arbitrairement.</p>:<fieldset disabled={saving} className="space-y-2 min-w-0">
-   {item.lots.map(l=><label key={l.lot_id} className="flex items-center gap-2 min-w-0 text-xs"><span className="min-w-0 flex-1 break-words">{l.batch_number||'Lot sans numéro'} · {l.site_name} · Disponible : {l.available}</span><input type="number" inputMode="decimal" min={0} max={l.available} step="any" aria-label={'Quantité ancien retour lot '+l.batch_number} className="min-h-10 w-20 shrink-0 border-b border-neutral-300 bg-transparent text-right tabular-nums" value={values[l.lot_id]||''} onChange={e=>setValues(v=>({...v,[l.lot_id]:e.target.value}))}/></label>)}
+   {item.lots.map(l=><label key={l.lot_id} className="flex items-center gap-2 min-w-0 text-xs"><span className="min-w-0 flex-1 break-words">{l.batch_number||'Lot sans numéro'} │ {l.site_name} │ Disponible : {l.available}</span><input type="number" inputMode="decimal" min={0} max={l.available} step="any" aria-label={'Quantité ancien retour lot '+l.batch_number} className="min-h-10 w-20 shrink-0 border-b border-neutral-300 bg-transparent text-right tabular-nums" value={values[l.lot_id]||''} onChange={e=>setValues(v=>({...v,[l.lot_id]:e.target.value}))}/></label>)}
    <p className="text-xs tabular-nums">Affecté : {total} / {item.quantity}</p>
    <label className="block text-xs">Référence du justificatif<textarea className="mt-1 w-full rounded border border-neutral-300 p-2 text-sm" rows={2} maxLength={1000} value={evidence} onChange={e=>setEvidence(e.target.value)}/></label>
    <label className="flex gap-2 items-start text-xs"><input type="checkbox" className="mt-0.5 shrink-0" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>{item.restock?'Je confirme les quantités et les mouvements physiques déjà vérifiés. Aucun stock ni remboursement supplémentaire ne sera créé.':'Je confirme les affectations selon les justificatifs. Aucun remboursement supplémentaire ne sera créé.'}</span></label>
@@ -103,9 +103,9 @@ export function HistoricalLotMatchPanel({saleId,articleId,onDone,onCancel}:{
       {data.prior_returns&&!already&&<p className="text-xs text-amber-800">Des retours antérieurs existent. Rapprochez d'abord les sorties de la vente, puis les anciens retours approuvés. Les retours en attente doivent être traités avant le rapprochement.</p>}
       {!data.deductions.length&&<p className="text-xs text-neutral-600">Aucune sortie de lot sans lien n'a été retrouvée. N'inventez pas de lot.</p>}
       {data.deductions.map(d=><div key={d.deduction_id} className="min-w-0 border-t border-neutral-200 pt-2 space-y-2">
-        <div className="text-xs font-semibold break-words">{d.batch_number||'Lot sans numéro'} · {d.site_name} · {d.quantity} à affecter</div>
+        <div className="text-xs font-semibold break-words">{d.batch_number||'Lot sans numéro'} │ {d.site_name} │ {d.quantity} à affecter</div>
         {data.lines.map((l,index)=><label key={l.sale_item_id} className="flex items-center gap-2 text-xs min-w-0">
-          <span className="min-w-0 flex-1 break-words">Ligne {index+1} · {l.name} ({l.quantity})</span>
+          <span className="min-w-0 flex-1 break-words">Ligne {index+1} │ {l.name} ({l.quantity})</span>
           <input type="number" inputMode="decimal" min={0} max={d.quantity} step="any" disabled={!!l.site_id&&l.site_id!==d.site_id} aria-label={'Quantité lot '+d.batch_number+' ligne '+(index+1)} className="w-20 shrink-0 min-h-10 border-b border-neutral-300 bg-transparent text-right tabular-nums" value={values[key(d.deduction_id,l.sale_item_id)]||''} onChange={e=>setValues(v=>({...v,[key(d.deduction_id,l.sale_item_id)]:e.target.value}))}/>
         </label>)}
         <p className="text-xs text-neutral-600 tabular-nums">Affecté : {data.lines.reduce((sum,l)=>sum+qty(d.deduction_id,l.sale_item_id),0)} / {d.quantity}</p>

@@ -49,9 +49,9 @@ export function ReturnRecoveryPanel({enabled,onActiveChange,onResolved}:Props){
     <p className="font-semibold">Retour à reprendre</p>
     {failure&&<p role="alert" className="text-xs mt-1 text-red-700">{failure}</p>}
     {active?.access_revoked?<p className="text-xs mt-1">L’accès au magasin a changé. Une demande non exécutée peut être annulée.</p>:active&&<div className="mt-1 text-xs space-y-1">
-      <p className="font-medium break-words">{active.sale_number||'Vente d’origine'} · {active.site_name||'Magasin d’origine'}</p>
-      <p>{active.payload?.mode==='cash'?'Espèces':active.payload?.mode==='avoir'?'Avoir':'Traitement différé'} · {active.payload?.restock?'Avec remise en stock':'Sans remise en stock'}</p>
-      {active.state==='succeeded'?<p className="font-medium">Enregistré : {active.result?.return_number||'Retour confirmé'}{active.result?.total!=null?' · '+formatFCFA(Number(active.result.total)):''}. Aucun nouveau retour ne sera créé.</p>:<p>La demande originale est conservée sur le serveur. Reprenez-la à l’identique ou annulez-la avant de créer un nouveau retour.</p>}
+      <p className="font-medium break-words">{active.sale_number||'Vente d’origine'} │ {active.site_name||'Magasin d’origine'}</p>
+      <p>{active.payload?.mode==='cash'?'Espèces':active.payload?.mode==='avoir'?'Avoir':'Traitement différé'} │ {active.payload?.restock?'Avec remise en stock':'Sans remise en stock'}</p>
+      {active.state==='succeeded'?<p className="font-medium">Enregistré : {active.result?.return_number||'Retour confirmé'}{active.result?.total!=null?' │ '+formatFCFA(Number(active.result.total)):''}. Aucun nouveau retour ne sera créé.</p>:<p>La demande originale est conservée sur le serveur. Reprenez-la à l’identique ou annulez-la avant de créer un nouveau retour.</p>}
     </div>}
     {actionError&&<p role="alert" className="text-xs text-red-700 mt-2">{actionError}</p>}
    </div></div>

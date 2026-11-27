@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { X, Check, Loader2, Lock, Trash2, Search, Car, Printer, Link2, MessageCircle, Pencil, ArrowRight, CreditCard, Plus, Minus, ShieldCheck, Columns3, ChevronDown, RotateCcw, RefreshCw, Coins, BookOpen, Ban, ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { useTopLayer } from './modalStack';
 import { QtyInput } from './QtyInput';
+import { SearchableSelect } from './SearchableSelect';
 import { formatFCFA, formatNum } from '../lib/format';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS } from './DocumentSettingsTab';
 import { type SalesRepresentative, repDisplayName } from '../lib/repCommission';
@@ -742,7 +743,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
         <div className={`flex min-w-0 flex-wrap items-center gap-y-1 ${tier === 'compact' ? 'flex-col items-stretch' : 'justify-between'}`}>
         <span className="text-[11px] text-[var(--w-text-muted)] tabular-nums">
           {validItems.length} ligne{validItems.length !== 1 ? 's' : ''}
-          {(payments?.length || 0) > 0 && ` · ${payments!.length} règl.`}
+          {(payments?.length || 0) > 0 && ` │ ${payments!.length} règl.`}
         </span>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-y-1 divide-x divide-[var(--w-separator)] [&>span]:whitespace-nowrap">
           {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-xs font-bold text-teal-600 num px-3 min-w-[80px] text-right">IPM {formatFCFA(ipmPartIpm)}</span>}
@@ -1191,11 +1192,15 @@ function EditableHeader({ tier, headerForm, setHeaderForm, customers, docSetting
           <div><label className="text-[10px] font-medium text-[var(--w-text-muted)] mb-0.5 block">IMEI / Téléphone</label><input value={headerForm.imei} onChange={e => setHeaderForm((f: any) => ({ ...f, imei: e.target.value }))} placeholder="Numéro..." className={headerInputCls} disabled={isLocked} /></div>
         )}
         {docSettings.show_representative && (
-          <div><label className="text-[10px] font-medium text-[var(--w-text-muted)] mb-0.5 block">Représentant</label>
-            <select value={headerForm.representative} onChange={e => setHeaderForm((f: any) => ({ ...f, representative: e.target.value }))} className={headerInputCls + ' cursor-pointer'}>
-              <option value="">Aucun</option>
-              {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
-            </select>
+          <div className="min-w-0">
+            <p className="mb-0.5 text-[10px] font-medium text-[var(--w-text-muted)]">Représentant</p>
+            <SearchableSelect
+              ariaLabel="Représentant"
+              value={headerForm.representative}
+              onChange={representative => setHeaderForm((previous: DocHeaderForm) => ({ ...previous, representative }))}
+              options={[{ value: '', label: 'Aucun' }, ...(reps || []).map(rep => ({ value: rep.id, label: repDisplayName(rep) }))]}
+              clearable={false}
+            />
           </div>
         )}
       </div>
@@ -1398,12 +1403,19 @@ function PaymentSection({ ipmBeneficiaire, ipmPartIpm, ipmPartClient, isCredit, 
           </div>
           {!isCredit && (
             <>
-              <div className="flex items-center gap-2 mb-2">
-                <select value={payMethodId} onChange={e => setPayMethodId(e.target.value)} className="text-[11px] font-medium text-neutral-700 bg-transparent border-b border-neutral-300 outline-none py-1 pr-5 cursor-pointer">
-                  {paymentMethods.map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-                <input type="number" value={payAmt} onChange={e => setPayAmt(e.target.value)} placeholder={formatNum(balance > 0 ? balance : 0)} min="0" className="text-xs h-7 w-28 px-2 border-b border-neutral-300 focus:border-neutral-900 outline-none text-right num bg-transparent" onFocus={() => { if (!payAmt && balance > 0) setPayAmt(String(balance)); }} />
-                <button onClick={addPayment} disabled={!payAmt || Number(payAmt) <= 0} className="px-2.5 py-1 rounded text-[11px] font-semibold bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors"><Plus className="w-3 h-3 inline" /> Ajouter</button>
+              <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
+                <SearchableSelect ariaLabel="Mode de paiement" value={payMethodId} onChange={setPayMethodId}
+                  options={paymentMethods.map(method => ({ value: method.id, label: method.name }))}
+                  placeholder="Choisir le mode" className="col-span-2 min-w-0 sm:col-span-1" clearable={false} searchable={false} />
+                <input type="number" aria-label="Montant du règlement" value={payAmt} onChange={e => setPayAmt(e.target.value)}
+                  placeholder={formatNum(balance > 0 ? balance : 0)} min="0"
+                  className="h-10 min-w-0 border-b border-neutral-300 bg-transparent px-2 text-right text-xs num outline-none focus:border-neutral-900"
+                  onFocus={() => { if (!payAmt && balance > 0) setPayAmt(String(balance)); }} />
+                <button type="button" onClick={addPayment}
+                  disabled={!paymentMethods.some(method => method.id === payMethodId) || !payAmt || Number(payAmt) <= 0}
+                  className="min-h-10 rounded bg-neutral-900 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-neutral-800 disabled:opacity-30">
+                  <Plus className="inline h-3 w-3" /> Ajouter
+                </button>
               </div>
               {payments.length > 0 && (
                 <div className="divide-y divide-neutral-100">

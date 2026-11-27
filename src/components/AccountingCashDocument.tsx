@@ -97,7 +97,7 @@ export function AccountingCashDocument({ tenantId, movementId, onClose, onSaving
           <div className="acc-fields acc-fields-2">
             <SearchableSelect variant="underline" label="Compte de contrepartie" value={account} onChange={setAccount}
               disabled={saving} options={review.accounts.map(option => ({
-                value: option.code, label: `${option.code} · ${option.name}`,
+                value: option.code, label: `${option.code} │ ${option.name}`,
               }))} />
             <label className="min-w-0 text-xs text-neutral-600">
               Référence du justificatif
@@ -106,8 +106,8 @@ export function AccountingCashDocument({ tenantId, movementId, onClose, onSaving
             </label>
           </div>
           <p className="break-words text-xs text-neutral-600">
-            {document.journal} · Débit {document.kind === 'refund' ? (account || 'à sélectionner') : document.treasury}
-            {' · '}Crédit {document.kind === 'refund' ? document.treasury : (account || 'à sélectionner')}
+            {document.journal} │ Débit {document.kind === 'refund' ? (account || 'à sélectionner') : document.treasury}
+            {' │ '}Crédit {document.kind === 'refund' ? document.treasury : (account || 'à sélectionner')}
           </p>
         </>
       )}

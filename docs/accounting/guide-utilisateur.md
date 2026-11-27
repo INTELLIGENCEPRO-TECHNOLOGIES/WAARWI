@@ -1,5 +1,5 @@
 # Prendre en main le bureau comptable
-@ Démarrage · Accueil comptable
+@ Démarrage │ Accueil comptable
 
 Ce guide s’adresse aux personnes qui saisissent, contrôlent et clôturent les comptes dans Waarwi. Les parcours sont décrits depuis l’espace **Comptabilité**. Sur téléphone, ouvrez **Comptabilité** dans la barre supérieure pour retrouver les rubriques.
 
@@ -20,7 +20,7 @@ Ce guide s’adresse aux personnes qui saisissent, contrôlent et clôturent les
 > **Vérifier le contexte** | Avant une action, contrôlez l’entreprise, la période, le journal et le compte. Le droit de consultation permet d’ouvrir les états. Les actions de gestion, comme la validation des écritures ou la clôture, dépendent du profil. Un bouton grisé peut également signaler une condition métier manquante.
 
 # Préparer les comptes et les journaux
-@ Structure · Plan comptable et Codes journaux
+@ Structure │ Plan comptable et Codes journaux
 
 ## Créer ou modifier un compte
 1. Ouvrez **Structure › Plan comptable**. Recherchez d’abord le numéro ou l’intitulé pour éviter un doublon.
@@ -50,7 +50,7 @@ Ce guide s’adresse aux personnes qui saisissent, contrôlent et clôturent les
 4. Ajoutez une **Ligne** pour chaque poste. Contrôlez les totaux en bas de la fenêtre et l’indication **Équilibrée**.
 5. Cliquez sur **Enregistrer**. Consultez ensuite le journal et la pièce générée. Si la période est fermée, vérifiez la date et les autorisations avant toute correction.
 
-## Exemple fictif · Facture d’électricité de 38 500 FCFA
+## Exemple fictif │ Facture d’électricité de 38 500 FCFA
 | Compte | Libellé | Débit | Crédit |
 | Compte de charge | Électricité novembre | 38 500 | — |
 | Compte fournisseur | Électricité novembre | — | 38 500 |
@@ -117,10 +117,10 @@ Un modèle mémorise la trame d’une écriture récurrente. Il est utile pour l
 3. Vérifiez le résultat du calcul d’équilibrage et l’ordre des lignes, puis cliquez sur **Reprendre en saisie**. Si une saisie est déjà ouverte, lisez la demande de remplacement avant de la confirmer.
 4. Renseignez la date et la référence de la pièce du jour. Relisez les comptes, libellés et totaux, puis cliquez sur **Enregistrer**.
 
-## Exemple fictif · Loyer variable, sans recopier le montant
+## Exemple fictif │ Loyer variable, sans recopier le montant
 | Ligne | Compte | Libellé | Montant |
-| 1 | Fixe · compte de loyers | À saisir | À saisir au débit |
-| 2 | Fixe · compte fournisseur ou banque adapté | Répéter | Équilibrer · automatique ou crédit |
+| 1 | Fixe │ compte de loyers | À saisir | À saisir au débit |
+| 2 | Fixe │ compte fournisseur ou banque adapté | Répéter | Équilibrer │ automatique ou crédit |
 
 À l’appel, saisissez par exemple « Loyer novembre » et **250 000 FCFA** sur la première ligne. Vérifiez que la seconde reprend le libellé et crédite 250 000 FCFA. Sélectionnez le compte de contrepartie approprié selon qu’il s’agit d’une facture à payer ou d’une dépense réglée.
 
@@ -131,8 +131,8 @@ Un modèle mémorise la trame d’une écriture récurrente. Il est utile pour l
 
 > **Modèle introuvable** | Vérifiez le journal sélectionné et l’état du modèle. Contrôlez aussi que les comptes fixes du modèle sont encore actifs.
 
-# Rapprocher une banque · préparer le relevé
-@ Traitement › Rapprochement bancaire · Relevés
+# Rapprocher une banque │ préparer le relevé
+@ Traitement › Rapprochement bancaire │ Relevés
 
 Le rapprochement compare les opérations réellement passées sur le compte bancaire aux écritures validées dans Waarwi. Rassemblez le relevé officiel, son intervalle, ses soldes d’ouverture et de clôture et les références des opérations.
 
@@ -151,8 +151,8 @@ Pour l’import, utilisez les en-têtes **Date**, **Libellé**, **Montant** ou l
 
 > **Contrôle chiffré** | Solde initial 1 000 000 FCFA, dépôt +250 000 FCFA, règlement −100 000 FCFA et frais −5 000 FCFA. Le solde final doit être 1 145 000 FCFA. Une différence à ce stade se corrige dans le relevé saisi.
 
-# Rapprocher une banque · pointer les opérations
-@ Traitement › Rapprochement bancaire · Pointage
+# Rapprocher une banque │ pointer les opérations
+@ Traitement › Rapprochement bancaire │ Pointage
 
 ## Pointer manuellement
 1. Passez à **Pointage › Manuel**. Dans la liste du relevé, choisissez une opération **À pointer**.
@@ -171,8 +171,8 @@ Pour l’import, utilisez les en-têtes **Date**, **Libellé**, **Montant** ou l
 
 > **Éviter un doublon** | Si la banque regroupe plusieurs écritures ou si la contrepartie attendue est un compte de tiers, recherchez la pièce d’origine et suivez la procédure comptable adaptée. Le pointage standard associe une ligne du relevé et une ligne comptable de même montant et de même sens.
 
-# Rapprocher une banque · contrôler et valider
-@ Traitement › Rapprochement bancaire · Contrôle
+# Rapprocher une banque │ contrôler et valider
+@ Traitement › Rapprochement bancaire │ Contrôle
 
 1. Choisissez **Contrôler le rapprochement** pour vérifier les opérations et les soldes.
 2. Assurez-vous que les trois contrôles ci-dessous aboutissent. Revenez dans **Pointage** pour corriger une association ou recherchez une pièce antérieure si l’ouverture a changé.
@@ -228,7 +228,7 @@ Par exemple, un chèque émis pas encore débité reste en attente sur les proch
 | Échéance inconnue | Retrouver la date contractuelle à partir de la facture et renseigner le motif. |
 
 # Comptabiliser les documents de gestion
-@ État › Balance générale · Actions de comptabilisation
+@ État › Balance générale │ Actions de comptabilisation
 
 ## Ventes, avoirs et règlements
 1. Ouvrez la balance et repérez les actions de comptabilisation accessibles à votre profil. Pour un cas particulier, revenez à la pièce d’origine dans Facturation, Journal des ventes ou Achats.
@@ -368,7 +368,7 @@ Par exemple, un chèque émis pas encore débité reste en attente sur les proch
 > **États de travail** | Les contrôles, ventilations et rubriques préremplies assistent la préparation du dossier. Appuyez la validation finale sur les pièces, la balance, le cadre applicable à votre entreprise et la revue du responsable comptable.
 
 # Diagnostic des blocages et repères
-@ Référence rapide · Pour tous les parcours
+@ Référence rapide │ Pour tous les parcours
 
 | Symptôme | Vérifier dans cet ordre |
 | Le bouton Enregistrer est grisé | Droit de gestion, fenêtre de modification, journal actif, compte actif, équilibre, date et champs obligatoires. |
@@ -384,7 +384,7 @@ Par exemple, un chèque émis pas encore débité reste en attente sur les proch
 3. Dans une capture, masquez les données qui ne sont pas nécessaires à la résolution. Transmettez le message avec les références utiles.
 
 # Glossaire comptable
-@ Référence rapide · Vocabulaire des écrans
+@ Référence rapide │ Vocabulaire des écrans
 
 | Terme | Définition |
 | Pièce | Ensemble des lignes d’une écriture, identifié par un numéro et une origine. |

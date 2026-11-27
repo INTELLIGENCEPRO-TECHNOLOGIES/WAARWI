@@ -1705,13 +1705,13 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
       const idemKey = balPayIdemRef.current;
       const { error: rpcErr } = await supabase.rpc('register_customer_balance_payment', {
         p_customer_id: c.id, p_payment_method_id: pm.id, p_method_name: pm.name,
-        p_amount: amt, p_reference: payRef || `Règlement solde · ${c.name}`,
+        p_amount: amt, p_reference: payRef || `Règlement solde │ ${c.name}`,
         p_cash_session_id: sess.id, p_idempotency_key: idemKey,
       });
       e = rpcErr;
     } else {
       const sale = sales.find(s => s.id === paySale);
-      const ref = payRef || (sale ? `Règlement facture ${sale.sale_number} · ${c.name}` : '');
+      const ref = payRef || (sale ? `Règlement facture ${sale.sale_number} │ ${c.name}` : '');
       const { error: rpcErr } = await supabase.rpc('register_sale_payment', {
         p_sale_id: paySale, p_payment_method_id: pm.id, p_method_name: pm.name,
         p_amount: amt, p_reference: ref, p_cash_session_id: sess.id,
@@ -1722,7 +1722,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     setPaying(false);
     if (e) { error(e.message); return; }
     balPayIdemRef.current = crypto.randomUUID();
-    success('Règlement enregistré · imputé sur la caisse du jour');
+    success('Règlement enregistré │ imputé sur la caisse du jour');
     setPaySale(''); setPayAmount(''); setPayRef('');
     reload();
     setStatementRefresh(n => n + 1);
@@ -1817,7 +1817,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
   const custOptions = useMemo(() => customerList.map(x => ({
     value: x.id,
     label: x.name,
-    sublabel: [(x as any).account_code, x.phone].filter(Boolean).join(' · '),
+    sublabel: [(x as any).account_code, x.phone].filter(Boolean).join(' │ '),
   })), [customerList]);
   const goToCustomer = (next: Customer | null) => {
     if (!next || next.id === activeCustomer.id) return;
@@ -2061,7 +2061,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
             <div className="text-sm font-bold text-black">{c.name}</div>
             <div className="text-[9px] font-semibold tracking-wider uppercase text-[var(--w-text-disabled)] mt-0.5">
               {key === 'payment' && 'Encaissement avec imputation'}
-              {key === 'docs' && 'Documents de ventes · statistiques'}
+              {key === 'docs' && 'Documents de ventes │ statistiques'}
               {key === 'pricing' && 'Prix spéciaux par article'}
             </div>
           </div>
@@ -2417,7 +2417,7 @@ function PaymentForm({ unpaid, methods, paySale, setPaySale, payAmount, setPayAm
             { value: '', label: 'Acompte libre (sans facture)' },
             ...unpaid.filter((s: any) => s.id !== '__balance__').map((s: any) => {
               const d = Math.max(0, Number(s.total) - Number(s.paid));
-              return { value: s.id, label: `${s.sale_number} · dû ${formatFCFA(d)}` };
+              return { value: s.id, label: `${s.sale_number} │ dû ${formatFCFA(d)}` };
             })
           ]}
           value={paySale}
@@ -2427,7 +2427,7 @@ function PaymentForm({ unpaid, methods, paySale, setPaySale, payAmount, setPayAm
         {unpaid.some((s: any) => s.id === '__balance__') && (
           <button type="button" onClick={() => { setPaySale('__balance__'); onSelectSale('__balance__'); }}
             className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-muted)] hover:text-[var(--w-text)]'}`}>
-            Report de solde · {formatFCFA(unpaid.find((s: any) => s.id === '__balance__')?.total || 0)}
+            Report de solde │ {formatFCFA(unpaid.find((s: any) => s.id === '__balance__')?.total || 0)}
           </button>
         )}
         {unpaid.length === 0 && <div className="text-[11px] text-emerald-700 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Aucune créance en attente</div>}
@@ -2463,7 +2463,7 @@ function PaymentForm({ unpaid, methods, paySale, setPaySale, payAmount, setPayAm
         <RecentPaymentsAccordion label="Derniers encaissements">
           {recentPayments.map((p: any) => (
             <div key={p.id} className="py-1.5 border-b border-neutral-100 last:border-0">
-              <div className="text-xs text-[var(--w-text-sec)] line-clamp-2 leading-snug">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
+              <div className="text-xs text-[var(--w-text-sec)] line-clamp-2 leading-snug">{p.method_name}{p.reference ? ` │ ${p.reference}` : ''}</div>
               <div className="flex items-center justify-between mt-0.5">
                 <div className="text-xs text-[var(--w-text-disabled)]">{p.sale_number || 'Acompte'}</div>
                 <div className="text-xs font-bold text-emerald-700 num">{formatFCFA(p.amount)}</div>
@@ -2988,7 +2988,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
           <div>
             <div className="text-sm font-bold text-black">{s.name}</div>
             <div className="text-[9px] font-semibold tracking-wider uppercase text-[var(--w-text-disabled)] mt-0.5">
-              {key === 'docs' && 'Documents d\'achats · statistiques'}
+              {key === 'docs' && 'Documents d\'achats │ statistiques'}
               {key === 'articles' && `${articles.length} article${articles.length > 1 ? 's' : ''} lié${articles.length > 1 ? 's' : ''}`}
             </div>
           </div>
@@ -3371,7 +3371,7 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
             variant="underline"
             menuWidth={600}
             wrapLabels
-            options={availableArticles.map(a => ({ value: a.id, label: a.name, sublabel: `Réf ${a.internal_ref} · Prix normal ${formatFCFA(a.sale_price)}` }))}
+            options={availableArticles.map(a => ({ value: a.id, label: a.name, sublabel: `Réf ${a.internal_ref} │ Prix normal ${formatFCFA(a.sale_price)}` }))}
             value={newArticleId}
             onChange={v => {
               setNewArticleId(v);

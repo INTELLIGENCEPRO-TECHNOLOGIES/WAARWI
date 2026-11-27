@@ -359,7 +359,7 @@ export function Coffre() {
         </tbody>
       </table>` : '';
     const rows = (full.movements || []).map(m => {
-      const refNote = [m.reference, m.note].filter(Boolean).join(' · ');
+      const refNote = [m.reference, m.note].filter(Boolean).join(' │ ');
       return `<tr>
         <td class="num">${esc(formatDateTime(m.effective_at))}</td>
         <td>${esc(kindLabel(m.kind))}</td>
@@ -441,7 +441,7 @@ export function Coffre() {
           <button
             onClick={() => setPickerOpen(v => !v)}
             aria-expanded={pickerOpen}
-            aria-label={`Période · ${labelRange(range)}`}
+            aria-label={`Période │ ${labelRange(range)}`}
             className="btn-ghost min-w-0 px-2.5 py-1.5 text-xs"
           >
             <Calendar className="h-4 w-4 shrink-0" />
@@ -533,7 +533,7 @@ export function Coffre() {
                   </thead>
                   <tbody>
                     {movements.map(m => {
-                      const refNote = [m.reference, m.note].filter(Boolean).join(' · ');
+                      const refNote = [m.reference, m.note].filter(Boolean).join(' │ ');
                       return (
                         <tr key={m.id}>
                           <td className={tdCls + ' whitespace-nowrap tabular-nums'}>{formatDateTime(m.effective_at)}</td>

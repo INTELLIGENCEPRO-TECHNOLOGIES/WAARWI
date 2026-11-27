@@ -23,7 +23,7 @@ function summarize(decision: Decision) {
     case 'link':
       return `Écriture ${decision.entry_number} déjà au journal`;
     case 'post':
-      return `${decision.journal} · Débit ${decision.debit_account} · Crédit ${decision.credit_account}`;
+      return `${decision.journal} │ Débit ${decision.debit_account} │ Crédit ${decision.credit_account}`;
     case 'post_payment':
       return 'Règlement identifié. Son écriture sera créée dans le journal du mode de paiement.';
     default:
@@ -143,12 +143,12 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
             <div className="acc-fields acc-fields-with-action">
               <SearchableSelect label="Coffre" variant="underline" value={vaultId} onChange={selectVault} disabled={busy}
                 options={vaultAccounts.vaults.map(vault => ({
-                  value: vault.id, label: `${vault.site_name} · ${vault.name}`,
-                  sublabel: [vault.account_code || 'Compte à renseigner', !vault.is_active && 'Inactif'].filter(Boolean).join(' · '),
+                  value: vault.id, label: `${vault.site_name} │ ${vault.name}`,
+                  sublabel: [vault.account_code || 'Compte à renseigner', !vault.is_active && 'Inactif'].filter(Boolean).join(' │ '),
                 }))} />
               <SearchableSelect label="Compte de trésorerie" variant="underline" value={accountCode} onChange={setAccountCode}
                 disabled={!selectedVault || busy} options={vaultAccounts.accounts.map(account => ({
-                  value: account.code, label: `${account.code} · ${account.name}`,
+                  value: account.code, label: `${account.code} │ ${account.name}`,
                 }))} />
               <button type="button" className="btn btn-secondary" onClick={() => void saveVault()}
                 disabled={busy || !selectedVault || !accountCode || accountCode === selectedVault.account_code}>
@@ -191,7 +191,7 @@ export function AccountingCashReview({ tenantId, onPosted }: { tenantId: string;
               <div className="min-w-0">
                 <p className="break-words text-sm font-medium text-neutral-900">{row.label}</p>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  {formatDate(row.decision.date)} · {cashMovementLabel(row.kind)}
+                  {formatDate(row.decision.date)} │ {cashMovementLabel(row.kind)}
                 </p>
                 <p className="mt-1 break-words text-xs text-neutral-600">{summarize(row.decision)}</p>
               </div>

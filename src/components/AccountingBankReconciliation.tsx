@@ -7,6 +7,7 @@ import { AccountingBankImport } from './AccountingBankImport';
 import { AccountingPagination, AccountingTable, useAccountingPagination } from './AccountingWorkspace';
 import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, Search } from './Icons';
 import { Modal } from './Modal';
+import { SearchableSelect } from './SearchableSelect';
 import './accounting-bank-reconciliation.css';
 
 type Account = { code: string; name: string; is_active: boolean };
@@ -483,17 +484,17 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
       {phase === 'statements' && !open && (
         <div className="acc-bank-screen acc-fill">
           <div className="acc-bank-toolbar">
-            <label className="acc-bank-account">Compte bancaire ou de monnaie électronique
-              <select className="input" value={account} disabled={busy || importing} onChange={event => {
-                if (!discard()) return;
-                setAccount(event.target.value);
+            <SearchableSelect label="Compte bancaire ou de monnaie électronique" className="acc-bank-account acc-filter-select"
+              value={account} disabled={busy || importing} clearable={false} wrapLabels
+              options={[
+                { value: '', label: 'Choisir un compte' },
+                ...accounts.map(choice => ({ value: choice.code, label: choice.code + ' — ' + choice.name + (choice.is_active ? '' : ' (inactif)') })),
+              ]} onChange={value => {
+                if (value === account || !discard()) return;
+                setAccount(value);
                 setStatements([]);
                 choose('');
-              }}>
-                <option value="">Choisir un compte</option>
-                {accounts.map(choice => <option key={choice.code} value={choice.code}>{choice.code} — {choice.name}{choice.is_active ? '' : ' (inactif)'}</option>)}
-              </select>
-            </label>
+              }}/>
             <div className="acc-bank-actions">
               {draft && <button type="button" className="btn-primary" disabled={busy || listLoading} onClick={() => {
                 if (discard()) choose(draft.id, 'pointing');
@@ -530,7 +531,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
       {open && (
         <form className="acc-bank-screen acc-fill" onSubmit={event => { event.preventDefault(); save(); }}>
           <div className="acc-bank-toolbar">
-            <h2>Nouveau relevé{account ? ' · ' + account : ''}</h2>
+            <h2>Nouveau relevé{account ? ' │ ' + account : ''}</h2>
             <button type="button" className="btn-secondary" disabled={busy || importing} onClick={() => { if (discard()) setOpen(false); }}>
               <ArrowLeft size={15} />Retour aux relevés
             </button>
@@ -582,7 +583,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
         <div className="acc-bank-context">
           <div>
             <h2>{chosen.reference}</h2>
-            <span className="acc-table-meta">{chosen.account_code} · {formatDate(chosen.date_from)} au {formatDate(chosen.date_to)}</span>
+            <span className="acc-table-meta">{chosen.account_code} │ {formatDate(chosen.date_from)} au {formatDate(chosen.date_to)}</span>
           </div>
           <StatementStatus status={chosen.status} />
           <button type="button" className="acc-icon" aria-label="Actualiser le rapprochement" title="Actualiser le rapprochement" disabled={busyOrLoading} onClick={refresh}>
@@ -612,7 +613,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                 <div className="acc-bank-guidance">
                   <h3>Correspondances proposées</h3>
                   <p className="acc-bank-hint">{suggestions
-                    ? suggestions.suggested + ' unique(s) · ' + suggestions.ambiguous + ' ambiguë(s) · ' + Math.max(0, suggestions.pending - suggestions.suggested - suggestions.ambiguous) + ' sans proposition.'
+                    ? suggestions.suggested + ' unique(s) │ ' + suggestions.ambiguous + ' ambiguë(s) │ ' + Math.max(0, suggestions.pending - suggestions.suggested - suggestions.ambiguous) + ' sans proposition.'
                     : 'Le montant et le sens doivent être identiques. Waarwi propose une même date ou une même référence à sept jours près. Traitez les ambiguïtés en mode manuel.'}
                   </p>
                 </div>
@@ -631,7 +632,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                           onChange={() => setProposalIds(previous => previous.includes(row.bank_id) ? previous.filter(id => id !== row.bank_id) : [...previous, row.bank_id])} /></td>
                         <td>{row.bank_label}<span className="acc-table-meta">{formatDate(row.operation_date)}</span></td>
                         <td><button type="button" className="acc-table-link" onClick={() => work?.openPiece({ entryId: row.entry_id, entryNumber: row.entry_number })}>{row.entry_number}</button>
-                          <span className="acc-table-meta">{formatDate(row.entry_date)} · {row.book_label}</span>
+                          <span className="acc-table-meta">{formatDate(row.entry_date)} │ {row.book_label}</span>
                           <span className="acc-table-meta">{row.ref_equal ? 'Référence identique' : 'Date identique'}</span></td>
                         <td className="text-right acc-bank-amount">{amount(row.amount)}</td>
                       </tr>
@@ -666,10 +667,10 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                 <section className="acc-bank-table-panel acc-fill" data-mobile-visible={mobilePanel === 'bank'}>
                   <div className="acc-bank-toolbar">
                     <h3>Relevé bancaire</h3>
-                    <label className="sr-only" htmlFor={inputId + '-bank-filter'}>Filtrer le relevé bancaire</label>
-                    <select id={inputId + '-bank-filter'} className="input" value={bankFilter} disabled={busy} onChange={event => setBankFilter(event.target.value as typeof bankFilter)}>
-                      <option value="all">Toutes les opérations</option><option value="pending">À pointer</option>
-                    </select>
+                    <SearchableSelect ariaLabel="Filtrer le relevé bancaire" className="acc-filter-select w-40 max-w-full" searchable={false}
+                      clearable={false} value={bankFilter} disabled={busy}
+                      options={[{value:'all',label:'Toutes les opérations'},{value:'pending',label:'À pointer'}]}
+                      onChange={value=>setBankFilter(value as typeof bankFilter)}/>
                   </div>
                   <AccountingTable fill label="Opérations du relevé bancaire" footer={<AccountingPagination {...bankPaging} disabled={busyOrLoading} />}>
                     <table>
@@ -683,7 +684,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                               {editable && !row.journal_line_id ? (
                                 <label className="font-medium cursor-pointer" htmlFor={inputId + '-bank-' + row.id}>{row.label}</label>
                               ) : <span className="font-medium">{row.label}</span>}
-                              <span className="acc-table-meta">{formatDate(row.operation_date)}{row.reference ? ' · ' + row.reference : ''}</span>
+                              <span className="acc-table-meta">{formatDate(row.operation_date)}{row.reference ? ' │ ' + row.reference : ''}</span>
                             </td>
                             <td className="text-right acc-bank-amount">{amount(row.amount)}</td>
                             <td>{row.journal_line_id ? <>
@@ -723,7 +724,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                             {editable && <td><input type="radio" name={inputId + '-book'} aria-label={'Sélectionner l’écriture ' + row.entry_number}
                               checked={bookLine === row.id} disabled={busyOrLoading || !bankChoice || Number(bankChoice.amount) !== Number(row.amount)} onChange={() => setBookLine(row.id)} /></td>}
                             <td><button type="button" className="acc-table-link" onClick={() => work?.openPiece({ entryNumber: row.entry_number })}>{row.entry_number}</button>
-                              <span className="acc-table-meta">{formatDate(row.entry_date)}{row.label ? ' · ' + row.label : ''}</span>
+                              <span className="acc-table-meta">{formatDate(row.entry_date)}{row.label ? ' │ ' + row.label : ''}</span>
                               {row.reference && <span className="acc-table-meta">{row.reference}</span>}</td>
                             <td className="text-right acc-bank-amount">{amount(row.amount)}</td>
                           </tr>
@@ -739,7 +740,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
                   <>
                     <div className="acc-bank-selection" aria-live="polite">
                       {bankChoice
-                        ? <><strong>{bankChoice.label} · {money(bankChoice.amount)}</strong>
+                        ? <><strong>{bankChoice.label} │ {money(bankChoice.amount)}</strong>
                           <span>{bookChoice ? 'Pièce ' + bookChoice.entry_number + ' sélectionnée.' : sameAmountOnPage ? 'Sélectionnez la pièce correspondante.' : 'Aucun montant identique sur cette page. Consultez la page suivante si elle existe.'}</span></>
                         : <span>Choisissez une opération à pointer.</span>}
                     </div>
@@ -824,7 +825,7 @@ export function AccountingBankReconciliation({ tenantId, canManage }: { tenantId
           <button type="button" className="btn-primary" disabled={busyOrLoading || counterBusy || !missing.counter || !missing.reason.trim()} onClick={postMissing}>Comptabiliser et pointer</button>
         </>}>
         <div className="acc-bank-fieldset">
-          <p><strong>{missing.label} · {money(missing.amount)}</strong></p>
+          <p><strong>{missing.label} │ {money(missing.amount)}</strong></p>
           <p className="acc-bank-hint">Réservé aux frais et produits bancaires réellement absents des journaux. Vérifiez le justificatif et les règlements déjà enregistrés, notamment les règlements partiels. La totalité de l’opération sera comptabilisée et pointée.</p>
           <label className="acc-bank-field">Compte de contrepartie
             <select className="input" value={missing.counter} disabled={busy || counterBusy} onChange={event => setMissing({ ...missing, counter: event.target.value })}>

@@ -24,6 +24,7 @@ import { CentralizedBackups } from '../components/CentralizedBackups';
 import { LandingConfigSection } from '../components/LandingConfigSection';
 import { LOGIN_ICON_MAP, DEFAULT_LOGIN_CONFIG, DEFAULT_LOGIN_MODULES, type LoginConfig, type LoginModule, type TextAccent } from '../lib/loginConfig';
 import { AccentedText } from '../components/AccentedText';
+import { SearchableSelect } from '../components/SearchableSelect';
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const doFetch = async (accessToken: string) => {
@@ -533,12 +534,14 @@ function TenantsSection({ onOpenSubscription }: { onOpenSubscription: (tenantId:
           <input value={q} aria-label="Rechercher une entreprise" placeholder="Entreprise, contact ou domaine"
             onChange={event => { setQ(event.target.value); setPage(0); }} />
         </label>
-        <select className="pa-field" aria-label="Statut de l’entreprise" value={filter}
-          onChange={event => { setFilter(event.target.value); setPage(0); }}>
-          <option value="all">Tous les statuts</option>
-          {Object.entries(companyStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          <option value="never_connected">Jamais connectée</option>
-        </select>
+        <SearchableSelect ariaLabel="Statut de l’entreprise" className="w-full min-w-0 sm:w-48" value={filter}
+          clearable={false} searchable={false} wrapLabels
+          onChange={value => { setFilter(value); setPage(0); }}
+          options={[
+            { value: 'all', label: 'Tous les statuts' },
+            ...Object.entries(companyStatuses).map(([value, label]) => ({ value, label })),
+            { value: 'never_connected', label: 'Jamais connectée' },
+          ]} />
         {!loading && <span className="pa-muted text-xs">{filtered.length} entreprise{filtered.length !== 1 ? 's' : ''}</span>}
       </div>
       {loading ? <PlatformLoading /> : filtered.length === 0 ? <p className="pa-empty">Aucune entreprise trouvée.</p> : (
@@ -684,7 +687,7 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
 }
 
 function UsageLine({ label, current, limit }: { label: string; current?: number; limit?: number }) {
-  return <div><dt>{label}</dt><dd>{current ?? 0}{limit != null && limit >= 0 ? ' / ' + limit : ' · sans limite'}</dd></div>;
+  return <div><dt>{label}</dt><dd>{current ?? 0}{limit != null && limit >= 0 ? ' / ' + limit : ' │ sans limite'}</dd></div>;
 }
 
 function TenantDetailPage({ tenant, plans, onClose, onRefresh, onDelete, onOpenSubscription, subscriptionMode = false, noticeActions, onSuspend, onReactivate, accessBusy }: {
@@ -904,7 +907,7 @@ function TenantDetailPage({ tenant, plans, onClose, onRefresh, onDelete, onOpenS
                         {tenant.registration_other_activity && <div><dt>Activité précisée</dt><dd>{tenant.registration_other_activity}</dd></div>}
                         {tenant.responsible_name && <div><dt>Responsable</dt><dd>{tenant.responsible_name}</dd></div>}
                         {tenant.whatsapp_phone && <div><dt>WhatsApp</dt><dd>{tenant.whatsapp_phone}</dd></div>}
-                        {tenant.first_payment?.state === 'paid' && <div><dt>Premier règlement</dt><dd>Payé · {formatFCFA(tenant.first_payment.amount)}</dd></div>}
+                        {tenant.first_payment?.state === 'paid' && <div><dt>Premier règlement</dt><dd>Payé │ {formatFCFA(tenant.first_payment.amount)}</dd></div>}
                         {['creating', 'pending'].includes(tenant.first_payment?.state) && <div><dt>Premier règlement</dt><dd>En attente</dd></div>}
                       </dl>
                       {rejecting ? (
@@ -952,7 +955,7 @@ function TenantDetailPage({ tenant, plans, onClose, onRefresh, onDelete, onOpenS
                             <select className="pa-field" value={subForm.plan_code} required
                               onChange={event => setSubForm({ ...subForm, plan_code: event.target.value, amount: undefined, custom_limits: undefined })}>
                               <option value="">Choisir l’offre</option>
-                              {plans.map(plan => <option key={plan.code} value={plan.code}>{plan.name}{plan.is_public === false ? ' · privée' : ''}</option>)}
+                              {plans.map(plan => <option key={plan.code} value={plan.code}>{plan.name}{plan.is_public === false ? ' │ privée' : ''}</option>)}
                             </select>
                           </label>
                           <label className="pa-field-label">Cycle
@@ -1013,7 +1016,7 @@ function TenantDetailPage({ tenant, plans, onClose, onRefresh, onDelete, onOpenS
                         <div className="py-2 space-y-2" key={entry.id}>
                           <div className="pa-section-head text-sm">
                             <div className="min-w-0">
-                              <p className="font-medium">{plans.find(plan => plan.code === entry.plan_code)?.name || entry.plan_code} · {formatFCFA(entry.amount)}</p>
+                              <p className="font-medium">{plans.find(plan => plan.code === entry.plan_code)?.name || entry.plan_code} │ {formatFCFA(entry.amount)}</p>
                               <p className="pa-row-subtitle">{formatDate(entry.started_at)}{entry.ends_at ? ' – ' + formatDate(entry.ends_at) : ''}</p>
                             </div>
                             <div className="pa-inline">
@@ -1054,7 +1057,7 @@ function TenantDetailPage({ tenant, plans, onClose, onRefresh, onDelete, onOpenS
                           <strong className="pa-break">{user.full_name || user.email}</strong>
                           {user.full_name && <p className="pa-row-subtitle pa-break">{user.email}</p>}
                         </div>
-                        <span className="pa-muted">{user.role} · {user.is_active ? 'Actif' : 'Inactif'}</span>
+                        <span className="pa-muted">{user.role} │ {user.is_active ? 'Actif' : 'Inactif'}</span>
                       </div>
                     ))}
                   </div>
@@ -1331,13 +1334,13 @@ function PlansSection() {
               <div className="pa-list-row" role="row" key={plan.code}>
                 <div role="cell" className="pa-row-title">
                   <button type="button" className="pa-name-button" onClick={() => openOffer(plan)}>{plan.name}</button>
-                  <div className="pa-row-subtitle">{plan.code} · {companies} entreprise{companies !== 1 ? 's' : ''}</div>
+                  <div className="pa-row-subtitle">{plan.code} │ {companies} entreprise{companies !== 1 ? 's' : ''}</div>
                 </div>
                 <div role="cell" className="pa-row-amount">{formatFCFA(plan.price_monthly)} <span className="pa-mobile-meta pa-muted">/ mois</span></div>
                 <div role="cell" className="pa-row-date">{formatFCFA(plan.price_yearly)} <span className="pa-mobile-meta pa-muted">/ an</span></div>
                 <div role="cell" className="pa-row-plan pa-muted">
                   {prepaidPeriods.filter(months => Number(plan[discountField(months)]) > 0)
-                    .map(months => months + ' m −' + formatSubscriptionDiscount(Number(plan[discountField(months)]))).join(' · ') || '—'}
+                    .map(months => months + ' m −' + formatSubscriptionDiscount(Number(plan[discountField(months)]))).join(' │ ') || '—'}
                 </div>
                 <div role="cell" className="pa-row-status pa-status">{plan.is_public === false ? 'Privée' : 'Publique'}</div>
                 <div role="cell" className="pa-row-actions">
@@ -1560,7 +1563,7 @@ function SubscriptionsSection({ initialFilter, focusTenantId, onFocusConsumed }:
               Exécuter le traitement quotidien
             </button>
             {lastResult && <p className="pa-feedback" role="status">
-              {lastResult.renewed || 0} renouvelés · {lastResult.expired || 0} expirés · {lastResult.suspended || 0} suspendus · {lastResult.reminders_sent || 0} rappels
+              {lastResult.renewed || 0} renouvelés │ {lastResult.expired || 0} expirés │ {lastResult.suspended || 0} suspendus │ {lastResult.reminders_sent || 0} rappels
             </p>}
           </div>
         </div>}
@@ -1590,15 +1593,15 @@ function SubscriptionsSection({ initialFilter, focusTenantId, onFocusConsumed }:
           <input value={q} aria-label="Rechercher un abonnement" placeholder="Entreprise ou offre"
             onChange={event => { setQ(event.target.value); setPage(0); }} />
         </label>
-        <select className="pa-field" value={statusFilter} aria-label="Filtrer les abonnements"
-          onChange={event => selectFilter(event.target.value as SubscriptionFilter)}>
-          {Object.entries(subscriptionStatuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-        </select>
+        <SearchableSelect ariaLabel="Filtrer les abonnements" className="w-full min-w-0 sm:w-48" value={statusFilter}
+          clearable={false} searchable={false} wrapLabels
+          onChange={value => selectFilter(value as SubscriptionFilter)}
+          options={Object.entries(subscriptionStatuses).map(([value, label]) => ({ value, label }))} />
         {statusFilter === 'due' && (
-          <select className="pa-field" aria-label="Fenêtre d’échéance" value={reminderDays}
-            onChange={event => { setReminderDays(Number(event.target.value)); setPage(0); }}>
-            {[3, 5, 7, 14, 30].map(days => <option key={days} value={days}>{days} jours</option>)}
-          </select>
+          <SearchableSelect ariaLabel="Fenêtre d’échéance" className="w-full min-w-0 sm:w-28" value={String(reminderDays)}
+            clearable={false} searchable={false}
+            onChange={value => { setReminderDays(Number(value)); setPage(0); }}
+            options={[3, 5, 7, 14, 30].map(days => ({ value: String(days), label: days + ' jours' }))} />
         )}
         <button type="button" className="pa-icon-button" aria-label="Actualiser les abonnements" title="Actualiser" onClick={refresh}><RefreshCw size={16} /></button>
         <button type="button" className="pa-button" onClick={() => void openRules()}><Settings_ size={15} /> Règles de suivi</button>
@@ -1798,7 +1801,7 @@ function MessagesSection() {
               <article className="pa-message-row" key={message.id}>
                 <div className="min-w-0">
                   <button type="button" onClick={() => setPreview(message)} className="pa-name-button">{message.title}</button>
-                  <p className="pa-row-subtitle">{target} · {severity} · {formatDateTime(message.created_at)}{expired ? ' · Expiré' : ''}</p>
+                  <p className="pa-row-subtitle">{target} │ {severity} │ {formatDateTime(message.created_at)}{expired ? ' │ Expiré' : ''}</p>
                   {message.body && <p className="pa-muted text-sm line-clamp-2 mt-1">{message.body}</p>}
                 </div>
                 <div className="pa-row-actions">
@@ -1871,7 +1874,7 @@ function ActivitySection() {
                 return (
                   <div key={company.tenant_id} className="pa-list-row" role="row">
                     <div className="pa-row-title" role="cell"><strong>{company.tenant_name}</strong>
-                      <p className="pa-row-subtitle pa-mobile-meta">{company.total_users} utilisateurs · {company.total_articles} articles · {company.total_sales} ventes</p>
+                      <p className="pa-row-subtitle pa-mobile-meta">{company.total_users} utilisateurs │ {company.total_articles} articles │ {company.total_sales} ventes</p>
                     </div>
                     <div className="pa-desktop-cell tabular-nums" role="cell">{company.total_users}</div>
                     <div className="pa-desktop-cell tabular-nums" role="cell">{company.total_articles}</div>
@@ -2347,8 +2350,8 @@ function ReleasesSection() {
             <div key={release.id} className="pa-message-row">
               <div className="min-w-0">
                 <button type="button" className="pa-name-button" onClick={() => openEdit(release)}>{release.title}</button>
-                <p className="pa-row-subtitle">v{release.version} · {formatDate(release.release_date)} · {release.is_published ? 'Publiée' : 'Brouillon'}</p>
-                <p className="pa-row-subtitle">{release.features.length} nouveautés · {release.fixes.length} corrections</p>
+                <p className="pa-row-subtitle">v{release.version} │ {formatDate(release.release_date)} │ {release.is_published ? 'Publiée' : 'Brouillon'}</p>
+                <p className="pa-row-subtitle">{release.features.length} nouveautés │ {release.fixes.length} corrections</p>
               </div>
               <div className="pa-row-actions">
                 <button type="button" className="pa-link" onClick={() => togglePublish(release)}>{release.is_published ? 'Dépublier' : 'Publier'}</button>

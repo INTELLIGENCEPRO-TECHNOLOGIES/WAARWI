@@ -179,7 +179,7 @@ export function MobileBillingWizard({
               </button>
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold">{vatSummary ? 'Total TTC' : 'Total'}</div>
-                {vatSummary && <div className="text-[10px] text-neutral-600">HT {formatVatAmount(vatSummary.ht)} · TVA {formatVatAmount(vatSummary.vat)}</div>}
+                {vatSummary && <div className="text-[10px] text-neutral-600">HT {formatVatAmount(vatSummary.ht)} │ TVA {formatVatAmount(vatSummary.vat)}</div>}
                 <div className="text-lg font-black text-neutral-900 num">{vatSummary ? formatVatAmount(total) : formatFCFA(total)}</div>
               </div>
             </div>

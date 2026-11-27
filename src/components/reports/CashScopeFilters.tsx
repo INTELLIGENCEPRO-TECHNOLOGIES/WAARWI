@@ -1,6 +1,7 @@
 import { Monitor, User, Clock, Layers } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { registerText } from '../../lib/cashSession';
+import { SearchableSelect, type SelectOption } from '../SearchableSelect';
 
 export type ScopeRegister = { id: string; name: string; code?: string | null; site_id: string | null };
 export type ScopeCashier = { id: string; name: string };
@@ -34,7 +35,7 @@ export function sessionLabel(s: ScopeSession, withCashier: boolean) {
   const when = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' '
     + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const state = s.closed_at ? '' : ' (ouverte)';
-  return withCashier && s.cashier_name ? `${when} · ${s.cashier_name}${state}` : `${when}${state}`;
+  return withCashier && s.cashier_name ? `${when} │ ${s.cashier_name}${state}` : `${when}${state}`;
 }
 
 export function scopeLabel(opts: CashScopeOptions, sel: CashScopeSelection): string {
@@ -50,25 +51,22 @@ export function scopeLabel(opts: CashScopeOptions, sel: CashScopeSelection): str
   parts.push(opts.elevated
     ? `Périmètre : ${filtered ? 'filtré' : 'sites supervisés, historique sans caisse attribuée inclus'}`
     : 'Périmètre : mes opérations');
-  return parts.join(' · ');
+  return parts.join(' │ ');
 }
 
-function Field({ icon, value, onChange, children, active }: {
-  icon: ReactNode; value: string; onChange: (v: string) => void; children: ReactNode; active: boolean;
+function Field({ icon, label, value, onChange, options }: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: SelectOption[];
 }) {
   return (
-    <label className={`relative flex items-center gap-1.5 text-[12px] font-medium transition-colors border-b pb-0.5 ${
-      active ? 'text-neutral-900 border-neutral-900' : 'text-neutral-600 border-transparent hover:text-neutral-900 hover:border-neutral-300'
-    }`}>
-      <span className="text-neutral-400 shrink-0">{icon}</span>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="appearance-none bg-transparent pr-1 max-w-[150px] sm:max-w-[190px] truncate cursor-pointer focus:outline-none"
-      >
-        {children}
-      </select>
-    </label>
+    <div className="flex min-w-0 max-w-full items-center gap-1.5">
+      <span className="shrink-0 text-[var(--w-text-muted)]" aria-hidden="true">{icon}</span>
+      <SearchableSelect ariaLabel={label} value={value} onChange={onChange} options={options}
+        searchable={options.length > 8} clearable={false} wrapLabels className="min-w-0 max-w-60" />
+    </div>
   );
 }
 
@@ -83,26 +81,29 @@ export function CashScopeFilters({ options, value, onChange, showSession = true 
 
   return (
     <>
-      <Field icon={<Monitor className="w-3.5 h-3.5" />} active={!!value.registerId} value={value.registerId}
-        onChange={v => onChange(v ? { ...value, registerId: v, sessionId: '' } : EMPTY_SCOPE)}>
-        <option value="">Toutes les caisses</option>
-        {options.registers.map(r => <option key={r.id} value={r.id}>{registerText(r.code, r.name)}</option>)}
-      </Field>
+      <Field label="Caisse" icon={<Monitor className="w-3.5 h-3.5" />} value={value.registerId}
+        onChange={v => onChange(v ? { ...value, registerId: v, sessionId: '' } : EMPTY_SCOPE)}
+        options={[
+          { value: '', label: 'Toutes les caisses' },
+          ...options.registers.map(register => ({ value: register.id, label: registerText(register.code, register.name) })),
+        ]} />
 
       {options.elevated && (
-        <Field icon={<User className="w-3.5 h-3.5" />} active={!!value.userId} value={value.userId}
-          onChange={v => onChange({ ...value, userId: v, sessionId: '' })}>
-          <option value="">Tous les caissiers</option>
-          {options.cashiers.map(c => <option key={c.id} value={c.id}>{c.name || 'Sans nom'}</option>)}
-        </Field>
+        <Field label="Caissier" icon={<User className="w-3.5 h-3.5" />} value={value.userId}
+          onChange={v => onChange({ ...value, userId: v, sessionId: '' })}
+          options={[
+            { value: '', label: 'Tous les caissiers' },
+            ...options.cashiers.map(cashier => ({ value: cashier.id, label: cashier.name || 'Sans nom' })),
+          ]} />
       )}
 
       {showSession && (
-        <Field icon={<Clock className="w-3.5 h-3.5" />} active={!!value.sessionId} value={value.sessionId}
-          onChange={v => onChange({ ...value, sessionId: v })}>
-          <option value="">Toutes les sessions</option>
-          {sessions.map(s => <option key={s.id} value={s.id}>{sessionLabel(s, options.elevated)}</option>)}
-        </Field>
+        <Field label="Session de caisse" icon={<Clock className="w-3.5 h-3.5" />} value={value.sessionId}
+          onChange={v => onChange({ ...value, sessionId: v })}
+          options={[
+            { value: '', label: 'Toutes les sessions' },
+            ...sessions.map(session => ({ value: session.id, label: sessionLabel(session, options.elevated) })),
+          ]} />
       )}
 
       {hasFilter && (

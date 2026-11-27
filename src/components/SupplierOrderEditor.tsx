@@ -540,7 +540,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-neutral-500 tabular-nums">
             {validItems.length} ligne{validItems.length !== 1 ? 's' : ''}
-            {' · '}{totalQtyItems} article{totalQtyItems !== 1 ? 's' : ''}
+            {' │ '}{totalQtyItems} article{totalQtyItems !== 1 ? 's' : ''}
           </span>
           <span className="text-xs font-black text-neutral-900 num px-3 min-w-[100px] text-right">
             TOTAL {formatFCFA(subtotal)}

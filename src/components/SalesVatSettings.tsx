@@ -65,7 +65,7 @@ export function SalesVatSettings() {
             return (
               <label key={id ?? 'company'} className="flex flex-wrap items-center justify-between gap-2 py-3">
                 <span className="min-w-0 text-sm font-semibold text-[var(--w-text)]">{name}</span>
-                <select aria-label={`TVA · ${name}`} className="input-field max-w-full sm:w-72" value={value}
+                <select aria-label={`TVA │ ${name}`} className="input-field max-w-full sm:w-72" value={value}
                   disabled={saving} onChange={event => void save(id, event.target.value)}>
                   {id && <option value="inherit">Hériter de l’entreprise ({companyEnabled ? 'activée' : 'désactivée'})</option>}
                   <option value="enabled">TVA activée</option>

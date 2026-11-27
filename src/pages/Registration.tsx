@@ -39,7 +39,7 @@ function PlanPrice({ plan, cycle }: { plan: Plan; cycle: RegistrationRequest['cy
   const amount = Number(cycle === 'yearly' ? plan.price_yearly : plan.price_monthly);
   return amount > 0
     ? <>{formatFCFA(amount)} <small>/ {cycle === 'yearly' ? 'an' : 'mois'}</small></>
-    : <>Gratuit{plan.trial_days > 0 && <small> · {plan.trial_days} jours</small>}</>;
+    : <>Gratuit{plan.trial_days > 0 && <small> │ {plan.trial_days} jours</small>}</>;
 }
 
 export function Registration({ onExit, onRegistered, paymentId, resumePayment }: {

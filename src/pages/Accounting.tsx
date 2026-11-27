@@ -6,6 +6,7 @@ import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Save, Pencil as Edit2, Search, CheckCircle, PlayCircle, X, Check, Trash2, Download, FileText } from '../components/Icons';
 import {useAccountingJournals} from '../lib/accountingJournals';
+import { SearchableSelect } from '../components/SearchableSelect';
 import {AccountingEntryTemplates,type EntryTemplate} from '../components/AccountingEntryTemplates';
 import {AccountingTemplateWorkspace,type EntryTemplateSource} from '../components/AccountingTemplateWorkspace';
 import {AccountingGuide} from '../components/AccountingGuide';
@@ -158,7 +159,9 @@ function PlanTab() {
     <div className="acc-fill space-y-3">
       <div className="acc-toolbar acc-fixed">
         <input aria-label="Rechercher un compte" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Code ou intitulé…" className="input flex-1 min-w-0 sm:max-w-xs"/>
-        <select aria-label="Classe" value={classFilter} onChange={e=>setClassFilter(e.target.value)} className="input w-auto"><option value="">Toutes les classes</option>{[1,2,3,4,5,6,7,8].map(c=><option key={c} value={c}>Classe {c}</option>)}</select>
+        <SearchableSelect ariaLabel="Classe" className="acc-toolbar-select w-40" searchable={false} clearable={false}
+          value={classFilter} onChange={setClassFilter}
+          options={[{value:'',label:'Toutes les classes'}, ...Array.from({length:8},(_,i)=>({value:String(i+1),label:'Classe '+(i+1)}))]}/>
         <span className="acc-spacer"/><AccountingPlanIO accounts={planLoading||planError?[]:list} onImportDone={()=>{work?.refresh();void load();}}/>
         {canManage&&<button type="button" onClick={()=>{setEditing(null);setForm({});setOpen(true);}} className="btn-primary"><Plus size={16}/>Nouveau compte</button>}
       </div>
@@ -199,6 +202,10 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
   const journalCatalog=useAccountingJournals(tenant?.id,work?.revision??0);
   const journalOptions=journalCatalog.rows.map(j=>({code:j.code,name:j.name,active:j.is_active}));
   const journalLabels=Object.fromEntries(journalOptions.map(j=>[j.code,j.name]));
+  const journalFilterOptions = [
+    { value: '', label: 'Tous les journaux' },
+    ...journalOptions.map(journal => ({ value: journal.code, label: journal.code + ' — ' + journal.name + (journal.active ? '' : ' (désactivé)') })),
+  ];
   const { success, error } = useToast();
   const { can } = usePermissions();
   const canManage = can('manage_accounting');
@@ -447,7 +454,7 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
       if(e){error(e.message+(!occurrence?' — En cas de réponse incertaine, réessayez la même saisie sans la modifier.':''));return;}
       if(!(data as any)?.success){error((data as any)?.error||'Erreur');return;}
       if(pendingKey&&sessionStorage.getItem(pendingKey)===requestId)sessionStorage.removeItem(pendingKey);
-      success('Écriture '+(data as any).piece_number+' enregistrée'+(releaseAfter&&(data as any).lock_released?' · accès libéré':''));
+      success('Écriture '+(data as any).piece_number+' enregistrée'+(releaseAfter&&(data as any).lock_released?' │ accès libéré':''));
       if(releaseAfter)void editLease.action('status');
       setOpen(false);
       setOccurrence(null);setEntryLines([newLine(),newLine()]);
@@ -484,7 +491,7 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
               <input type="date" aria-label="Date comptable" min="2000-01-01" max={new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'})} value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} className="input" disabled={saving||!!occurrence} />
             </div>
           </div>
-        <DocumentEditLeaseBar lease={editLease} dirty={dirtyEntry} saving={saving} label={form.journal_type+" · "+form.entry_date.slice(0,7)} onSaveAndRelease={dirtyEntry&&isBalanced&&readyLines&&!!form.description.trim()&&!accountLoading&&!accountError&&!journalCatalog.loading&&!journalCatalog.error?()=>void save(true):undefined}/>
+        <DocumentEditLeaseBar lease={editLease} dirty={dirtyEntry} saving={saving} label={form.journal_type+" │ "+form.entry_date.slice(0,7)} onSaveAndRelease={dirtyEntry&&isBalanced&&readyLines&&!!form.description.trim()&&!accountLoading&&!accountError&&!journalCatalog.loading&&!journalCatalog.error?()=>void save(true):undefined}/>
         {tenant&&<AccountingEntryTemplates
           tenantId={tenant.id}
           canSave={canManage&&isBalanced&&readyLines&&!!form.description.trim()&&journalOptions.some(j=>j.code===form.journal_type&&j.active)&&!accountLoading&&!accountError}
@@ -500,7 +507,7 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
         />}
         <fieldset disabled={saving||!editLease.held} className="space-y-2" onKeyDown={e=>{if((e.target as HTMLElement).closest('.acc-template-strip'))return;if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();void save();}else if(e.key==='F2'){e.preventDefault();addLine();}}}>
           {(journalCatalog.error||accountError)&&<p role="alert" className="text-xs text-red-700">{journalCatalog.error||accountError}</p>}
-          {occurrence&&<div className="acc-toolbar"><strong className="text-xs">Échéance mensuelle : {occurrence.name} · {formatDate(occurrence.due)}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Détacher cette échéance ? La saisie actuelle sera effacée et l’échéance restera à traiter.')){setOccurrence(null);setEntryLines([newLine(),newLine()]);setForm(p=>({...p,description:'',reference:'',entry_date:new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'})}));}}}>Annuler l’échéance</button></div>}
+          {occurrence&&<div className="acc-toolbar"><strong className="text-xs">Échéance mensuelle : {occurrence.name} │ {formatDate(occurrence.due)}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Détacher cette échéance ? La saisie actuelle sera effacée et l’échéance restera à traiter.')){setOccurrence(null);setEntryLines([newLine(),newLine()]);setForm(p=>({...p,description:'',reference:'',entry_date:new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'})}));}}}>Annuler l’échéance</button></div>}
           <div className="acc-entry-header">
             <div>
               <label className="label">Référence</label>
@@ -513,7 +520,7 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
           </div>
 
           <div className="acc-entry-grid" ref={gridRef}>
-            <div className="acc-toolbar"><strong className="text-xs">Lignes d'écriture</strong><span className="acc-spacer"/><span className="text-[11px] text-neutral-500 hidden md:inline">F2 Ajouter · F4 Contrepartie · Ctrl+Entrée Valider</span><button type="button" className="btn-secondary" onClick={addLine} disabled={entryLines.length>=500}><Plus size={15}/>Ligne</button></div>
+            <div className="acc-toolbar"><strong className="text-xs">Lignes d'écriture</strong><span className="acc-spacer"/><span className="text-[11px] text-neutral-500 hidden md:inline">F2 Ajouter │ F4 Contrepartie │ Ctrl+Entrée Valider</span><button type="button" className="btn-secondary" onClick={addLine} disabled={entryLines.length>=500}><Plus size={15}/>Ligne</button></div>
             {accountLoading&&<p className="text-xs">Chargement du plan comptable…</p>}
             <datalist id={'acc-entry-accounts-'+windowId}>{accounts.map(a=><option key={a.code} value={a.code}>{a.name}</option>)}</datalist>
             <div className="acc-entry-grid-head"><span>N°</span><span>Compte / intitulé</span><span>Libellé</span><span>Débit (FCFA)</span><span>Crédit (FCFA)</span><span>Actions</span></div>
@@ -538,7 +545,8 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
     return (
     <div className="acc-fill space-y-3">
       <div className="acc-toolbar acc-fixed">
-        <select aria-label="Journal" value={journalType} onChange={e=>{setJournalPage(0);setJournalType(e.target.value);}} className="input w-auto"><option value="">Tous les journaux</option>{journalOptions.map(j=><option key={j.code} value={j.code}>{j.code} — {j.name}{!j.active?' (désactivé)':''}</option>)}</select>
+        <SearchableSelect ariaLabel="Journal" className="acc-toolbar-select w-52" searchable={false} clearable={false} wrapLabels
+          value={journalType} options={journalFilterOptions} onChange={value=>{setJournalPage(0);setJournalType(value);}}/>
         <label>Du <input aria-label="Date de début" type="date" className="input w-auto" value={fromDate} onChange={e=>{setJournalPage(0);setFromDate(e.target.value);}}/></label>
         <label>Au <input aria-label="Date de fin" type="date" className="input w-auto" value={toDate} onChange={e=>{setJournalPage(0);setToDate(e.target.value);}}/></label>
         <span className="acc-spacer"/>
@@ -550,7 +558,7 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
       <AccountingTable fill label="Écritures du journal" footer={<AccountingPagination page={journalPage} size={journalSize} total={journalTotal} setPage={n=>{setContextRow(null);setJournalPage(n);}} setSize={n=>{setJournalPage(0);setJournalSize(n);}} disabled={loading}/>}>
         <table><thead><tr><th className="text-left">Pièce</th><th className="text-left hidden md:table-cell">Date</th><th className="text-left hidden md:table-cell">Journal</th><th className="text-left">Libellé</th><th className="text-left hidden lg:table-cell">Statut</th><th className="text-right">Débit</th><th className="text-right hidden sm:table-cell">Crédit</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{loading?<tr><td colSpan={8} className="text-center"><Loader2 className="mx-auto animate-spin" size={20}/></td></tr>:entries.length===0?<tr><td colSpan={8} className="text-center text-neutral-500">Aucune écriture sur cette période.</td></tr>:entries.map(e=><tr key={e.id} onContextMenu={event=>{event.preventDefault();setContextRow({id:e.id,x:event.clientX,y:event.clientY});}}>
-          <td><button type="button" className="text-left font-medium underline-offset-2 hover:underline" onClick={()=>void openDetail(e)}>{e.entry_number}</button><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(e.entry_date)} · {e.journal_type}</span></td>
+          <td><button type="button" className="text-left font-medium underline-offset-2 hover:underline" onClick={()=>void openDetail(e)}>{e.entry_number}</button><span className="block md:hidden text-[11px] text-neutral-500">{formatDate(e.entry_date)} │ {e.journal_type}</span></td>
           <td className="hidden md:table-cell whitespace-nowrap">{formatDate(e.entry_date)}</td><td className="hidden md:table-cell">{e.journal_type}</td>
           <td className="break-words">{e.description}<span className="block lg:hidden text-[11px] text-neutral-500">{e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
           <td className="hidden lg:table-cell"><span className={'acc-status '+(e.status==='posted'?'valid':e.status==='cancelled'?'cancelled':'draft')}>{e.status==='posted'&&<Check size={13}/>} {e.status==='posted'?'Validée':e.status==='cancelled'?'Annulée':'Brouillon'}</span></td>
@@ -576,20 +584,12 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
             </div>
           </div>
           <div className="acc-fields acc-fields-2">
-            <div>
-              <label className="label">Journal</label>
-              <select value={exportJournal} onChange={e => { setExportJournal(e.target.value); setExportData(null); }} className="input" disabled={exportLoading}>
-                <option value="">Tous les journaux</option>
-                {journalOptions.map(j => <option key={j.code} value={j.code}>{j.code} — {j.name}{!j.active?' (désactivé)':''}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Format</label>
-              <select value={exportFormat} onChange={e => setExportFormat(e.target.value as 'xlsx' | 'csv')} className="input" disabled={exportLoading}>
-                <option value="xlsx">Excel (.xlsx)</option>
-                <option value="csv">CSV (séparateur ;)</option>
-              </select>
-            </div>
+            <SearchableSelect label="Journal" className="acc-filter-select" searchable={false} clearable={false} wrapLabels
+              value={exportJournal} options={journalFilterOptions} disabled={exportLoading}
+              onChange={value=>{setExportJournal(value);setExportData(null);}}/>
+            <SearchableSelect label="Format" className="acc-filter-select" searchable={false} clearable={false} wrapLabels
+              value={exportFormat} options={[{value:'xlsx',label:'Excel (.xlsx)'},{value:'csv',label:'CSV (séparateur ;)'}]}
+              disabled={exportLoading} onChange={value=>setExportFormat(value as 'xlsx' | 'csv')}/>
           </div>
 
           {exportError && (
@@ -750,8 +750,8 @@ function BalanceTab() {
 
       {bulkReport&&<section className="acc-section-head space-y-2" aria-live="polite">
         <div className="acc-toolbar"><strong className="text-sm">Compte rendu — {bulkReport.label}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>setBulkReport(null)}>Fermer</button></div>
-        <p className="text-xs">{bulkReport.posted} pièce(s) comptabilisée(s) · {bulkReport.errors} erreur(s)</p>
-        {bulkReport.skipped.length>0&&<p className="text-xs">{bulkReport.skipped.join(' · ')}</p>}
+        <p className="text-xs">{bulkReport.posted} pièce(s) comptabilisée(s) │ {bulkReport.errors} erreur(s)</p>
+        {bulkReport.skipped.length>0&&<p className="text-xs">{bulkReport.skipped.join(' │ ')}</p>}
         {bulkReport.details.length>0&&<details open><summary className="text-xs cursor-pointer">Détail des opérations en erreur ({bulkReport.details.length})</summary><div className="max-h-64 overflow-auto"><table className="w-full text-xs"><thead><tr><th>Référence</th><th>Motif</th></tr></thead><tbody>{bulkReport.details.map((d,i)=><tr key={i}><td className="break-all">{d.reference}</td><td>{d.error}</td></tr>)}</tbody></table></div></details>}
       </section>}
       <AccountingPeriodBooks mode="balance"/>
@@ -857,7 +857,7 @@ function TiersTab() {
             <tbody>
               {!loading && tiersPaging.rows.map(row => (
                 <tr key={`${row.tiers_id}:${row.account_code}`} data-selected={selected?.tiers_id === row.tiers_id}>
-                  <td><button type="button" className="acc-table-link" aria-pressed={selected?.tiers_id === row.tiers_id} onClick={() => void loadExtrait(row)}>{row.tiers_name}</button><span className="acc-table-meta">{row.account_code}</span><span className="acc-table-meta acc-amount-compact">D {formatMovement(row.total_debit)} · C {formatMovement(row.total_credit)}</span></td>
+                  <td><button type="button" className="acc-table-link" aria-pressed={selected?.tiers_id === row.tiers_id} onClick={() => void loadExtrait(row)}>{row.tiers_name}</button><span className="acc-table-meta">{row.account_code}</span><span className="acc-table-meta acc-amount-compact">D {formatMovement(row.total_debit)} │ C {formatMovement(row.total_credit)}</span></td>
                   <td className="text-right acc-amount-col">{formatMovement(row.total_debit)}</td>
                   <td className="text-right acc-amount-col">{formatMovement(row.total_credit)}</td>
                   <td className="text-right font-semibold">{formatAccountingAmount(row.solde)}</td>
@@ -870,14 +870,14 @@ function TiersTab() {
       </section>
 
       {selected && <section className="acc-third-party-pane" aria-label="Extrait du tiers">
-        <div className="acc-section-title"><h2>{selected.tiers_name}</h2><span className="acc-table-meta">Extrait · {selected.account_code}</span></div>
+        <div className="acc-section-title"><h2>{selected.tiers_name}</h2><span className="acc-table-meta">Extrait │ {selected.account_code}</span></div>
         <AccountingTable fill label="Mouvements du tiers" footer={<AccountingPagination {...extraitPaging} disabled={extraitLoading} />}>
           <table className="acc-third-party-table">
             <thead><tr><th className="text-left">Pièce / libellé</th><th className="text-right acc-amount-col">Débit</th><th className="text-right acc-amount-col">Crédit</th><th className="text-right">Solde (FCFA)</th></tr></thead>
             <tbody>
               {!extraitLoading && extraitPaging.rows.map((line, index) => (
                 <tr key={`${line.entry_number}:${index}`}>
-                  <td><button type="button" className="acc-table-link" onClick={() => work?.openPiece({entryNumber: line.entry_number})}>{line.entry_number}</button><span className="acc-table-meta">{formatDate(line.entry_date)}</span>{line.label && <span className="acc-table-meta">{line.label}</span>}<span className="acc-table-meta acc-amount-compact">D {formatMovement(line.debit)} · C {formatMovement(line.credit)}</span></td>
+                  <td><button type="button" className="acc-table-link" onClick={() => work?.openPiece({entryNumber: line.entry_number})}>{line.entry_number}</button><span className="acc-table-meta">{formatDate(line.entry_date)}</span>{line.label && <span className="acc-table-meta">{line.label}</span>}<span className="acc-table-meta acc-amount-compact">D {formatMovement(line.debit)} │ C {formatMovement(line.credit)}</span></td>
                   <td className="text-right acc-amount-col">{formatMovement(line.debit)}</td>
                   <td className="text-right acc-amount-col">{formatMovement(line.credit)}</td>
                   <td className="text-right font-semibold">{formatAccountingAmount(line.solde_cumule)}</td>

@@ -18,7 +18,7 @@ type Section = 'periods' | 'payments';
 
 function periodLabel({ started_at, ends_at }: Dates) {
   return ends_at ? `Du ${formatDate(started_at)} au ${formatDate(ends_at)}`
-    : `À compter du ${formatDate(started_at)} · Sans échéance`;
+    : `À compter du ${formatDate(started_at)} │ Sans échéance`;
 }
 
 function periodStatus(period: Period) {
@@ -89,7 +89,7 @@ export function SubscriptionHistory({ initialSection = 'periods' }: { initialSec
                 <div className="min-w-0">
                   <p className="break-words text-sm font-semibold text-[var(--w-text)]">{period.plan_name}</p>
                   <p className="mt-1 text-xs text-[var(--w-text-sec)]">
-                    {period.billing_cycle && `${subscriptionCycleLabels[period.billing_cycle]} · `}
+                    {period.billing_cycle && `${subscriptionCycleLabels[period.billing_cycle]} │ `}
                     {periodLabel(period)}
                   </p>
                 </div>
@@ -104,10 +104,10 @@ export function SubscriptionHistory({ initialSection = 'periods' }: { initialSec
             <li key={payment.id} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3">
               <div className="min-w-0">
                 <p className="break-words text-sm font-semibold text-[var(--w-text)]">
-                  {payment.plan_name} · {subscriptionPaymentDuration(payment)} · {formatFCFA(payment.amount)}
+                  {payment.plan_name} │ {subscriptionPaymentDuration(payment)} │ {formatFCFA(payment.amount)}
                 </p>
                 <p className="mt-1 text-xs text-[var(--w-text-sec)]">
-                  {payment.paid_at && `${formatDateTime(payment.paid_at)} · `}{subscriptionPaymentLabel(payment)}
+                  {payment.paid_at && `${formatDateTime(payment.paid_at)} │ `}{subscriptionPaymentLabel(payment)}
                 </p>
                 <p className="mt-1 text-xs text-[var(--w-text-sec)]">
                   {payment.period ? periodLabel(payment.period) : 'Période à confirmer'}

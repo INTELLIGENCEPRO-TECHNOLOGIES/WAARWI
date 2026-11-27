@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { ConfirmDialog, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { PageSearch } from '../components/PageSearch';
 
 type OrderStatus = 'nouvelle' | 'confirmee' | 'en_preparation' | 'prete' | 'livree' | 'annulee';
@@ -253,7 +254,7 @@ export function OnlineOrders() {
           <h1>${escapeHtml(t.name || '')}</h1>
           ${t.legal_name ? `<div class="legal">${escapeHtml(t.legal_name)}</div>` : ''}
           <div class="info">${tenantInfoLines.join('<br/>')}</div>
-          ${idLines.length ? `<div class="ids">${idLines.join(' · ')}</div>` : ''}
+          ${idLines.length ? `<div class="ids">${idLines.join(' │ ')}</div>` : ''}
         </div>
         <div style="text-align:right">
           <div class="doc-tag">Commande en ligne</div>
@@ -321,22 +322,15 @@ export function OnlineOrders() {
       {/* Filter panel */}
       {showFilters && (
         <div className="py-3 border-b border-neutral-100 grid grid-cols-1 sm:grid-cols-2 gap-2.5 animate-slide-down">
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1">Paiement</label>
-            <select value={payFilter} onChange={e => setPayFilter(e.target.value as any)} className="input h-9 text-xs">
-              <option value="all">Tous paiements</option>
-              {Object.entries(PAYMENT_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1">Période</label>
-            <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="input h-9 text-xs">
-              <option value="all">Toutes périodes</option>
-              <option value="today">Aujourd'hui</option>
-              <option value="7d">7 derniers jours</option>
-              <option value="30d">30 derniers jours</option>
-            </select>
-          </div>
+          <SearchableSelect label="Paiement" value={payFilter} onChange={value => setPayFilter(value as typeof payFilter)}
+            className="min-w-0" searchable={false} clearable={false}
+            options={[{ value: 'all', label: 'Tous les paiements' }, ...Object.entries(PAYMENT_META).map(([value, meta]) => ({ value, label: meta.label }))]} />
+          <SearchableSelect label="Période" value={dateFilter} onChange={value => setDateFilter(value as typeof dateFilter)}
+            className="min-w-0" searchable={false} clearable={false}
+            options={[
+              { value: 'all', label: 'Toutes les périodes' }, { value: 'today', label: 'Aujourd’hui' },
+              { value: '7d', label: '7 derniers jours' }, { value: '30d', label: '30 derniers jours' },
+            ]} />
         </div>
       )}
 
@@ -369,7 +363,7 @@ export function OnlineOrders() {
 
       {/* Inline summary */}
       <div className="flex items-center justify-between text-[11px] text-neutral-500 font-semibold px-1">
-        <span>{totalActive} commande{totalActive > 1 ? 's' : ''}{statusFilter !== 'all' ? ` · ${STATUS_META[statusFilter as OrderStatus].label}` : ''}</span>
+        <span>{totalActive} commande{totalActive > 1 ? 's' : ''}{statusFilter !== 'all' ? ` │ ${STATUS_META[statusFilter as OrderStatus].label}` : ''}</span>
         {(statusFilter !== 'all' || payFilter !== 'all' || dateFilter !== 'all' || query) && (
           <button onClick={() => { setStatusFilter('all'); setPayFilter('all'); setDateFilter('all'); setQuery(''); }} className="text-brand-600 hover:text-brand-700 flex items-center gap-0.5">
             Réinitialiser <X className="w-3 h-3" />
@@ -481,7 +475,7 @@ export function OnlineOrders() {
                 <span className={`w-1.5 h-1.5 rounded-full ${STATUS_META[selected.status].dot}`} />
                 {STATUS_META[selected.status].label}
               </span>
-              <span className="text-neutral-300">·</span>
+              <span aria-hidden="true" className="w-inline-divider mx-1" />
               <span className={`inline-flex items-center text-[11px] font-bold ${PAYMENT_META[selected.payment_status].cls}`}>
                 {PAYMENT_META[selected.payment_status].label}
               </span>
@@ -557,7 +551,7 @@ export function OnlineOrders() {
                         {it.internal_ref && <div className="text-[10px] font-mono text-neutral-400 mt-0.5">{it.internal_ref}</div>}
                         <div className="text-[10px] text-neutral-500 font-medium mt-0.5">
                           Qté <span className="font-bold text-neutral-700 num">{it.quantity}</span>
-                          {' · '}
+                          {' │ '}
                           PU <span className="font-bold text-neutral-700 num">{formatFCFA(it.unit_price)}</span>
                         </div>
                       </div>

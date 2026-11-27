@@ -256,7 +256,7 @@
 .pa-table .pa-row-actions { grid-area: actions; }
 @container (width < 43rem) {
   .pa-row-cycle { display: inline; }
-  .pa-row-cycle::before { content: " · "; }
+  .pa-row-cycle::before { content: " │ "; }
   .pa-subscription-list .pa-row-date,
   .pa-payment-list .pa-row-amount,
   .pa-offers-list .pa-row-date,

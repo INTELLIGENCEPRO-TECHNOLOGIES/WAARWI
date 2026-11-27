@@ -702,7 +702,7 @@ export function Stock() {
         updated_at: new Date().toISOString(),
       }).eq('id', docEditDoc.id);
 
-      success(`Document ${docEditDoc.doc_number} mis à jour · stock régénéré`);
+      success(`Document ${docEditDoc.doc_number} mis à jour │ stock régénéré`);
       setDocEditOpen(false);
       setDocEditDoc(null);
       await loadStockDocs();
@@ -721,7 +721,7 @@ export function Stock() {
       const { error: rErr } = await supabase.rpc('reverse_stock_document', { p_document_id: doc.id });
       if (rErr) throw rErr;
       await supabase.from('stock_documents').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', doc.id);
-      success(`Document ${doc.doc_number} annulé · stock régénéré`);
+      success(`Document ${doc.doc_number} annulé │ stock régénéré`);
       setDocDeleteConfirm(null);
       await loadStockDocs();
       await load(true);
@@ -1303,30 +1303,23 @@ export function Stock() {
             if (ownDepots.length === 0) return null;
             return (
               <div className="flex items-center gap-2 pb-1">
-                <MapPin className="w-3 h-3 text-neutral-400 shrink-0" />
-                <div className="relative flex-1 min-w-0">
-                  <select
-                    value={mvSiteId}
-                    onChange={e => {
-                      const newId = e.target.value;
-                      setMvSiteId(newId);
-                      setMvPage(1);
-                      try {
-                        if (tenant?.id && profile?.id) {
-                          localStorage.setItem(`mvSiteId:${tenant.id}:${profile.id}`, newId);
-                        }
-                      } catch {}
-                    }}
-                    className="bare-input text-[11px] font-semibold py-1 w-full pr-5"
-                  >
-                    <option value="">Tous les emplacements</option>
-                    {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
-                    {ownDepots.map(d => (
-                      <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3 h-3 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
+                <MapPin className="w-3 h-3 text-neutral-400 shrink-0" aria-hidden="true" />
+                <SearchableSelect ariaLabel="Emplacement" value={mvSiteId} className="flex-1 min-w-0"
+                  searchable={ownDepots.length > 7} clearable={false} wrapLabels
+                  onChange={newId => {
+                    setMvSiteId(newId);
+                    setMvPage(1);
+                    try {
+                      if (tenant?.id && profile?.id) {
+                        localStorage.setItem(`mvSiteId:${tenant.id}:${profile.id}`, newId);
+                      }
+                    } catch {}
+                  }}
+                  options={[
+                    { value: '', label: 'Tous les emplacements' },
+                    ...(currentSite ? [{ value: currentSite.id, label: `${currentSite.name} (Magasin)` }] : []),
+                    ...ownDepots.map(depot => ({ value: depot.id, label: `${depot.name} (Dépôt)` })),
+                  ]} />
               </div>
             );
           })()}
@@ -1392,7 +1385,7 @@ export function Stock() {
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-neutral-500">
                       <span className="font-mono truncate">{(m.articles as any)?.internal_ref}</span>
-                      <span className="shrink-0">·</span>
+                      <span aria-hidden="true" className="w-inline-divider mx-1" />
                       <span className="shrink-0 num">{formatDateTime(m.created_at)}</span>
                     </div>
                     {isTransfer ? (
@@ -1502,11 +1495,11 @@ export function Stock() {
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-neutral-500 flex-wrap">
                           <span className="num">{d.line_count} ligne{d.line_count > 1 ? 's' : ''}</span>
-                          <span>·</span>
+                          <span aria-hidden="true" className="w-inline-divider mx-1" />
                           <span className="num">Total: {Number(d.total_qty).toLocaleString('fr-FR')}</span>
-                          <span>·</span>
+                          <span aria-hidden="true" className="w-inline-divider mx-1" />
                           <span className="num">{formatDateTime(d.created_at)}</span>
-                          {d.dest_site_id && (<><span>·</span><span className="truncate">{findSiteName(d.site_id)} → {findSiteName(d.dest_site_id)}</span></>)}
+                          {d.dest_site_id && (<><span aria-hidden="true" className="w-inline-divider mx-1" /><span className="truncate">{findSiteName(d.site_id)} → {findSiteName(d.dest_site_id)}</span></>)}
                         </div>
                         {d.note && <div className="text-[10px] text-neutral-400 break-words mt-0.5">{d.note}</div>}
                       </div>
@@ -1885,9 +1878,9 @@ export function Stock() {
           <div className="space-y-3">
             <div className="flex items-center gap-3 text-[11px] py-2 border-b border-neutral-100">
               <span className="font-bold text-neutral-900">{docTypeMeta[docDetailDoc.doc_type]?.label || docDetailDoc.doc_type}</span>
-              <span className="text-neutral-400">·</span>
+              <span aria-hidden="true" className="w-inline-divider mx-1" />
               <span className="font-semibold text-neutral-700 num">{formatDateTime(docDetailDoc.created_at)}</span>
-              <span className="text-neutral-400">·</span>
+              <span aria-hidden="true" className="w-inline-divider mx-1" />
               <span className="font-semibold text-neutral-700">{findSiteName(docDetailDoc.site_id)}{docDetailDoc.dest_site_id ? ` → ${findSiteName(docDetailDoc.dest_site_id)}` : ''}</span>
             </div>
             {docDetailDoc.note && (
@@ -2428,7 +2421,7 @@ function StockListEditView({ filtered, listEditMode, listEdits, setListEdits, li
         }
         savedCount++;
       }
-      successToast(`${savedCount} article${savedCount > 1 ? 's' : ''} mis à jour · ${docRow.doc_number}`);
+      successToast(`${savedCount} article${savedCount > 1 ? 's' : ''} mis à jour │ ${docRow.doc_number}`);
       const modeType = listEditMode === 'transfer' ? 'transfer_out' : listEditMode === 'inventory' ? 'inventory' : listEditMode === 'in' ? 'adjustment_in' : 'adjustment_out';
       const items = entries.map(e => {
         const row = filtered.find(r => r.article_id === e.article_id);

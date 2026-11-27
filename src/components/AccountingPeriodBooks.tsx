@@ -98,7 +98,7 @@ function CompactLedgerRows({ row, first, last, openAccount, openPiece }: { row: 
   </tr>}
   <tr>
    <td>{row.entry_number && <button type="button" className="acc-table-link" onClick={openPiece}>{row.entry_number}</button>}
-    <span className="acc-table-meta">{date(row.entry_date)}{row.journal_type ? ` · ${row.journal_type}` : ''}</span>
+    <span className="acc-table-meta">{date(row.entry_date)}{row.journal_type ? ` │ ${row.journal_type}` : ''}</span>
     <span>{row.label || row.reference || '—'}</span>
    </td>
    <td><BookAmounts values={[[ 'Débit', amount(row.debit) ], [ 'Crédit', amount(row.credit) ], [ 'Solde cumulé', dc(row.running_balance) ]]}/></td>

@@ -1,5 +1,5 @@
 import { useRealtimeRefresh, useRealtimeTick } from '../lib/useRealtimeData';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Package, Check, Download, X, Filter, CheckCircle2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { PageSearch } from '../components/PageSearch';
 import './ArticleCatalog.css';
 
@@ -43,7 +44,6 @@ export function MasterCatalog() {
   const [brandFilter, setBrandFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const filterId = useId();
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 60;
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -381,11 +381,9 @@ export function MasterCatalog() {
       </header>
 
       <div className="article-toolbar" aria-label="Sélection dans le catalogue">
-        <select aria-label="Sélection par lot" value="" className="article-page-select"
-          onChange={event => { if (event.target.value) selectBatch(Number(event.target.value)); }}>
-          <option value="">Sélection par lot</option>
-          {[100, 200, 300, 400, 500].map(size => <option key={size} value={size}>{size} articles</option>)}
-        </select>
+        <SearchableSelect ariaLabel="Sélection par lot" placeholder="Sélection par lot" value=""
+          onChange={value => selectBatch(Number(value))} searchable={false} clearable={false}
+          options={[100, 200, 300, 400, 500].map(size => ({ value: String(size), label: `${size} articles` }))} />
         {paginated.some(item => !importedIds.has(item.id)) && <button type="button" onClick={selectPage} className="btn-ghost article-button">
           <Check size={15} aria-hidden="true" />Sélectionner la page
         </button>}
@@ -458,35 +456,17 @@ export function MasterCatalog() {
           <button type="button" onClick={() => setFiltersOpen(false)} className="btn-primary article-button"><Check size={15} aria-hidden="true" />Appliquer</button>
         </>}>
         <div className="space-y-3 flat-form">
-          <div>
-            <label htmlFor={filterId + '-category'} className="label">Catégorie</label>
-            <select id={filterId + '-category'} value={categoryId} onChange={event => { setCategoryId(event.target.value); setSubcategoryId(''); }} className="input text-sm">
-              <option value="">Toutes les catégories</option>
-              {rootCategories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-            </select>
-          </div>
-          {subcategories.length > 0 && <div>
-            <label htmlFor={filterId + '-subcategory'} className="label">Sous-catégorie</label>
-            <select id={filterId + '-subcategory'} value={subcategoryId} onChange={event => setSubcategoryId(event.target.value)} className="input text-sm">
-              <option value="">Toutes les sous-catégories</option>
-              {subcategories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-            </select>
-          </div>}
-          <div>
-            <label htmlFor={filterId + '-brand'} className="label">Marque</label>
-            <select id={filterId + '-brand'} value={brandFilter} onChange={event => setBrandFilter(event.target.value)} className="input text-sm">
-              <option value="">Toutes les marques</option>
-              {brands.map(brand => <option key={brand} value={brand}>{brand}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor={filterId + '-status'} className="label">Statut d’import</label>
-            <select id={filterId + '-status'} value={statusFilter} onChange={event => setStatusFilter(event.target.value as FilterStatus)} className="input text-sm">
-              <option value="all">Tous</option>
-              <option value="available">Disponibles</option>
-              <option value="imported">Déjà importés</option>
-            </select>
-          </div>
+          <SearchableSelect label="Catégorie" value={categoryId} onChange={value => { setCategoryId(value); setSubcategoryId(''); }}
+            clearable={false} searchable={rootCategories.length > 8} wrapLabels
+            options={[{ value: '', label: 'Toutes les catégories' }, ...rootCategories.map(category => ({ value: category.id, label: category.name }))]} />
+          {subcategories.length > 0 && <SearchableSelect label="Sous-catégorie" value={subcategoryId} onChange={setSubcategoryId}
+            clearable={false} searchable={subcategories.length > 8} wrapLabels
+            options={[{ value: '', label: 'Toutes les sous-catégories' }, ...subcategories.map(category => ({ value: category.id, label: category.name }))]} />}
+          <SearchableSelect label="Marque" value={brandFilter} onChange={setBrandFilter} clearable={false} searchable={brands.length > 8} wrapLabels
+            options={[{ value: '', label: 'Toutes les marques' }, ...brands.map(brand => ({ value: brand, label: brand }))]} />
+          <SearchableSelect label="Statut d’import" value={statusFilter} onChange={value => setStatusFilter(value as FilterStatus)}
+            clearable={false} searchable={false}
+            options={[{ value: 'all', label: 'Tous' }, { value: 'available', label: 'Disponibles' }, { value: 'imported', label: 'Déjà importés' }]} />
         </div>
       </Modal>
 
@@ -506,7 +486,7 @@ export function MasterCatalog() {
                 <p className="article-muted">{confirmOpen.label}</p>
                 <p><strong className="num">{confirmOpen.count}</strong> article{confirmOpen.count === 1 ? '' : 's'} à ajouter. Les articles déjà importés seront ignorés.</p>
                 {isMultiSite && !sharedArticles && currentSite && (
-                  <p className="article-muted">Catalogue indépendant · magasin <strong>{currentSite.name}</strong>.</p>
+                  <p className="article-muted">Catalogue indépendant │ magasin <strong>{currentSite.name}</strong>.</p>
                 )}
               </>
             )}
@@ -524,7 +504,7 @@ export function MasterCatalog() {
               <div><dt>Erreurs</dt><dd className="num">{lastResult.errors?.length || 0}</dd></div>
             </dl>
             {lastResult.errors?.length > 0 && <ul className="article-result-errors">{lastResult.errors.slice(0, 10).map((item, index) => (
-              <li key={index}>{item.designation || item.item_id} · {item.error}</li>
+              <li key={index}>{item.designation || item.item_id} │ {item.error}</li>
             ))}</ul>}
           </div>
         )}

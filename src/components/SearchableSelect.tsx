@@ -7,6 +7,7 @@ export type SelectOption = {
   value: string;
   label: string;
   sublabel?: string;
+  disabled?: boolean;
 };
 
 type Props = {
@@ -15,9 +16,11 @@ type Props = {
   onChange: (value: string) => void;
   placeholder?: string;
   label?: string;
+  ariaLabel?: string;
   disabled?: boolean;
   className?: string;
   searchable?: boolean;
+  clearable?: boolean;
   noBorder?: boolean;
   variant?: 'default' | 'underline';
   menuWidth?: number;
@@ -68,9 +71,11 @@ export function SearchableSelect({
   onChange,
   placeholder = '— Choisir —',
   label,
+  ariaLabel,
   disabled = false,
   className = '',
   searchable = true,
+  clearable = true,
   noBorder = false,
   variant = 'default',
   menuWidth,
@@ -91,7 +96,8 @@ export function SearchableSelect({
   const isUnderline = variant === 'underline';
   const selected = options.find(option => option.value === value);
   const visible = open && !disabled;
-  const canClear = !!value && !disabled;
+  const canClear = clearable && !!value && !disabled;
+  const accessibleName = ariaLabel ?? label;
   const textOverflow = wrapLabels ? 'break-words' : 'truncate';
 
   const filtered = useMemo(() => {
@@ -114,7 +120,8 @@ export function SearchableSelect({
   const show = () => {
     if (disabled) return;
     updatePos();
-    setHighlightIdx(0);
+    const selectedIndex = filtered.findIndex(option => option.value === value && !option.disabled);
+    setHighlightIdx(selectedIndex >= 0 ? selectedIndex : filtered.findIndex(option => !option.disabled));
     setOpen(true);
   };
 
@@ -123,7 +130,9 @@ export function SearchableSelect({
   }, [visible, searchable]);
 
   useEffect(() => {
-    setHighlightIdx(0);
+    setHighlightIdx(index => filtered[index] && !filtered[index].disabled && !query
+      ? index
+      : filtered.findIndex(option => !option.disabled));
   }, [filtered.length, query]);
 
   useEffect(() => {
@@ -163,6 +172,17 @@ export function SearchableSelect({
     close();
   };
 
+  function moveHighlight(direction: -1 | 1) {
+    setHighlightIdx(current => {
+      let index = current < 0 && direction < 0 ? filtered.length - 1 : current + direction;
+      while (index >= 0 && index < filtered.length) {
+        if (!filtered[index].disabled) return index;
+        index += direction;
+      }
+      return current;
+    });
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement | HTMLInputElement>) {
     if (event.nativeEvent.isComposing) return;
     if (!visible) {
@@ -175,15 +195,15 @@ export function SearchableSelect({
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        setHighlightIdx(index => Math.max(0, Math.min(index + 1, filtered.length - 1)));
+        moveHighlight(1);
         break;
       case 'ArrowUp':
         event.preventDefault();
-        setHighlightIdx(index => Math.max(0, index - 1));
+        moveHighlight(-1);
         break;
       case 'Enter':
         event.preventDefault();
-        if (filtered[highlightIdx]) choose(filtered[highlightIdx].value);
+        if (filtered[highlightIdx] && !filtered[highlightIdx].disabled) choose(filtered[highlightIdx].value);
         break;
       case 'Escape':
         event.preventDefault();
@@ -205,13 +225,13 @@ export function SearchableSelect({
       {searchable && (
         <div className="relative shrink-0 border-b border-[var(--w-separator)]">
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--w-text-muted)]" />
-          <input ref={inputRef} role="combobox" aria-label={label ? `Rechercher : ${label}` : 'Rechercher une option'}
+          <input ref={inputRef} role="combobox" aria-label={accessibleName ? `Rechercher : ${accessibleName}` : 'Rechercher une option'}
             aria-expanded="true" aria-autocomplete="list" aria-controls={listId} aria-activedescendant={activeOptionId}
             type="text" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={handleKeyDown}
             placeholder="Rechercher…" className="w-full bg-transparent py-2.5 pl-9 pr-3 text-[16px] text-[var(--w-text)] outline-none placeholder:text-[var(--w-text-muted)] sm:text-sm"/>
         </div>
       )}
-      <div ref={listRef} id={listId} role="listbox" aria-label={label || 'Options'}
+      <div ref={listRef} id={listId} role="listbox" aria-label={accessibleName || 'Options'}
         className="relative min-h-0 flex-auto divide-y divide-[var(--w-separator-l)] overflow-y-auto overscroll-contain">
         {filtered.length === 0 ? (
           <p className="px-3 py-2.5 text-sm text-[var(--w-text-sec)]">Aucun résultat.</p>
@@ -219,9 +239,9 @@ export function SearchableSelect({
           const current = option.value === value;
           return (
             <button key={option.value} id={`${listId}-${index}`} type="button" role="option" tabIndex={-1}
-              aria-selected={current} data-active={index === highlightIdx} onClick={() => choose(option.value)}
-              onPointerEnter={event => { if (event.pointerType === 'mouse') setHighlightIdx(index); }}
-              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm data-[active=true]:bg-[var(--w-hover)]
+              aria-selected={current} disabled={option.disabled} data-active={index === highlightIdx} onClick={() => choose(option.value)}
+              onPointerEnter={event => { if (event.pointerType === 'mouse' && !option.disabled) setHighlightIdx(index); }}
+              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm data-[active=true]:bg-[var(--w-hover)] disabled:cursor-not-allowed disabled:opacity-50
                 ${current ? 'font-medium text-[var(--w-text)]' : 'text-[var(--w-text-sec)]'}`}>
               <span className="min-w-0 flex-1">
                 <span className={`block ${textOverflow}`}>{option.label}</span>
@@ -245,11 +265,11 @@ export function SearchableSelect({
     <div className={isUnderline ? '' : className}>
       {label && <label className="label" htmlFor={triggerId}>{label}</label>}
       <div className="relative min-w-0">
-        <button ref={triggerRef} id={triggerId} type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={visible}
+        <button ref={triggerRef} id={triggerId} type="button" disabled={disabled} aria-label={ariaLabel} aria-describedby={accessibleName ? triggerId + "-value" : undefined} aria-haspopup="listbox" aria-expanded={visible}
           aria-controls={visible ? listId : undefined} onClick={visible ? close : show} onKeyDown={handleKeyDown}
           className={`flex w-full min-w-0 items-center gap-2 py-2.5 text-left text-sm focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--w-text)] disabled:cursor-not-allowed disabled:opacity-60
             ${triggerStyle} ${borderStyle} ${canClear ? 'pr-9' : ''}`}>
-          <span className={`min-w-0 flex-1 ${wrapLabels ? 'break-words' : 'truncate'} ${selected ? 'font-medium text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`}>
+          <span id={triggerId + '-value'} className={`min-w-0 flex-1 ${wrapLabels ? 'break-words' : 'truncate'} ${selected ? 'font-medium text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`}>
             {selected ? selected.label : placeholder}
           </span>
           {!canClear && <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-[var(--w-text-muted)] ${visible ? 'rotate-180' : ''}`}/>}

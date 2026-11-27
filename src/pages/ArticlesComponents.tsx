@@ -118,7 +118,7 @@ export function ArticleCard({ article, category, qty, onEdit, selectionMode, sel
       {selectionMode && (selected ? <CheckSquare size={17} aria-hidden="true" /> : <Square size={17} aria-hidden="true" />)}
       <span className="article-list-item-main">
         <strong>{article.name}</strong>
-        {(reference || category) && <span className="article-muted">{[reference, category?.name].filter(Boolean).join(' · ')}</span>}
+        {(reference || category) && <span className="article-muted">{[reference, category?.name].filter(Boolean).join(' │ ')}</span>}
         {showStock && article.track_stock !== false && <span className="article-muted">Stock <span className="num">{qty}</span></span>}
       </span>
       <strong className="num article-money">{formatFCFA(article.sale_price)}</strong>
@@ -563,7 +563,7 @@ export function ImageTab({ currentUrl, uploading, onFileSelect, onDelete }: {
           <label htmlFor={fileInputId} className="label">Ajouter une image</label>
           <input id={fileInputId} type="file" accept="image/*" className="article-file-input" disabled={uploading} aria-describedby={fileInputId + '-hint'}
             onChange={event => { const file = event.target.files?.[0]; if (file) onFileSelect(file); }} />
-          <p id={fileInputId + '-hint'} className="article-muted">JPG, PNG · 5 Mo maximum</p>
+          <p id={fileInputId + '-hint'} className="article-muted">JPG, PNG │ 5 Mo maximum</p>
         </div>
       )}
       {uploading && (
@@ -577,11 +577,11 @@ export function ImageTab({ currentUrl, uploading, onFileSelect, onDelete }: {
 
 // ── MobileArticleEdit (swipe-based, native-feel modal) ─────
 
-export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, saveAndNew, saveAndClose: saveAndCloseIntent, saving, saveState, formMode, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount }: {
+export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, saveAndNew, saveAndClose: saveAndCloseIntent, saving, switchingArticle, saveState, formMode, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
   save: () => Promise<boolean>; saveAndNew: () => Promise<void>; saveAndClose: () => Promise<void>;
-  saving: boolean; saveState?: string; formMode?: string;
+  saving: boolean; switchingArticle: boolean; saveState?: string; formMode?: string;
   compats: Compat[]; setCompats: (c: Compat[] | ((p: Compat[]) => Compat[])) => void;
   categories: Category[]; suppliers: any[]; brands: VehicleBrand[]; models: any[];
   autoMode: boolean; generateRef: () => void; addCompat: () => void; removeCompat: (i: number) => void;
@@ -651,12 +651,12 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
     <Modal open onClose={onClose} title={form.name || 'Nouvel article'} size="xl" fullscreenMobile
       panelClassName="article-editor" footer={
         formMode === 'create' ? <>
-          <button type="button" onClick={saveAndNew} disabled={saving} className="btn-secondary article-button"><Plus size={15} aria-hidden="true" />Enregistrer et nouveau</button>
-          <button type="button" onClick={saveAndCloseIntent} disabled={saving} className="btn-primary article-button">
+          <button type="button" onClick={saveAndNew} disabled={saving || switchingArticle} className="btn-secondary article-button"><Plus size={15} aria-hidden="true" />Enregistrer et nouveau</button>
+          <button type="button" onClick={saveAndCloseIntent} disabled={saving || switchingArticle} className="btn-primary article-button">
             {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
             Enregistrer et fermer
           </button>
-        </> : <button type="button" onClick={save} disabled={saving} className="btn-primary article-button">
+        </> : <button type="button" onClick={save} disabled={saving || switchingArticle} className="btn-primary article-button">
           {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
           Enregistrer
         </button>
@@ -665,12 +665,12 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
       {(editing || saveState === 'saving' || saveState === 'saved' || saveState === 'error') && (
         <div className="article-editor-tools">
           <span className="article-muted" role="status">
-            {saveState === 'saving' ? 'Enregistrement…' : saveState === 'saved' ? 'Enregistré' : saveState === 'error' ? 'Échec de l’enregistrement' : ''}
+            {switchingArticle && !saving ? 'Chargement de la fiche…' : saveState === 'saving' ? 'Enregistrement…' : saveState === 'saved' ? 'Enregistré' : saveState === 'error' ? 'Échec de l’enregistrement' : ''}
           </span>
           {editing && totalCount > 0 && (
             <div className="article-toolbar">
               <button type="button" onClick={onPrev} disabled={!onPrev} aria-label="Article précédent" className="waarwi-window-button"><ArrowLeft size={16} aria-hidden="true" /></button>
-              <span className="num article-muted">{editingIndex + 1} / {totalCount}</span>
+              {editingIndex >= 0 && <span className="num article-muted">{editingIndex + 1} / {totalCount}</span>}
               <button type="button" onClick={onNext} disabled={!onNext} aria-label="Article suivant" className="waarwi-window-button"><ArrowRightIcon size={16} aria-hidden="true" /></button>
             </div>
           )}
@@ -686,13 +686,13 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
       <div className="article-edit-body touch-pan-y"
         style={{ transform: dragX ? `translateX(${dragX * 0.35}px)` : undefined, transition: dragX ? 'none' : 'transform 0.24s cubic-bezier(0.22,1,0.36,1)' }}
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-        <div key={tab}>
+        <fieldset key={tab} disabled={switchingArticle} className="min-w-0" aria-busy={switchingArticle}>
           {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} createCategory={createCategory} />}
           {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={showPurchasePrice} showMargin={showMargin} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy} />}
           {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
           {tab === 'compat' && autoMode && <CompatTab compats={compats} brands={brands} models={models} onAdd={addCompat} onRemove={removeCompat} onUpdate={(i, patch) => setCompats((arr: Compat[]) => arr.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
           {tab === 'image' && <ImageTab currentUrl={imagePreview} uploading={imageUploading} onFileSelect={onFileSelect} onDelete={onDeleteImage} />}
-        </div>
+        </fieldset>
       </div>
     </Modal>
   );
@@ -960,12 +960,12 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
 
 // ── FullScreenArticleEdit ──────────────────────────────────
 
-export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TABS: _TABS, save, saveAndNew, saveAndClose: saveAndCloseIntent, saving, saveState, formMode, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount, filtered, onJumpTo }: {
+export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TABS: _TABS, save, saveAndNew, saveAndClose: saveAndCloseIntent, saving, switchingArticle, saveState, formMode, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount, filtered, onJumpTo }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
   TABS: { k: TabKey; l: string; icon: any }[];
   save: () => Promise<boolean>; saveAndNew: () => Promise<void>; saveAndClose: () => Promise<void>;
-  saving: boolean; saveState?: string; formMode?: string;
+  saving: boolean; switchingArticle: boolean; saveState?: string; formMode?: string;
   compats: Compat[]; setCompats: (c: Compat[] | ((p: Compat[]) => Compat[])) => void;
   categories: Category[]; suppliers: any[]; brands: VehicleBrand[]; models: any[];
   autoMode: boolean; generateRef: () => void; addCompat: () => void; removeCompat: (i: number) => void;
@@ -1009,6 +1009,7 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
+        if (saving || switchingArticle) return;
         if (e.shiftKey) { saveAndCloseIntent(); }
         else if (isCreate) { saveAndNew(); }
         else { save(); }
@@ -1016,9 +1017,10 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isCreate, save, saveAndNew, saveAndCloseIntent]);
+  }, [isCreate, save, saveAndNew, saveAndCloseIntent, saving, switchingArticle]);
 
-  const saveStateLabel = saveState === 'saving' ? 'Enregistrement…'
+  const saveStateLabel = switchingArticle && !saving ? 'Chargement de la fiche…'
+    : saveState === 'saving' ? 'Enregistrement…'
     : saveState === 'saved' ? 'Enregistré'
     : saveState === 'dirty' ? 'Modifications en cours…'
     : saveState === 'error' ? 'Échec'
@@ -1027,15 +1029,15 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
   return (
     <DocPanel open onClose={onClose} title={form.name || 'Nouvel article'} fullscreen fullscreenMobile
       footer={isCreate ? <>
-        <button type="button" onClick={saveAndNew} disabled={saving} className="btn-secondary article-button" title="Ctrl+Entrée">
+        <button type="button" onClick={saveAndNew} disabled={saving || switchingArticle} className="btn-secondary article-button" title="Ctrl+Entrée">
           <Plus size={15} aria-hidden="true" />Enregistrer et nouveau
         </button>
-        <button type="button" onClick={saveAndCloseIntent} disabled={saving} className="btn-primary article-button" title="Ctrl+Maj+Entrée">
+        <button type="button" onClick={saveAndCloseIntent} disabled={saving || switchingArticle} className="btn-primary article-button" title="Ctrl+Maj+Entrée">
           {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
           Enregistrer et fermer
         </button>
       </> : (
-        <button type="button" onClick={save} disabled={saving} className="btn-primary article-button">
+        <button type="button" onClick={save} disabled={saving || switchingArticle} className="btn-primary article-button">
           {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
           Enregistrer
         </button>
@@ -1044,12 +1046,12 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
         <div className="article-editor-tools">
           <span className="article-muted" role="status">{saveStateLabel}</span>
           <div className="article-toolbar">
-            <button type="button" onClick={() => { setSearchOpen(!searchOpen); setLocalSearch(''); }} className="btn-secondary article-button" aria-expanded={searchOpen}>
+            <button type="button" disabled={switchingArticle || saving} onClick={() => { setSearchOpen(!searchOpen); setLocalSearch(''); }} className="btn-secondary article-button" aria-expanded={searchOpen}>
               <Search size={15} aria-hidden="true" />Rechercher
             </button>
             {!isCreate && <>
               <button type="button" onClick={onPrev} disabled={!onPrev} aria-label="Article précédent" className="waarwi-window-button"><ArrowLeft size={16} aria-hidden="true" /></button>
-              {totalCount > 0 && <span className="num article-muted">{editingIndex + 1} / {totalCount}</span>}
+              {editingIndex >= 0 && <span className="num article-muted">{editingIndex + 1} / {totalCount}</span>}
               <button type="button" onClick={onNext} disabled={!onNext} aria-label="Article suivant" className="waarwi-window-button"><ArrowRightIcon size={16} aria-hidden="true" /></button>
             </>}
           </div>
@@ -1073,13 +1075,13 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
             </button>
           ))}
         </nav>
-        <div className="article-edit-body">
+        <fieldset className="article-edit-body min-w-0" disabled={switchingArticle} aria-busy={switchingArticle}>
           {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} createCategory={createCategory} />}
           {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={showPurchasePrice} showMargin={showMargin} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy} />}
           {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
           {tab === 'compat' && autoMode && <CompatTab compats={compats} brands={brands} models={models} onAdd={addCompat} onRemove={removeCompat} onUpdate={(i, patch) => setCompats((arr: Compat[]) => arr.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
           {tab === 'image' && <ImageTab currentUrl={imagePreview} uploading={imageUploading} onFileSelect={onFileSelect} onDelete={onDeleteImage} />}
-        </div>
+        </fieldset>
       </div>
     </DocPanel>
   );

@@ -193,7 +193,7 @@ function tenantHeader80Compact(t: PrintTenant) {
   }
   if (shown('name') && t.name) parts.push(`<div class="shop-name" style="font-size:13px;font-weight:900;">${esc(t.name)}</div>`);
   const meta = [shown('phone') && t.phone ? `Tél: ${t.phone}` : '', shown('address') ? t.address || '' : ''].filter(Boolean);
-  if (meta.length) parts.push(`<div class="meta" style="font-size:10px;font-weight:600;">${esc(meta.join(' · '))}</div>`);
+  if (meta.length) parts.push(`<div class="meta" style="font-size:10px;font-weight:600;">${esc(meta.join(' │ '))}</div>`);
   return parts.join('');
 }
 
@@ -225,7 +225,7 @@ export function renderA4Header(opts: A4HeaderOpts): string {
   const a4cfg = mergeA4HeaderConfig(t.a4_header_config);
   const logoPx = A4_LOGO_SIZES[a4cfg.logo_size] || 60;
 
-  // Build info lines (each on its own line, no "·" merging)
+  // Build info lines (each on its own line, no "│" merging)
   const infoLines: string[] = [];
   for (const item of config) {
     if (item.key === 'logo') continue;
@@ -684,9 +684,9 @@ export function printReturnTicket80(
 <style>${compactTicketStyle}</style>${printFontLink}</head><body>
 ${tenantHeader80Compact(tenant)}
 <hr class="hr-solid" />
-<div class="doc-label">RETOUR${returnNumber ? ` · N° ${esc(returnNumber)}` : ''}</div>
-<div class="doc-date">${new Date().toLocaleString('fr-FR')} · Vente ${esc(refSaleNumber)}</div>
-<div class="line">Caissier: ${esc(cashier)}${customerName ? ` · Client: ${esc(customerName)}` : ''}</div>
+<div class="doc-label">RETOUR${returnNumber ? ` │ N° ${esc(returnNumber)}` : ''}</div>
+<div class="doc-date">${new Date().toLocaleString('fr-FR')} │ Vente ${esc(refSaleNumber)}</div>
+<div class="line">Caissier: ${esc(cashier)}${customerName ? ` │ Client: ${esc(customerName)}` : ''}</div>
 <hr class="hr" />
 ${itemsHtml}
 ${vat?.vat_net_amount != null ? `
@@ -712,9 +712,9 @@ function cashReceiptBody80(o: {
   amountText: string;
 }) {
   return `<hr class="hr-solid" />
-<div class="doc-label">${o.title} · N° ${esc(o.receiptNumber)}</div>
+<div class="doc-label">${o.title} │ N° ${esc(o.receiptNumber)}</div>
 <div class="doc-date">${o.date.toLocaleString('fr-FR')}</div>
-<div class="line">Caissier: ${esc(o.cashier)}${o.party ? ` · ${o.partyLabel}: ${esc(o.party)}` : ''}</div>
+<div class="line">Caissier: ${esc(o.cashier)}${o.party ? ` │ ${o.partyLabel}: ${esc(o.party)}` : ''}</div>
 ${o.label ? `<div class="line">Motif: ${esc(o.label)}</div>` : ''}
 ${o.reference ? `<div class="line">Réf: ${esc(o.reference)}</div>` : ''}
 <div class="row total"><span>${o.totalLabel} (${esc(o.method)})</span><span>${o.amountText} FCFA</span></div>`;
@@ -888,16 +888,16 @@ ${[...regGroups].map(([type, g]) => `<div class="row"><span>${esc(type)} (${g.co
 <style>${compactTicketStyle}</style>${printFontLink}</head><body>
 ${tenantHeader80Compact(opts.tenant)}
 <hr class="hr-solid" />
-<div class="doc-label">X DE CAISSE · ${esc(opts.sessionId.slice(0, 8).toUpperCase())}</div>
-<div class="line">${esc(opts.siteName)} · ${esc(opts.cashier)}</div>
+<div class="doc-label">X DE CAISSE │ ${esc(opts.sessionId.slice(0, 8).toUpperCase())}</div>
+<div class="line">${esc(opts.siteName)} │ ${esc(opts.cashier)}</div>
 ${opts.registerLabel ? `<div class="line">Caisse : ${esc(opts.registerLabel)}</div>` : ''}
-<div class="line">Ouv. ${fmtDt(opts.openedAt)}${opts.closedAt ? ` · Clôt. ${fmtDt(opts.closedAt)}` : ''}</div>
+<div class="line">Ouv. ${fmtDt(opts.openedAt)}${opts.closedAt ? ` │ Clôt. ${fmtDt(opts.closedAt)}` : ''}</div>
 <div class="line">Imprimé ${fmtDt(new Date())}${opts.printedBy ? ` par ${esc(opts.printedBy)}` : ''}</div>
 <hr class="hr" />
 <div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)}</span></div>
 <div class="row"><span>Ventes (${opts.salesCount})</span><span>${fmtMoney(opts.salesTotal)}</span></div>
 ${opts.byMethod.length > 0
-    ? opts.byMethod.map(m => `<div class="row"><span>· ${esc(m.method_name)}</span><span>${fmtMoney(m.amount)}</span></div>`).join('')
+    ? opts.byMethod.map(m => `<div class="row"><span>│ ${esc(m.method_name)}</span><span>${fmtMoney(m.amount)}</span></div>`).join('')
     : '<div class="line">Aucun encaissement</div>'}
 ${movementsHtml}
 ${controlsHtml}
@@ -1176,7 +1176,7 @@ async function printPagedDocument(opts: CommercialDocOpts, f: PagedFormat) {
         ${i.supplier_ref || i.oem_ref ? `<div class="item-ref">${[
           i.supplier_ref ? `Réf : ${esc(i.supplier_ref)}` : '',
           i.oem_ref ? `OEM : ${esc(i.oem_ref)}` : '',
-        ].filter(Boolean).join(' · ')}</div>` : ''}
+        ].filter(Boolean).join(' │ ')}</div>` : ''}
       </td>
       <td class="center">${i.quantity}</td>
       <td class="right">${fmtMoney(i.unit_price)}</td>
@@ -1248,7 +1248,7 @@ async function printPagedDocument(opts: CommercialDocOpts, f: PagedFormat) {
 
   const contHeader = (pageNo: number, count: number) => `<div class="doc-cont">
     <strong>${esc(t.name)}</strong>
-    <span>${esc(opts.docLabel)} N° ${esc(opts.docNumber)} · ${esc(opts.docDate)} · Page ${pageNo}/${count}</span>
+    <span>${esc(opts.docLabel)} N° ${esc(opts.docNumber)} │ ${esc(opts.docDate)} │ Page ${pageNo}/${count}</span>
   </div>`;
 
   const closingHtml = (pageNo: number, count: number, pageSubtotal: number) => {
@@ -1579,13 +1579,13 @@ export function printStockMovement80(opts: StockMovementPrintOpts) {
     opts.siteOrigin ? `De: ${opts.siteOrigin}` : '',
     opts.siteDestination ? `Vers: ${opts.siteDestination}` : '',
     opts.siteName ? `Dépôt: ${opts.siteName}` : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join(' │ ');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>${compactTicketStyle}</style>${printFontLink}</head><body>
 ${tenantHeader80Compact(t)}
 <hr class="hr-solid" />
-<div class="doc-label">${esc(title)} · ${esc(opts.reference)}</div>
+<div class="doc-label">${esc(title)} │ ${esc(opts.reference)}</div>
 <div class="doc-date">${esc(opts.date)}</div>
 <div class="line">Opérateur: ${esc(opts.user)}</div>
 ${sites ? `<div class="line">${esc(sites)}</div>` : ''}

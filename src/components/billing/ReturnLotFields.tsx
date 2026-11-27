@@ -11,7 +11,7 @@ export function ReturnLotFields({line,restock,onChange}:{line:ReturnLotLine;rest
   {lots.map(l=>{
    const qty=result.manual?(line.lotQuantities?.[l.lot_id]||''):String(result.lots.find(x=>x.lot_id===l.lot_id)?.quantity||0);
    return <div key={l.lot_id} className="flex min-w-0 items-center gap-3 py-1">
-    <div className="min-w-0 flex-1"><div className="break-words font-medium">{l.batch_number||'Lot sans numéro'}</div><div className="break-words text-xs text-[var(--w-text-secondary)]">{l.site_name} · Restant : {l.available} / {l.sold}{l.expiry_date?' · Péremption : '+l.expiry_date.split('-').reverse().join('/') : ''}</div></div>
+    <div className="min-w-0 flex-1"><div className="break-words font-medium">{l.batch_number||'Lot sans numéro'}</div><div className="break-words text-xs text-[var(--w-text-secondary)]">{l.site_name} │ Restant : {l.available} / {l.sold}{l.expiry_date?' │ Péremption : '+l.expiry_date.split('-').reverse().join('/') : ''}</div></div>
     {result.manual&&Number(l.available)>0?<input type="number" inputMode="decimal" min={0} max={l.available} step="any" aria-label={'Quantité à retourner, lot '+l.batch_number} value={qty} onChange={e=>onChange({...line.lotQuantities,[l.lot_id]:e.target.value})} className="min-h-11 w-20 shrink-0 border-b border-[var(--w-separator)] bg-transparent text-right tabular-nums"/>:<span className="shrink-0 tabular-nums">{qty||0}</span>}
    </div>;
   })}

@@ -90,7 +90,7 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
   const showTemplatesRequest=showTemplates?++nextRequest.current:undefined;
   setOpen(previous=>previous.some(work=>work.id===id)
    ? previous.map(work=>work.id===id&&work.kind==='entry'&&showTemplatesRequest?{...work,showTemplates:showTemplatesRequest}:work)
-   : [...previous,{id,kind:'entry',title:journal?'Saisie des écritures · '+journal:'Saisie des écritures',journal,showTemplates:showTemplatesRequest}]);
+   : [...previous,{id,kind:'entry',title:journal?'Saisie des écritures │ '+journal:'Saisie des écritures',journal,showTemplates:showTemplatesRequest}]);
   wm.restore(id);
   setActive(id);
  };

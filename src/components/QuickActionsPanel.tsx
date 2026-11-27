@@ -313,7 +313,7 @@ export function QuickActionsPanel({ onClose }: { onClose: () => void }) {
         {/* Footer hint */}
         <div className="shrink-0 px-4 py-2 border-t border-neutral-100">
           <div className="text-[10px] text-neutral-400 text-center">
-            {customizing ? 'Cliquez sur ★ pour ajouter aux favoris' : 'Alt+A pour ouvrir · Esc pour fermer'}
+            {customizing ? 'Cliquez sur ★ pour ajouter aux favoris' : 'Alt+A pour ouvrir │ Esc pour fermer'}
           </div>
         </div>
       </div>

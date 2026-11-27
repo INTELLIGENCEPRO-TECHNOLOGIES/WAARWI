@@ -575,7 +575,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       const { data, error } = await supabase.rpc('comptabiliser_vente', { p_sale_id: selected.id });
       if (error) throw error;
       if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur inconnue');
-      toastSuccess((data as any).piece_number ? `Comptabilisé · ${(data as any).piece_number}` : 'Vente comptabilisée');
+      toastSuccess((data as any).piece_number ? `Comptabilisé │ ${(data as any).piece_number}` : 'Vente comptabilisée');
       setSelected(prev => prev?.id === selected.id ? { ...prev, accounting_status: 'accounted' } : prev);
       setSales(prev => prev.map(s => s.id === selected.id ? { ...s, accounting_status: 'accounted' } : s));
     } catch (e: any) { toastError(e.message); }
@@ -596,10 +596,14 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Journal des ventes</h1>
 
         {/* Row 2: Stats */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium">
+        <div role="group" aria-label="Totaux des ventes" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium">
           <span className="shrink-0 text-neutral-500 num">{totalCount} vente{totalCount > 1 ? 's' : ''}</span>
-          <span className="shrink-0 whitespace-nowrap text-neutral-700 num">Total · {formatFCFA(serverTotals.sum_total)}</span>
-          <span className="shrink-0 whitespace-nowrap text-neutral-700 num">Encaissé · {formatFCFA(serverTotals.sum_paid)}</span>
+          <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[var(--w-text-sec)]">
+            Total <span aria-hidden="true" className="w-inline-divider" /> <span className="num">{formatFCFA(serverTotals.sum_total)}</span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[var(--w-text-sec)]">
+            Encaissé <span aria-hidden="true" className="w-inline-divider" /> <span className="num">{formatFCFA(serverTotals.sum_paid)}</span>
+          </span>
           {refreshing && <RefreshCw className="w-3 h-3 animate-spin text-neutral-400 shrink-0" />}
           {hasFilters && (
             <button
@@ -642,36 +646,38 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       ) : (
         <>
           {/* ── MOBILE: list ──────────────────────────────── */}
-          <div className="divide-y-0 lg:hidden">
+          <ul aria-label="Ventes du journal" className="divide-y divide-[var(--w-separator)] lg:hidden">
             {sales.map(s => {
               const st = statusStyles(s.status, s);
               const payMethods = (s.sale_payments || []).map(p => p.method_name).join(', ');
               return (
-                <button
-                  key={s.id}
-                  data-row-id={s.id}
-                  onClick={() => openDetail(s)}
-                  className="w-tr-hover w-full border-b border-[var(--w-separator-l)] px-2 py-3 text-left transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="break-words text-sm font-semibold text-[var(--w-text)]">{s.customers?.name || 'Client comptoir'}</div>
-                      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-[var(--w-text-sec)]">
-                        <span className="doc-number break-all font-semibold">{s.sale_number}</span>
-                        <span className="num">{formatDateTime(s.created_at)}</span>
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    data-row-id={s.id}
+                    onClick={() => openDetail(s)}
+                    className="w-tr-hover block w-full px-2 py-3 text-left transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="break-words text-sm font-semibold text-[var(--w-text)]">{s.customers?.name || 'Client comptoir'}</div>
+                        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-[var(--w-text-sec)]">
+                          <span className="doc-number break-all font-semibold">{s.sale_number}</span>
+                          <span className="num">{formatDateTime(s.created_at)}</span>
+                        </div>
                       </div>
+                      <span className="num shrink-0 whitespace-nowrap text-sm font-semibold text-[var(--w-text)]">{formatFCFA(s.total)}</span>
                     </div>
-                    <span className="num shrink-0 whitespace-nowrap text-sm font-semibold text-[var(--w-text)]">{formatFCFA(s.total)}</span>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                    <span className={st.textColor}>{st.label}</span>
-                    {s.accounting_status === 'accounted' && <span className="text-[var(--w-text-sec)]">Comptabilisée</span>}
-                    {payMethods && <span className="text-[var(--w-text-sec)]">{payMethods}</span>}
-                  </div>
-                </button>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                      <span className={st.textColor}>{st.label}</span>
+                      {s.accounting_status === 'accounted' && <span className="text-[var(--w-text-sec)]">Comptabilisée</span>}
+                      {payMethods && <span className="text-[var(--w-text-sec)]">{payMethods}</span>}
+                    </div>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
 
           {/* ── DESKTOP: table ─────────────────────────────────── */}
           <div className="hidden lg:block">
@@ -926,21 +932,21 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                           Quantité
                           <input type="number" min="0" step="any" value={item.quantity}
                             onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
-                            aria-label={`Quantité · ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            aria-label={`Quantité │ ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                         </label>
                         <label className="min-w-0 text-xs font-medium text-[var(--w-text-sec)]">
                           Prix unitaire
                           <input type="number" min="0" value={item.unit_price}
                             onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
-                            aria-label={`Prix unitaire · ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            aria-label={`Prix unitaire │ ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                         </label>
                         <label className="min-w-0 text-xs font-medium text-[var(--w-text-sec)]">
                           Remise
                           <input type="number" min="0" value={item.discount}
                             onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
-                            aria-label={`Remise · ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            aria-label={`Remise │ ${item.name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                         </label>
                       </div>

@@ -329,7 +329,7 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-bold text-neutral-900 truncate">{custPayCustomer.name}</div>
                     <div className="text-[11px] text-neutral-500">
-                      {custPayUnpaid.filter(s => s.id !== '__balance__').length} facture(s) impayée(s) · Solde {formatFCFA(Number((custPayCustomer as any).balance || 0))}
+                      {custPayUnpaid.filter(s => s.id !== '__balance__').length} facture(s) impayée(s) │ Solde {formatFCFA(Number((custPayCustomer as any).balance || 0))}
                     </div>
                   </div>
                   <button onClick={() => setCustPayCustomer(null)} className="text-[11px] font-semibold text-neutral-500 hover:text-neutral-900 transition-colors shrink-0">Changer</button>
@@ -358,7 +358,7 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
                           <button key={s.id} type="button" onClick={() => { setCustPaySaleId(s.id); setCustPayAmount(s.total - s.paid); }}
                             className={`w-full flex items-center gap-3 px-1 py-3 text-left transition-colors border-b border-neutral-100 last:border-b-0 ${custPaySaleId === s.id ? 'bg-neutral-50' : 'hover:bg-neutral-50'}`}>
                             <div className="min-w-0 flex-1">
-                              <div className={`text-[13px] truncate ${custPaySaleId === s.id ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>{s.sale_number} · dû {formatFCFA(s.total - s.paid)}</div>
+                              <div className={`text-[13px] truncate ${custPaySaleId === s.id ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>{s.sale_number} │ dû {formatFCFA(s.total - s.paid)}</div>
                               <div className="text-[11px] text-neutral-400">{s.id === '__balance__' ? 'Solde positionné' : new Date(s.created_at).toLocaleDateString('fr-FR')}</div>
                             </div>
                             {custPaySaleId === s.id && <Check className="w-4 h-4 text-neutral-900 shrink-0" />}

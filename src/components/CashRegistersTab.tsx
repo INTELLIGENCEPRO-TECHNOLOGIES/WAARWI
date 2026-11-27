@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { Modal } from './Modal';
+import { SearchableSelect } from './SearchableSelect';
 import { usePermissions } from '../lib/permissions';
 import { desktopAutoFocus } from '../lib/device';
 import { MultiCashModeSection } from './MultiCashModeSection';
@@ -141,7 +142,7 @@ export function CashRegistersTab() {
 
   const siteLabel = (id: string) => {
     const s = allSites.find(x => x.id === id);
-    return s ? (s.is_warehouse ? `Dépôt · ${s.name}` : s.name) : '';
+    return s ? (s.is_warehouse ? `Dépôt │ ${s.name}` : s.name) : '';
   };
   const lockActive = !!editing && (editing.is_default || (editing.is_active && editing.has_open_session));
   const lockDefault = !!editing && editing.is_default;
@@ -161,13 +162,13 @@ export function CashRegistersTab() {
 
       <MultiCashModeSection onChanged={load} />
 
-      <div className="flex items-center gap-3 h-[52px] border-t border-b border-neutral-200">
+      <div className="flex min-h-[52px] items-center gap-3 border-y border-neutral-200 py-1.5">
         <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500 shrink-0">Magasin</span>
-        <select value={siteId} onChange={e => changeSite(e.target.value)} disabled={saving} aria-label="Magasin"
-          className="flex-1 min-w-0 max-w-[360px] bg-transparent text-[13px] font-semibold text-neutral-900 outline-none cursor-pointer disabled:opacity-50">
-          {allSites.length === 0 && <option value="">{appLoading ? 'Chargement…' : 'Aucun magasin accessible'}</option>}
-          {allSites.map(s => <option key={s.id} value={s.id}>{s.is_warehouse ? `Dépôt · ${s.name}` : s.name}</option>)}
-        </select>
+        <SearchableSelect ariaLabel="Magasin" value={siteId} onChange={changeSite}
+          disabled={saving || allSites.length === 0} clearable={false} searchable={allSites.length > 8} wrapLabels
+          className="min-w-0 max-w-[360px] flex-1"
+          placeholder={appLoading ? 'Chargement…' : 'Aucun magasin accessible'}
+          options={allSites.map(site => ({ value: site.id, label: site.is_warehouse ? `Dépôt │ ${site.name}` : site.name }))} />
         {loading && <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />}
       </div>
 
@@ -200,7 +201,7 @@ export function CashRegistersTab() {
                 </span>
                 <span className="text-neutral-500 min-w-[150px]">
                   {r.has_open_session
-                    ? <span className="inline-flex items-center gap-1.5"><span className="w-[6px] h-[6px] rounded-full bg-amber-500 animate-pulse" />Ouverte · {r.open_session_user_name || '—'} · {formatOpened(r.open_session_opened_at)}</span>
+                    ? <span className="inline-flex items-center gap-1.5"><span className="w-[6px] h-[6px] rounded-full bg-amber-500 animate-pulse" />Ouverte │ {r.open_session_user_name || '—'} │ {formatOpened(r.open_session_opened_at)}</span>
                     : <span className="text-neutral-400">Aucune session ouverte</span>}
                 </span>
               </div>
@@ -307,7 +308,7 @@ function AssignmentsModal({ register, onClose, onSaved, onLoadError }: { registe
   };
 
   return (
-    <Modal open onClose={onClose} title={`Collaborateurs · ${register.name}`} size="md" fullscreenMobile
+    <Modal open onClose={onClose} title={`Collaborateurs │ ${register.name}`} size="md" fullscreenMobile
       footer={<><span className="mr-auto text-[12px] text-neutral-500">{selected.size} sélectionné{selected.size > 1 ? 's' : ''}</span><button onClick={onClose} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={save} disabled={saving || loading} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}</button></>}>
       <div className="space-y-3">
         <div className="flex items-center gap-2.5 h-10 px-3 rounded-md border border-neutral-200 focus-within:border-neutral-400 transition-colors">

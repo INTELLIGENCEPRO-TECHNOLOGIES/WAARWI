@@ -114,7 +114,7 @@ export function DocSlimHeader({ status, customerName, date, extra, docHeader }: 
         )}
         {(date || extra) && (
           <span className="ml-auto text-[11px] text-neutral-400 font-medium whitespace-nowrap num">
-            {extra ? `${extra} · ` : ''}{date}
+            {extra ? `${extra} │ ` : ''}{date}
           </span>
         )}
       </div>

@@ -72,7 +72,7 @@ function Operations({ data, issues }: { data: Coverage; issues: Issue[] }) {
         <span>{count(data.missing)} sans lien enregistré</span>
         <span>{count(data.invalid)} avec un lien incohérent</span>
         <span>{count(data.date_differences)} avec une date différente</span>
-        {data.excluded > 0 && <span>Exclusions du rapprochement de caisse · {count(data.excluded)}</span>}
+        {data.excluded > 0 && <span>Exclusions du rapprochement de caisse │ {count(data.excluded)}</span>}
       </p>
       {data.missing + data.invalid > 0 && (
         <p className="text-xs text-neutral-600">Montant des mouvements dont le lien est à contrôler {money(data.amount_to_check)}.</p>
@@ -136,9 +136,9 @@ function MonthClosing({ tenantId, report, canClose, onClosed, onPendingChange }:
       <section className="space-y-1 border-y border-neutral-200 py-3">
         <h2 className="text-sm font-semibold flex items-center gap-2"><Lock size={16}/>Mois clôturé</h2>
         <p className="text-xs text-neutral-600">
-          {formatDateTime(month.closed_at)}{month.closed_by_name && ` · ${month.closed_by_name}`}
+          {formatDateTime(month.closed_at)}{month.closed_by_name && ` │ ${month.closed_by_name}`}
         </p>
-        <p className="text-xs text-neutral-600">Écritures validées à la clôture · {count(month.snapshot.journal.entries)}</p>
+        <p className="text-xs text-neutral-600">Écritures validées à la clôture │ {count(month.snapshot.journal.entries)}</p>
         {month.note && <p className="whitespace-pre-wrap break-words text-sm">{month.note}</p>}
       </section>
     );
@@ -149,7 +149,7 @@ function MonthClosing({ tenantId, report, canClose, onClosed, onPendingChange }:
       {month.blocked ? (
         <p className="text-sm text-neutral-700">Corrigez les incohérences du journal et validez les écritures en attente avant la clôture.</p>
       ) : <p className="text-sm text-neutral-600">Mois ouvert</p>}
-      {month.unposted_entries > 0 && <p className="text-xs text-neutral-600">Écritures à valider · {count(month.unposted_entries)}</p>}
+      {month.unposted_entries > 0 && <p className="text-xs text-neutral-600">Écritures à valider │ {count(month.unposted_entries)}</p>}
       {canClose && !month.blocked && (
         confirming ? (
           <>
@@ -209,8 +209,8 @@ export function AccountingPeriodControls({ tenantId, canClose }: { tenantId: str
   };
 
   const bookRows = report && [
-    { label: 'Journal', debit: report.journal.debit, credit: report.journal.credit, detail: `Écritures validées · ${count(report.journal.entries)}` },
-    { label: 'Grand livre', debit: report.accounts.ledger_debit, credit: report.accounts.ledger_credit, detail: `Lignes · ${count(report.accounts.lines)}` },
+    { label: 'Journal', debit: report.journal.debit, credit: report.journal.credit, detail: `Écritures validées │ ${count(report.journal.entries)}` },
+    { label: 'Grand livre', debit: report.accounts.ledger_debit, credit: report.accounts.ledger_credit, detail: `Lignes │ ${count(report.accounts.lines)}` },
     { label: 'Balance générale', debit: report.accounts.balance_debit, credit: report.accounts.balance_credit },
   ];
 
@@ -243,12 +243,12 @@ export function AccountingPeriodControls({ tenantId, canClose }: { tenantId: str
             <h2 className="text-sm font-semibold text-neutral-900">Écritures et comptes</h2>
             <AccountingTable><table><thead><tr><th className="text-left">Contrôle</th><th className="text-right">Débit (FCFA)</th><th className="text-right">Crédit (FCFA)</th></tr></thead><tbody>{bookRows.map(row=><tr key={row.label}><td><strong>{row.label}</strong>{row.detail&&<span className="block text-[11px] text-neutral-500">{row.detail}</span>}</td><td className="text-right">{count(row.debit)}</td><td className="text-right">{count(row.credit)}</td></tr>)}</tbody></table></AccountingTable>
             <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-600">
-              <span>Écritures incohérentes · {count(report.journal.inconsistent_entries)}</span>
-              <span>Sources avec plusieurs écritures · {count(report.journal.duplicate_sources)}</span>
-              <span>Comptes avec un écart · {count(report.accounts.inconsistent_accounts)}</span>
+              <span>Écritures incohérentes │ {count(report.journal.inconsistent_entries)}</span>
+              <span>Sources avec plusieurs écritures │ {count(report.journal.duplicate_sources)}</span>
+              <span>Comptes avec un écart │ {count(report.accounts.inconsistent_accounts)}</span>
             </p>
-            {report.journal_examples.length > 0 && <p className="break-words text-xs">Pièces relevées · {report.journal_examples.join(', ')}</p>}
-            {report.account_examples.length > 0 && <p className="break-words text-xs">Comptes relevés · {report.account_examples.join(', ')}</p>}
+            {report.journal_examples.length > 0 && <p className="break-words text-xs">Pièces relevées │ {report.journal_examples.join(', ')}</p>}
+            {report.account_examples.length > 0 && <p className="break-words text-xs">Comptes relevés │ {report.account_examples.join(', ')}</p>}
           </section>
           <section className="space-y-2">
             <h2 className="text-sm font-semibold text-neutral-900">Mouvements à rapprocher</h2>
@@ -263,7 +263,7 @@ export function AccountingPeriodControls({ tenantId, canClose }: { tenantId: str
                 <h3 className="text-sm font-medium">{row.family === 'client' ? 'Clients' : 'Fournisseurs'}</h3>
                 {row.configured ? (
                   <>
-                    <p className="text-xs text-neutral-600">Lignes sans tiers correspondant · {count(row.unassigned_lines)}</p>
+                    <p className="text-xs text-neutral-600">Lignes sans tiers correspondant │ {count(row.unassigned_lines)}</p>
                     <dl className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 text-sm sm:gap-x-6">
                       <dt>Écart grand livre / balance des tiers</dt>
                       <div className="text-right"><dt className="text-xs text-neutral-500">Débit</dt><dd>{money(row.ledger_debit-row.balance_debit)}</dd></div><div className="text-right"><dt className="text-xs text-neutral-500">Crédit</dt><dd>{money(row.ledger_credit-row.balance_credit)}</dd></div>

@@ -449,7 +449,7 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
               id: `sale-${s.id}`,
               type: 'sale',
               title: `Vente ${s.sale_number}`,
-              detail: `${client}${method ? ' · ' + method : ''} · ${statusLabel}`,
+              detail: `${client}${method ? ' │ ' + method : ''} │ ${statusLabel}`,
               amount: Number(s.total),
               amountType: s.status === 'cancelled' ? 'negative' : 'positive',
               time: s.created_at,
@@ -467,7 +467,7 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
               id: `quote-${q.id}`,
               type: 'quote',
               title: `Devis ${q.quote_number}`,
-              detail: `${client} · ${statusLabel}`,
+              detail: `${client} │ ${statusLabel}`,
               amount: Number(q.total),
               amountType: 'neutral',
               time: q.created_at,
@@ -485,7 +485,7 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
               id: `suporder-${o.id}`,
               type: 'supplier_order',
               title: `Commande ${o.order_number}`,
-              detail: `${supplier} · ${statusLabel}`,
+              detail: `${supplier} │ ${statusLabel}`,
               amount: Number(o.total),
               amountType: 'negative',
               time: o.created_at,
@@ -503,7 +503,7 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
               id: `online-${o.id}`,
               type: 'online_order',
               title: `Commande en ligne ${o.order_number}`,
-              detail: `${client} · ${statusLabel}`,
+              detail: `${client} │ ${statusLabel}`,
               amount: Number(o.total),
               amountType: 'positive',
               time: o.created_at,
@@ -518,7 +518,7 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
               id: `return-${r.id}`,
               type: 'return',
               title: `Retour ${r.return_number || ''}`,
-              detail: `${client} · ${r.status === 'pending' ? 'En attente' : 'Traité'}`,
+              detail: `${client} │ ${r.status === 'pending' ? 'En attente' : 'Traité'}`,
               amount: Number(r.total || 0),
               amountType: 'negative',
               time: r.created_at,
@@ -536,7 +536,7 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
               id: `payment-${p.id}`,
               type: 'payment_received',
               title: `Règlement ${saleRef}`,
-              detail: `${client} · ${p.method_name || 'Espèces'}`,
+              detail: `${client} │ ${p.method_name || 'Espèces'}`,
               amount: Number(p.amount),
               amountType: 'positive',
               time: p.created_at,
@@ -555,7 +555,7 @@ export function Dashboard({ onNavigate, onOpenSubscription }: {
               id: `movement-${m.id}`,
               type: m.kind === 'expense' ? 'expense' : m.kind === 'refund' ? 'return' : 'payment_received',
               title: label,
-              detail: `${client ? client + ' · ' : ''}${m.note || ''}`.replace(/ · $/, '') || label,
+              detail: `${client ? client + ' │ ' : ''}${m.note || ''}`.replace(/ │ $/, '') || label,
               amount: Number(m.amount),
               amountType: (m.kind === 'deposit' || m.kind === 'customer_prepayment') ? 'positive' : 'negative',
               time: m.created_at,
@@ -846,7 +846,7 @@ function MobileDashboard({
             Plan {subInfo.planName}
             {subInfo.expiresAt && (
               <>
-                {' · '}
+                {' │ '}
                 <span className={(() => {
                   const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
                   return days <= 0 ? 'text-red-500' : '';
@@ -859,7 +859,7 @@ function MobileDashboard({
                 </span>
               </>
             )}
-            {subInfo.billingCycle === 'lifetime' && ' · À vie'}
+            {subInfo.billingCycle === 'lifetime' && ' │ À vie'}
           </span>
         </button>
       )}
@@ -1284,7 +1284,7 @@ function MobileDashboard({
             <div className="flex-1 min-w-0">
               <div className="text-[11px] font-semibold text-neutral-800 truncate">
                 {(stats.recentSales[0] as any).customers?.name || 'Client comptoir'}
-                <span className="font-mono text-[9px] font-bold text-neutral-500 ml-1">· {stats.recentSales[0].sale_number}</span>
+                <span className="font-mono text-[9px] font-bold text-neutral-500 ml-1">│ {stats.recentSales[0].sale_number}</span>
               </div>
               <div className="text-[9px] text-neutral-400 num">{formatDateTime(stats.recentSales[0].created_at)}</div>
             </div>
@@ -1909,7 +1909,7 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
             <div className="flex flex-1 flex-col rounded-xl border border-neutral-200 bg-white px-5 py-3">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-neutral-700" />
-                <h2 className="text-sm font-bold text-neutral-900">{viewMode === 'session' ? 'Rentabilité · Session' : 'Rentabilité'}</h2>
+                <h2 className="text-sm font-bold text-neutral-900">{viewMode === 'session' ? 'Rentabilité │ Session' : 'Rentabilité'}</h2>
                 <span className="text-[10px] text-neutral-400 font-medium ml-1">{viewMode === 'session' ? 'Session en cours' : periodLabel}</span>
               </div>
               <div className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] content-center gap-3">
@@ -2174,7 +2174,7 @@ function DesktopDashboard({ stats, nav, onOpenSubscription, period, setPeriod, s
                     };
                     const isMovement = act.type === 'expense';
                     const refPart = isMovement ? act.title : act.title.split(' ').slice(1).join(' ');
-                    const clientPart = isMovement ? '' : act.detail.split(' · ')[0];
+                    const clientPart = isMovement ? '' : act.detail.split(' │ ')[0];
                     const d = act.time ? new Date(act.time) : null;
                     const dateStr = d
                       ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`

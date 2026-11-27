@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { ReportScreen } from '../components/reports/ReportScreen';
 import { ReportSkeleton } from '../components/reports/reportPrimitives';
@@ -255,7 +256,7 @@ export function Reports() {
 
   const headerLabel = scopeOptions
     ? [siteName, reportType === 'cash' ? scopeLabel(scopeOptions, scope) : scopeLabel(scopeOptions, EMPTY_SCOPE)]
-        .filter(Boolean).join(' · ')
+        .filter(Boolean).join(' │ ')
     : siteName;
 
   const buildHtml = () => {
@@ -281,7 +282,7 @@ export function Reports() {
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-[var(--w-separator)] pb-3">
           <div className="min-w-0 flex-1 basis-48">
             <h1 className="text-lg font-bold leading-tight text-[var(--w-text)]">Rapports</h1>
-            <p className="mt-0.5 break-words text-xs text-[var(--w-text-sec)]">{def.label} · {def.context}</p>
+            <p className="mt-0.5 break-words text-xs text-[var(--w-text-sec)]">{def.label} │ {def.context}</p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {!mobile && (
@@ -322,7 +323,7 @@ export function Reports() {
           <button
             onClick={() => setPickerOpen(v => !v)}
             aria-expanded={pickerOpen}
-            aria-label={`Période · ${labelRange(range)}`}
+            aria-label={`Période │ ${labelRange(range)}`}
             className="btn-ghost min-w-0 px-2.5 py-1.5 text-xs"
           >
             <Calendar className="h-4 w-4 shrink-0" />
@@ -331,18 +332,12 @@ export function Reports() {
           </button>
 
           {sites.length > 1 && (
-            <label className="flex min-w-0 max-w-full items-center gap-2 px-2.5 text-[var(--w-text-sec)]">
-              <Store className="h-4 w-4 shrink-0" />
-              <span className="sr-only">Point de vente</span>
-              <select
-                value={selectedSiteId}
-                onChange={e => selectSite(e.target.value)}
-                className="w-input-ul min-w-0 max-w-60 py-1.5 text-xs"
-              >
-                <option value="all">Tous les sites</option>
-                {sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}
-              </select>
-            </label>
+            <div className="flex min-w-0 max-w-full items-center gap-2 px-2.5 text-[var(--w-text-sec)]">
+              <Store className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <SearchableSelect ariaLabel="Point de vente" value={selectedSiteId} onChange={selectSite}
+                className="min-w-0 max-w-60" searchable={sites.length > 8} clearable={false} wrapLabels
+                options={[{ value: 'all', label: 'Tous les sites' }, ...sites.map(site => ({ value: site.id, label: site.name }))]} />
+            </div>
           )}
 
           {multi && reportType === 'cash' && scopeOptions && (
@@ -379,7 +374,7 @@ export function Reports() {
               <button onClick={() => setViewMode('screen')} className="btn-ghost px-2.5 py-1.5 text-xs">
                 <ArrowLeft className="w-4 h-4" /> Retour au rapport
               </button>
-              <span className="text-xs text-[var(--w-text-sec)]">Aperçu avant impression · {def.label}</span>
+              <span className="text-xs text-[var(--w-text-sec)]">Aperçu avant impression │ {def.label}</span>
               <button onClick={handlePrint} className="btn-secondary px-2.5 py-1.5 text-xs">
                 <Printer className="w-4 h-4" /> Imprimer
               </button>

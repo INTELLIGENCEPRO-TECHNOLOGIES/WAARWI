@@ -144,7 +144,7 @@ export function SupplierPaymentModal({ supplier, initialOrderId, siteId, onSucce
     const funding: 'cash' | 'vault' = vaultEnabled && payFunding === 'vault' ? 'vault' : 'cash';
     const isBalance = payOrder === BALANCE_ID;
     const orderId = isBalance || !payOrder ? null : payOrder;
-    const reference = payRef || (isBalance ? `Règlement solde · ${supplier.name}` : '');
+    const reference = payRef || (isBalance ? `Règlement solde │ ${supplier.name}` : '');
 
     const sig = JSON.stringify([funding, orderId, amt, pm.id, reference, siteId]);
     if (!attemptRef.current || attemptRef.current.sig !== sig) {
@@ -182,7 +182,7 @@ export function SupplierPaymentModal({ supplier, initialOrderId, siteId, onSucce
           const now = await sessionPaymentIds();
           if (!now) { error('Connexion impossible — vérifiez le réseau puis réessayez.'); return; }
           if ([...now].some(id => !attempt.snapshot!.has(id))) {
-            await finishSuccess(funding, orderId, amt, 'Règlement déjà enregistré avant la coupure réseau · caisse du jour');
+            await finishSuccess(funding, orderId, amt, 'Règlement déjà enregistré avant la coupure réseau │ caisse du jour');
             return;
           }
         } else {
@@ -215,7 +215,7 @@ export function SupplierPaymentModal({ supplier, initialOrderId, siteId, onSucce
         error(body?.error || 'Règlement refusé par le serveur');
         return;
       }
-      await finishSuccess(funding, orderId, amt, funding === 'vault' ? 'Règlement enregistré · imputé sur le coffre' : 'Règlement enregistré · imputé sur la caisse du jour');
+      await finishSuccess(funding, orderId, amt, funding === 'vault' ? 'Règlement enregistré │ imputé sur le coffre' : 'Règlement enregistré │ imputé sur la caisse du jour');
     } catch {
       if (attemptRef.current) attemptRef.current.uncertain = true;
       error('Réponse du serveur non reçue — vérifiez la connexion puis validez à nouveau.');
@@ -273,7 +273,7 @@ export function SupplierPaymentModal({ supplier, initialOrderId, siteId, onSucce
           {target?.reason && (
             <div className="mt-3 flex items-start gap-2 text-[12px] text-[var(--w-text)]">
               <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
-              <span>{target.order ? `${target.order.order_number} · ` : ''}{target.reason}</span>
+              <span>{target.order ? `${target.order.order_number} │ ` : ''}{target.reason}</span>
             </div>
           )}
           <SupplierPaymentForm
@@ -316,10 +316,10 @@ function SupplierPaymentForm({
 
   const options = [
     { value: '', label: 'Acompte libre (sans commande)' },
-    ...payable.map(o => ({ value: o.id, label: `${o.order_number} · dû ${formatFCFA(orderRemaining(o))}` })),
+    ...payable.map(o => ({ value: o.id, label: `${o.order_number} │ dû ${formatFCFA(orderRemaining(o))}` })),
   ];
   if (target && !payable.some(o => o.id === target.id)) {
-    options.push({ value: target.id, label: `${target.order_number} · non réglable` });
+    options.push({ value: target.id, label: `${target.order_number} │ non réglable` });
   }
 
   const selectOrder = (id: string) => {
@@ -343,10 +343,10 @@ function SupplierPaymentForm({
         <div className="pl-4 border-l border-neutral-200">
           {hasSelection ? (
             <>
-              <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">{isBalance ? 'Solde positionné' : `Dû · ${selected!.order_number}`}</div>
+              <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">{isBalance ? 'Solde positionné' : `Dû │ ${selected!.order_number}`}</div>
               <div className="mt-1 text-sm font-bold text-[var(--w-text)] num">{formatFCFA(due)}</div>
               {selected && (
-                <div className="text-[10px] text-[var(--w-text-muted)] mt-0.5 num">Total {formatFCFA(selected.total)} · payé {formatFCFA(selected.paid)}</div>
+                <div className="text-[10px] text-[var(--w-text-muted)] mt-0.5 num">Total {formatFCFA(selected.total)} │ payé {formatFCFA(selected.paid)}</div>
               )}
               {amt > 0 && <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Reste après : <span className="font-bold num text-[var(--w-text)]">{formatFCFA(remaining)}</span></div>}
             </>
@@ -371,7 +371,7 @@ function SupplierPaymentForm({
         {positionedDue > 0 && (
           <button type="button" onClick={() => selectOrder(BALANCE_ID)}
             className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-muted)] hover:text-[var(--w-text)]'}`}>
-            Solde positionné · {formatFCFA(positionedDue)}
+            Solde positionné │ {formatFCFA(positionedDue)}
           </button>
         )}
         {payable.length === 0 && positionedDue <= 0 && <div className="text-[11px] text-emerald-700 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Tout soldé</div>}
@@ -418,7 +418,7 @@ function SupplierPaymentForm({
         <RecentPaymentsAccordion label="Derniers règlements">
           {recentPayments.map(p => (
             <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-neutral-100 last:border-0">
-              <div className="text-xs text-[var(--w-text-sec)]">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
+              <div className="text-xs text-[var(--w-text-sec)]">{p.method_name}{p.reference ? ` │ ${p.reference}` : ''}</div>
               <div className="text-xs text-[var(--w-text-disabled)]">{p.order_number || 'Acompte'}</div>
               <div className="text-xs font-bold text-emerald-700 num">{formatFCFA(p.amount)}</div>
             </div>

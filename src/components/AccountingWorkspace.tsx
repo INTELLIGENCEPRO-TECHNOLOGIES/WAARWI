@@ -1,6 +1,7 @@
 import {useState,useEffect,useRef,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import {ChevronLeft,ChevronRight,MoreHorizontal,Eye,Copy,ArrowRightLeft,FileText} from './Icons';
+import { SearchableSelect } from './SearchableSelect';
 
 export function useAccountingPagination<T>(rows:T[],resetKey:string){
  const [size,setSize]=useState(20);
@@ -10,11 +11,16 @@ export function useAccountingPagination<T>(rows:T[],resetKey:string){
  useEffect(()=>setPage(0),[resetKey,size]);
  return {rows:rows.slice(current*size,(current+1)*size),page:current,size,total:rows.length,setPage,setSize};
 }
+const pageSizes = [5,10,20,50].map(size=>({value:String(size),label:String(size)}));
 export function AccountingPagination({page,size,total,setPage,setSize,disabled=false}:{page:number;size:number;total:number;setPage:(n:number)=>void;setSize:(n:number)=>void;disabled?:boolean}){
  const pages=Math.max(1,Math.ceil(total/size));
  return <nav className="acc-pagination" aria-label="Pagination comptable">
   <span>{total?Math.min(page*size+1,total):0}–{Math.min((page+1)*size,total)} sur {total}</span>
-  <label>Lignes <select aria-label="Lignes par page" value={size} disabled={disabled} onChange={e=>setSize(Number(e.target.value))}>{[5,10,20,50].map(n=><option key={n}>{n}</option>)}</select></label>
+  <div className="acc-page-size">
+    <span aria-hidden="true">Lignes</span>
+    <SearchableSelect ariaLabel="Lignes par page" className="acc-filter-select w-14" searchable={false} clearable={false} menuWidth={88}
+      value={String(size)} options={pageSizes} disabled={disabled} onChange={value=>setSize(Number(value))}/>
+  </div>
   <div className="acc-page-buttons"><button type="button" aria-label="Page précédente" className="acc-icon" disabled={disabled||page===0} onClick={()=>setPage(page-1)}><ChevronLeft size={17}/></button><span>{page+1} / {pages}</span><button type="button" aria-label="Page suivante" className="acc-icon" disabled={disabled||page+1>=pages} onClick={()=>setPage(page+1)}><ChevronRight size={17}/></button></div>
  </nav>;
 }

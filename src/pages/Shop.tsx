@@ -313,7 +313,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
           <div className="overflow-hidden" style={{ background: shopSettings.promo_banner_color || '#dc2626' }}>
             <div className="py-1.5 flex">
               <span className="shop-promo-text text-xs font-bold text-white px-4">
-                {shopSettings.promo_banner_text} &nbsp;&nbsp;&bull;&nbsp;&nbsp; {shopSettings.promo_banner_text} &nbsp;&nbsp;&bull;&nbsp;&nbsp; {shopSettings.promo_banner_text} &nbsp;&nbsp;&bull;&nbsp;&nbsp; {shopSettings.promo_banner_text}
+                {shopSettings.promo_banner_text} &nbsp;&nbsp;│&nbsp;&nbsp; {shopSettings.promo_banner_text} &nbsp;&nbsp;│&nbsp;&nbsp; {shopSettings.promo_banner_text} &nbsp;&nbsp;│&nbsp;&nbsp; {shopSettings.promo_banner_text}
               </span>
             </div>
           </div>
@@ -449,7 +449,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
           {/* Results count */}
           <div className="text-center text-xs text-neutral-400 pt-2 pb-4">
             {filtered.length} produit{filtered.length > 1 ? 's' : ''}
-            {totalPages > 1 && ` · Page ${page}/${totalPages}`}
+            {totalPages > 1 && ` │ Page ${page}/${totalPages}`}
           </div>
           </>
         )}

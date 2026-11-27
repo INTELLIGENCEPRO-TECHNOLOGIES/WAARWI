@@ -39,9 +39,9 @@ export function PosRegisterPicker({
       <div className="max-w-sm text-[11px] leading-snug text-center break-words">
         <span className="text-neutral-400">Caisse : </span>
         <span className="font-semibold text-neutral-800">{l.primary}</span>
-        {l.secondary && <span className="text-neutral-500 tabular-nums"> · {l.secondary}</span>}
-        {r.status === 'busy' && <div className="text-neutral-500">En cours · {r.operator_name || 'Autre opérateur'}</div>}
-        {r.locked && r.status !== 'busy' && <div className="text-neutral-500">Assignée à {r.assigned_to || 'un autre collaborateur'} · ouverture impossible</div>}
+        {l.secondary && <span className="text-neutral-500 tabular-nums"> │ {l.secondary}</span>}
+        {r.status === 'busy' && <div className="text-neutral-500">En cours │ {r.operator_name || 'Autre opérateur'}</div>}
+        {r.locked && r.status !== 'busy' && <div className="text-neutral-500">Assignée à {r.assigned_to || 'un autre collaborateur'} │ ouverture impossible</div>}
       </div>
     );
   }
@@ -54,7 +54,7 @@ export function PosRegisterPicker({
           const busy = r.status === 'busy' || !!r.locked;
           const active = selectedId === r.id;
           const l = registerLabel(r.code, r.name);
-          const status = r.status === 'busy' ? `En cours · ${r.operator_name || 'Autre opérateur'}`
+          const status = r.status === 'busy' ? `En cours │ ${r.operator_name || 'Autre opérateur'}`
             : r.locked ? `Assignée à ${r.assigned_to || 'un autre collaborateur'}`
             : r.status === 'mine' ? 'Votre session' : null;
           return (

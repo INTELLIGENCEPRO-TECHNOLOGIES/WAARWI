@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
-import { BookOpen, ChevronDown, Coins, Loader2, Minus, Plus, Printer, Wallet, X } from 'lucide-react';
+import { BookOpen, Coins, Loader2, Minus, Plus, Printer, Wallet, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useTopLayer } from '../modalStack';
+import { SearchableSelect } from '../SearchableSelect';
 import { formatDateTime } from '../../lib/format';
 import { formatVatAmount, type VatAmounts } from '../../lib/salesVat';
 
@@ -39,23 +40,21 @@ export function BillingReturnFields({ origins, saleId, lines, loading, loadError
   const selectedOrigin = origins.find(origin => origin.id === saleId);
   return (
     <fieldset disabled={busy} className="min-w-0 space-y-5">
-      <label className="block text-sm font-semibold">
-        Vente d’origine <span aria-hidden="true">*</span>
-        <span className="relative mt-1 block">
-          <select required value={saleId} onChange={event => onSale(event.target.value)}
-            className="min-h-11 w-full appearance-none border-b border-[var(--w-separator)] bg-transparent pr-7 text-base font-normal">
-            <option value="">Choisir une vente</option>
-            {origins.map(origin => <option key={origin.id} value={origin.id}>
-              {origin.id === saleId ? origin.reference : `${origin.reference} · ${origin.customer}`}
-            </option>)}
-          </select>
-          <ChevronDown size={16} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2" />
-        </span>
-        {selectedOrigin && <span className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm font-normal text-[var(--w-text-secondary)]">
+      <div>
+        <SearchableSelect
+          label="Vente d’origine *"
+          options={origins.map(origin => ({ value: origin.id, label: origin.reference, sublabel: origin.customer }))}
+          value={saleId}
+          onChange={onSale}
+          placeholder="Choisir une vente"
+          disabled={busy}
+          wrapLabels
+        />
+        {selectedOrigin && <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm text-[var(--w-text-secondary)]">
           <span className="min-w-0 break-words">{selectedOrigin.customer}</span>
           <span className="whitespace-nowrap tabular-nums">{formatVatAmount(selectedOrigin.total)}</span>
-        </span>}
-      </label>
+        </div>}
+      </div>
 
       {saleId && (
         <section aria-label="Articles à retourner" aria-busy={loading}>
@@ -144,7 +143,7 @@ export function MobileReturnScreen({ title, subtitle, badge, onClose, busy, chil
       className="billing-return-screen fixed inset-0 flex flex-col bg-[var(--w-surface)] text-[var(--w-text)]"
       style={{ zIndex }}
       onKeyDown={event => {
-        if (!isTop) return;
+        if (!isTop || event.defaultPrevented) return;
         if (event.key === 'Escape' && !busy) {
           event.preventDefault();
           event.stopPropagation();
@@ -268,7 +267,7 @@ export function MobileReturnDetail({ document, status, items, loading, loadError
         <div className="space-y-4">
           <div className="space-y-1 border-b border-[var(--w-separator-l)] pb-3">
             <p className="text-sm font-semibold">{document.customers?.name || 'Client comptoir'}</p>
-            {document.sales?.sale_number && <p className="text-sm text-[var(--w-text-secondary)]">Vente d’origine · {document.sales.sale_number}</p>}
+            {document.sales?.sale_number && <p className="text-sm text-[var(--w-text-secondary)]">Vente d’origine │ {document.sales.sale_number}</p>}
             <p className="text-xs text-[var(--w-text-secondary)]">{formatDateTime(document.created_at)}</p>
           </div>
           <section aria-label="Articles retournés" aria-busy={loading}>
@@ -283,7 +282,7 @@ export function MobileReturnDetail({ document, status, items, loading, loadError
                   <li key={item.id} className="flex items-end justify-between gap-2 py-2.5 text-sm">
                     <div className="min-w-0">
                       <p className="break-words">{item.name}</p>
-                      {(item.articles?.internal_ref || item.articles?.oem_ref) && <p className="text-xs text-[var(--w-text-secondary)]">{[item.articles.internal_ref, item.articles.oem_ref].filter(Boolean).join(' · ')}</p>}
+                      {(item.articles?.internal_ref || item.articles?.oem_ref) && <p className="text-xs text-[var(--w-text-secondary)]">{[item.articles.internal_ref, item.articles.oem_ref].filter(Boolean).join(' │ ')}</p>}
                       <p className="text-xs text-[var(--w-text-secondary)]">{item.quantity} × {formatVatAmount(item.unit_price)}{fiscal ? ' HT' : ''}</p>
                     </div>
                     <span className="whitespace-nowrap font-semibold tabular-nums">{formatVatAmount(item.total)}</span>
@@ -299,8 +298,8 @@ export function MobileReturnDetail({ document, status, items, loading, loadError
             ))}
           </dl>
           <div className="space-y-2 border-t border-[var(--w-separator-l)] pt-3 text-sm text-[var(--w-text-secondary)]">
-            {approved && !isCredit && document.refund_method === 'cash' && <p>Remboursé en caisse{document.refunded_at ? ` · ${formatDateTime(document.refunded_at)}` : ''}</p>}
-            {document.reason && <p><span className="font-semibold">Motif</span> · {document.reason}</p>}
+            {approved && !isCredit && document.refund_method === 'cash' && <p>Remboursé en caisse{document.refunded_at ? ` │ ${formatDateTime(document.refunded_at)}` : ''}</p>}
+            {document.reason && <p><span className="font-semibold">Motif</span> │ {document.reason}</p>}
             <p>{document.restock ? 'Articles remis en stock' : 'Sans remise en stock'}</p>
           </div>
         </div>

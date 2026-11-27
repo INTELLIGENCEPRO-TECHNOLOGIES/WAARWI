@@ -509,7 +509,7 @@ function POSLandingResume({
                 </div>
                 <div className="py-4 px-4 border-l border-b border-neutral-100">
                   <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Ouverte le</p>
-                  <p className="text-[13px] font-bold text-neutral-900 leading-tight">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })} · {fmtTimeLanding(session.opened_at)}</p>
+                  <p className="text-[13px] font-bold text-neutral-900 leading-tight">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })} │ {fmtTimeLanding(session.opened_at)}</p>
                 </div>
                 <div className="py-4 pl-4 border-l border-b border-neutral-100">
                   <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Durée</p>
@@ -1890,7 +1890,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         await supabase.from('sales').update({ status: 'paid', paid: totalPaid + ipmPartIpm }).eq('id', saleId);
       }
     }
-    success(`Vente enregistrée${ipmBeneficiaire && ipmPartIpm > 0 ? ` · IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : ''}`);
+    success(`Vente enregistrée${ipmBeneficiaire && ipmPartIpm > 0 ? ` │ IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : ''}`);
     setCart([]); setDiscount(0); setCustomer(null); setPayments([]); setPayOpen(false); setMobileCartOpen(false);
     setDocDeliveryDate(''); setDocReference(''); setDocWarranty(''); setDocRepresentative('');
     setIpmDocuments({ numero_ordonnance: '', medecin: '', numero_bon: '' });
@@ -2198,7 +2198,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         </div>
         {customersStatus === 'error' && (
           <button type="button" className="mt-1 text-xs underline" onClick={() => { setCustomersStatus('loading'); refreshCustomers(value => value + 1); }}>
-            Clients indisponibles · Réessayer
+            Clients indisponibles │ Réessayer
           </button>
         )}
         {customer && (() => {
@@ -2885,7 +2885,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div key={h.id} className="w-tr-hover flex items-center justify-between gap-2 border-b border-[var(--w-separator-l)] py-3">
                 <div className="min-w-0">
                   <div className="font-semibold text-sm">{h.label}</div>
-                  <div className="text-xs text-neutral-500">{h.cart.length} article{h.cart.length > 1 ? 's' : ''} · {formatFCFA(h.cart.reduce((s, i) => s + i.quantity * i.unit_price - i.discount, 0) - h.discount)}</div>
+                  <div className="text-xs text-neutral-500">{h.cart.length} article{h.cart.length > 1 ? 's' : ''} │ {formatFCFA(h.cart.reduce((s, i) => s + i.quantity * i.unit_price - i.discount, 0) - h.discount)}</div>
                   <div className="text-xs text-neutral-400">{new Date(h.savedAt).toLocaleTimeString('fr-FR')}</div>
                 </div>
                 <div className="flex items-center gap-2 ml-3 shrink-0">
@@ -3024,7 +3024,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             {transformed && <span className="inline-flex items-center gap-1 text-xs text-[var(--w-text-sec)]"><CheckCircle2 className="h-3 w-3" />Transformée</span>}
                             {o.payment_status !== 'paye' && <span className="text-xs text-amber-700">{o.payment_status === 'en_attente' ? 'Paiement en attente' : 'Non payée'}</span>}
                           </div>
-                          <div className="text-xs text-neutral-600 mt-0.5 break-words">{o.customer_name} · <Phone className="inline w-3 h-3" /> {o.customer_phone}</div>
+                          <div className="text-xs text-neutral-600 mt-0.5 break-words">{o.customer_name} │ <Phone className="inline w-3 h-3" /> {o.customer_phone}</div>
                           <div className="text-[11px] text-neutral-400 mt-0.5">{new Date(o.created_at).toLocaleString('fr-FR')}</div>
                         </div>
                         <div className="text-right shrink-0">
@@ -3257,7 +3257,7 @@ function PaymentScreen({
                       inputMode="numeric"
                       value={p.amount || ''}
                       onChange={e => updateAmount(idx, e.target.value)}
-                      aria-label={`Montant · ${p.method_name}`}
+                      aria-label={`Montant │ ${p.method_name}`}
                       className="w-input-ul w-full py-1 text-sm font-semibold num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="0"
                     />

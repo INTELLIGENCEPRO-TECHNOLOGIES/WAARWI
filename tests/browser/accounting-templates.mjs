@@ -5,8 +5,12 @@ export async function verifyAccountingTemplates(page) {
 
   const activeWindow = title => page.locator('.acc-work-window[data-active="true"]').and(page.getByRole('region', { name: title, exact: true }));
   const button = (scope, name) => scope.getByRole('button', { name, exact: true });
-  const globalModel = 'Frais bancaires · modèle commun';
-  const journalModel = 'Frais bancaires · modèle BQ';
+  const filterJournal = async (scope, code) => {
+    await button(scope, 'Journal').click();
+    await page.getByRole('listbox').getByRole('option', { name: new RegExp('^' + code + ' —') }).click();
+  };
+  const globalModel = 'Frais bancaires │ modèle commun';
+  const journalModel = 'Frais bancaires │ modèle BQ';
 
   await page.reload();
   const accountingNav = button(page, 'Comptabilité').filter({ visible: true }).first();
@@ -29,17 +33,17 @@ export async function verifyAccountingTemplates(page) {
 
   await button(page, 'Journaux').filter({ visible: true }).first().click();
   const journals = activeWindow('Journaux comptables');
-  await journals.getByLabel('Journal', { exact: true }).selectOption('BQ');
+  await filterJournal(journals, 'BQ');
   await button(journals, 'Appeler un modèle').click();
   const chooser = page.getByRole('dialog', { name: 'Appeler un modèle', exact: true });
-  await chooser.getByRole('combobox').selectOption({ label: globalModel + ' · Tous les journaux' });
+  await chooser.getByRole('combobox').selectOption({ label: globalModel + ' │ Tous les journaux' });
   await button(chooser, 'Préparer le modèle').click();
   const prepare = page.getByRole('dialog', { name: 'Préparer le modèle', exact: true });
   await prepare.getByLabel('Libellé ligne 1', { exact: true }).fill('Frais mensuels fictifs');
   await prepare.getByLabel('Montant ligne 1 en FCFA', { exact: true }).fill('75500,25');
   await button(prepare, 'Reprendre en saisie').click();
 
-  const entry = activeWindow('Saisie des écritures · BQ');
+  const entry = activeWindow('Saisie des écritures │ BQ');
   assert.equal(await entry.getByLabel('Journal de saisie', { exact: true }).inputValue(), 'BQ');
   assert.equal(await entry.getByLabel('Libellé ligne 2', { exact: true }).inputValue(), 'Frais mensuels fictifs');
   assert.equal(await entry.getByLabel('Crédit ligne 2', { exact: true }).inputValue(), '75500.25');
@@ -73,10 +77,10 @@ export async function verifyAccountingTemplates(page) {
   await button(copied, 'Fermer').click();
   await button(piece, 'Fermer').click();
 
-  await journals.getByLabel('Journal', { exact: true }).selectOption('OD');
+  await filterJournal(journals, 'OD');
   await button(journals, 'Appeler un modèle').click();
   const select = chooser.getByRole('combobox');
-  await select.selectOption({ label: globalModel + ' · Tous les journaux' });
+  await select.selectOption({ label: globalModel + ' │ Tous les journaux' });
   assert.equal(await select.getByRole('option', { name: journalModel + ' révisé', exact: true }).count(), 0);
   await button(chooser, 'Fermer').last().click();
 

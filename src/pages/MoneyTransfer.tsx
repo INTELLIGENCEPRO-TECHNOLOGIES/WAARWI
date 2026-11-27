@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 import { ConfirmDialog, Modal } from '../components/Modal';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { PageSearch } from '../components/PageSearch';
 
 type SubPage = 'dashboard' | 'operations' | 'operations_grossiste' | 'depenses' | 'clients' | 'soldes' | 'clotures' | 'rapports' | 'parametres';
@@ -99,17 +100,11 @@ export function MoneyTransfer() {
       <header className="shrink-0 border-b border-[var(--w-separator)] bg-[var(--w-surface)]">
         <div className="mx-auto max-w-[1400px] px-1 py-2.5 lg:px-4">
           <h1 className="text-base font-bold text-[var(--w-text)]">Transfert d’argent</h1>
-          <div className="mt-2 flex items-center gap-2 lg:hidden">
-            <label htmlFor="mt-section" className="sr-only">Rubrique de transfert d’argent</label>
-            <select id="mt-section" value={sub} onChange={event => setSub(event.target.value as SubPage)}
-              className="input min-h-10 min-w-0 text-sm">
-              {navigation.map(item => (
-                <option key={item.key} value={item.key} disabled={!isInitialized && blockedPages.includes(item.key)}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect ariaLabel="Rubrique de transfert d’argent" value={sub} onChange={value => setSub(value as SubPage)}
+            className="mt-2 min-w-0 lg:hidden" searchable={false} clearable={false}
+            options={navigation.map(item => ({
+              value: item.key, label: item.label, disabled: !isInitialized && blockedPages.includes(item.key),
+            }))} />
           <nav aria-label="Rubriques de transfert d’argent" className="mt-2 hidden flex-wrap gap-1 lg:flex">
             {navigation.map(item => (
               <button key={item.key} type="button" aria-current={sub === item.key ? 'page' : undefined}
@@ -307,11 +302,11 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
           <p className="text-xs text-[var(--w-text-sec)]">{new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <select aria-label="Filtrer par point de service" value={selectedPointId ?? ''}
-            onChange={event => setSelectedPointId(event.target.value || null)} className="input !w-auto max-w-full py-1.5 text-xs">
-            <option value="">Tous les points</option>
-            {points.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
-          </select>
+          <SearchableSelect ariaLabel="Filtrer par point de service" value={selectedPointId ?? ''}
+            onChange={value => setSelectedPointId(value || null)} className="min-w-0 max-w-full" clearable={false}
+            searchable={points.length > 8} wrapLabels options={[
+              { value: '', label: 'Tous les points' }, ...points.map(point => ({ value: point.id, label: point.name })),
+            ]} />
           <button type="button" onClick={load} className="btn-icon" aria-label="Actualiser la situation" title="Actualiser">
             <RefreshCw className="h-4 w-4" />
           </button>
@@ -361,7 +356,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
           {totalAlerts > 0 && (
             <p className="flex items-start gap-2 border-t border-[var(--w-separator)] px-3.5 py-2.5 text-xs text-[var(--w-warning)] xl:px-4">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>{totalAlerts} en solde bas{uvAlerts ? ` · ${uvAlerts} UV` : ''}{creditAlerts ? ` · ${creditAlerts} crédit` : ''}</span>
+              <span>{totalAlerts} en solde bas{uvAlerts ? ` │ ${uvAlerts} UV` : ''}{creditAlerts ? ` │ ${creditAlerts} crédit` : ''}</span>
             </p>
           )}
         </section>
@@ -407,7 +402,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
                   className="w-full px-3.5 py-2.5 text-left hover:bg-[var(--w-hover)] aria-pressed:bg-[var(--w-active)] xl:px-4">
                   <span className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                     <span className="text-sm font-semibold">{point.name}</span>
-                    <span className="text-xs text-[var(--w-text-muted)]">{point.opsCount} op. · {point.servicesCount} service{point.servicesCount > 1 ? 's' : ''}</span>
+                    <span className="text-xs text-[var(--w-text-muted)]">{point.opsCount} op. │ {point.servicesCount} service{point.servicesCount > 1 ? 's' : ''}</span>
                   </span>
                   <span className="block space-y-1 text-xs">
                     {[
@@ -440,7 +435,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
                   <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--w-text-sec)]" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{OP_TYPE_LABELS[op.type] || op.type}</p>
-                    <p className="text-xs text-[var(--w-text-sec)]">{[getServiceName(op.service_id), getPointName(op.service_point_id), time].filter(Boolean).join(' · ')}</p>
+                    <p className="text-xs text-[var(--w-text-sec)]">{[getServiceName(op.service_id), getPointName(op.service_point_id), time].filter(Boolean).join(' │ ')}</p>
                   </div>
                   <div className="shrink-0 text-right">
                     <MTMoney value={isWithdrawal ? -Number(op.amount) : Number(op.amount)} className="text-xs font-semibold sm:text-sm" />
@@ -655,7 +650,7 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
 
       {/* Balance grids per point */}
       {displayPoints.length === 0 && !isValidated ? (
-        <MTEmpty>Aucun point de service configuré · Créez d'abord vos points de service et associez-leur des services</MTEmpty>
+        <MTEmpty>Aucun point de service configuré │ Créez d'abord vos points de service et associez-leur des services</MTEmpty>
       ) : displayPoints.length === 0 && isValidated ? (
         <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] py-12 text-center">
           <CheckCircle2 className="w-10 h-10 text-emerald-300 mx-auto mb-3" />
@@ -876,7 +871,7 @@ function MTServicePoints() {
       </Modal>
 
       {points.length === 0 ? (
-        <MTEmpty>Aucun point de service configuré · Créez votre premier point de service pour commencer</MTEmpty>
+        <MTEmpty>Aucun point de service configuré │ Créez votre premier point de service pour commencer</MTEmpty>
       ) : (
         <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden divide-y divide-neutral-100">
           {points.map(p => (
@@ -886,7 +881,7 @@ function MTServicePoints() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-neutral-900">{p.name}</p>
-                <p className="text-xs text-neutral-400">{p.code ? `${p.code} · ` : ''}{p.address || 'Aucune adresse'}</p>
+                <p className="text-xs text-neutral-400">{p.code ? `${p.code} │ ` : ''}{p.address || 'Aucune adresse'}</p>
                 {(pointServices[p.id] || []).length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {(pointServices[p.id] || []).map(sid => {
@@ -1063,7 +1058,7 @@ function MTServices() {
       </Modal>
 
       {services.length === 0 ? (
-        <MTEmpty>Aucun service configuré · Ajoutez Orange Money, Wave, Ria, etc.</MTEmpty>
+        <MTEmpty>Aucun service configuré │ Ajoutez Orange Money, Wave, Ria, etc.</MTEmpty>
       ) : (
         <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden divide-y divide-neutral-100">
           {services.map(s => (
@@ -1077,7 +1072,7 @@ function MTServices() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-neutral-900">{s.name}</p>
-                <p className="text-xs text-neutral-400">{s.family === 'credit_telephone' ? 'Crédit téléphonique' : 'Transfert'} · {s.type === 'national' ? 'National' : s.type === 'international' ? 'International' : 'Mixte'} · {s.currency}{Number(s.alert_min_balance) > 0 ? ` · Alerte si < ${fmt(s.alert_min_balance)}` : ''}</p>
+                <p className="text-xs text-neutral-400">{s.family === 'credit_telephone' ? 'Crédit téléphonique' : 'Transfert'} │ {s.type === 'national' ? 'National' : s.type === 'international' ? 'International' : 'Mixte'} │ {s.currency}{Number(s.alert_min_balance) > 0 ? ` │ Alerte si < ${fmt(s.alert_min_balance)}` : ''}</p>
               </div>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>{s.status === 'active' ? 'Actif' : 'Inactif'}</span>
               {s.logo_url && (
@@ -1304,11 +1299,9 @@ function MTOperations() {
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <MapPin className="h-4 w-4 shrink-0 text-[var(--w-text-sec)]" aria-hidden="true" />
         {points.length > 1 ? (
-          <select aria-label="Point de service" value={selectedPoint} onChange={event => setSelectedPoint(event.target.value)}
-            className="input !w-auto min-w-0 max-w-full py-1.5 text-sm">
-            <option value="">Sélectionner un point</option>
-            {points.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
-          </select>
+          <SearchableSelect ariaLabel="Point de service" value={selectedPoint} onChange={setSelectedPoint}
+            className="min-w-0 flex-1 sm:max-w-72" clearable={false} searchable={points.length > 8} wrapLabels
+            options={[{ value: '', label: 'Sélectionner un point' }, ...points.map(point => ({ value: point.id, label: point.name }))]} />
         ) : <span className="text-sm font-medium">{selectedPointName}</span>}
       </div>
 
@@ -1379,7 +1372,7 @@ function MTOperations() {
       {opModal && (
         <Modal open onClose={closeOperation} title={OP_TYPE_LABELS[opModal.type]} size="sm" layer="top" panelClassName="!h-auto" focusOnOpen
           footer={<MTFormActions cancel={closeOperation} submit={createOp} label="Valider" busy={saving} disabled={!form.amount} />}>
-          <p className="mb-3 text-sm text-[var(--w-text-sec)]">{opModal.service.name} · {selectedPointName}</p>
+          <p className="mb-3 text-sm text-[var(--w-text-sec)]">{opModal.service.name} │ {selectedPointName}</p>
           <div className="space-y-3">
             <label className="label">Montant total (FCFA)
               <input value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} type="number" inputMode="decimal" placeholder="0"
@@ -1393,20 +1386,19 @@ function MTOperations() {
             </label>
           </div>
           <p className="mt-3 border-t border-[var(--w-separator)] pt-2 text-xs text-[var(--w-text-sec)]">
-            Libellé automatique · {opModal.type === 'depot' ? `Total dépôt ${opModal.service.name} du jour` : opModal.type === 'retrait' ? `Total retrait ${opModal.service.name} du jour` : `Vente crédit ${opModal.service.name} du jour`}
+            Libellé automatique │ {opModal.type === 'depot' ? `Total dépôt ${opModal.service.name} du jour` : opModal.type === 'retrait' ? `Total retrait ${opModal.service.name} du jour` : `Vente crédit ${opModal.service.name} du jour`}
           </p>
         </Modal>
       )}
 
       <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historique des opérations" size="lg" layer="top" fullscreenMobile focusOnOpen>
         <div className="space-y-3">
-          <p className="text-xs text-[var(--w-text-sec)]">{selectedPointName || 'Tous les points'} · {historyOps.length} opération{historyOps.length > 1 ? 's' : ''}</p>
+          <p className="text-xs text-[var(--w-text-sec)]">{selectedPointName || 'Tous les points'} │ {historyOps.length} opération{historyOps.length > 1 ? 's' : ''}</p>
           <div className="grid items-end gap-2 sm:grid-cols-2">
             <PageSearch value={filter.search} onChange={search => setFilter({ ...filter, search })} placeholder="Rechercher une référence ou une note…" />
-            <select aria-label="Type d’opération" value={filter.type} onChange={event => setFilter({ ...filter, type: event.target.value })} className="input py-1.5 text-sm">
-              <option value="">Tous les types</option>
-              {Object.entries(OP_TYPE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-            </select>
+            <SearchableSelect ariaLabel="Type d’opération" value={filter.type} onChange={type => setFilter(previous => ({ ...previous, type }))}
+              className="min-w-0" searchable={false} clearable={false} wrapLabels
+              options={[{ value: '', label: 'Tous les types' }, ...Object.entries(OP_TYPE_LABELS).map(([value, label]) => ({ value, label }))]} />
           </div>
           {historyOps.length === 0 ? <MTEmpty>Aucune opération</MTEmpty> : (
             <ul className="divide-y divide-[var(--w-separator-l)] border-y border-[var(--w-separator)]">
@@ -1419,7 +1411,7 @@ function MTOperations() {
                   <li key={op.id} className="flex items-start gap-2 py-2.5">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{OP_TYPE_LABELS[op.type] || op.type}</p>
-                      <p className="text-xs text-[var(--w-text-sec)]">{[service?.name, point?.name, when].filter(Boolean).join(' · ')}</p>
+                      <p className="text-xs text-[var(--w-text-sec)]">{[service?.name, point?.name, when].filter(Boolean).join(' │ ')}</p>
                       {(op.comment || op.reference) && <p className="break-words text-xs text-[var(--w-text-muted)]">{op.comment || op.reference}</p>}
                     </div>
                     <div className="shrink-0 text-right">
@@ -1583,7 +1575,7 @@ function MTWholesalers() {
       </Modal>
 
       {wholesalers.length === 0 ? (
-        <MTEmpty>Aucun grossiste configuré · Ajoutez vos grossistes pour les opérations de recharge et déchargement</MTEmpty>
+        <MTEmpty>Aucun grossiste configuré │ Ajoutez vos grossistes pour les opérations de recharge et déchargement</MTEmpty>
       ) : (
         <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden divide-y divide-neutral-100">
           {wholesalers.map(w => (
@@ -1593,7 +1585,7 @@ function MTWholesalers() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-neutral-900">{w.name}</p>
-                <p className="text-xs text-neutral-400">{w.phone || '—'} · {w.zone || w.address || '—'}</p>
+                <p className="text-xs text-neutral-400">{w.phone || '—'} │ {w.zone || w.address || '—'}</p>
                 {w.services?.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {w.services.map((sid: string) => (
@@ -1715,8 +1707,8 @@ function MTWholesalerOperations() {
       const svcName = services.find(s => s.id === svc)?.name || '';
       return {
         rows: [
-          { label: `${balanceLabel(bal, svcName)} · ${points.find(p => p.id === sp)?.name || ''}`, before: srcBefore, after: srcBefore - amount, delta: -amount, isSource: true },
-          { label: `${balanceLabel(bal, svcName)} · ${points.find(p => p.id === dp)?.name || ''}`, before: dstBefore, after: dstBefore + amount, delta: amount, isSource: false },
+          { label: `${balanceLabel(bal, svcName)} │ ${points.find(p => p.id === sp)?.name || ''}`, before: srcBefore, after: srcBefore - amount, delta: -amount, isSource: true },
+          { label: `${balanceLabel(bal, svcName)} │ ${points.find(p => p.id === dp)?.name || ''}`, before: dstBefore, after: dstBefore + amount, delta: amount, isSource: false },
         ],
         insufficient: srcBefore < amount ? balanceLabel(bal, svcName) : null,
       };
@@ -1729,16 +1721,16 @@ function MTWholesalerOperations() {
     if (opType === 'dechargement_grossiste') {
       return {
         rows: [
-          { label: `${balanceLabel('uv', svcName)} · ${points.find(p => p.id === sp)?.name || ''}`, before: targetBefore, after: targetBefore - amount, delta: -amount, isSource: true },
-          { label: `${balanceLabel('cash')} · ${points.find(p => p.id === sp)?.name || ''}`, before: sourceBefore, after: sourceBefore + amount, delta: amount, isSource: false },
+          { label: `${balanceLabel('uv', svcName)} │ ${points.find(p => p.id === sp)?.name || ''}`, before: targetBefore, after: targetBefore - amount, delta: -amount, isSource: true },
+          { label: `${balanceLabel('cash')} │ ${points.find(p => p.id === sp)?.name || ''}`, before: sourceBefore, after: sourceBefore + amount, delta: amount, isSource: false },
         ],
         insufficient: targetBefore < amount ? balanceLabel('uv', svcName) : null,
       };
     }
     return {
       rows: [
-        { label: `${balanceLabel('cash')} · ${points.find(p => p.id === sp)?.name || ''}`, before: sourceBefore, after: sourceBefore - amount, delta: -amount, isSource: true },
-        { label: `${balanceLabel(targetType, svcName)} · ${points.find(p => p.id === sp)?.name || ''}`, before: targetBefore, after: targetBefore + amount, delta: amount, isSource: false },
+        { label: `${balanceLabel('cash')} │ ${points.find(p => p.id === sp)?.name || ''}`, before: sourceBefore, after: sourceBefore - amount, delta: -amount, isSource: true },
+        { label: `${balanceLabel(targetType, svcName)} │ ${points.find(p => p.id === sp)?.name || ''}`, before: targetBefore, after: targetBefore + amount, delta: amount, isSource: false },
       ],
       insufficient: sourceBefore < amount ? balanceLabel('cash') : null,
     };
@@ -2005,7 +1997,7 @@ function MTWholesalerOperations() {
 
       {/* Historique */}
       {ops.length === 0 ? (
-        <MTEmpty>Aucune opération enregistrée · Créez une nouvelle opération pour alimenter ou déplacer vos soldes.</MTEmpty>
+        <MTEmpty>Aucune opération enregistrée │ Créez une nouvelle opération pour alimenter ou déplacer vos soldes.</MTEmpty>
       ) : (
         <div className="rounded-md border border-[var(--w-separator)] bg-[var(--w-surface)] overflow-hidden">
           <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
@@ -2031,7 +2023,7 @@ function MTWholesalerOperations() {
                     <p className="text-xs text-neutral-500 mt-0.5 break-words">
                       {isTr
                         ? `${getPointName(op.service_point_id)} → ${getPointName(op.dest_service_point_id)}`
-                        : `${getWholesalerName(op.wholesaler_id)} · ${getPointName(op.service_point_id)}`}
+                        : `${getWholesalerName(op.wholesaler_id)} │ ${getPointName(op.service_point_id)}`}
                     </p>
                     <p className="text-[11px] text-neutral-400 mt-0.5">{new Date(op.operated_at).toLocaleDateString('fr-FR')} {new Date(op.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
@@ -2236,16 +2228,16 @@ function MTBalances() {
         <h2 className="text-base font-bold">Soldes</h2>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {points.length > 1 ? (
-            <select aria-label="Point de service" value={selectedPointId} onChange={e => setSelectedPointId(e.target.value)} className="input !w-auto max-w-full py-1.5 text-xs">
-              <option value="">Tous les points</option>
-              {points.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
-            </select>
+            <SearchableSelect ariaLabel="Point de service" value={selectedPointId} onChange={setSelectedPointId}
+              className="min-w-0 max-w-full" searchable={points.length > 8} clearable={false} wrapLabels
+              options={[{ value: '', label: 'Tous les points' }, ...points.map(point => ({ value: point.id, label: point.name }))]} />
           ) : <span className="text-sm text-[var(--w-text-sec)]">{selectedPointName}</span>}
-          <select aria-label="Période" value={dateRange} onChange={e => setDateRange(e.target.value)} className="input !w-auto max-w-full py-1.5 text-xs">
-            <option value="today">Aujourd’hui</option>
-            <option value="week">7 derniers jours</option>
-            <option value="month">30 derniers jours</option>
-          </select>
+          <SearchableSelect ariaLabel="Période" value={dateRange} onChange={setDateRange}
+            className="min-w-0 max-w-full" searchable={false} clearable={false}
+            options={[
+              { value: 'today', label: 'Aujourd’hui' }, { value: 'week', label: '7 derniers jours' },
+              { value: 'month', label: '30 derniers jours' },
+            ]} />
         </div>
       </div>
 
@@ -2451,7 +2443,7 @@ function MTBalances() {
                             {x.svc.logo_url ? <img src={x.svc.logo_url} className="w-5 h-5 object-contain" /> : <Smartphone className="w-4 h-4 text-amber-600" />}
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-amber-900 break-words">{x.svc.name}</p>
-                              <p className="text-[10px] text-amber-600 break-words">{ptName ? `${ptName} · ` : ''}Seuil : {fmt(x.svc.alert_min_balance)} FCFA</p>
+                              <p className="text-[10px] text-amber-600 break-words">{ptName ? `${ptName} │ ` : ''}Seuil : {fmt(x.svc.alert_min_balance)} FCFA</p>
                             </div>
                           </div>
                           <p className="text-sm font-bold text-amber-900 num shrink-0">{fmt(x.acc.balance)}</p>
@@ -3037,7 +3029,7 @@ function MTClosures() {
       )}
 
       {closures.length === 0 && !showForm && !showOpeningForm && (
-        <MTEmpty>Aucune clôture effectuée · Clôturez en fin de journée pour suivre les écarts</MTEmpty>
+        <MTEmpty>Aucune clôture effectuée │ Clôturez en fin de journée pour suivre les écarts</MTEmpty>
       )}
     </div>
   );
@@ -3086,14 +3078,12 @@ function MTReports() {
       <h2 className="text-base font-bold">Rapports</h2>
       <form className="grid min-w-0 items-end gap-2 border-b border-[var(--w-separator)] pb-3 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
         onSubmit={event => { event.preventDefault(); void generate(); }}>
-        <label className="label min-w-0">Type de rapport
-          <select value={report} onChange={event => changeType(event.target.value)} className="input mt-1 text-sm" disabled={loading}>
-            <option value="operations">Toutes les opérations</option>
-            <option value="depots">Dépôts</option>
-            <option value="retraits">Retraits</option>
-            <option value="clotures">Clôtures</option>
-          </select>
-        </label>
+        <SearchableSelect label="Type de rapport" value={report} onChange={changeType}
+          className="min-w-0" searchable={false} clearable={false} wrapLabels disabled={loading}
+          options={[
+            { value: 'operations', label: 'Toutes les opérations' }, { value: 'depots', label: 'Dépôts' },
+            { value: 'retraits', label: 'Retraits' }, { value: 'clotures', label: 'Clôtures' },
+          ]} />
         <label className="label min-w-0">Du
           <input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} className="input mt-1 min-w-0 text-sm" required />
         </label>
@@ -3370,7 +3360,7 @@ function MTExpenses() {
           <label className="label">Montant (FCFA) <span aria-hidden="true">*</span>
             <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" type="number" inputMode="decimal" min="0" className="input num mt-1 text-base font-semibold" required />
           </label>
-          <div className="self-center text-sm text-[var(--w-text-sec)]">Source · Caisse</div>
+          <div className="self-center text-sm text-[var(--w-text-sec)]">Source │ Caisse</div>
           <label className="label sm:col-span-2">Description
             <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="input mt-1" />
           </label>
@@ -3379,14 +3369,12 @@ function MTExpenses() {
 
       {/* Filtres */}
       <div className="flex items-center gap-2 flex-wrap">
-        <select value={filterPoint} onChange={e => setFilterPoint(e.target.value)} className="input h-9 text-xs w-auto">
-          <option value="">Tous les points</option>
-          {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="input h-9 text-xs w-auto">
-          <option value="">Toutes catégories</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <SearchableSelect ariaLabel="Point de service" value={filterPoint} onChange={setFilterPoint}
+          className="min-w-0 max-w-full" searchable={points.length > 8} clearable={false} wrapLabels
+          options={[{ value: '', label: 'Tous les points' }, ...points.map(point => ({ value: point.id, label: point.name }))]} />
+        <SearchableSelect ariaLabel="Catégorie de dépense" value={filterCategory} onChange={setFilterCategory}
+          className="min-w-0 max-w-full" searchable={categories.length > 8} clearable={false} wrapLabels
+          options={[{ value: '', label: 'Toutes les catégories' }, ...categories.map(category => ({ value: category.id, label: category.name }))]} />
         <div className="flex gap-1 bg-neutral-100 rounded-lg p-0.5">
           {(['today', 'week', 'month', 'all'] as const).map(p => (
             <button key={p} onClick={() => setFilterPeriod(p)} className={`px-2.5 py-1 text-xs font-medium rounded-md ${filterPeriod === p ? 'bg-white text-neutral-900 ' : 'text-neutral-500'}`}>
@@ -3411,7 +3399,7 @@ function MTExpenses() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium text-neutral-900">{getCatName(e.category_id)}</p>
                   </div>
-                  <p className="text-xs text-neutral-500 mt-0.5 break-words">{getPointName(e.service_point_id)}{e.description ? ` · ${e.description}` : ''}</p>
+                  <p className="text-xs text-neutral-500 mt-0.5 break-words">{getPointName(e.service_point_id)}{e.description ? ` │ ${e.description}` : ''}</p>
                   <p className="text-[11px] text-neutral-400 mt-0.5">{new Date(e.expense_date).toLocaleDateString('fr-FR')} {new Date(e.expense_date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
                 <div className="text-right shrink-0">
@@ -3634,10 +3622,10 @@ function MTCustomers() {
     const svcName = opService?.name || '';
     const entryType = balancePart > 0 ? 'operation_solde' : 'creance';
     const comment = creancePart > 0 && balancePart > 0
-      ? `${svcName} · ${fmt(balancePart)} sur solde, ${fmt(creancePart)} en créance`
+      ? `${svcName} │ ${fmt(balancePart)} sur solde, ${fmt(creancePart)} en créance`
       : balancePart > 0
-        ? `${svcName} · réglé sur solde`
-        : `${svcName} · totalement en créance`;
+        ? `${svcName} │ réglé sur solde`
+        : `${svcName} │ totalement en créance`;
 
     const { error: ledErr } = await supabase.from('mt_customer_ledger').insert({
       tenant_id: tenant.id,
@@ -3648,7 +3636,7 @@ function MTCustomers() {
       amount: opAmount,
       balance_delta: -balancePart,
       creance_delta: creancePart,
-      comment: opForm.comment ? `${comment} · ${opForm.comment}` : comment,
+      comment: opForm.comment ? `${comment} │ ${opForm.comment}` : comment,
       operated_by: profile?.id || null,
     });
     if (ledErr) { toast.error('Erreur ledger : ' + ledErr.message); setSaving(false); return; }
@@ -3679,7 +3667,7 @@ function MTCustomers() {
       amount: Math.abs(Number(e.amount)),
       balance_delta: -Number(e.balance_delta || 0),
       creance_delta: -Number(e.creance_delta || 0),
-      comment: `Annulation · ${e.comment || ''}`.trim(),
+      comment: `Annulation │ ${e.comment || ''}`.trim(),
       operated_by: profile?.id || null,
     });
     toast.success('Opération annulée');
@@ -3758,7 +3746,7 @@ function MTCustomers() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="text-base font-bold text-neutral-900">{selected.name}</h3>
-                    <p className="text-xs text-neutral-500">{selected.phone || '—'}{selected.address ? ` · ${selected.address}` : ''}</p>
+                    <p className="text-xs text-neutral-500">{selected.phone || '—'}{selected.address ? ` │ ${selected.address}` : ''}</p>
                     {selected.code && <p className="text-[11px] text-neutral-400 mt-0.5">Code : {selected.code}</p>}
                   </div>
                   <div className="flex gap-1 shrink-0">
@@ -3804,7 +3792,7 @@ function MTCustomers() {
                               {Number(e.creance_delta) > 0 && <span className="text-[10px] font-medium bg-red-50 text-red-600 px-1.5 py-0.5 rounded">+créance {fmt(Number(e.creance_delta))}</span>}
                               {Number(e.balance_delta) < 0 && e.entry_type !== 'retrait' && <span className="text-[10px] font-medium bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded">solde -{fmt(Math.abs(Number(e.balance_delta)))}</span>}
                             </div>
-                            <p className="text-[11px] text-neutral-400">{new Date(e.operated_at).toLocaleDateString('fr-FR')} {new Date(e.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}{e.comment ? ` · ${e.comment}` : ''}</p>
+                            <p className="text-[11px] text-neutral-400">{new Date(e.operated_at).toLocaleDateString('fr-FR')} {new Date(e.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}{e.comment ? ` │ ${e.comment}` : ''}</p>
                           </div>
                           <MTMoney value={Math.abs(Number(e.amount)) * (isPositive ? 1 : -1)} className={`shrink-0 text-xs font-semibold ${isPositive ? 'text-[var(--w-success)]' : 'text-[var(--w-error)]'}`} />
                           {cancellable && (
@@ -3923,7 +3911,7 @@ function MTCustomers() {
                 <div className="rounded-lg bg-white border border-neutral-200 p-2.5 flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-medium text-neutral-500 uppercase">Solde {opTargetType === 'stock_credit' ? 'stock crédit' : 'UV'} du service</p>
-                    <p className="text-[10px] text-neutral-400 mt-0.5">{opService?.name} · {getPointName(opForm.service_point_id)}</p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">{opService?.name} │ {getPointName(opForm.service_point_id)}</p>
                   </div>
                   <div className="text-right">
                     <div className="flex items-baseline gap-1 justify-end">

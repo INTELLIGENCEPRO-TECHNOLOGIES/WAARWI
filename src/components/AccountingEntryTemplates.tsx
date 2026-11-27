@@ -111,7 +111,7 @@ export function AccountingEntryTemplates({
                 onChange={event => setChosen(event.target.value)}>
                 <option value="">{templateList.loading ? 'Chargement…' : 'Choisir un modèle'}</option>
                 {scoped.map(template => <option key={template.id} value={template.id}>
-                  {template.name}{!template.journal_code ? ' · Tous les journaux' : ''}
+                  {template.name}{!template.journal_code ? ' │ Tous les journaux' : ''}
                 </option>)}
               </select>
             </label>

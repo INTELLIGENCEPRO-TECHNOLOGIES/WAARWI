@@ -172,7 +172,7 @@ export function SubscriptionPaymentPanel({ paymentId, inDialog = false }: { paym
           </h3>
           {quote && (
             <p className="mt-1.5 text-sm text-[var(--w-text-sec)]">
-              {quote.plan_name} · {subscriptionCycleLabels[quote.billing_cycle]}
+              {quote.plan_name} │ {subscriptionCycleLabels[quote.billing_cycle]}
             </p>
           )}
         </div>
@@ -191,7 +191,7 @@ export function SubscriptionPaymentPanel({ paymentId, inDialog = false }: { paym
             className="min-h-10 border-b border-[var(--w-separator)] bg-transparent pr-8 text-sm text-[var(--w-text)]">
             {billingOptions.map(option => (
               <option key={option.months} value={option.months}>
-                {option.months} mois{option.discount_percent ? ' · −' + formatSubscriptionDiscount(option.discount_percent) : ''}
+                {option.months} mois{option.discount_percent ? ' │ −' + formatSubscriptionDiscount(option.discount_percent) : ''}
               </option>
             ))}
           </select>
@@ -208,9 +208,9 @@ export function SubscriptionPaymentPanel({ paymentId, inDialog = false }: { paym
       {context?.environment === 'test' && <p className="text-xs font-medium text-amber-700">Mode test PayTech</p>}
       {payment && (
         <div className="space-y-1 text-xs text-[var(--w-text-sec)]" aria-live="polite">
-          <p className="font-medium text-[var(--w-text)]">{quote && 'Dernier paiement · '}{subscriptionPaymentLabel(payment)}</p>
+          <p className="font-medium text-[var(--w-text)]">{quote && 'Dernier paiement │ '}{subscriptionPaymentLabel(payment)}</p>
           {!quote && <p>{subscriptionPaymentDuration(payment)}</p>}
-          {payment.paid_at && <p>{formatDateTime(payment.paid_at)}{payment.payment_method && ' · ' + payment.payment_method}</p>}
+          {payment.paid_at && <p>{formatDateTime(payment.paid_at)}{payment.payment_method && ' │ ' + payment.payment_method}</p>}
           {paymentId && <p className="break-all">Référence {payment.id}</p>}
           {payment.review_reason && <p>Contactez l’équipe Waarwi avec la référence {payment.id}.</p>}
           {payment.state === 'paid' && payment.subscription_id && <p>Votre abonnement a été mis à jour.</p>}

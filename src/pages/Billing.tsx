@@ -20,6 +20,7 @@ import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
@@ -139,6 +140,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [tab, setTabRaw] = useState<Tab>('invoices');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [draftStatusFilter, setDraftStatusFilter] = useState('');
   const [tabError, setTabError] = useState<string | null>(null);
 
   const switchTab = useCallback((t: Tab) => {
@@ -1640,7 +1642,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       const { data, error: rpcErr } = await supabase.rpc('comptabiliser_vente', { p_sale_id: inv.id });
       if (rpcErr) throw rpcErr;
       if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur inconnue');
-      success((data as any).piece_number ? `Comptabilisé · ${(data as any).piece_number}` : 'Facture comptabilisée');
+      success((data as any).piece_number ? `Comptabilisé │ ${(data as any).piece_number}` : 'Facture comptabilisée');
       setInvoiceDetail(prev => prev?.id === inv.id ? { ...prev, accounting_status: 'accounted' } : prev);
       setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, accounting_status: 'accounted' } : i));
     } catch (e: any) { error(e.message); }
@@ -1673,7 +1675,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     const cashCtx = await getOperationalCashContext(currentSite.id);
     const sess = cashCtx.session;
     if (!sess) { payingRef.current = false; setPaying(false); error(missingSessionMessage(cashCtx, "La caisse doit être ouverte d'abord")); return; }
-    const ref = `Règlement facture ${invoiceDetail.sale_number}${invoiceDetail.customers?.name ? ' · ' + invoiceDetail.customers.name : ''}`;
+    const ref = `Règlement facture ${invoiceDetail.sale_number}${invoiceDetail.customers?.name ? ' │ ' + invoiceDetail.customers.name : ''}`;
     const { error: e } = await supabase.rpc('register_sale_payment', {
       p_sale_id: invoiceDetail.id,
       p_payment_method_id: pm.id,
@@ -1692,7 +1694,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         await supabase.from('ipm_ventes').update({ part_beneficiaire_payee: Math.min(totalPaidNow, Number(ipmV.part_client)) }).eq('id', ipmV.id);
       }
     }
-    success('Paiement enregistré · imputé sur la caisse du jour');
+    success('Paiement enregistré │ imputé sur la caisse du jour');
     setPayOpen(false);
     payingRef.current = false;
     setPaying(false);
@@ -1963,6 +1965,32 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     return Object.entries(RETURN_STATUS).map(([v, s]) => ({ value: v, label: s.label }));
   }, [tab]);
 
+  const openFilters = () => {
+    setDraftStatusFilter(statusFilter);
+    setFiltersOpen(true);
+  };
+  const stockSettings = (tenant as (typeof tenant & { settings?: { shared_articles?: boolean; inter_depot_transfer?: boolean } }))?.settings;
+  const canUseOtherDepots = stockSettings?.shared_articles !== false && !!stockSettings?.inter_depot_transfer;
+  const availableDepots = depots.filter(depot => canUseOtherDepots || depot.parent_site_id === currentSite?.id);
+  const stockSourceOptions = [
+    ...(currentSite ? [{ value: currentSite.id, label: currentSite.name + ' (Magasin)' }] : []),
+    ...availableDepots.map(depot => ({ value: depot.id, label: depot.name + ' (Dépôt)' })),
+  ];
+  const stockSourceSelect = (
+    <SearchableSelect
+      ariaLabel="Source du stock"
+      className="min-w-0 flex-1 md:w-40"
+      searchable={availableDepots.length > 8}
+      clearable={false}
+      menuWidth={264}
+      wrapLabels
+      value={billSourceSiteId || currentSite?.id || ''}
+      onChange={setBillSourceSiteId}
+      options={stockSourceOptions}
+      placeholder="Sélectionner une source"
+    />
+  );
+
   const newMenuItems = [
     { key: 'invoice', label: 'Nouvelle facture', icon: FilePlus, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; } openInvoiceEditor(); } },
     { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); } } },
@@ -1970,6 +1998,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     { key: 'credit', label: 'Nouvel avoir', icon: CreditCard, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } startReturn('avoir'); } },
   ];
 
+  const paymentOptions = paymentMethods.map(method => ({ value: method.id, label: method.name }));
   const quotePreviewAction = 'clay-action inline-flex h-9 w-9 shrink-0 items-center justify-center';
   const invoiceDue = invoiceDetail ? invoicePatientDue(invoiceDetail) : 0;
 
@@ -2029,7 +2058,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           </button>
         )}
         <button
-          onClick={() => setFiltersOpen(true)}
+          onClick={openFilters}
           className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
             (statusFilter || customerFilter || dateFrom || dateTo || minAmount || maxAmount)
               ? 'text-brand-700'
@@ -2041,37 +2070,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         </button>
       </div>
 
-      {(() => {
-        const sharedCatalog = (tenant as any)?.settings?.shared_articles !== false;
-        const interDepot = !!(tenant as any)?.settings?.inter_depot_transfer;
-        const availableDepots = depots.filter(d =>
-          d.parent_site_id === currentSite?.id || (sharedCatalog && interDepot)
-        );
-        if (availableDepots.length === 0) return null;
-        return (
-          <div className="md:hidden flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock depuis :</span>
-            <select
-              value={billSourceSiteId}
-              onChange={e => setBillSourceSiteId(e.target.value)}
-              className="text-[11px] font-semibold bg-transparent border-b border-slate-300 px-0 py-1 text-slate-700 focus:outline-none focus:border-brand-400"
-            >
-              {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
-              {availableDepots.map(d => (
-                <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
-              ))}
-            </select>
-          </div>
-        );
-      })()}
+      {availableDepots.length > 0 && (
+        <div className="flex min-w-0 items-center gap-2 md:hidden">
+          <span className="shrink-0 text-xs font-medium text-[var(--w-text-sec)]">Stock depuis</span>
+          {stockSourceSelect}
+        </div>
+      )}
 
       {/* Desktop: single compact toolbar row – search, filters, depot, action */}
       {(() => {
-        const sharedCatalog = (tenant as any)?.settings?.shared_articles !== false;
-        const interDepot = !!(tenant as any)?.settings?.inter_depot_transfer;
-        const availableDepots = depots.filter(d =>
-          d.parent_site_id === currentSite?.id || (sharedCatalog && interDepot)
-        );
         const actionItem = newMenuItems.find(i =>
           (tab === 'invoices' && i.key === 'invoice') ||
           (tab === 'quotes' && i.key === 'quote') ||
@@ -2097,7 +2104,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               )}
             </div>
             <button
-              onClick={() => setFiltersOpen(true)}
+              onClick={openFilters}
               className={`shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-sm font-semibold transition-colors ${
                 filtersActive
                   ? 'text-brand-700 hover:text-brand-800'
@@ -2108,18 +2115,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               <span>Filtres</span>
             </button>
             {availableDepots.length > 0 && (
-              <div className="shrink-0 inline-flex items-center gap-2 pb-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Stock</span>
-                <select
-                  value={billSourceSiteId}
-                  onChange={e => setBillSourceSiteId(e.target.value)}
-                  className="text-xs font-semibold bg-transparent border-0 px-0 py-0 text-neutral-800 focus:outline-none max-w-[200px] cursor-pointer"
-                >
-                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
-                  {availableDepots.map(d => (
-                    <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
-                  ))}
-                </select>
+              <div className="inline-flex shrink-0 items-center gap-2">
+                <span className="text-xs font-medium text-[var(--w-text-sec)]">Stock</span>
+                {stockSourceSelect}
               </div>
             )}
             {actionItem && ActionIcon && (
@@ -2226,7 +2224,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                           <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{q.quote_number}</span>
                           <span className={`text-xs font-semibold ${st.pill} shrink-0`}>{st.label}</span>
-                          <span className="text-xs text-[var(--w-text-sec)] shrink-0 num">{formatDate(q.created_at)}{q.valid_until ? ` · Valide ${formatDate(q.valid_until)}` : ''}</span>
+                          <span className="text-xs text-[var(--w-text-sec)] shrink-0 num">{formatDate(q.created_at)}{q.valid_until ? ` │ Valide ${formatDate(q.valid_until)}` : ''}</span>
                         </div>
                         </button>
                         {/* Line 3: actions + amount */}
@@ -2384,7 +2382,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                         </div>
                         {/* Line 3: date + sale ref */}
                         <div className="text-xs text-[var(--w-text-sec)] num mt-0.5 truncate">
-                          {formatDateTime(r.created_at)}{r.sales?.sale_number && <> · Vente {r.sales.sale_number}</>}
+                          {formatDateTime(r.created_at)}{r.sales?.sale_number && <> │ Vente {r.sales.sale_number}</>}
                         </div>
                         {/* Line 4: balance + amount */}
                         <div className="flex items-center gap-1 mt-1.5">
@@ -2459,20 +2457,25 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         onClose={() => setFiltersOpen(false)}
         from={dateFrom}
         to={dateTo}
-        onApply={(f, t) => { setDateFrom(f); setDateTo(t); setFiltersOpen(false); }}
+        allowEmptyRange={draftStatusFilter !== statusFilter}
+        onApply={(f, t) => {
+          setStatusFilter(draftStatusFilter);
+          setDateFrom(f);
+          setDateTo(t);
+          setFiltersOpen(false);
+        }}
         onReset={clearFilters}
         extraFilters={
-          <div>
-            <div className="text-[10px] font-semibold text-slate-500 mb-0.5">Statut</div>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="w-full px-2 py-1 text-[10px] font-medium border border-slate-200 rounded-md bg-white text-slate-700 outline-none focus:border-slate-400"
-            >
-              <option value="">Tous</option>
-              {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
+          <SearchableSelect
+            label="Statut"
+            searchable={false}
+            clearable={false}
+            menuWidth={230}
+            wrapLabels
+            options={[{ value: '', label: 'Tous les statuts' }, ...statusOptions]}
+            value={draftStatusFilter}
+            onChange={setDraftStatusFilter}
+          />
         }
       />
     </div>
@@ -2692,7 +2695,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   </p>
                   {invoiceEditorSubtotalRaw > 0 && (
                     <p className="text-xs text-[var(--w-text-sec)]">
-                      Part IPM : {formatFCFA(ipmPartIpm)} · Part client : {formatFCFA(ipmPartClient)}
+                      Part IPM : {formatFCFA(ipmPartIpm)} │ Part client : {formatFCFA(ipmPartClient)}
                     </p>
                   )}
                 </div>
@@ -2803,7 +2806,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   </p>
                   {quoteSubtotal > 0 && quoteIpmPartIpm > 0 && (
                     <p className="text-xs text-[var(--w-text-sec)]">
-                      Part IPM : {formatFCFA(quoteIpmPartIpm)} · Part client : {formatFCFA(quoteIpmPartClient)}
+                      Part IPM : {formatFCFA(quoteIpmPartIpm)} │ Part client : {formatFCFA(quoteIpmPartClient)}
                     </p>
                   )}
                 </div>
@@ -2944,7 +2947,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Total de la facture</div>
-                  {convertPricing.price?.enabled && <div className="text-[11px] text-slate-600">HT {formatVatAmount(convertPricing.price.ht)} · TVA {formatVatAmount(convertPricing.price.vat)}</div>}
+                  {convertPricing.price?.enabled && <div className="text-[11px] text-slate-600">HT {formatVatAmount(convertPricing.price.ht)} │ TVA {formatVatAmount(convertPricing.price.vat)}</div>}
                   <div className="text-lg font-bold text-brand-900 num">{convertPricing.price ? formatVatAmount(convertTtc) : convertPricing.error ? 'Montant indisponible' : 'Calcul…'}</div>
                   {convertPricing.error && <button type="button" className="text-xs font-semibold underline" onClick={convertPricing.refresh}>Recalculer</button>}
                 </div>
@@ -2958,7 +2961,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-[var(--w-text)]">{convertIpmBeneficiaire.ipm_organismes?.nom}</p>
                     <p className="text-xs text-[var(--w-text-sec)]">
-                      Taux : {convertIpmCfg?.taux_defaut || 0}% — Part IPM : {formatFCFA(convertIpmCalc.part_ipm)} · Part client : {formatFCFA(convertIpmCalc.part_client)}
+                      Taux : {convertIpmCfg?.taux_defaut || 0}% — Part IPM : {formatFCFA(convertIpmCalc.part_ipm)} │ Part client : {formatFCFA(convertIpmCalc.part_client)}
                     </p>
                   </div>
                 </div>
@@ -2996,12 +2999,17 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
             {convertPayNow && (
               <div className="space-y-2">
-                <div>
-                  <label className="label">Mode de règlement</label>
-                  <select value={convertPayMethod} onChange={e => setConvertPayMethod(e.target.value)} className="input">
-                    {paymentMethods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
+                <SearchableSelect
+                  label="Mode de règlement"
+                  options={paymentOptions}
+                  value={convertPayMethod}
+                  onChange={setConvertPayMethod}
+                  placeholder={paymentOptions.length ? 'Choisir un mode' : 'Aucun mode disponible'}
+                  disabled={converting || !paymentOptions.length}
+                  searchable={false}
+                  clearable={false}
+                  wrapLabels
+                />
                 <div>
                   <label className="label">Montant encaissé{convertIpmCalc ? ` (Part client: ${formatFCFA(convertIpmCalc.part_client)})` : ''}</label>
                   <input type="number" value={convertPayAmount} onChange={e => setConvertPayAmount(e.target.value)} className="input num text-lg font-bold" />
@@ -3084,12 +3092,17 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               <span className="text-sm">Solde dû</span>
               <strong className="num whitespace-nowrap text-base">{formatFCFA(invoiceDue)}</strong>
             </div>
-            <label className="block space-y-1 text-sm font-medium">
-              Mode de règlement
-              <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="billing-field">
-                {paymentMethods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </label>
+            <SearchableSelect
+              label="Mode de règlement"
+              options={paymentOptions}
+              value={payMethod}
+              onChange={setPayMethod}
+              placeholder={paymentOptions.length ? 'Choisir un mode' : 'Aucun mode disponible'}
+              disabled={paying || !paymentOptions.length}
+              searchable={false}
+              clearable={false}
+              wrapLabels
+            />
             <label className="block space-y-1 text-sm font-medium">
               Montant encaissé
               <input type="number" inputMode="decimal" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="billing-field num" />
@@ -3112,20 +3125,23 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               <span>Solde à payer</span><strong className="whitespace-nowrap tabular-nums">{formatVatAmount(invoiceDue)}</strong>
             </p>
             {availableCredits.length > 0 ? <>
-              <label className="block text-sm font-semibold">
-                Avoir disponible
-                <select value={creditSelected} onChange={event => {
-                  const credit = availableCredits.find(item => item.id === event.target.value);
-                  setCreditSelected(event.target.value);
+              <SearchableSelect
+                label="Avoir disponible"
+                options={availableCredits.map(credit => ({
+                  value: credit.id,
+                  label: credit.return_number + ' │ ' + formatVatAmount(Number(credit.total) - Number(credit.credit_used ?? 0)),
+                }))}
+                value={creditSelected}
+                onChange={id => {
+                  const credit = availableCredits.find(item => item.id === id);
+                  setCreditSelected(id);
                   setApplyCreditError(null);
                   setCreditAmount(credit ? String(Math.min(invoiceDue, Number(credit.total) - Number(credit.credit_used ?? 0))) : '');
-                }} className="mt-1 block min-h-11 w-full border-b border-[var(--w-separator)] bg-transparent text-base font-normal">
-                  <option value="">Choisir un avoir</option>
-                  {availableCredits.map(credit => <option key={credit.id} value={credit.id}>
-                    {credit.return_number} · {formatVatAmount(Number(credit.total) - Number(credit.credit_used ?? 0))}
-                  </option>)}
-                </select>
-              </label>
+                }}
+                placeholder="Choisir un avoir"
+                disabled={applyingCredit}
+                wrapLabels
+              />
               <label className="block text-sm font-semibold">
                 Montant à appliquer
                 <input type="number" inputMode="decimal" min="0.01" step="0.01" max={Math.min(invoiceDue, available)}

@@ -5,10 +5,11 @@ DO $fixture$
 DECLARE
  actor uuid:=current_setting('waarwi_recipe.browser_actor')::uuid;
  t uuid:=gen_random_uuid(); site uuid:=gen_random_uuid(); article uuid:=gen_random_uuid();
- patient uuid:=gen_random_uuid(); org uuid:=gen_random_uuid(); convention uuid:=gen_random_uuid();
+ patient uuid:=gen_random_uuid(); regular_customer uuid:=gen_random_uuid(); org uuid:=gen_random_uuid(); convention uuid:=gen_random_uuid();
  beneficiary uuid:=gen_random_uuid(); register_id uuid:=gen_random_uuid(); session_id uuid:=gen_random_uuid();
  method uuid:=gen_random_uuid(); sale uuid; result jsonb;
  token text:=replace(gen_random_uuid()::text,'-','');
+ next_article uuid:=gen_random_uuid();
  article_name text:='Article recette navigateur ' || repeat('DésignationDeCatalogueSansEspaces', 4);
 BEGIN
  INSERT INTO public.tenants(id,name,enabled_modules,settings,approval_status)
@@ -24,9 +25,12 @@ BEGIN
  INSERT INTO public.document_settings(tenant_id,doc_type,allow_edit)
  VALUES(t,'invoice',true) ON CONFLICT(tenant_id,doc_type) DO UPDATE SET allow_edit=excluded.allow_edit;
  INSERT INTO public.sites(id,tenant_id,name,is_active,allow_negative_stock) VALUES(site,t,'Pharmacie de recette',true,false);
- INSERT INTO public.customers(id,tenant_id,name) VALUES(patient,t,'Patient recette navigateur');
+ INSERT INTO public.customers(id,tenant_id,name)
+ VALUES(patient,t,'Patient recette navigateur'),(regular_customer,t,'Client fictif du journal');
  INSERT INTO public.articles(id,tenant_id,internal_ref,name,sale_price,purchase_price,track_stock,ipm_eligible)
  VALUES(article,t,'NAV-001',article_name,2500,500,true,true);
+ INSERT INTO public.articles(id,tenant_id,internal_ref,name,sale_price,purchase_price,track_stock,ipm_eligible)
+ VALUES(next_article,t,'NAV-002','Article recette voisin',1500,600,false,false);
  INSERT INTO public.stock_levels(tenant_id,article_id,site_id,quantity) VALUES(t,article,site,10);
  INSERT INTO public.ipm_organismes(id,tenant_id,nom) VALUES(org,t,'Organisme recette navigateur');
  INSERT INTO public.ipm_conventions(id,tenant_id,organisme_id,nom,taux_defaut,mode_calcul,mode_arrondi)
@@ -49,8 +53,15 @@ BEGIN
      'ipm',jsonb_build_object('beneficiaire_id',beneficiary,'expected_part_ipm',1600)),
    jsonb_build_array(jsonb_build_object('article_id',article,'name',article_name,'quantity',1,'unit_price',2500,'discount',0)),
    jsonb_build_array(jsonb_build_object('payment_method_id',method,'amount',400)),site,'{}',gen_random_uuid());
- EXECUTE 'RESET ROLE';
  sale:=(result->>'sale_id')::uuid;
+ -- Two adjacent sales exercise every separator in the mobile journal.
+ FOR i IN 1..2 LOOP
+   PERFORM public.create_direct_invoice_atomic(t,
+     jsonb_build_object('site_id',site,'customer_id',regular_customer,'cash_session_id',session_id,'total',1500),
+     jsonb_build_array(jsonb_build_object('article_id',next_article,'name','Article recette voisin','quantity',1,'unit_price',1500,'discount',0)),
+     '[]'::jsonb,site,'{}',gen_random_uuid());
+ END LOOP;
+ EXECUTE 'RESET ROLE';
  UPDATE public.sales SET public_code=token WHERE id=sale;
 END $fixture$;
 COMMIT;

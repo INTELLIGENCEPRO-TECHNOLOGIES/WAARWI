@@ -35,9 +35,9 @@ DARK_BAND = colors.HexColor("#222222")
 SLUGS = {
     "Créer et maintenir les modèles de saisie": "modeles-de-saisie",
     "Appeler un modèle et traiter une échéance": "appeler-un-modele",
-    "Rapprocher une banque · préparer le relevé": "rapprochement-releves",
-    "Rapprocher une banque · pointer les opérations": "rapprochement-pointage",
-    "Rapprocher une banque · contrôler et valider": "rapprochement-controle",
+    "Rapprocher une banque │ préparer le relevé": "rapprochement-releves",
+    "Rapprocher une banque │ pointer les opérations": "rapprochement-pointage",
+    "Rapprocher une banque │ contrôler et valider": "rapprochement-controle",
 }
 
 
@@ -93,7 +93,8 @@ def parse_chapters(source):
 def inline(text, *, pdf=False):
     safe = escape(text, quote=False)
     element = "b" if pdf else "strong"
-    return re.sub(r"\*\*(.+?)\*\*", rf"<{element}>\1</{element}>", safe)
+    marked = re.sub(r"\*\*(.+?)\*\*", rf"<{element}>\1</{element}>", safe)
+    return marked.replace("│", '<font name="NotoSeparator">│</font>') if pdf else marked
 
 
 def style(name, size, leading, *, font="Noto", color=INK):
@@ -105,13 +106,14 @@ def make_pdf(chapters, target):
     pdfmetrics.registerFont(TTFont("Noto", FONT_DIR / "NotoSans-Regular.ttf"))
     pdfmetrics.registerFont(TTFont("NotoBold", FONT_DIR / "NotoSans-Bold.ttf"))
     pdfmetrics.registerFontFamily("Noto", normal="Noto", bold="NotoBold")
+    pdfmetrics.registerFont(TTFont("NotoSeparator", FONT_DIR / "NotoSansMono-Regular.ttf"))
     width, height = A4
     margin = 55
     avail = width - 2 * margin
     os.environ.setdefault("SOURCE_DATE_EPOCH", "1795737600")
     rendered = Canvas(str(target), pagesize=A4, invariant=True, lang="fr-SN")
-    rendered.setTitle(TITLE + " | Waarwi")
-    rendered.setCreator("Waarwi | IntelligencePro Technologies")
+    rendered.setTitle(TITLE + " │ Waarwi")
+    rendered.setCreator("Waarwi │ IntelligencePro Technologies")
     rendered.setAuthor("IntelligencePro Technologies")
     rendered.setSubject("Procédures et écrans du module Comptabilité de Waarwi")
     rendered.showOutline()
@@ -167,7 +169,7 @@ def make_pdf(chapters, target):
     rendered.setStrokeColor(LINE)
     rendered.line(margin, y - 30, width - margin, y - 30)
     y = put(DESCRIPTION, "intro", y - 55, box=avail - 35)
-    y = put("Entreprises · gestionnaires · équipes comptables", "route", y - 33)
+    y = put("Entreprises │ gestionnaires │ équipes comptables", "route", y - 33)
     rendered.setFont("Noto", 9)
     rendered.setFillColor(SUB)
     rendered.drawString(margin, 79, REVISION)
@@ -324,7 +326,7 @@ def make_html(chapters, target):
     <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{TITLE} · Waarwi</title>
+    <title>{TITLE} │ Waarwi</title>
     <meta name="description" content="{escape(DESCRIPTION)}">
     <style>{CSS}</style>
     </head>

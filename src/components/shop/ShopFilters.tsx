@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { X, CheckCircle2, ChevronDown } from 'lucide-react';
+import { X, CheckCircle2 } from 'lucide-react';
+import { SearchableSelect } from '../SearchableSelect';
 import type { Category, VehicleBrand, VehicleModel } from '../../lib/shopTypes';
 
 type Props = {
@@ -33,7 +34,7 @@ export function ShopFilters({
 }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose();
     };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
@@ -72,7 +73,7 @@ export function ShopFilters({
           {/* Disponibilite */}
           <section>
             <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
-              Disponibilite
+              Disponibilité
             </div>
             <button
               onClick={() => onAvail(!filterAvail)}
@@ -93,19 +94,12 @@ export function ShopFilters({
               <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
                 Constructeur
               </div>
-              <div className="relative border-b border-neutral-200 pb-1">
-                <select
-                  value={filterBrand}
-                  onChange={(e) => onBrand(e.target.value)}
-                  className="bare-input text-sm text-neutral-900 font-medium pr-8 cursor-pointer"
-                >
-                  <option value="">Tous les constructeurs</option>
-                  {vehicleBrands.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
-              </div>
+              <SearchableSelect ariaLabel="Constructeur" value={filterBrand} onChange={onBrand}
+                clearable={false} searchable={vehicleBrands.length > 8} wrapLabels
+                options={[
+                  { value: '', label: 'Tous les constructeurs' },
+                  ...vehicleBrands.map(brand => ({ value: brand.id, label: brand.name })),
+                ]} />
             </section>
           )}
 
@@ -113,21 +107,14 @@ export function ShopFilters({
           {filterBrand && vehicleModels.length > 0 && (
             <section>
               <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
-                Modele
+                Modèle
               </div>
-              <div className="relative border-b border-neutral-200 pb-1">
-                <select
-                  value={filterModel}
-                  onChange={(e) => onModel(e.target.value)}
-                  className="bare-input text-sm text-neutral-900 font-medium pr-8 cursor-pointer"
-                >
-                  <option value="">Tous les modeles</option>
-                  {vehicleModels.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
-              </div>
+              <SearchableSelect ariaLabel="Modèle" value={filterModel} onChange={onModel}
+                clearable={false} searchable={vehicleModels.length > 8} wrapLabels
+                options={[
+                  { value: '', label: 'Tous les modèles' },
+                  ...vehicleModels.map(model => ({ value: model.id, label: model.name })),
+                ]} />
             </section>
           )}
 
@@ -135,7 +122,7 @@ export function ShopFilters({
           {roots.length > 0 && (
             <section>
               <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
-                Categorie
+                Catégorie
               </div>
               <div className="space-y-0.5">
                 <button
@@ -187,7 +174,7 @@ export function ShopFilters({
             onClick={onClose}
             className="w-full h-11 bg-neutral-900 text-white text-sm font-bold hover:bg-neutral-800 active:scale-[0.98] transition-all"
           >
-            Voir les resultats
+            Voir les résultats
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   type SubscriptionPayment,
 } from '../lib/subscriptionPayments';
 import { PlatformWorkPage } from './PlatformWorkPage';
+import { SearchableSelect } from './SearchableSelect';
 
 type PaymentList = {
   payments: SubscriptionPayment[];
@@ -104,7 +105,7 @@ export function AdminSubscriptionPayments() {
             {([
               ['Entreprise', selected.tenant_name],
               ['Référence', selected.id],
-              ['Offre', selected.plan_code + ' · ' + subscriptionCycleLabels[selected.billing_cycle]],
+              ['Offre', selected.plan_code + ' │ ' + subscriptionCycleLabels[selected.billing_cycle]],
               ['Durée', subscriptionPaymentDuration(selected)],
               ['Montant', formatFCFA(selected.amount)],
               ['Remise accordée', savings > 0 && formatFCFA(savings)],
@@ -135,15 +136,14 @@ export function AdminSubscriptionPayments() {
           <input aria-label="Entreprise ou référence" placeholder="Entreprise ou référence"
             value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />
         </label>
-        <select aria-label="Statut" className="pa-field" value={state}
-          onChange={event => { setState(event.target.value); setPage(0); }}>
-          {statuses.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}
-        </select>
-        <select aria-label="Environnement" className="pa-field" value={environment}
-          onChange={event => { setEnvironment(event.target.value === 'test' ? 'test' : 'prod'); setPage(0); }}>
-          <option value="prod">Production</option>
-          <option value="test">Mode test</option>
-        </select>
+        <SearchableSelect ariaLabel="Statut" className="w-full min-w-0 sm:w-40" value={state}
+          clearable={false} searchable={false}
+          onChange={value => { setState(value); setPage(0); }}
+          options={statuses.map(status => ({ value: status.key, label: status.label }))} />
+        <SearchableSelect ariaLabel="Environnement" className="w-full min-w-0 sm:w-36" value={environment}
+          clearable={false} searchable={false}
+          onChange={value => { setEnvironment(value === 'test' ? 'test' : 'prod'); setPage(0); }}
+          options={[{ value: 'prod', label: 'Production' }, { value: 'test', label: 'Mode test' }]} />
         <button type="button" onClick={refresh} disabled={loading} className="pa-icon-button" aria-label="Actualiser" title="Actualiser">
           <RefreshCw size={16} className={loading ? 'animate-spin' : undefined} />
         </button>

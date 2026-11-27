@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { PlatformConfirmation, PlatformWorkPage } from './PlatformWorkPage';
+import { SearchableSelect } from './SearchableSelect';
 import { formatFCFA } from '../lib/format';
 
 type ActivityType = { id: string; name: string; slug: string; description: string; is_active: boolean; legacy_business_type: string | null };
@@ -178,7 +179,7 @@ function ActivitiesTab({ activities, onChange }: { activities: ActivityType[]; o
             <div key={item.id} className="pa-setting-row">
               <div>
                 <button type="button" className="pa-name-button" onClick={() => openEdit(item)}>{item.name}</button>
-                <p className="pa-row-subtitle">{item.slug}{item.description ? ' · ' + item.description : ''}</p>
+                <p className="pa-row-subtitle">{item.slug}{item.description ? ' │ ' + item.description : ''}</p>
               </div>
               <div className="pa-inline">
                 <span className="pa-muted">{item.is_active ? 'Actif' : 'Inactif'}</span>
@@ -283,7 +284,7 @@ function CatalogsTab({ catalogs, activities, onChange, onBrowse }: { catalogs: C
               <div key={item.id} className="pa-setting-row">
                 <div>
                   <button type="button" className="pa-name-button" onClick={() => onBrowse(item.id)}>{item.name}</button>
-                  <p className="pa-row-subtitle">{activity?.name || '—'}{item.description ? ' · ' + item.description : ''}</p>
+                  <p className="pa-row-subtitle">{activity?.name || '—'}{item.description ? ' │ ' + item.description : ''}</p>
                 </div>
                 <div className="pa-inline">
                   <span className="pa-muted">{count == null ? '—' : count + (count === 1 ? ' article' : ' articles')}</span>
@@ -343,7 +344,7 @@ function CategoriesTab({ catalogs, categories, selectedCatalogId, onSelectCatalo
     return (
       <CatalogEditor title={isNew ? (parent ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie') : 'Modifier la catégorie'}
         backLabel="Retour aux catégories" onBack={() => setEditing(null)} onSave={save}>
-        {parent && <p className="pa-copy">Catégorie parente · {parent.name}</p>}
+        {parent && <p className="pa-copy">Catégorie parente │ {parent.name}</p>}
         <div className="pa-form-grid">
           <label className="pa-field-label">Nom
             <input className="w-input-ul" required value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} />
@@ -393,12 +394,10 @@ function CategoriesTab({ catalogs, categories, selectedCatalogId, onSelectCatalo
 
 function CatalogSelect({ catalogs, value, onChange }: { catalogs: Catalog[]; value: string; onChange: (id: string) => void }) {
   return (
-    <label className="pa-field-label">Catalogue
-      <select className="w-input-ul" value={value} onChange={event => onChange(event.target.value)}>
-        {!value && <option value="">Choisir un catalogue</option>}
-        {catalogs.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-      </select>
-    </label>
+    <SearchableSelect label="Catalogue" className="w-full min-w-0 sm:max-w-xs" value={value}
+      clearable={false} searchable={catalogs.length > 8} wrapLabels
+      placeholder="Choisir un catalogue" onChange={onChange}
+      options={catalogs.map(item => ({ value: item.id, label: item.name }))} />
   );
 }
 
@@ -651,7 +650,7 @@ function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, on
                 </div>
                 <div className="pa-catalog-name" role="cell">
                   <button type="button" className="pa-name-button" onClick={() => openEdit(item)}>{item.designation}</button>
-                  <p className="pa-row-subtitle">{[item.brand, item.manufacturer_ref, !item.is_active ? 'Inactif' : ''].filter(Boolean).join(' · ')}</p>
+                  <p className="pa-row-subtitle">{[item.brand, item.manufacturer_ref, !item.is_active ? 'Inactif' : ''].filter(Boolean).join(' │ ')}</p>
                 </div>
                 <div className="pa-catalog-prices" role="cell">
                   <span><small>Achat </small>{formatFCFA(item.purchase_price)}</span>
@@ -841,7 +840,7 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
               event.target.value = '';
             }} />
         </label>
-        {filename && <p className="pa-copy">{filename} · {rows.length} ligne{rows.length !== 1 ? 's' : ''}</p>}
+        {filename && <p className="pa-copy">{filename} │ {rows.length} ligne{rows.length !== 1 ? 's' : ''}</p>}
 
         <details>
           <summary className="pa-link cursor-pointer">Colonnes attendues</summary>
@@ -853,7 +852,7 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
 
         {importProgress && (
           <div className="space-y-1" role="status">
-            <p className="pa-row-subtitle">Lot {importProgress.lotsDone} sur {importProgress.lotsTotal} · {importProgress.done} articles sur {importProgress.total} · {importProgress.elapsed} s</p>
+            <p className="pa-row-subtitle">Lot {importProgress.lotsDone} sur {importProgress.lotsTotal} │ {importProgress.done} articles sur {importProgress.total} │ {importProgress.elapsed} s</p>
             <progress className="pa-progress" value={importProgress.done} max={importProgress.total} aria-label="Progression de l’import" />
           </div>
         )}
@@ -881,7 +880,7 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
               <summary className="pa-link cursor-pointer">Voir les lignes en erreur</summary>
               <ul className="pa-divided">
                 {result.errors.map((item: any, idx: number) => (
-                  <li key={idx} className="pa-setting-row pa-danger">Ligne {item.row} · {item.error}</li>
+                  <li key={idx} className="pa-setting-row pa-danger">Ligne {item.row} │ {item.error}</li>
                 ))}
               </ul>
             </details>

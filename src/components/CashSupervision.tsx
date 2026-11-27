@@ -1,3 +1,4 @@
+import { SearchableSelect } from './SearchableSelect';
 import { useRealtimeRefresh } from '../lib/useRealtimeData';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowLeftRight, BarChart3, HandCoins, Loader2, Lock, LogOut, ReceiptText, RefreshCw, Undo2 } from 'lucide-react';
@@ -126,8 +127,8 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
     { kind: 'customer', label: 'Encaisser client', icon: HandCoins, show: isOpen && !!rights.customer_payment },
     { kind: 'return', label: 'Retour', icon: Undo2, show: isOpen && !!rights.returns },
     { kind: 'tickets', label: 'Tickets', icon: ReceiptText, show: true },
-    { kind: 'stats', label: 'Statistiques · Rapport X', icon: BarChart3, show: !!(rights.stats || rights.summary || rights.x_report) },
-    { kind: 'close', label: 'Compter · Clôturer', icon: Lock, show: isOpen && !!rights.close },
+    { kind: 'stats', label: 'Statistiques │ Rapport X', icon: BarChart3, show: !!(rights.stats || rights.summary || rights.x_report) },
+    { kind: 'close', label: 'Compter │ Clôturer', icon: Lock, show: isOpen && !!rights.close },
   ];
 
   return (
@@ -197,11 +198,9 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
               ))}
               <div className="flex-1" />
               {siteOptions.length > 1 && (
-                <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)}
-                  className="mb-1.5 text-sm bg-transparent border-0 border-b border-neutral-300 focus:border-black focus:ring-0 py-1 pr-7">
-                  <option value="">Tous les magasins</option>
-                  {siteOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                </select>
+                <SearchableSelect ariaLabel="Magasin" value={siteFilter} onChange={setSiteFilter}
+                  className="mb-1.5 min-w-0 max-w-full" searchable={siteOptions.length > 8} clearable={false} wrapLabels
+                  options={[{ value: '', label: 'Tous les magasins' }, ...siteOptions.map(([value, label]) => ({ value, label }))]} />
               )}
             </div>
 

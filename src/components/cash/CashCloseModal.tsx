@@ -397,7 +397,7 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
                         <div className="break-words text-xs font-semibold text-[var(--w-text)]">{c.method_name}</div>
                         <div className="mt-0.5 text-xs text-[var(--w-text-sec)]">Théorique <span className="font-semibold num">{formatFCFA(c.theoretical_amount)}</span></div>
                       </div>
-                      <input type="number" value={c.counted_amount || ''} onChange={e => setControlLines(lines => lines.map((l, i) => i === idx ? { ...l, counted_amount: Number(e.target.value) } : l))} aria-label={`Montant compté · ${c.method_name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs font-semibold num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" inputMode="numeric" placeholder="0" />
+                      <input type="number" value={c.counted_amount || ''} onChange={e => setControlLines(lines => lines.map((l, i) => i === idx ? { ...l, counted_amount: Number(e.target.value) } : l))} aria-label={`Montant compté │ ${c.method_name}`} className="w-input-ul min-w-0 py-1.5 text-right text-xs font-semibold num [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" inputMode="numeric" placeholder="0" />
                       <div className={`min-w-12 whitespace-nowrap text-right text-xs font-semibold num ${balanced ? 'text-neutral-700' : diff < 0 ? 'text-red-600' : diff > 0 ? 'text-amber-600' : 'text-neutral-300'}`}>
                         {c.counted_amount === 0 ? '—' : diff === 0 ? 'OK' : `${diff > 0 ? '+' : ''}${formatFCFA(diff)}`}
                       </div>

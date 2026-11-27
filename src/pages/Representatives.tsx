@@ -339,7 +339,7 @@ export function Representatives() {
     statRep ? repName(statRep) : '',
     statSite ? siteName(statSite) : '',
     statStatus === 'active' ? 'Ventes actives' : statStatus === 'cancelled' ? 'Ventes annulées' : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join(' │ ');
 
   const closeForm = () => { if (!saving) setFormOpen(false); };
   const closeDelete = () => { if (!deleting) setToDelete(null); };
@@ -397,7 +397,7 @@ export function Representatives() {
                   const statusAction = rep.status === 'actif' ? 'Désactiver' : 'Activer';
                   const ruleLabel = !rep.commission_override ? 'Règle globale' : rule.commission_type === 'fixe'
                     ? `${formatFCFA(rule.fixed_amount)} par vente`
-                    : `${rule.rate} % · ${rule.commission_type === 'pct_marge' ? 'Marge' : COMMISSION_BASE_LABELS[rule.commission_base]}`;
+                    : `${rule.rate} % │ ${rule.commission_type === 'pct_marge' ? 'Marge' : COMMISSION_BASE_LABELS[rule.commission_base]}`;
                   return (
                     <tr key={rep.id}>
                       <th scope="row" className="rep-identity">
@@ -472,8 +472,8 @@ export function Representatives() {
               {kpi.cancelled > 0 && (
                 <p className="rep-note">
                   {kpi.cancelled === 1 ? '1 vente annulée' : `${kpi.cancelled} ventes annulées`}
-                  {' · '}<span className="num rep-amount">{formatFCFA(kpi.cancelledTotal)}</span>
-                  {' · '}Hors indicateurs
+                  {' │ '}<span className="num rep-amount">{formatFCFA(kpi.cancelledTotal)}</span>
+                  {' │ '}Hors indicateurs
                 </p>
               )}
               {statSales.length === 0 ? (

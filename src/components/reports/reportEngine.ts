@@ -117,7 +117,7 @@ export function docHeader(
 export function docFooter(generatedAt: string): string {
   return `
     <div class="doc-footer">
-      <div class="footer-note">Généré le ${esc(generatedAt)} · Document confidentiel</div>
+      <div class="footer-note">Généré le ${esc(generatedAt)} │ Document confidentiel</div>
       <div class="waarwi-brand">Propulsé par WAARWI — Plateforme Business 2.0 made in Sénégal</div>
     </div>`;
 }
@@ -143,7 +143,7 @@ export type CashBreakdownRow = {
 };
 
 export const UNASSIGNED_LABEL = UNASSIGNED_REGISTER_LABEL;
-export const GLOBAL_BALANCES_NOTE = 'Soldes globaux du client (toutes caisses) · les mouvements de la période suivent les filtres';
+export const GLOBAL_BALANCES_NOTE = 'Soldes globaux du client (toutes caisses) │ les mouvements de la période suivent les filtres';
 
 export async function fetchCashStats(
   _tenantId: string, siteId: string | undefined, from: string, to: string,
@@ -488,7 +488,7 @@ export function buildCashReport(
     <div class="kpi-cell"><div class="kpi-label">Annulations</div><div class="kpi-value">${fmtNum(nbAnnulations)} (${fmtMoney(montantAnnule)})</div></div>` : '';
 
   return `
-    ${docHeader(tenant, 'Rapport de Caisse', 'Flux de trésorerie réels · Activité · Rentabilité', period, siteName)}
+    ${docHeader(tenant, 'Rapport de Caisse', 'Flux de trésorerie réels │ Activité │ Rentabilité', period, siteName)}
 
     <div class="section-title">Trésorerie réelle</div>
     <div class="kpi-row">
@@ -683,7 +683,7 @@ export function buildCustomerReport(
     </div>` : '';
 
   return `
-    ${docHeader(tenant, 'Rapport Clients', 'Activité de la période · Situation financière', period, siteName)}
+    ${docHeader(tenant, 'Rapport Clients', 'Activité de la période │ Situation financière', period, siteName)}
     <div class="kpi-row">
       <div class="kpi-cell"><div class="kpi-label">CA net période</div><div class="kpi-value">${fmtMoney(tn('ca_net'))}</div></div>
       <div class="kpi-cell"><div class="kpi-label">Encaissements période</div><div class="kpi-value">${fmtMoney(tn('encaissements'))}</div></div>
@@ -749,7 +749,7 @@ export function buildSupplierReport(
   </tr>`).join('');
 
   return `
-    ${docHeader(tenant, 'Rapport Fournisseurs', 'Achats · Règlements · Dette', period, siteName)}
+    ${docHeader(tenant, 'Rapport Fournisseurs', 'Achats │ Règlements │ Dette', period, siteName)}
     <div class="kpi-row">
       <div class="kpi-cell"><div class="kpi-label">Achats de la période</div><div class="kpi-value">${fmtMoney(tn('total_achats'))}</div></div>
       <div class="kpi-cell"><div class="kpi-label">Règlements</div><div class="kpi-value">${fmtMoney(tn('reglements'))}</div></div>
@@ -812,7 +812,7 @@ export function buildExpenseReport(
   </tr>`).join('');
 
   return `
-    ${docHeader(tenant, 'Rapport des Dépenses', "Charges d'exploitation · Résultat", period, siteName)}
+    ${docHeader(tenant, 'Rapport des Dépenses', "Charges d'exploitation │ Résultat", period, siteName)}
 
     <div class="kpi-row">
       <div class="kpi-cell"><div class="kpi-label">Dépenses validées</div><div class="kpi-value">${fmtMoney(expensesTotal)}</div></div>

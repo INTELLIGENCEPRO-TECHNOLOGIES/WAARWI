@@ -98,11 +98,11 @@ export function CashMovementModal({ ctx, onClose, onDone }: Props) {
           amount: mvAmount,
           method: mvMethod.name,
           label: mvKind === 'customer_prepayment'
-            ? (mvReason ? `Acompte · ${mvReason}` : 'Acompte client')
+            ? (mvReason ? `Acompte │ ${mvReason}` : 'Acompte client')
             : mvKind === 'customer_withdrawal'
-              ? (mvReason ? `Retrait · ${mvReason}` : 'Retrait client')
+              ? (mvReason ? `Retrait │ ${mvReason}` : 'Retrait client')
               : mvKind === 'customer_loan'
-                ? (mvReason ? `Prêt · ${mvReason}` : 'Prêt client')
+                ? (mvReason ? `Prêt │ ${mvReason}` : 'Prêt client')
                 : (mvReason || undefined),
           reference: mvRef || undefined,
           customerName: mvCustomer?.name || null,
@@ -115,17 +115,17 @@ export function CashMovementModal({ ctx, onClose, onDone }: Props) {
 
     setMvSubmitting(false);
     if (mvKind === 'customer_prepayment' && autoApplied > 0) {
-      success(`Acompte enregistré · ${formatFCFA(autoApplied)} imputé automatiquement`);
+      success(`Acompte enregistré │ ${formatFCFA(autoApplied)} imputé automatiquement`);
     } else if (mvKind === 'customer_withdrawal') {
       success('Retrait client enregistré');
     } else if (mvKind === 'customer_loan') {
-      success('Prêt client enregistré · créance ajoutée');
+      success('Prêt client enregistré │ créance ajoutée');
     } else if (mvKind === 'expense') {
       success('Dépense enregistrée');
     } else if (mvKind === 'income') {
       success('Entrée enregistrée');
     } else {
-      success('Acompte enregistré · en attente de facture');
+      success('Acompte enregistré │ en attente de facture');
     }
 
     if (mvPrint) {

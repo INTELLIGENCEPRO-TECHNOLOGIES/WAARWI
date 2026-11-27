@@ -108,7 +108,7 @@ export function MultiCashModeSection({ onChanged }: { onChanged?: () => void }) 
             {blocking.map(a => (
               <li key={a.code} className="px-3 py-2">
                 <div className="text-[12.5px] font-semibold text-neutral-900">{a.label} <span className="text-neutral-400 font-normal">({a.items.length}{a.items.length >= 50 ? '+' : ''})</span></div>
-                <div className="mt-0.5 text-[12px] text-neutral-500 leading-relaxed break-words">{a.items.join(' · ')}</div>
+                <div className="mt-0.5 text-[12px] text-neutral-500 leading-relaxed break-words">{a.items.join(' │ ')}</div>
               </li>
             ))}
           </ul>

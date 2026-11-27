@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { verifyArticleNavigation } from './article-navigation.mjs';
+import { verifyCalendarActions } from './calendar-layout.mjs';
 import { verifyAccountingTemplates } from './accounting-templates.mjs';
 
 const api = new URL(process.env.VITE_SUPABASE_URL);
@@ -57,7 +59,7 @@ async function signIn(page) {
   }
 }
 
-async function openInvoice(page) {
+async function openInvoice(page, checkFilters = false) {
   await signIn(page);
   let nav = page.getByRole('button', { name: 'Facturation', exact: true }).filter({ visible: true }).first();
   try {
@@ -69,6 +71,7 @@ async function openInvoice(page) {
   }
   await visible(nav, 'Navigation Facturation');
   await nav.click();
+  if (checkFilters) await verifyBillingFilters(page);
   const invoice = page.getByText(fixture.number, { exact: true }).filter({ visible: true }).first();
   await visible(invoice, 'Facture fictive dans la liste');
   await invoice.click();
@@ -76,17 +79,55 @@ async function openInvoice(page) {
   await visible(page.getByText('Solde patient', { exact: false }).filter({ visible: true }).first(), 'Solde patient');
 }
 
+async function verifyBillingFilters(page) {
+  const filters = page.getByRole('button', { name: 'Filtres', exact: true }).filter({ visible: true }).first();
+  const dialog = page.getByRole('dialog', { name: 'Période', exact: true });
+  const status = dialog.getByRole('button', { name: 'Statut', exact: true });
+  const list = page.getByRole('listbox', { name: 'Statut', exact: true });
+  const apply = dialog.getByRole('button', { name: 'Appliquer', exact: true });
+
+  await filters.click();
+  await verifyCalendarActions(dialog);
+  assert.equal(await dialog.locator('select').count(), 0);
+  await status.click();
+  await list.waitFor();
+  await page.keyboard.press('Escape');
+  await list.waitFor({ state: 'hidden' });
+  await status.click();
+  await list.getByRole('option', { name: 'Payée', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Annuler', exact: true }).click();
+
+  await filters.click();
+  assert.match(await status.innerText(), /Tous les statuts/);
+  await status.click();
+  await list.getByRole('option', { name: 'Partiellement payée', exact: true }).click();
+  const filteredRequest = page.waitForRequest(request =>
+    request.url().endsWith('/rpc/rpc_paginated_invoices') &&
+    request.postDataJSON()?.p_status_filter === 'partial',
+  );
+  await apply.click();
+  const { p_date_from, p_date_to } = (await filteredRequest).postDataJSON();
+  assert.equal(p_date_from, null);
+  assert.equal(p_date_to, null);
+  await filters.click();
+  await dialog.getByRole('button', { name: 'Réinitialiser', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+}
+
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
 try {
   const desktop = await browserPage(browser, { width: 1440, height: 900 });
-  await openInvoice(desktop);
+  await openInvoice(desktop, true);
   console.log('Facturation ordinateur : aperçu IPM et solde patient');
   const mobile = await browserPage(browser, { width: 390, height: 844 });
-  await openInvoice(mobile);
+  await openInvoice(mobile, true);
   await mobile.getByTitle('Encaisser', { exact: true }).filter({ visible: true }).first().click();
   await visible(mobile.getByText('Encaisser la facture', { exact: true }), 'Fenêtre d’encaissement');
   assert.equal(await mobile.locator('input[type=number]').filter({ visible: true }).last().inputValue(), '500');
-  await mobile.locator('select').filter({ visible: true }).last().selectOption(fixture.method);
+  const paymentDialog = mobile.getByRole('dialog', { name: 'Encaisser la facture', exact: true });
+  await paymentDialog.getByRole('button', { name: 'Mode de règlement', exact: true }).click();
+  const methods = mobile.getByRole('listbox', { name: 'Mode de règlement', exact: true });
+  await methods.getByRole('option', { name: 'Espèces recette', exact: true }).click();
   const response = mobile.waitForResponse(r => r.url().endsWith('/rpc/register_sale_payment'));
   await mobile.getByRole('button', { name: 'Encaisser', exact: true }).filter({ visible: true }).last().click();
   const payment = await response;
@@ -119,10 +160,21 @@ try {
   await salesNav.click();
   const saleRow = journal.getByText(fixture.number, { exact: true }).filter({ visible: true }).first();
   await visible(saleRow, 'Vente dans le journal');
+  const saleRows = journal.getByRole('list', { name: 'Ventes du journal', exact: true }).getByRole('listitem');
+  await visible(saleRows.nth(2), 'Trois ventes dans le journal');
+  const separators = await saleRows.evaluateAll(rows => rows.slice(1).map(row => {
+    const style = getComputedStyle(row);
+    return style.borderTopStyle === 'solid' && parseFloat(style.borderTopWidth) >= 1;
+  }));
+  assert.ok(separators.every(Boolean), 'Chaque vente doit être séparée de la précédente.');
+  const summary = journal.getByRole('group', { name: 'Totaux des ventes', exact: true });
+  assert.doesNotMatch(await summary.innerText(), /[·•]/u);
+  const widths = await summary.locator('.w-inline-divider').evaluateAll(dividers => dividers.map(divider => divider.getBoundingClientRect().width));
+  assert.deepEqual(widths, [1, 1], 'Les montants utilisent des traits verticaux fins.');
   await saleRow.click();
   await journal.getByTitle('Modifier', { exact: true }).filter({ visible: true }).first().click();
   const journalEditor = journal.getByRole('dialog', { name: `Modifier la vente ${fixture.number}`, exact: true });
-  await visible(journalEditor.getByRole('spinbutton', { name: /^Quantité · / }), 'Article chargé sous verrou dans le journal');
+  await visible(journalEditor.getByRole('spinbutton', { name: /^Quantité │ / }), 'Article chargé sous verrou dans le journal');
   const dimensions = await journalEditor.locator('.waarwi-window-body').evaluate(body => ({
     client: body.clientWidth, content: body.scrollWidth, document: document.documentElement.scrollWidth,
   }));
@@ -142,6 +194,7 @@ try {
   assert.deepEqual(invoice, { total: 2500, paid: 900, ipm_patient_total: 900, status: 'paid' });
   console.log('Lien public : ventilation et statut cohérents après encaissement');
 
+  await verifyArticleNavigation(mobile);
   await verifyAccountingTemplates(desktop);
 } finally {
   await browser.close();

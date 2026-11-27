@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import { useAccountingTemplateRows } from '../lib/useAccountingTemplateRows';
 import { AccountingPagination, AccountingTable, useAccountingPagination } from './AccountingWorkspace';
 import { Modal } from './Modal';
+import { SearchableSelect } from './SearchableSelect';
 
 export type { EntryTemplateSource } from '../lib/accountingEntryTemplates';
 
@@ -308,10 +309,11 @@ export function AccountingTemplateWorkspace({ tenantId, canManage, source }: {
       <div className="acc-toolbar acc-fixed">
         <input className="input min-w-0 flex-1 sm:max-w-xs" aria-label="Rechercher un modèle" placeholder="Intitulé ou libellé…" value={query}
           onChange={event => setQuery(event.target.value)} />
-        <select className="input w-auto max-w-full" aria-label="Filtrer par journal" value={journalFilter} onChange={event => setJournalFilter(event.target.value)}>
-          <option value="">Tous les modèles</option><option value="global">Sans journal attitré</option>
-          {journals.rows.map(journal => <option key={journal.code} value={journal.code}>{journal.code} — {journal.name}</option>)}
-        </select>
+        <SearchableSelect ariaLabel="Filtrer par journal" className="acc-toolbar-select w-52" searchable={false} clearable={false} wrapLabels
+          value={journalFilter} onChange={setJournalFilter} options={[
+            {value:'',label:'Tous les modèles'}, {value:'global',label:'Sans journal attitré'},
+            ...journals.rows.map(journal=>({value:journal.code,label:journal.code+' — '+journal.name})),
+          ]}/>
         <span className="acc-spacer" />
         {canManage && <button type="button" className="btn-primary" onClick={() => startEdit()}><Plus size={16} />Nouveau modèle</button>}
       </div>

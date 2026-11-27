@@ -8,6 +8,8 @@ const weekdays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const monthFormat = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
 const dayFormat = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 const rangeFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+const actionSize = 'h-11 w-full min-w-0 gap-1.5 whitespace-nowrap px-1 py-0 text-[11px] sm:h-10 sm:px-2 sm:text-xs';
+const actionIcon = 'hidden h-4 w-4 shrink-0 sm:block';
 
 function dateFromISO(iso: string) {
   const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
@@ -95,11 +97,12 @@ function MonthCalendar({ month, range, onMonth, onSelect, className = '' }: {
   );
 }
 
-export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extraFilters, onReset }: {
+export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extraFilters, onReset, allowEmptyRange = false }: {
   open: boolean; onClose: () => void; from: string; to: string;
   onApply: (from: string, to: string) => void;
   extraFilters?: ReactNode;
   onReset?: () => void;
+  allowEmptyRange?: boolean;
 }) {
   const [range, setRange] = useState<Range>({ from, to });
   const [months, setMonths] = useState(() => monthsFor({ from, to }));
@@ -116,17 +119,20 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
   });
 
   return (
-    <Modal open={open} onClose={onClose} title="Période" size="lg" layer="top" footer={<>
-      <button type="button" className="btn-ghost mr-auto text-xs" aria-label="Réinitialiser" onClick={() => { setRange({ from: '', to: '' }); onReset?.(); }}>
-        <RotateCcw aria-hidden="true" className="h-4 w-4" /> <span className="max-[359px]:sr-only">Réinitialiser</span>
-      </button>
-      <button type="button" className="btn-secondary text-xs" onClick={onClose}>
-        <X aria-hidden="true" className="h-4 w-4" /> Annuler
-      </button>
-      <button type="button" className="btn-primary text-xs" onClick={() => onApply(range.from, range.to || range.from)} disabled={!range.from}>
-        <Check aria-hidden="true" className="h-4 w-4" /> Appliquer
-      </button>
-    </>}>
+    <Modal open={open} onClose={onClose} title="Période" size="lg" layer="top"
+      footer={
+        <div className="grid w-full grid-cols-3 gap-1.5 sm:max-w-sm sm:gap-2">
+          <button type="button" className={`btn-secondary ${actionSize}`} onClick={() => { setRange({ from: '', to: '' }); onReset?.(); }}>
+            <RotateCcw aria-hidden="true" className={actionIcon} />Réinitialiser
+          </button>
+          <button type="button" className={`btn-secondary ${actionSize}`} onClick={onClose}>
+            <X aria-hidden="true" className={actionIcon} />Annuler
+          </button>
+          <button type="button" className={`btn-primary ${actionSize}`} onClick={() => onApply(range.from, range.to || range.from)} disabled={!allowEmptyRange && !range.from}>
+            <Check aria-hidden="true" className={actionIcon} />Appliquer
+          </button>
+        </div>
+      }>
       <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4">
         <div className="space-y-3 sm:border-r sm:border-[var(--w-separator)] sm:pr-3">
           <div className="flex flex-wrap gap-1 sm:flex-col sm:items-stretch">

@@ -5,6 +5,7 @@ import { HeartPulse, Building2, FileText, Users, Receipt, CreditCard, AlertTrian
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDate } from '../lib/format';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { Modal } from '../components/Modal';
 
 type Section = 'dashboard' | 'organismes' | 'conventions' | 'beneficiaires' | 'bordereaux' | 'factures' | 'reglements' | 'rejets' | 'parametres';
@@ -60,10 +61,9 @@ export function IPM() {
     <div className="w-full min-w-0">
       <h1 className="mb-3 text-lg font-bold tracking-tight text-[var(--w-text)]">IPM / Tiers payant</h1>
       <nav aria-label="Sections IPM" className="mb-4">
-        <select aria-label="Section IPM" value={section} onChange={event => setSection(event.target.value as Section)}
-          className="input min-h-11 text-sm lg:hidden">
-          {SECTIONS.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
-        </select>
+        <SearchableSelect ariaLabel="Section IPM" value={section} onChange={value => setSection(value as Section)}
+          className="min-w-0 lg:hidden" options={SECTIONS.map(({ key, label }) => ({ value: key, label }))}
+          searchable={false} clearable={false} />
         <div className="hidden flex-wrap gap-x-1 border-b border-[var(--w-separator)] lg:flex">
           {SECTIONS.map(({ key, label, icon: Icon }) => (
             <button key={key} type="button" aria-current={section === key ? 'page' : undefined} onClick={() => setSection(key)}
@@ -505,7 +505,7 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
                       {expired && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase">Expirée</span>}
                       {!c.is_active && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 uppercase">Inactive</span>}
                     </div>
-                    <p className="text-xs text-neutral-500">{c.ipm_organismes?.nom || '-'} {c.code ? `· ${c.code}` : ''}</p>
+                    <p className="text-xs text-neutral-500">{c.ipm_organismes?.nom || '-'} {c.code ? `│ ${c.code}` : ''}</p>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-neutral-600">
                       <span>Taux : <b>{c.taux_defaut}%</b></span>
                       {c.plafond_facture && <span>Plafond/fact. : <b>{formatFCFA(c.plafond_facture)}</b></span>}
@@ -1161,13 +1161,9 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
             disabled={!selectedOrg || pendingVentes.length === 0} label={'Générer le bordereau'} />}
         >
           <div className="space-y-4">
-            <label className="block min-w-0">
-              <span className="label text-xs">Organisme</span>
-              <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="input min-h-10 py-2 text-sm">
-                <option value="">Sélectionnez un organisme</option>
-                {organismes.map(o => <option key={o.id} value={o.id}>{o.nom}</option>)}
-              </select>
-            </label>
+            <SearchableSelect label="Organisme" value={selectedOrg} onChange={setSelectedOrg}
+              className="min-w-0" clearable={false} searchable={organismes.length > 8} wrapLabels
+              options={[{ value: '', label: 'Sélectionnez un organisme' }, ...organismes.map(organisme => ({ value: organisme.id, label: organisme.nom }))]} />
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Période du</label>
@@ -1541,7 +1537,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
                     <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{f.ipm_organismes?.nom || '-'}</p>
-                    <p className="text-[10px] text-neutral-400 mt-0.5">{f.numero} · {f.date_facture}</p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">{f.numero} │ {f.date_facture}</p>
                   </div>
                   <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${statusColors[f.statut] || 'bg-neutral-100 text-neutral-600'}`}>{f.statut.replace(/_/g, ' ')}</span>
                 </div>
@@ -1606,13 +1602,9 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
             disabled={selectedBordereaux.length === 0} label={'Créer la facture'} />}
         >
           <div className="space-y-4">
-            <label className="block min-w-0">
-              <span className="label text-xs">Organisme</span>
-              <select value={selectedOrg} onChange={e => { setSelectedOrg(e.target.value); setSelectedBordereaux([]); }} className="input min-h-10 py-2 text-sm">
-                <option value="">Sélectionnez un organisme</option>
-                {organismes.map(o => <option key={o.id} value={o.id}>{o.nom}</option>)}
-              </select>
-            </label>
+            <SearchableSelect label="Organisme" value={selectedOrg} onChange={value => { setSelectedOrg(value); setSelectedBordereaux([]); }}
+              className="min-w-0" clearable={false} searchable={organismes.length > 8} wrapLabels
+              options={[{ value: '', label: 'Sélectionnez un organisme' }, ...organismes.map(organisme => ({ value: organisme.id, label: organisme.nom }))]} />
             {selectedOrg && (
               <div className="space-y-2">
                 {bordereaux.length === 0 ? (
@@ -1628,7 +1620,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
                           }} className="w-4 h-4 rounded border-neutral-300 text-neutral-700" />
                           <div className="flex-1">
                             <span className="text-xs font-semibold text-neutral-700">{b.numero}</span>
-                            <span className="text-[10px] text-neutral-500 ml-2">{b.nombre_factures} ventes · {b.periode_debut} au {b.periode_fin}</span>
+                            <span className="text-[10px] text-neutral-500 ml-2">{b.nombre_factures} ventes │ {b.periode_debut} au {b.periode_fin}</span>
                           </div>
                           <span className="text-xs font-bold text-neutral-800 tabular-nums">{formatFCFA(b.total_part_ipm)}</span>
                         </label>
@@ -1778,7 +1770,7 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
                     <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{r.ipm_organismes?.nom || '-'}</p>
-                    <p className="text-[10px] text-neutral-400 mt-0.5">{r.date_reglement} · {r.mode_reglement}</p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">{r.date_reglement} │ {r.mode_reglement}</p>
                   </div>
                   {r.ecart !== 0 && (
                     <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded ${r.ecart < 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -2165,7 +2157,7 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
                       <p className="min-w-0 break-words text-sm font-semibold text-[var(--w-text)]">{v.ipm_beneficiaires?.customers?.name || '-'}</p>
-                      <p className="text-[10px] text-neutral-400 mt-0.5">{formatDate(v.date_vente)} · {v.ipm_organismes?.nom || '-'}</p>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">{formatDate(v.date_vente)} │ {v.ipm_organismes?.nom || '-'}</p>
                     </div>
                     <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold ${statutColor(v.statut)}`}>
                       {statutLabel(v.statut)}

@@ -274,7 +274,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
                         aria-label={`Retourner ${l.name}`} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--w-accent)]" />
                       <div className="min-w-0 flex-1">
                         <div className="break-words text-sm font-semibold leading-snug text-[var(--w-text)]">{l.name}</div>
-                        <div className="text-[12px] text-neutral-500 mt-1 num">{formatFCFA(l.unit_price)} · Qté achetée : {l.maxQty}</div>
+                        <div className="text-[12px] text-neutral-500 mt-1 num">{formatFCFA(l.unit_price)} │ Qté achetée : {l.maxQty}</div>
                         {l.selected && (
                           <div className="text-[12px] text-red-600 font-medium mt-0.5 num">Montant du retour : -{formatFCFA(l.quantity * l.unit_price)}</div>
                         )}

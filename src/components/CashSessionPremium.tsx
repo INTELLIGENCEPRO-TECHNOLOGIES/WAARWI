@@ -46,7 +46,7 @@ export function ActiveCashSessionCard({ session, siteName: _siteName, onResume }
               Session en cours
             </div>
             <h2 className="text-sm font-bold text-slate-900 leading-tight truncate">
-              {new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} &middot; {fmtTime(session.opened_at)}
+              {new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} │ {fmtTime(session.opened_at)}
             </h2>
           </div>
           <span className="shrink-0 inline-flex items-center gap-1 text-emerald-600 text-[9px] font-bold uppercase tracking-wider">
@@ -60,7 +60,7 @@ export function ActiveCashSessionCard({ session, siteName: _siteName, onResume }
           <InfoRow
             icon={Calendar}
             label="Ouverte le"
-            value={`${fmtDate(session.opened_at)} · ${fmtTime(session.opened_at)}`}
+            value={`${fmtDate(session.opened_at)} │ ${fmtTime(session.opened_at)}`}
           />
           <InfoRow
             icon={Banknote}

@@ -83,7 +83,7 @@ function CashScreen({ stats, showMargin }: { stats: Extract<ReportData, { type: 
       {s.parJour.length > 1 && (
         <>
           <SectionTitle>Évolution journalière de la caisse</SectionTitle>
-          <DailyBars data={s.parJour.map((d) => ({ date: d.date, value: d.solde, label: `${formatDate(d.date)} · ${signed(d.solde)}` }))} />
+          <DailyBars data={s.parJour.map((d) => ({ date: d.date, value: d.solde, label: `${formatDate(d.date)} │ ${signed(d.solde)}` }))} />
         </>
       )}
 

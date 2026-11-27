@@ -193,7 +193,7 @@ const load = async () => {
                       <div className="flex items-center justify-between mt-0.5">
                         <div className="flex items-center gap-0 text-[11px] text-neutral-400 num whitespace-nowrap">
                           <span className={`font-semibold ${s.status === 'return' ? 'text-red-500' : ''}`}>{s.sale_number}</span>
-                          <span className="mx-1.5">·</span>
+                          <span aria-hidden="true" className="w-inline-divider mx-1" />
                           <span>{formatDateTime(s.created_at)}</span>
                         </div>
                         {s.status !== 'return' && can('pos_reprint') && (
@@ -255,7 +255,7 @@ const load = async () => {
                           <div className="flex items-center justify-between mt-0.5">
                             <div className="text-[11px] text-neutral-400 num">
                               <span>{m.method_name || 'Espèces'}</span>
-                              <span className="mx-1.5">·</span>
+                              <span aria-hidden="true" className="w-inline-divider mx-1" />
                               <span>{formatDateTime(m.created_at)}</span>
                             </div>
                             {can('pos_reprint') && <button
@@ -310,8 +310,8 @@ const load = async () => {
                           </div>
                           <div className="text-[11px] text-neutral-400 num mt-0.5">
                             <span className="font-semibold">{p.sale_number}</span>
-                            {p.method_name && <><span className="mx-1.5">·</span><span>{p.method_name}</span></>}
-                            <span className="mx-1.5">·</span>
+                            {p.method_name && <><span aria-hidden="true" className="w-inline-divider mx-1" /><span>{p.method_name}</span></>}
+                            <span aria-hidden="true" className="w-inline-divider mx-1" />
                             <span>{formatDateTime(p.created_at)}</span>
                           </div>
                         </div>
@@ -345,7 +345,7 @@ const load = async () => {
                           <div className="flex items-center justify-between mt-0.5">
                             <div className="text-[11px] text-neutral-400 num">
                               <span>{m.method_name || 'Acompte'}</span>
-                              <span className="mx-1.5">·</span>
+                              <span aria-hidden="true" className="w-inline-divider mx-1" />
                               <span>{formatDateTime(m.created_at)}</span>
                             </div>
                             {can('pos_reprint') && <button
@@ -356,7 +356,7 @@ const load = async () => {
                                     receiptNumber: `ACO-${String(m.id).slice(0, 8).toUpperCase()}`,
                                     amount: m.amount,
                                     method: m.method_name || 'Espèces',
-                                    label: m.reason ? `Acompte · ${m.reason}` : 'Acompte client',
+                                    label: m.reason ? `Acompte │ ${m.reason}` : 'Acompte client',
                                     reference: m.reference || undefined,
                                     customerName: m.customer_name,
                                     createdAt: m.created_at,
@@ -401,7 +401,7 @@ const load = async () => {
                           <div className="flex items-center justify-between mt-0.5">
                             <div className="text-[11px] text-neutral-400 num">
                               <span>{m.method_name || 'Espèces'}</span>
-                              <span className="mx-1.5">·</span>
+                              <span aria-hidden="true" className="w-inline-divider mx-1" />
                               <span>{formatDateTime(m.created_at)}</span>
                             </div>
                             {can('pos_reprint') && <button
@@ -456,7 +456,7 @@ const load = async () => {
                           </div>
                           <div className="text-[11px] text-neutral-400 num mt-0.5">
                             <span>{m.method_name || 'Espèces'}</span>
-                            <span className="mx-1.5">·</span>
+                            <span aria-hidden="true" className="w-inline-divider mx-1" />
                             <span>{formatDateTime(m.created_at)}</span>
                           </div>
                         </div>
@@ -489,7 +489,7 @@ const load = async () => {
                           </div>
                           <div className="text-[11px] text-neutral-400 num mt-0.5">
                             <span>{m.method_name || 'Espèces'}</span>
-                            <span className="mx-1.5">·</span>
+                            <span aria-hidden="true" className="w-inline-divider mx-1" />
                             <span>{formatDateTime(m.created_at)}</span>
                           </div>
                         </div>
@@ -522,7 +522,7 @@ const load = async () => {
                           </div>
                           <div className="text-[11px] text-neutral-400 num mt-0.5">
                             <span>Prêt</span>
-                            <span className="mx-1.5">·</span>
+                            <span aria-hidden="true" className="w-inline-divider mx-1" />
                             <span>{formatDateTime(m.created_at)}</span>
                           </div>
                         </div>

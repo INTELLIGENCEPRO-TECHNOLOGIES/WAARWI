@@ -16,11 +16,11 @@ import { Field, PremiumSelect, ArticleCard, CategoryPickerModal, MasterCatalogGu
 
 type Form = Partial<Article> & { stock_init?: number };
 type Compat = { id?: string; brand_id: string; model_id: string; year_start: number; year_end: number; notes: string };
-type PricingTier = { id: string; article_id: string; tier_name: string; price: number; sort_order: number };
 type TierDefinition = { id: string; tier_name: string; sort_order: number; is_default: boolean };
 
 type TabKey = 'infos' | 'prix' | 'stock' | 'compat' | 'image';
 type FormMode = 'create' | 'edit';
+type EditorSurface = 'mobile' | 'desktop';
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 type SaveIntent = 'stay' | 'new' | 'close';
 
@@ -62,7 +62,9 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => { setSearch(val); setPage(0); setCursors([]); }, 250);
   };
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editorSurface, setEditorSurface] = useState<EditorSurface | null>(null);
+  const [switchingArticle, setSwitchingArticle] = useState(false);
+  const articleTransitionRef = useRef(false);
   const [editing, setEditing] = useState<Article | null>(null);
   const [toDelete, setToDelete] = useState<Article | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -102,9 +104,6 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [bulkActionOpen, setBulkActionOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState('');
   const [bulkActionValue, setBulkActionValue] = useState('');
-  const [fullScreenOpen, setFullScreenOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState(-1);
-  const [, setPricingTiers] = useState<PricingTier[]>([]);
   const [tierDefinitions, setTierDefinitions] = useState<TierDefinition[]>([]);
   const [formTiers, setFormTiers] = useState<Array<{ tier_name: string; price: number | '' }>>([]);
 
@@ -217,6 +216,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   // Articles are already filtered/sorted/paginated server-side
   const paginated = articles;
+  const editingIndex = paginated.findIndex(article => article.id === currentArticleId);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
@@ -253,52 +253,52 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   };
 
   const openCreate = () => {
+    if (articleTransitionRef.current) return;
     initCreateForm();
-    const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
-    if (isDesktop) {
-      setEditingIndex(-1);
-      setFullScreenOpen(true);
-      setDrawerOpen(false);
-    } else {
-      setDrawerOpen(true);
-    }
+    setEditorSurface(window.innerWidth >= 768 ? 'desktop' : 'mobile');
   };
 
-  // Debounced auto-save refs (declared early so openEdit can flag skip)
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const skipAutoSaveRef = useRef(true);
 
-  const openEdit = async (a: Article) => {
-    skipAutoSaveRef.current = true;
-    setEditing(a);
-    setFormMode('edit');
-    setCurrentArticleId(a.id);
-    setSaveState('idle');
+  const loadArticle = async (article: Article) => {
+    const [compatResult, tierResult] = await Promise.all([
+      supabase.from('article_compatibilities').select('*').eq('article_id', article.id),
+      supabase.from('article_pricing_tiers').select('*').eq('article_id', article.id).order('sort_order'),
+    ]);
+    if (compatResult.error || tierResult.error) {
+      error('Impossible de charger cette fiche article. Réessayez.');
+      return false;
+    }
+
+    const loadedCompats: Compat[] = (compatResult.data ?? []).map(row => ({
+      id: row.id,
+      brand_id: row.brand_id || '',
+      model_id: row.model_id || '',
+      year_start: row.year_start || 0,
+      year_end: row.year_end || 0,
+      notes: row.notes || '',
+    }));
+    const loadedTiers = tierResult.data ?? [];
+    const nextTiers: typeof formTiers = tierDefinitions.map(definition => ({
+      tier_name: definition.tier_name,
+      price: loadedTiers.find(tier => tier.tier_name === definition.tier_name)?.price ?? '',
+    }));
+    const editForm = { ...article, stock_init: 0 };
+
+    savedSnapshotRef.current = getFormSnapshot(editForm, loadedCompats, nextTiers);
     userTouchedRef.current = false;
+    setEditing(article);
+    setFormMode('edit');
+    setCurrentArticleId(article.id);
+    setSaveState('idle');
     setTab('infos');
     setImageFile(null);
-    setImagePreview(a.image_url || null);
+    setImagePreview(article.image_url || null);
     setImageDeletePending(false);
-    const editForm = { ...a, stock_init: 0 };
     setForm(editForm);
-
-    const [{ data: compatData }, { data: tiersData }] = await Promise.all([
-      supabase.from('article_compatibilities').select('*').eq('article_id', a.id),
-      supabase.from('article_pricing_tiers').select('*').eq('article_id', a.id).order('sort_order'),
-    ]);
-
-    const loadedCompats = (compatData || []).map((c: any) => ({ id: c.id, brand_id: c.brand_id || '', model_id: c.model_id || '', year_start: c.year_start || 0, year_end: c.year_end || 0, notes: c.notes || '' }));
     setCompats(loadedCompats);
-    setPricingTiers(tiersData || []);
-
-    const loadedTiers = tiersData || [];
-    const newFormTiers = tierDefinitions.map(def => {
-      const existing = loadedTiers.find(t => t.tier_name === def.tier_name);
-      return { tier_name: def.tier_name, price: existing?.price || '' as number | '' };
-    });
-    setFormTiers(newFormTiers);
-    savedSnapshotRef.current = getFormSnapshot(editForm, loadedCompats, newFormTiers);
-    setDrawerOpen(true);
+    setFormTiers(nextTiers);
+    return true;
   };
 
   const generateRef = async () => {
@@ -479,8 +479,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         setTimeout(() => { document.querySelector<HTMLInputElement>('[data-field="designation"]')?.focus(); }, 50);
       } else if (intent === 'close') {
         if (!silent) success(isCreate ? 'Article créé' : 'Article modifié');
-        setFullScreenOpen(false);
-        setDrawerOpen(false);
+        setEditorSurface(null);
         if (pendingReloadRef.current) { await loadPage(page, true); pendingReloadRef.current = false; }
       } else {
         if (!silent) success(isCreate ? 'Article créé' : 'Article modifié');
@@ -605,62 +604,48 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     finally { setListSaving(false); }
   };
 
-  const openFullScreen = (a: Article) => {
-    skipAutoSaveRef.current = true;
-    const idx = paginated.findIndex(x => x.id === a.id);
-    setEditingIndex(idx >= 0 ? idx : 0);
-    openEdit(a);
-    setFullScreenOpen(true);
-    setDrawerOpen(false);
-  };
-
   const saveAndClose = async () => {
+    if (articleTransitionRef.current || saving) return;
     if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null; }
-    // If in create mode with no data entered, just close
-    if (formMode === 'create' && !currentArticleId && !form.name?.trim()) {
-      setFullScreenOpen(false);
-      setDrawerOpen(false);
+    if ((formMode === 'create' && !currentArticleId && !form.name?.trim()) || !isDirty()) {
+      setEditorSurface(null);
       if (pendingReloadRef.current) { loadPage(page, true); pendingReloadRef.current = false; }
       return;
     }
-    // If already saved and no new changes, just close
-    if (!isDirty()) {
-      setFullScreenOpen(false);
-      setDrawerOpen(false);
-      if (pendingReloadRef.current) { loadPage(page, true); pendingReloadRef.current = false; }
-      return;
-    }
-    // Save then close
     await save({ intent: 'close' });
   };
 
   const saveAndNew = async () => {
+    if (articleTransitionRef.current || saving) return;
     if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null; }
     await save({ intent: 'new' });
   };
 
-  const navigateArticle = async (dir: -1 | 1) => {
+  const openArticle = async (article: Article, surface: EditorSurface) => {
+    if (articleTransitionRef.current || saving || (editorSurface && article.id === currentArticleId)) return;
+    articleTransitionRef.current = true;
+    setSwitchingArticle(true);
     if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null; }
-    if (isDirty() && form.name?.trim() && form.internal_ref?.trim()) {
-      const ok = await save({ silent: true });
-      if (!ok) return;
+
+    try {
+      if (editorSurface && isDirty() && !await save({ silent: true })) {
+        error('La fiche actuelle contient des modifications à enregistrer.');
+        return;
+      }
+      if (await loadArticle(article)) setEditorSurface(surface);
+    } catch {
+      error('Impossible de charger cette fiche article. Réessayez.');
+    } finally {
+      articleTransitionRef.current = false;
+      setSwitchingArticle(false);
     }
-    const newIdx = editingIndex + dir;
-    if (newIdx < 0 || newIdx >= paginated.length) return;
-    setEditingIndex(newIdx);
-    const a = paginated[newIdx];
-    await openEdit(a);
-    setDrawerOpen(false);
   };
 
-  const jumpToArticle = async (a: Article) => {
-    if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null; }
-    if (isDirty() && form.name?.trim() && form.internal_ref?.trim()) {
-      const ok = await save({ silent: true });
-      if (!ok) return;
-    }
-    const idx = paginated.indexOf(a);
-    if (idx >= 0) { setEditingIndex(idx); await openEdit(a); setDrawerOpen(false); }
+  const openFullScreen = (article: Article) => void openArticle(article, 'desktop');
+
+  const navigateArticle = (direction: -1 | 1) => {
+    const article = paginated[editingIndex + direction];
+    if (editorSurface && editingIndex >= 0 && article) void openArticle(article, editorSurface);
   };
 
   // Track user interaction for dirty detection
@@ -671,22 +656,21 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   }, []);
 
   useEffect(() => {
-    if (!fullScreenOpen) return;
+    if (editorSurface !== 'desktop' || articleTransitionRef.current) return;
     // Auto-save only for existing articles (edit mode with id)
     if (!currentArticleId) return;
-    if (skipAutoSaveRef.current) { skipAutoSaveRef.current = false; return; }
     if (!userTouchedRef.current) return;
     if (!isDirty()) return;
 
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
     autoSaveRef.current = setTimeout(() => {
-      if (form.name?.trim() && form.internal_ref?.trim()) {
+      if (!articleTransitionRef.current && form.name?.trim() && form.internal_ref?.trim()) {
         save({ silent: true });
       }
     }, 1200);
     return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, compats, formTiers, fullScreenOpen, currentArticleId]);
+  }, [form, compats, formTiers, editorSurface, currentArticleId]);
 
   const allFilteredSelected = paginated.length > 0 && paginated.every(a => selectedIds.has(a.id));
 
@@ -928,7 +912,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           <div className="md:hidden">
             {paginated.map(a => (
               <ArticleCard key={a.id} article={a} category={categoryMap.get(a.category_id || '')} qty={stockMap[a.id] || 0}
-                onEdit={() => selectionMode ? toggleSelected(a.id) : openEdit(a)} onDelete={() => setToDelete(a)}
+                onEdit={() => selectionMode ? toggleSelected(a.id) : void openArticle(a, 'mobile')} onDelete={() => setToDelete(a)}
                 selectionMode={selectionMode} selected={selectedIds.has(a.id)} onToggleSelect={() => toggleSelected(a.id)}
                 showMargin={can('view_margins')} showStock={can('view_stock_levels')} />
             ))}
@@ -1024,11 +1008,11 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       <CategoryPickerModal open={filterOpen} onClose={() => setFilterOpen(false)} categories={categories} selected={categoryFilter} onSelect={v => { setCategoryFilter(v); setFilterOpen(false); }} />
 
       {/* ── Full-screen edit (desktop) ────── */}
-      {fullScreenOpen && (
+      {editorSurface === 'desktop' && (
         <FullScreenArticleEdit
           form={form} setForm={wrappedSetForm} editing={editing} tab={tab} setTab={setTab}
           TABS={TABS} save={() => save()} saveAndNew={saveAndNew} saveAndClose={saveAndClose}
-          saving={saving} saveState={saveState} formMode={formMode}
+          saving={saving} switchingArticle={switchingArticle} saveState={saveState} formMode={formMode}
           compats={compats} setCompats={setCompats}
           categories={categories} suppliers={suppliers} brands={brands} models={models}
           autoMode={autoMode} generateRef={generateRef} addCompat={addCompat} removeCompat={removeCompat}
@@ -1040,20 +1024,20 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')}
           stockMap={stockMap} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy}
           onClose={saveAndClose}
-          onPrev={editingIndex > 0 ? () => navigateArticle(-1) : undefined}
-          onNext={editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
+          onPrev={!switchingArticle && !saving && editingIndex > 0 ? () => navigateArticle(-1) : undefined}
+          onNext={!switchingArticle && !saving && editingIndex >= 0 && editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
           editingIndex={editingIndex} totalCount={paginated.length}
-          filtered={paginated} onJumpTo={jumpToArticle}
+          filtered={paginated} onJumpTo={openFullScreen}
         />
       )}
 
       {/* ── Drawer article (mobile + fallback) ────── */}
-      {drawerOpen && !fullScreenOpen && (
+      {editorSurface === 'mobile' && (
         <MobileArticleEdit
           form={form} setForm={wrappedSetForm}
           editing={editing} tab={tab} setTab={setTab}
           save={() => save()} saveAndNew={saveAndNew} saveAndClose={saveAndClose}
-          saving={saving} saveState={saveState} formMode={formMode}
+          saving={saving} switchingArticle={switchingArticle} saveState={saveState} formMode={formMode}
           compats={compats} setCompats={setCompats}
           categories={categories} suppliers={suppliers}
           brands={brands} models={models}
@@ -1069,8 +1053,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions}
           isPharmacy={isPharmacy}
           onClose={saveAndClose}
-          onPrev={editing && editingIndex > 0 ? () => navigateArticle(-1) : undefined}
-          onNext={editing && editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
+          onPrev={!switchingArticle && !saving && editingIndex > 0 ? () => navigateArticle(-1) : undefined}
+          onNext={!switchingArticle && !saving && editingIndex >= 0 && editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
           editingIndex={editingIndex} totalCount={paginated.length}
         />
       )}
@@ -1183,7 +1167,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             <span className="label">Fichier Excel (.xlsx ou .xls)</span>
             <input type="file" accept=".xlsx,.xls" className="article-file-input" disabled={importingArticles}
               onChange={event => { const file = event.target.files?.[0]; if (file) void handleImportFile(file); event.target.value = ''; }} />
-            {importFilename && <span className="article-muted block break-words mt-1">{importFilename} · {importRows.length} ligne{importRows.length === 1 ? '' : 's'}</span>}
+            {importFilename && <span className="article-muted block break-words mt-1">{importFilename} │ {importRows.length} ligne{importRows.length === 1 ? '' : 's'}</span>}
           </label>
           {importResult && (
             <div>
@@ -1192,7 +1176,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                 <div><dt>Mis à jour</dt><dd className="num">{importResult.updated}</dd></div>
                 <div><dt>Erreurs</dt><dd className="num">{importResult.errors?.length || 0}</dd></div>
               </dl>
-              {importResult.errors?.length > 0 && <ul className="article-result-errors">{importResult.errors.map((item, index) => <li key={index}>Ligne {item.row} · {item.error}</li>)}</ul>}
+              {importResult.errors?.length > 0 && <ul className="article-result-errors">{importResult.errors.map((item, index) => <li key={index}>Ligne {item.row} │ {item.error}</li>)}</ul>}
             </div>
           )}
         </div>

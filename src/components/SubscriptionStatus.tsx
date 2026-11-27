@@ -20,12 +20,12 @@ export default function SubscriptionStatus({ info, onClick, compact = false }: {
     <button
       type="button"
       onClick={onClick}
-      title={`Abonnement ${info.planName} · ${detail}`}
+      title={`Abonnement ${info.planName} │ ${detail}`}
       className="flex items-center gap-2 text-xs whitespace-nowrap hover:opacity-70 transition-opacity"
     >
       {!compact && <span className="text-[11px] text-neutral-500">Votre abonnement</span>}
       <span className={`truncate font-semibold text-neutral-800 ${compact ? 'max-w-20' : 'max-w-[120px]'}`}>{info.planName}</span>
-      <span className={`font-bold ${style.color}`}>{compact && date && info.status !== 'pending_review' ? `${style.label} · ${date}` : detail}</span>
+      <span className={`font-bold ${style.color}`}>{compact && date && info.status !== 'pending_review' ? `${style.label} │ ${date}` : detail}</span>
     </button>
   );
 }

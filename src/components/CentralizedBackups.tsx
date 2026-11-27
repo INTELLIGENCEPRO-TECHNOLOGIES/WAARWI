@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { formatDateTime } from '../lib/format';
 import { useToast } from '../context/ToastContext';
 import { PlatformConfirmation, PlatformWorkPage } from './PlatformWorkPage';
+import { SearchableSelect } from './SearchableSelect';
 
 async function callScheduler(action: string, payload: Record<string, unknown> = {}) {
   let { data: sess } = await supabase.auth.getSession();
@@ -230,7 +231,7 @@ function SupervisionTab({ onNavigate, onUnprotected }: { onNavigate: (tab: Tab) 
             <KeyValue label="Sauvegarde automatique" value={planningReady ? 'Active' : 'Inactive'} />
             <KeyValue label="Planificateur" value={cronReady ? 'Actif' : 'Inactif'} />
             <KeyValue label="Copie distante LWS" value={remoteReady ? 'Active' : 'Inactive'} />
-            {data.policy?.cron_expression && <KeyValue label="Cadence" value={data.policy.cron_expression + ' · ' + (data.policy.timezone || 'Africa/Dakar')} />}
+            {data.policy?.cron_expression && <KeyValue label="Cadence" value={data.policy.cron_expression + ' │ ' + (data.policy.timezone || 'Africa/Dakar')} />}
           </dl>
         </section>
       </div>
@@ -289,10 +290,10 @@ function CompaniesTab({ initialFilter }: { initialFilter: BackupFilter }) {
           <Search size={16} aria-hidden="true" />
           <input aria-label="Rechercher une entreprise à sauvegarder" placeholder="Rechercher une entreprise…" value={search} onChange={event => setSearch(event.target.value)} />
         </label>
-        <select aria-label="État des sauvegardes" className="w-input-ul" value={filter}
-          onChange={event => setFilter(event.target.value as BackupFilter)}>
-          {Object.entries(filters).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-        </select>
+        <SearchableSelect ariaLabel="État des sauvegardes" className="w-full min-w-0 sm:w-48" value={filter}
+          clearable={false} searchable={false} wrapLabels
+          onChange={value => setFilter(value as BackupFilter)}
+          options={Object.entries(filters).map(([value, label]) => ({ value, label }))} />
         <button type="button" className="pa-icon-button" aria-label="Actualiser les sauvegardes" onClick={() => void load()}><RefreshCw size={16} /></button>
       </div>
       {loading ? <Spinner /> : visible.length === 0 ? <p className="pa-empty">Aucune entreprise pour ces critères.</p> : (
@@ -404,7 +405,7 @@ function CompanyBackups({ company, transfer, onBack, onChange }: {
               <div className="pa-setting-row" key={item.id}>
                 <div>
                   <strong>{item.label || item.kind}</strong>
-                  <p className="pa-row-subtitle">{formatDateTime(item.created_at)} · {formatBytes(item.size_bytes)} · {formatRowCount(item.row_counts)} lignes</p>
+                  <p className="pa-row-subtitle">{formatDateTime(item.created_at)} │ {formatBytes(item.size_bytes)} │ {formatRowCount(item.row_counts)} lignes</p>
                   {item.error_message && <p className="pa-danger text-xs">{item.error_message}</p>}
                 </div>
                 <div className="pa-inline">
@@ -459,7 +460,7 @@ function HistoryTab() {
           <div className="pa-row-plan" role="cell">{run.triggered_by === 'cron' ? 'Automatique' : 'Manuel'}</div>
           <div className="pa-row-status" role="cell">
             <StatusLabel status={run.status} />
-            <p className="pa-row-subtitle">{run.tenants_succeeded ?? 0} réussies · {run.tenants_failed ?? 0} en échec</p>
+            <p className="pa-row-subtitle">{run.tenants_succeeded ?? 0} réussies │ {run.tenants_failed ?? 0} en échec</p>
           </div>
           <div className="pa-row-date pa-muted" role="cell">{runDuration(run)}</div>
         </div>
@@ -494,7 +495,7 @@ function RunDetails({ run, onBack }: { run: Run; onBack: () => void }) {
               <div className="pa-setting-row" key={item.id}>
                 <div>
                   <strong>{item.tenants?.name || item.tenant_id?.slice(0, 8)}</strong>
-                  <p className="pa-row-subtitle">{formatBytes(item.size_bytes)} · {item.row_count?.toLocaleString('fr-FR') ?? '—'} lignes</p>
+                  <p className="pa-row-subtitle">{formatBytes(item.size_bytes)} │ {item.row_count?.toLocaleString('fr-FR') ?? '—'} lignes</p>
                   {item.error_message && <p className="pa-danger text-xs">{item.error_message}</p>}
                 </div>
                 <StatusLabel status={item.status} />
@@ -549,7 +550,7 @@ function OffsiteTab() {
       const failed = processed.filter(item => item.status === 'failed').length;
       const verified = processed.filter(item => item.status === 'verified').length;
       const skipped = processed.filter(item => item.status === 'skipped').length;
-      const message = processed.length ? verified + ' vérifiés · ' + failed + ' en échec · ' + skipped + ' ignorés' : 'Aucun transfert en attente';
+      const message = processed.length ? verified + ' vérifiés │ ' + failed + ' en échec │ ' + skipped + ' ignorés' : 'Aucun transfert en attente';
       toast(message, failed > 0 ? 'error' : 'success');
       await load();
     } catch (cause) { error((cause as Error).message); }
@@ -581,7 +582,7 @@ function OffsiteTab() {
   return (
     <div className="pa-page">
       <div className="pa-section-head">
-        <span className="pa-muted text-sm">Connexion LWS · {ready ? 'Active' : 'Inactive'}</span>
+        <span className="pa-muted text-sm">Connexion LWS │ {ready ? 'Active' : 'Inactive'}</span>
         <div className="pa-inline">
           <button type="button" className="pa-link" onClick={() => void testConnection()} disabled={!canTest || testing}>
             {testing ? <Loader2 size={16} className="animate-spin" /> : <Cloud size={16} />} Tester la connexion

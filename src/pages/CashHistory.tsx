@@ -356,14 +356,14 @@ export function CashHistory() {
                         <span className={`text-xs font-medium ${isOpen ? 'text-[var(--w-text)]' : 'text-[var(--w-text-sec)]'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
                       </div>
                       <div className="text-[10px] text-neutral-500 num leading-tight mt-0.5">
-                        {opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        {opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} │ {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         {closed && <>→{closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</>}
-                        {duration != null && <span className="text-neutral-400"> · {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
+                        {duration != null && <span className="text-neutral-400"> │ {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
                       </div>
                       {showRegister && (
                         <div className="text-[11px] text-neutral-700 leading-snug mt-0.5 break-words">
                           <span className="font-semibold">{sessionRegister(s)}</span>
-                          {s.cashier_name && <span className="text-neutral-500"> · {s.cashier_name}</span>}
+                          {s.cashier_name && <span className="text-neutral-500"> │ {s.cashier_name}</span>}
                         </div>
                       )}
                     </div>
@@ -423,7 +423,7 @@ export function CashHistory() {
                       <td className="px-2 py-1.5 doc-number text-[12px] font-bold text-neutral-700 whitespace-nowrap">#{s.id.slice(0, 8).toUpperCase()}</td>
                       {showRegister && <td className="px-2 py-1.5 text-[11px] font-semibold text-neutral-800 break-words min-w-[8rem]">{sessionRegister(s)}</td>}
                       {showRegister && <td className="px-2 py-1.5 text-[11px] text-neutral-600 break-words">{s.cashier_name || '—'}</td>}
-                      <td className="px-2 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="px-2 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} │ {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="px-2 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{closed ? closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                       <td className="px-2 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{duration != null ? (duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`) : '—'}</td>
                       <td className="px-2 py-1.5 text-center">
@@ -512,8 +512,8 @@ export function CashHistory() {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-black">Caisse</span>
                 <span className="text-xs text-right text-neutral-800 break-words">
                   <span className="font-semibold">{sessionRegister(detail.session)}</span>
-                  {detail.session.cashier_name && <span className="text-neutral-500"> · {detail.session.cashier_name}</span>}
-                  <span className="text-neutral-400"> · {detail.session.status === 'open' ? 'Ouverte' : 'Clôturée'}</span>
+                  {detail.session.cashier_name && <span className="text-neutral-500"> │ {detail.session.cashier_name}</span>}
+                  <span className="text-neutral-400"> │ {detail.session.status === 'open' ? 'Ouverte' : 'Clôturée'}</span>
                 </span>
               </div>
             )}

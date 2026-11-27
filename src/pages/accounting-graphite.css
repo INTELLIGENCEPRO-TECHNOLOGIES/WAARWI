@@ -31,7 +31,12 @@
 .accounting-workspace .acc-status{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;white-space:nowrap;background:none;border:0;padding:0}
 .accounting-workspace .acc-status.valid{color:var(--w-success)}.accounting-workspace .acc-status.cancelled{color:var(--w-error)}.accounting-workspace .acc-status.draft{color:var(--w-text-muted)}
 .accounting-workspace .acc-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:43px;padding:5px 0;background:var(--w-bg);color:var(--w-text-sec);font-size:11px;border-top:1px solid var(--w-separator)}
-.accounting-workspace .acc-pagination label{display:flex;align-items:center;gap:6px}.accounting-workspace .acc-pagination select{min-height:30px;padding:3px 4px;border:0;border-bottom:1px solid var(--w-separator);background:var(--w-bg)}
+/* Keep the shared dropdowns aligned with the adjoining accounting fields. */
+.accounting-workspace .acc-toolbar-select,.accounting-workspace .acc-filter-select{min-width:0;max-width:100%}
+.accounting-workspace :is(.acc-toolbar-select,.acc-filter-select) [aria-haspopup="listbox"]{min-height:32px;padding-block:4px;padding-inline:7px;font-size:12px}
+.accounting-workspace .acc-search-field .label,.accounting-workspace .acc-toolbar-select .label{margin-bottom:0;font-size:11px;color:var(--w-text-sec)}
+.accounting-workspace .acc-page-size{display:flex;align-items:center;gap:6px}
+.accounting-workspace .acc-page-size [aria-haspopup="listbox"]{min-height:30px;padding-inline:5px;gap:4px}
 .accounting-workspace .acc-page-buttons{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .accounting-workspace .acc-context{position:fixed;z-index:90;width:216px;background:var(--w-surface);border:1px solid var(--w-separator);box-shadow:0 6px 20px #00000018;border-radius:5px;padding:4px;text-align:left;white-space:normal}
 .accounting-workspace .acc-context-label{display:block;padding:6px 8px;font-size:11px;color:var(--w-text-muted);border-bottom:1px solid var(--w-separator-l)}

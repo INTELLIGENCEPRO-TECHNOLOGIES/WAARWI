@@ -366,6 +366,14 @@ p { line-height: 1.6; }
   .w-thead th { color: var(--w-text-sec); }
   .w-divider { border-color: var(--w-separator-l); }
   .w-tr-hover:hover { background: var(--w-hover); }
+  .w-inline-divider {
+    display: inline-block;
+    flex: none;
+    width: 1px;
+    height: .85em;
+    vertical-align: -.08em;
+    background-color: var(--w-separator);
+  }
   .w-tr-active { background: var(--w-active); }
   .w-option { color: var(--w-text); }
   .w-option:hover { background: var(--w-hover); }

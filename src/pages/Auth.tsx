@@ -311,15 +311,15 @@ export function Auth({ onRegister }: { onRegister: () => void }) {
       <footer className="py-4 px-6 text-center lg:text-left">
         <div className="max-w-[1060px] mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1">
           <p className="text-[11px] text-neutral-400">
-            &copy; {year} Waarwi &middot; Intelligencepro Technologies
+            &copy; {year} Waarwi │ Intelligencepro Technologies
           </p>
           <p className="text-[11px] text-neutral-400">
             <a href="https://wa.me/221775254101" className="hover:text-neutral-600 transition-colors">Assistance</a>
-            {' · '}
+            {' │ '}
             <a href="https://waarwi.com/confidentialite" className="hover:text-neutral-600 transition-colors">Confidentialité</a>
-            {' · '}
+            {' │ '}
             <a href="https://waarwi.com/cgu" className="hover:text-neutral-600 transition-colors">CGU</a>
-            {' · '}
+            {' │ '}
             <span>Conçu au Sénégal</span>
           </p>
         </div>
