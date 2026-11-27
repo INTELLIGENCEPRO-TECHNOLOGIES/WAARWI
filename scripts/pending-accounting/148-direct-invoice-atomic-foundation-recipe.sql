@@ -1,0 +1,37 @@
+BEGIN;
+DO $test$
+DECLARE t uuid:=gen_random_uuid();u uuid:=gen_random_uuid();site uuid:=gen_random_uuid();depot uuid:=gen_random_uuid();art uuid:=gen_random_uuid();svc uuid:=gen_random_uuid();cust uuid:=gen_random_uuid();reg uuid:=gen_random_uuid();cs uuid:=gen_random_uuid();pm uuid:=gen_random_uuid();key uuid:=gen_random_uuid();sid uuid;header jsonb;items jsonb;payments jsonb;r jsonb;
+BEGIN
+ INSERT INTO public.tenants(id,name,enabled_modules,settings) VALUES(t,'RECETTE FACTURE DIRECTE','[]','{"stock_method":"none"}');
+ INSERT INTO auth.users(id,email,aud,role) VALUES(u,u::text||'@example.invalid','authenticated','authenticated');
+ INSERT INTO public.profiles(id,tenant_id,role,site_access_mode,full_name,is_active) VALUES(u,t,'admin','all','Recette directe',true);
+ INSERT INTO public.sites(id,tenant_id,name,is_active,allow_negative_stock) VALUES(site,t,'Magasin recette',true,false);
+ INSERT INTO public.sites(id,tenant_id,name,is_active,is_warehouse,parent_site_id,allow_negative_stock) VALUES(depot,t,'Dépôt recette',true,true,site,true);
+ INSERT INTO public.articles(id,tenant_id,internal_ref,name,sale_price,purchase_price,track_stock,vat_rate) VALUES(art,t,'A-REC','Article recette',1000,500,true,18),(svc,t,'S-REC','Service recette',500,200,false,18);
+ INSERT INTO public.customers(id,tenant_id,name) VALUES(cust,t,'Client recette');
+ INSERT INTO public.stock_levels(tenant_id,article_id,site_id,quantity) VALUES(t,art,depot,1),(t,art,site,99);
+ INSERT INTO public.cash_registers(id,tenant_id,site_id,code,name) VALUES(reg,t,site,'C1','Caisse recette');
+ INSERT INTO public.cash_sessions(id,tenant_id,site_id,user_id,cash_register_id,status,theoretical_amount) VALUES(cs,t,site,u,reg,'open',100);
+ INSERT INTO public.payment_methods(id,tenant_id,name,code,payment_type,is_active) VALUES(pm,t,'Espèces','CASH','cash',true);
+ INSERT INTO public.sales_vat_settings(tenant_id,site_id,enabled) VALUES(t,site,true);
+ header:=jsonb_build_object('site_id',site,'customer_id',cust,'cash_session_id',cs,'total',4130);
+ items:=jsonb_build_array(jsonb_build_object('article_id',art,'name','Article recette','quantity',2,'unit_price',1000,'discount',0),jsonb_build_object('article_id',art,'name','Article bis','quantity',1,'unit_price',1000,'discount',0),jsonb_build_object('article_id',svc,'name','Service','quantity',1,'unit_price',500,'discount',0));
+ payments:=jsonb_build_array(jsonb_build_object('payment_method_id',pm,'amount',1200));
+ PERFORM set_config('request.jwt.claim.sub',u::text,true);EXECUTE 'SET LOCAL ROLE authenticated';
+ BEGIN PERFORM public.create_direct_invoice_atomic(t,header,items,payments,depot,'{}',key);RAISE EXCEPTION USING ERRCODE='P9098',MESSAGE='Stock insuffisant accepté';EXCEPTION WHEN SQLSTATE '55000' THEN IF SQLERRM NOT LIKE 'Stock insuffisant%' THEN RAISE;END IF;END;
+ EXECUTE 'RESET ROLE';
+ IF EXISTS(SELECT 1 FROM public.sales WHERE tenant_id=t) OR EXISTS(SELECT 1 FROM public.sale_payments WHERE tenant_id=t) OR EXISTS(SELECT 1 FROM public.stock_movements WHERE tenant_id=t) OR EXISTS(SELECT 1 FROM public.tenant_doc_counters WHERE tenant_id=t AND doc_kind='invoice') OR (SELECT theoretical_amount FROM public.cash_sessions WHERE id=cs)<>100 OR (SELECT balance FROM public.customers WHERE id=cust)<>0 THEN RAISE EXCEPTION 'Rollback facture directe incomplet';END IF;
+ UPDATE public.stock_levels SET quantity=10 WHERE tenant_id=t AND article_id=art AND site_id=depot;
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ r:=public.create_direct_invoice_atomic(t,header,items,payments,depot,'{}',key);sid:=(r->>'sale_id')::uuid;
+ r:=public.create_direct_invoice_atomic(t,header,items,payments,depot,'{}',key);
+ IF r->>'sale_id' IS DISTINCT FROM sid::text OR r->>'idempotent' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Réessai non idempotent';END IF;
+ BEGIN PERFORM public.create_direct_invoice_atomic(t,jsonb_set(header,'{total}','4000'),items,payments,depot,'{}',key);RAISE EXCEPTION 'Collision acceptée';EXCEPTION WHEN unique_violation THEN NULL;END;
+ BEGIN UPDATE public.sales SET billing_create_key=gen_random_uuid() WHERE id=sid;RAISE EXCEPTION 'Clé modifiable';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ EXECUTE 'RESET ROLE';
+ SET CONSTRAINTS ALL IMMEDIATE;
+ IF NOT EXISTS(SELECT 1 FROM public.sales WHERE id=sid AND total=4130 AND paid=1200 AND vat_net_amount=3500 AND vat_amount=630 AND sale_number='F-00001') OR (SELECT count(*) FROM public.sales WHERE tenant_id=t)<>1 OR (SELECT count(*) FROM public.sale_payments WHERE sale_id=sid)<>1 OR (SELECT theoretical_amount FROM public.cash_sessions WHERE id=cs)<>1300 OR (SELECT balance FROM public.customers WHERE id=cust)<>2930 OR (SELECT quantity FROM public.stock_levels WHERE tenant_id=t AND article_id=art AND site_id=depot)<>7 OR (SELECT quantity FROM public.stock_levels WHERE tenant_id=t AND article_id=art AND site_id=site)<>99 OR EXISTS(SELECT 1 FROM public.stock_levels WHERE tenant_id=t AND article_id=svc) OR (SELECT count(*) FROM public.stock_movements WHERE reference_id=sid)<>1 OR NOT EXISTS(SELECT 1 FROM public.quote_conversion_stock_trace WHERE sale_id=sid AND tenant_id=t) THEN RAISE EXCEPTION 'Facture directe : stock, TVA, solde ou caisse incohérents';END IF;
+ IF has_function_privilege('anon','public.create_direct_invoice_atomic(uuid,jsonb,jsonb,jsonb,uuid,jsonb,uuid)','EXECUTE') THEN RAISE EXCEPTION 'RPC exposée à anon';END IF;
+END $test$;
+ROLLBACK;
+SELECT 'FACTURE_DIRECTE_ATOMIQUE_OK' AS resultat;

@@ -61,7 +61,8 @@
     "scripts/pending-accounting/140-durable-return-recovery-context-candidate.sql",
     "scripts/pending-accounting/141-durable-return-journal-restore-guard-candidate.sql",
     "scripts/pending-accounting/144-ipm-line-allocation-candidate.sql",
-    "scripts/pending-accounting/146-ipm-historical-line-snapshot-candidate.sql"
+    "scripts/pending-accounting/146-ipm-historical-line-snapshot-candidate.sql",
+    "scripts/pending-accounting/147-direct-invoice-atomic-foundation-candidate.sql"
   ],
   "recipe_files": [
     "scripts/pending-accounting/03-recipe.sql",
@@ -97,6 +98,7 @@
     "scripts/pending-accounting/137-ipm-historical-patient-refund-cap-recipe.sql",
     "scripts/pending-accounting/139-durable-return-request-journal-recipe.sql",
     "scripts/pending-accounting/142-durable-return-journal-restore-recipe.sql",
-    "scripts/pending-accounting/145-ipm-line-allocation-recipe.sql"
+    "scripts/pending-accounting/145-ipm-line-allocation-recipe.sql",
+    "scripts/pending-accounting/148-direct-invoice-atomic-foundation-recipe.sql"
   ]
 }

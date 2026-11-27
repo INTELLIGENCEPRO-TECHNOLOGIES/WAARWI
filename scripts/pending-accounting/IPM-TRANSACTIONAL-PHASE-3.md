@@ -1,0 +1,5 @@
+# Phase 3 — socle transactionnel de facture directe
+
+147/148 : nouveau RPC serveur, encore non raccordé aux interfaces. Facturation ordinaire TVA/non TVA, stock réel du dépôt, agrégation des lignes, lots et coûts d'origine selon le moteur de conversion, commission serveur, règlements et avoirs existants, recalcul solde, identifiant idempotent dans sales. Recette intégrée : TVA, stock insuffisant et rollback des paiements/compteur, réessai et collision, service non stocké, protection de clé et contrôle des agrégats. Les lots, crédits et concurrence du nouveau parcours demandent leurs propres recettes supplémentaires.
+
+Blocage restant IPM : recalculate_customer_balance calcule aujourd'hui le TTC intégral moins les paiements ; il faut isoler la créance organisme sans enregistrer de faux paiement. Ne pas appliquer automatiquement un avoir client à la part organisme. Le nouveau RPC refuse provisoirement les bénéficiaires actifs ; ce refus n'est pas une solution métier et ne doit pas être activé dans l'interface. Le parcours actuel reste inchangé jusqu'à validation complète. Aucun déploiement.
