@@ -260,12 +260,15 @@ jobs:
           print(',\n'.join(f"('{version}')" for version in versions) + ';')
           PY
           docker exec "$db" mkdir -p /tmp/waarwi-sync/supabase
-          docker cp "$(command -v supabase)" "$db:/tmp/waarwi-sync/supabase-cli"
+          cli_entry=$(readlink -f "$(command -v supabase)")
+          cli_package=$(node -p 'require("node:module").createRequire(process.argv[1]).resolve("@supabase/cli-linux-x64/package.json")' "$cli_entry")
+          # The npm launcher is a symlink to JavaScript. Copy the packaged native CLI.
+          docker cp "$(dirname "$cli_package")/bin/supabase" "$db:/tmp/waarwi-sync/supabase-cli"
           docker cp supabase/migrations "$db:/tmp/waarwi-sync/supabase/migrations"
           printf 'project_id = "waarwi_history_sync"\n\n[db]\nmajor_version = 17\n' > "$RUNNER_TEMP/waarwi-sync.toml"
           docker cp "$RUNNER_TEMP/waarwi-sync.toml" "$db:/tmp/waarwi-sync/supabase/config.toml"
           docker exec -w /tmp/waarwi-sync "$db" ./supabase-cli db push --dry-run --include-all \
-            --db-url 'postgresql://postgres:postgres@127.0.0.1:5432/postgres' 2>&1 | tee "$RUNNER_TEMP/waarwi-sync.log"
+            --db-url 'postgresql://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable' 2>&1 | tee "$RUNNER_TEMP/waarwi-sync.log"
           grep -E '(Remote database|Linked project) is up to date\.' "$RUNNER_TEMP/waarwi-sync.log"
       - name: Préparer les données fictives de recette
         id: fixtures
