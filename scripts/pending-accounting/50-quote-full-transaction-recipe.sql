@@ -75,6 +75,13 @@ BEGIN
  ELSIF scenario='lot' THEN
   IF (SELECT remaining_quantity FROM public.stock_lots WHERE id=lot1)<>1 OR (SELECT remaining_quantity FROM public.stock_lots WHERE id=lot2)<>4 OR (SELECT quantity FROM public.stock_levels WHERE tenant_id=t AND article_id=art AND site_id=depot)<>5 OR EXISTS(SELECT 1 FROM public.sale_items i WHERE i.sale_id=sid AND (SELECT sum(d.quantity) FROM public.sale_lot_deductions d WHERE d.sale_item_id=i.id) IS DISTINCT FROM i.quantity) OR abs((SELECT sum(quantity*purchase_cost) FROM public.sale_items WHERE sale_id=sid)-2400)>0.01 THEN RAISE EXCEPTION 'Traçabilité lot ou coût incorrect';END IF;
  ELSE
+  IF NOT EXISTS(SELECT 1 FROM public.ipm_sale_line_snapshots x WHERE x.sale_id=sid AND x.tenant_id=t AND (x.snapshot->>'ipm')::numeric=1600 AND (x.snapshot->>'patient')::numeric=900 AND EXISTS(SELECT 1 FROM jsonb_array_elements(x.snapshot->'lines') z WHERE (z->>'eligible')::boolean=false AND (z->>'ipm')::numeric=0 AND (z->>'patient')::numeric=500)) THEN RAISE EXCEPTION 'Ventilation IPM originale absente';END IF;
+  UPDATE public.ipm_conventions SET taux_defaut=20 WHERE id=conv;
+  UPDATE public.articles SET ipm_eligible=false WHERE id=art;
+  IF NOT EXISTS(SELECT 1 FROM public.ipm_sale_line_snapshots x WHERE x.sale_id=sid AND (x.snapshot->'rule'->>'rate')::numeric=80 AND (x.snapshot->>'ipm')::numeric=1600) THEN RAISE EXCEPTION 'Historique IPM modifié';END IF;
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  BEGIN PERFORM 1 FROM public.ipm_sale_line_snapshots WHERE sale_id=sid;RAISE EXCEPTION 'Registre IPM exposé';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+  EXECUTE 'RESET ROLE';
   IF NOT EXISTS(SELECT 1 FROM public.ipm_ventes WHERE sale_id=sid AND tenant_id=t AND part_ipm=1600 AND part_client=900 AND part_beneficiaire_payee=900 AND numero_ordonnance='ORD-REC' AND montant_non_eligible=500) OR (SELECT quantity FROM public.stock_levels WHERE tenant_id=t AND article_id=art AND site_id=depot)<>8 THEN RAISE EXCEPTION 'IPM ou stock incorrect';END IF;
  END IF;
  END LOOP;

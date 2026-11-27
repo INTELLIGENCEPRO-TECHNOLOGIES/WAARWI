@@ -2,7 +2,7 @@
 BEGIN;
 SELECT public._br_lotd_install_hooks();
 DO $test$
-DECLARE t uuid:=gen_random_uuid();u uuid:=gen_random_uuid();site uuid:=gen_random_uuid();depot uuid:=gen_random_uuid();art uuid:=gen_random_uuid();cust uuid:=gen_random_uuid();a uuid:=gen_random_uuid();b uuid:=gen_random_uuid();w uuid:=gen_random_uuid();qid uuid;sid uuid;li uuid;tok uuid;v text;r jsonb;items jsonb;req text:=gen_random_uuid()::text;ret uuid;other jsonb;reg uuid:=gen_random_uuid();cs uuid:=gen_random_uuid();pm uuid:=gen_random_uuid();li2 uuid:=gen_random_uuid();da uuid;db uuid;matches jsonb;archive_id uuid:=gen_random_uuid();old_archive uuid:=gen_random_uuid();no_journal_archive uuid:=gen_random_uuid();payload jsonb:='{}';counts jsonb:='{}';checks jsonb:='{}';data_rows jsonb;chk text;regrow record;job_id uuid;lease_token uuid;outcome jsonb;old_count int;ri uuid;proof_time timestamptz;org uuid:=gen_random_uuid();conv uuid:=gen_random_uuid();bord uuid:=gen_random_uuid();fac uuid:=gen_random_uuid();vente uuid:=gen_random_uuid();regl uuid:=gen_random_uuid();rejet uuid:=gen_random_uuid();assignment uuid:=gen_random_uuid();lease uuid:=gen_random_uuid();control_t uuid:=gen_random_uuid();control_cust uuid:=gen_random_uuid();
+DECLARE t uuid:=gen_random_uuid();u uuid:=gen_random_uuid();site uuid:=gen_random_uuid();depot uuid:=gen_random_uuid();art uuid:=gen_random_uuid();cust uuid:=gen_random_uuid();a uuid:=gen_random_uuid();b uuid:=gen_random_uuid();w uuid:=gen_random_uuid();qid uuid;sid uuid;li uuid;tok uuid;v text;r jsonb;items jsonb;req text:=gen_random_uuid()::text;ret uuid;other jsonb;reg uuid:=gen_random_uuid();cs uuid:=gen_random_uuid();pm uuid:=gen_random_uuid();li2 uuid:=gen_random_uuid();da uuid;db uuid;matches jsonb;archive_id uuid:=gen_random_uuid();old_archive uuid:=gen_random_uuid();no_journal_archive uuid:=gen_random_uuid();payload jsonb:='{}';counts jsonb:='{}';checks jsonb:='{}';data_rows jsonb;chk text;regrow record;job_id uuid;lease_token uuid;outcome jsonb;old_count int;ri uuid;proof_time timestamptz;org uuid:=gen_random_uuid();conv uuid:=gen_random_uuid();bord uuid:=gen_random_uuid();fac uuid:=gen_random_uuid();vente uuid:=gen_random_uuid();regl uuid:=gen_random_uuid();rejet uuid:=gen_random_uuid();assignment uuid:=gen_random_uuid();lease uuid:=gen_random_uuid();control_t uuid:=gen_random_uuid();control_cust uuid:=gen_random_uuid(); snap_sale uuid:=gen_random_uuid(); snap_ipm uuid:=gen_random_uuid(); snap_archive uuid:=gen_random_uuid(); snap_before jsonb;
 BEGIN
  INSERT INTO public.tenants(id,name,enabled_modules,settings) VALUES(t,'RECETTE RESTORE PREUVES HISTORIQUES','[]','{"stock_method":"lot"}');
  INSERT INTO auth.users(id,email,aud,role) VALUES(u,u::text||'@example.invalid','authenticated','authenticated');
@@ -91,6 +91,14 @@ BEGIN
  INSERT INTO public.ipm_reglements(id,tenant_id,organisme_id,facture_id,montant_recu,montant_attendu,reference) VALUES(regl,t,org,fac,5000,7500,'VIR-REC');
  INSERT INTO public.ipm_rejets(id,tenant_id,vente_ipm_id,facture_id,organisme_id,montant_rejete,motif,montant_ipm_attendu,montant_accepte,ecart) VALUES(rejet,t,vente,fac,org,500,'Justificatif fictif',8000,7500,500);
  IF NOT EXISTS(SELECT 1 FROM public.sale_returns WHERE id=ret AND tenant_id=t AND requested_refund_mode='cash' AND refund_method='cash' AND total=3000) THEN RAISE EXCEPTION 'Mode initial absent avant archive';END IF;
+ -- Nouvelle vente fictive distincte : ventilation originale, pas une reconstruction de la vente retournée.
+ UPDATE public.ipm_conventions SET mode_calcul='articles_eligibles',mode_arrondi='round' WHERE id=conv;
+ UPDATE public.articles SET ipm_eligible=true WHERE id=art;
+ INSERT INTO public.sales(id,tenant_id,site_id,user_id,sale_number,subtotal,total,paid,status,source,vat_enabled_at_issue) VALUES(snap_sale,t,site,u,'IPM-SNAPSHOT-REC',1000,1000,200,'partial','billing',false);
+ INSERT INTO public.sale_items(tenant_id,sale_id,article_id,name,quantity,unit_price,total,purchase_cost,site_id) VALUES(t,snap_sale,art,'Article IPM fictif',1,1000,1000,500,site);
+ INSERT INTO public.ipm_ventes(id,tenant_id,organisme_id,convention_id,sale_id,part_ipm,part_client,montant_total,taux_prise_en_charge,montant_eligible,montant_non_eligible,part_beneficiaire_payee) VALUES(snap_ipm,t,org,conv,snap_sale,800,200,1000,80,1000,0,200);
+ PERFORM public._ipm_capture_new_sale_snapshot(t,snap_sale,snap_ipm);
+ SELECT snapshot INTO STRICT snap_before FROM public.ipm_sale_line_snapshots WHERE sale_id=snap_sale;
  -- Archive v2 synthétique complète, construite avec le périmètre réel du registre et son format d'empreinte.
  FOR regrow IN SELECT table_name FROM public._br_table_registry WHERE schema_name='public' AND tenant_link IN ('direct','indirect') ORDER BY table_name LOOP
   EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(q)),''[]''::jsonb) FROM public.%I q WHERE %s',regrow.table_name,public._br_rs_tenant_pred(regrow.table_name,'q')) INTO data_rows USING t;
@@ -101,7 +109,10 @@ BEGIN
  (archive_id,t,u,'Archive complète de recette',2,'verified','manual',payload,counts,checks,clock_timestamp()),
  (old_archive,t,u,'Archive historique sans rapprochements',2,'verified','manual',payload-'historical_sale_lot_matches',counts-'historical_sale_lot_matches',checks-'historical_sale_lot_matches',clock_timestamp()-interval '1 day');
  INSERT INTO public.tenant_backups(id,tenant_id,created_by,label,format_version,status,kind,payload,row_counts,checksums,created_at) VALUES(no_journal_archive,t,u,'Ancienne archive sans journal',2,'verified','manual',payload-'return_request_journal',counts-'return_request_journal',checks-'return_request_journal',clock_timestamp());
+ INSERT INTO public.tenant_backups(id,tenant_id,created_by,label,format_version,status,kind,payload,row_counts,checksums,created_at) VALUES(snap_archive,t,u,'Archive sans ventilation IPM',2,'verified','manual',payload-'ipm_sale_line_snapshots',counts-'ipm_sale_line_snapshots',checks-'ipm_sale_line_snapshots',clock_timestamp());
  UPDATE public._br_restore_config SET enabled=true WHERE id=1;
+ outcome:=public._br_rs_request_restore(t,u,2,snap_archive);
+ IF outcome->>'status' IS DISTINCT FROM 'failed' OR outcome->>'error_code' IS DISTINCT FROM 'BRR-020' THEN RAISE EXCEPTION 'Archive sans ventilation IPM acceptée : %',outcome;END IF;
  outcome:=public._br_rs_request_restore(t,u,2,no_journal_archive);
  IF outcome->>'status' IS DISTINCT FROM 'failed' OR outcome->>'error_code' IS DISTINCT FROM 'BRR-020' THEN RAISE EXCEPTION 'Archive sans demande active acceptée : %',outcome;END IF;
  outcome:=public._br_rs_request_restore(t,u,2,old_archive);
@@ -111,6 +122,7 @@ BEGIN
  IF r->>'state' IS DISTINCT FROM 'acknowledged' THEN RAISE EXCEPTION 'Acquittement impossible';END IF;
  EXECUTE 'RESET ROLE';
  -- Mutation post-archive puis restauration via le vrai moteur, sans simuler le swap.
+ UPDATE public.ipm_conventions SET taux_defaut=20 WHERE id=conv;
  UPDATE public.ipm_factures SET montant_regle=6000,reste_a_payer=1500 WHERE id=fac;
  UPDATE public.ipm_bordereaux SET total_paye=6000,facture_ipm_id=NULL WHERE id=bord;
  DELETE FROM public.ipm_rejets WHERE id=rejet;
@@ -137,6 +149,7 @@ BEGIN
  IF outcome->>'status' IS DISTINCT FROM 'succeeded' THEN RAISE EXCEPTION 'Swap moteur : %',outcome;END IF;
  PERFORM public._br_rs_release(job_id);
  IF (SELECT quantity FROM public.stock_levels WHERE tenant_id=t AND article_id=art AND site_id=depot)<>3 OR EXISTS(SELECT 1 FROM public.customers WHERE tenant_id=t AND name='Client après sauvegarde') OR (SELECT count(*) FROM public.historical_sale_lot_matches WHERE tenant_id=t)<>3 OR (SELECT theoretical_amount FROM public.cash_sessions WHERE id=cs)<>7100 OR (SELECT sum(alloc.quantity) FROM public.sale_return_lot_allocations alloc WHERE alloc.tenant_id=t)<>3 OR NOT EXISTS(SELECT 1 FROM public.cash_register_assignments WHERE id=assignment AND tenant_id=t AND is_active) OR EXISTS(SELECT 1 FROM public.document_edit_leases WHERE tenant_id=t) OR NOT EXISTS(SELECT 1 FROM public.customers WHERE id=control_cust AND tenant_id=control_t AND balance=7000) THEN RAISE EXCEPTION 'Données restaurées incorrectes';END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.ipm_sale_line_snapshots WHERE sale_id=snap_sale AND tenant_id=t AND snapshot=snap_before) THEN RAISE EXCEPTION 'Ventilation IPM non restaurée';END IF;
  IF NOT EXISTS(SELECT 1 FROM public.ipm_bordereaux WHERE id=bord AND facture_ipm_id=fac AND total_part_ipm=8000 AND total_paye=5000 AND total_rejete=500) OR NOT EXISTS(SELECT 1 FROM public.ipm_factures WHERE id=fac AND bordereau_id=bord AND montant_total=7500 AND montant_regle=5000 AND reste_a_payer=2500) OR NOT EXISTS(SELECT 1 FROM public.ipm_ventes WHERE id=vente AND facture_ipm_id=fac AND bordereau_id=bord AND part_ipm=8000 AND part_client=2000) OR NOT EXISTS(SELECT 1 FROM public.ipm_rejets WHERE id=rejet AND vente_ipm_id=vente AND facture_id=fac AND montant_rejete=500) OR NOT EXISTS(SELECT 1 FROM public.ipm_reglements WHERE id=regl AND facture_id=fac AND montant_recu=5000) THEN RAISE EXCEPTION 'Restauration IPM inexacte';END IF;
  IF NOT EXISTS(SELECT 1 FROM public.sale_return_lot_allocations WHERE tenant_id=t AND return_item_id=ri AND lot_id=a AND quantity=3 AND restocked AND reconciliation_evidence='Preuve historique REC-RET-01' AND reconciled_by=u AND reconciled_at=proof_time) THEN RAISE EXCEPTION 'Métadonnées de preuve historiques non restaurées';END IF;
  IF (SELECT count(*) FROM public.audit_logs WHERE tenant_id=t AND action='historical_return_lots_matched')<>1 THEN RAISE EXCEPTION 'Audit historique non restauré';END IF;

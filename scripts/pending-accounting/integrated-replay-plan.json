@@ -60,7 +60,8 @@
     "scripts/pending-accounting/138-durable-return-request-journal-candidate.sql",
     "scripts/pending-accounting/140-durable-return-recovery-context-candidate.sql",
     "scripts/pending-accounting/141-durable-return-journal-restore-guard-candidate.sql",
-    "scripts/pending-accounting/144-ipm-line-allocation-candidate.sql"
+    "scripts/pending-accounting/144-ipm-line-allocation-candidate.sql",
+    "scripts/pending-accounting/146-ipm-historical-line-snapshot-candidate.sql"
   ],
   "recipe_files": [
     "scripts/pending-accounting/03-recipe.sql",

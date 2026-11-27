@@ -1,0 +1,5 @@
+# Phase 2 — conservation historique IPM
+
+Candidat 146 : registre privé, une ventilation originale par vente IPM nouvellement convertie sans TVA, identifiants facture/dossier/convention, taux, règle, plafond, quantités et parts. Recettes 50 et 142 enrichies sans supprimer leurs assertions : changement de convention/article, accès direct refusé, registre de sauvegarde, refus d'une archive sans table alors que des ventilations existent, restauration V2 réelle. Aucune migration distante.
+
+Pas de rétrocalcul de factures anciennes. La méthode total_facture conserve sa sémantique actuelle, distincte de articles_eligibles. Les arrondis qui produisent une couverture supérieure à la capacité d'une ligne peuvent demander une révision du calcul de convention (pas de correction arbitraire ni promesse de compatibilité complète). La TVA, les plafonds temporels/avant calcul, la facture directe, POS, comptabilisation, parcours de retour et validation V3 restent à traiter. La recette intégrée doit passer avant toute conclusion.
