@@ -103,9 +103,9 @@ Deno.serve(async (req: Request) => {
     }
 
     function isCron(): boolean {
-      const secret = Deno.env.get("BACKUP_V3_CRON_SECRET");
       const provided = req.headers.get("X-Cron-Secret");
-      return !!(secret && provided && secret === provided);
+      return !!provided && [Deno.env.get("BACKUP_V3_CRON_SECRET"), Deno.env.get("OFFSITE_CRON_SECRET")]
+        .some((secret) => secret === provided);
     }
 
     // Autorisation propriétaire/super_admin évaluée en base avec l'identité de l'appelant.
@@ -131,7 +131,7 @@ Deno.serve(async (req: Request) => {
           blocks_written: r.blocks_written, blocks_verified: r.blocks_verified });
       }
       const r = await runOffsiteInvocation({ rpc: rpcOf(admin), store: storeOf(admin), remote: webdavOf() }, workerId,
-        64);
+        24);
       return json({ outcome: r.outcome, transfer_id: r.transfer_id, items: r.items, error_code: r.error_code });
     }
 
