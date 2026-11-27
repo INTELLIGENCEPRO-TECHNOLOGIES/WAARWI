@@ -38,6 +38,10 @@
 .acc-mobile .accounting-workspace .acc-mobile-command-bar .btn-primary,
 .acc-mobile .accounting-workspace .acc-mobile-command-bar .btn-secondary{white-space:normal;line-height:1.2}
 .acc-mobile .accounting-workspace .acc-mobile-command-bar .acc-mobile-more{width:44px;padding:0}
+.acc-mobile .accounting-workspace .acc-mobile-balance-commands{
+  grid-template-columns:minmax(0,1fr) minmax(0,1.55fr) 44px;
+}
+.acc-mobile-balance-search{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
 .acc-mobile .accounting-workspace .acc-mobile-command-bar .acc-mobile-selection{width:100%;max-width:none}
 .acc-mobile .accounting-workspace .acc-mobile-command-bar .acc-mobile-selection button{min-height:44px}
 .acc-mobile .accounting-workspace .acc-mobile-command-caption{font-size:12px;color:var(--w-text-sec);margin:0 0 8px;overflow-wrap:anywhere}

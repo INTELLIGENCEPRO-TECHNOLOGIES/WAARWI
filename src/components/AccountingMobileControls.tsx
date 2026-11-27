@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { MoreHorizontal } from './Icons';
+import { ChevronDown, MoreHorizontal } from './Icons';
 import { Modal } from './Modal';
 
 export function AccountingMobileFilters({ open, title = 'Filtres', children, onClose, onReset, onApply }: {
@@ -23,16 +23,17 @@ export function AccountingMobileFilters({ open, title = 'Filtres', children, onC
 
 type MobileAction = { label: string; run: () => void; icon?: ReactNode; disabled?: boolean };
 
-export function AccountingMobileActions({ actions, title }: {
+export function AccountingMobileActions({ actions, title, showLabel = false }: {
   actions: MobileAction[];
   title: string;
+  showLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (!actions.length) return null;
   return <>
-    <button type="button" className="btn-secondary acc-mobile-more"
+    <button type="button" className={showLabel ? 'btn-secondary' : 'btn-secondary acc-mobile-more'}
       aria-label={title} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
-      <MoreHorizontal size={18} aria-hidden="true" />
+      {showLabel ? <><span>{title}</span><ChevronDown size={14} aria-hidden="true" /></> : <MoreHorizontal size={18} aria-hidden="true" />}
     </button>
     <Modal open={open} onClose={() => setOpen(false)} title={title} size="sm" layer="top" variant="flat" focusOnOpen
       panelClassName="accounting-workspace acc-mobile-sheet">

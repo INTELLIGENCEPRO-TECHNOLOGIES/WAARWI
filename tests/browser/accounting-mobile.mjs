@@ -85,4 +85,56 @@ export async function verifyAccountingMobile(page) {
   page.once('dialog', dialog => dialog.accept());
   await button(header, 'Retour').tap();
   console.log('Comptabilité mobile : filtres et export, défilement tactile du relevé et montant de crédit lisible');
+  await verifyBalancePostingMenu(page);
+}
+
+export async function verifyBalancePostingMenu(page) {
+  assert.equal(new URL(page.url()).origin, 'http://127.0.0.1:4173');
+  const button = (scope, name) => scope.getByRole('button', { name, exact: true });
+  const panel = page.locator('.acc-mobile-page:visible');
+  const nav = page.getByRole('navigation', { name: 'Navigation comptable' });
+  await button(nav, 'Plus').tap();
+  await button(panel, 'Balance générale').tap();
+
+  const postingMenu = button(panel, 'Comptabiliser');
+  const period = button(panel, 'Période');
+  const more = button(panel, 'Actions de l’état comptable');
+  const search = panel.getByRole('searchbox', { name: 'Compte ou intitulé' });
+  const show = button(panel, 'Afficher');
+  await postingMenu.waitFor();
+  const [menuBox, periodBox, moreBox, searchBox, showBox] = await Promise.all(
+    [postingMenu, period, more, search, show].map(control => control.boundingBox()),
+  );
+  assert.ok(menuBox && periodBox && moreBox && searchBox && showBox);
+  assert.ok(menuBox.height >= 44 && menuBox.height === periodBox.height && menuBox.height === moreBox.height);
+  assert.ok(menuBox.y === periodBox.y && menuBox.y === moreBox.y, 'Les commandes doivent rester sur la même ligne');
+  assert.ok(searchBox.y === showBox.y && searchBox.x + searchBox.width <= showBox.x, 'La recherche et son action doivent rester côte à côte');
+  assert.ok(await panel.evaluate(element => element.scrollWidth <= element.clientWidth + 1));
+  assert.equal(await panel.locator('.acc-posting-actions:visible').count(), 0);
+
+  const operations = page.getByRole('dialog', { name: 'Comptabiliser', exact: true });
+  await postingMenu.tap();
+  assert.deepEqual(await operations.locator('.acc-mobile-action-list button').allTextContents(), [
+    'Ventes', 'Règlements clients', 'Factures fournisseurs', 'Règlements fournisseurs', 'Mouvements de caisse',
+  ]);
+  await button(operations, 'Factures fournisseurs').tap();
+  const invoices = panel.getByRole('region', { name: 'Factures fournisseurs', exact: true });
+  await invoices.waitFor();
+  await postingMenu.tap();
+  await button(operations, 'Masquer les factures fournisseurs').tap();
+  await invoices.waitFor({ state: 'hidden' });
+
+  await postingMenu.tap();
+  await button(operations, 'Mouvements de caisse').tap();
+  const cash = panel.getByRole('region', { name: 'Rapprochement de la caisse', exact: true });
+  await cash.waitFor();
+  await postingMenu.tap();
+  await button(operations, 'Masquer les mouvements de caisse').tap();
+  await cash.waitFor({ state: 'hidden' });
+  await button(panel, 'Période').tap();
+  const filters = page.getByRole('dialog', { name: 'Période', exact: true });
+  await verifyCalendarActions(filters);
+  await button(filters, 'Annuler').tap();
+  await filters.waitFor({ state: 'hidden' });
+  console.log('Balance générale mobile : accès aux cinq opérations, alignement des commandes et filtres utilisables');
 }

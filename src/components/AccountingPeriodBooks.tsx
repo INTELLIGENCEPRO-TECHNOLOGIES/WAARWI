@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useState,type ReactNode} from 'react';
 import {useApp} from '../context/AppContext';
 import {useAccountingMobile,useAccountingWork} from '../context/AccountingWindowContext';
 import {supabase} from '../lib/supabase';
@@ -17,7 +17,11 @@ const dc=(x:number)=>Number(x)===0?'0':money(Math.abs(Number(x)))+(Number(x)>0?'
 const msg=(e:unknown)=>e&&typeof e==='object'&&'message'in e?String(e.message):'Chargement impossible.';
 const date=(s:string)=>s.split('-').reverse().join('/');
 const clean=(v:unknown)=>typeof v==='string'&&/^[\s\u0000-\u001f]*[=+@-]/.test(v)?"'"+v:v;
-export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
+export function AccountingPeriodBooks({mode,mobilePostingAction,children}:{
+ mode:'balance'|'ledger';
+ mobilePostingAction?:ReactNode;
+ children?:ReactNode;
+}){
  const mobile=useAccountingMobile();
  const {tenant}=useApp();const work=useAccountingWork();const tick=useRealtimeTick(['journal_entries','journal_lines','accounts','accounting_fiscal_years']);
  const initial={from:today().slice(0,4)+'-01-01',to:today(),search:''};
@@ -38,12 +42,17 @@ export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
  const t=data?.totals;
  const balanceRows = (data?.rows ?? []).filter((row): row is Balance => !('line_id' in row));
  const ledgerRows = (data?.rows ?? []).filter((row): row is Ledger => 'line_id' in row);
+ const compactBalanceControls=mobile&&!!mobilePostingAction;
+ const accountSearch=<input type="search" className={mobile?'input acc-mobile-command-wide acc-mobile-search-input':'input flex-1 min-w-0'}
+   aria-label="Compte ou intitulé" placeholder="Compte ou intitulé" value={form.search} onChange={e=>setForm(p=>({...p,search:e.target.value}))}/>;
+ const showReport=<button className="btn-primary" disabled={loading||exporting}><Search size={15}/>Afficher</button>;
  return <section className="acc-fill acc-period-books space-y-2">
- <form className={mobile?'acc-mobile-command-bar':'acc-toolbar acc-fixed'} onSubmit={e=>{e.preventDefault();submit();}}>
+ <form className={compactBalanceControls?'acc-mobile-command-bar acc-mobile-balance-commands':mobile?'acc-mobile-command-bar':'acc-toolbar acc-fixed'}
+  onSubmit={e=>{e.preventDefault();submit();}}>
   {!mobile&&<><label className="text-xs">Du <input className="input" type="date" value={form.from} onChange={e=>setForm(p=>({...p,from:e.target.value}))}/></label><label className="text-xs">Au <input className="input" type="date" max={today()} value={form.to} onChange={e=>setForm(p=>({...p,to:e.target.value}))}/></label></>}
-  <input type="search" className={mobile?'input acc-mobile-command-wide acc-mobile-search-input':'input flex-1 min-w-0'} aria-label="Compte ou intitulé" placeholder="Compte ou intitulé" value={form.search} onChange={e=>setForm(p=>({...p,search:e.target.value}))}/>
+  {compactBalanceControls?<div className="acc-mobile-command-wide acc-mobile-balance-search">{accountSearch}{showReport}</div>:accountSearch}
   {mobile&&<button type="button" className="btn-secondary" aria-haspopup="dialog" onClick={()=>{setPeriodDraft({from:form.from,to:form.to});setPeriodError('');}}>Période</button>}
-  <button className="btn-primary" disabled={loading||exporting}><Search size={15}/>Afficher</button>
+  {compactBalanceControls?mobilePostingAction:showReport}
   {mobile?<AccountingMobileActions title="Actions de l’état comptable" actions={[
     {label:'Actualiser',icon:<RefreshCw size={15}/>,disabled:loading||exporting,run:()=>setRev(v=>v+1)},
     {label:'Exporter en Excel',icon:<Download size={15}/>,disabled:!data||loading||exporting||changed,run:()=>void exportExcel()},
@@ -64,6 +73,7 @@ export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
     {periodError&&<p role="alert" className="text-xs text-red-700">{periodError}</p>}
   </AccountingMobileFilters>}
  </form>
+ {children}
  {changed&&<p className="text-xs">Appliquez les critères pour actualiser l’état.</p>}
  {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
  {data&&<p className="text-xs text-neutral-600">{data.opening_mode==='fiscal'?'Report à nouveau arrêté de '+data.prior_year+' puis mouvements antérieurs à la période.':data.opening_mode==='provisional'?'Ouverture provisoire : exercice précédent non clôturé ; reprise continue des écritures depuis le dernier arrêté disponible. Les comptes de gestion peuvent conserver des soldes antérieurs.':'Premier exercice : solde issu des mouvements antérieurs à la période.'} Les reports ne sont pas des pièces supplémentaires.</p>}

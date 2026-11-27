@@ -690,6 +690,7 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
 
 /* ===================== BALANCE GENERALE (via RPC) ===================== */
 function BalanceTab() {
+  const mobile=useAccountingMobile();
   const work=useAccountingWork();
   const { tenant } = useApp();
   const { success, error: toastError } = useToast();
@@ -711,11 +712,12 @@ function BalanceTab() {
   const [showPurchaseInvoice, setShowPurchaseInvoice] = useState(false);
   const [bulkPayFournBusy, setBulkPayFournBusy] = useState(false);
   const [showCashReview, setShowCashReview] = useState(false);
+  const postingBusy = bulkBusy || bulkPayBusy || bulkPayFournBusy;
 
   const load=()=>work?.refresh();
 
   const comptabiliserTout = async () => {
-    if (!tenant || !canManage || bulkBusy || bulkPayBusy || bulkPayFournBusy) return;
+    if (!tenant || !canManage || postingBusy) return;
     setBulkReport(null);
     setBulkBusy(true);
     try {
@@ -729,7 +731,7 @@ function BalanceTab() {
   };
 
   const comptabiliserReglements = async () => {
-    if (!tenant || !canManage || bulkBusy || bulkPayBusy || bulkPayFournBusy) return;
+    if (!tenant || !canManage || postingBusy) return;
     setBulkReport(null);
     setBulkPayBusy(true);
     try {
@@ -743,7 +745,7 @@ function BalanceTab() {
   };
 
   const comptabiliserReglFourn = async () => {
-    if (!tenant || !canManage || bulkBusy || bulkPayBusy || bulkPayFournBusy) return;
+    if (!tenant || !canManage || postingBusy) return;
     setBulkReport(null);
     setBulkPayFournBusy(true);
     try {
@@ -761,22 +763,42 @@ function BalanceTab() {
     finally { setBulkPayFournBusy(false); }
   };
 
+  const mobilePostingAction=mobile&&canManage?<AccountingMobileActions title="Comptabiliser" showLabel actions={[
+    {label:'Ventes',run:comptabiliserTout,disabled:postingBusy},
+    {label:'Règlements clients',run:comptabiliserReglements,disabled:postingBusy},
+    {label:showPurchaseInvoice?'Masquer les factures fournisseurs':'Factures fournisseurs',run:()=>setShowPurchaseInvoice(open=>!open)},
+    {label:'Règlements fournisseurs',run:comptabiliserReglFourn,disabled:postingBusy},
+    {label:showCashReview?'Masquer les mouvements de caisse':'Mouvements de caisse',run:()=>setShowCashReview(open=>!open)},
+  ]}/>:undefined;
+
+  const postingDetails=<>
+    {mobile&&postingBusy&&<p role="status" className="text-xs">Comptabilisation en cours…</p>}
+    {canManage&&tenant&&showPurchaseInvoice&&<AccountingPurchaseInvoice key={'purchase:'+tenant.id} tenantId={tenant.id} onPosted={load}/>}
+    {canManage&&tenant&&showCashReview&&<AccountingCashReview key={'cash:'+tenant.id} tenantId={tenant.id} onPosted={load}/>}
+    {bulkReport&&<section className="acc-section-head space-y-2" aria-live="polite">
+      <div className="acc-toolbar"><strong className="text-sm">Compte rendu — {bulkReport.label}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>setBulkReport(null)}>Fermer</button></div>
+      <p className="text-xs">{bulkReport.posted} pièce(s) comptabilisée(s) │ {bulkReport.errors} erreur(s)</p>
+      {bulkReport.skipped.length>0&&<p className="text-xs">{bulkReport.skipped.join(' │ ')}</p>}
+      {bulkReport.details.length>0&&<details open><summary className="text-xs cursor-pointer">Détail des opérations en erreur ({bulkReport.details.length})</summary><div className="max-h-64 overflow-auto"><table className="w-full text-xs"><thead><tr><th>Référence</th><th>Motif</th></tr></thead><tbody>{bulkReport.details.map((d,i)=><tr key={i}><td className="break-all">{d.reference}</td><td>{d.error}</td></tr>)}</tbody></table></div></details>}
+    </section>}
+  </>;
+
   return (
     <div className="acc-fill space-y-4">
-      {canManage && <div className="acc-toolbar acc-posting-actions" aria-label="Comptabilisation des opérations">
+      {!mobile && canManage && <div className="acc-toolbar acc-posting-actions" aria-label="Comptabilisation des opérations">
           <span className="acc-field-label">Comptabiliser</span>
-          <button onClick={comptabiliserTout} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
+          <button onClick={comptabiliserTout} disabled={postingBusy} className="btn-secondary">
             {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Ventes
           </button>
-          <button onClick={comptabiliserReglements} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
+          <button onClick={comptabiliserReglements} disabled={postingBusy} className="btn-secondary">
             {bulkPayBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Règlements clients
           </button>
           <button type="button" className="btn btn-secondary" aria-expanded={showPurchaseInvoice} onClick={() => setShowPurchaseInvoice(show => !show)}>
             Factures fournisseurs
           </button>
-          <button onClick={comptabiliserReglFourn} disabled={bulkBusy||bulkPayBusy||bulkPayFournBusy} className="btn-secondary">
+          <button onClick={comptabiliserReglFourn} disabled={postingBusy} className="btn-secondary">
             {bulkPayFournBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Règlements fournisseurs
           </button>
@@ -786,20 +808,10 @@ function BalanceTab() {
           </button>
       </div>}
 
-      {canManage && tenant && showPurchaseInvoice && (
-        <AccountingPurchaseInvoice key={tenant.id} tenantId={tenant.id} onPosted={() => void load()} />
-      )}
-      {canManage && tenant && showCashReview && (
-        <AccountingCashReview key={tenant.id} tenantId={tenant.id} onPosted={() => void load()} />
-      )}
-
-      {bulkReport&&<section className="acc-section-head space-y-2" aria-live="polite">
-        <div className="acc-toolbar"><strong className="text-sm">Compte rendu — {bulkReport.label}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>setBulkReport(null)}>Fermer</button></div>
-        <p className="text-xs">{bulkReport.posted} pièce(s) comptabilisée(s) │ {bulkReport.errors} erreur(s)</p>
-        {bulkReport.skipped.length>0&&<p className="text-xs">{bulkReport.skipped.join(' │ ')}</p>}
-        {bulkReport.details.length>0&&<details open><summary className="text-xs cursor-pointer">Détail des opérations en erreur ({bulkReport.details.length})</summary><div className="max-h-64 overflow-auto"><table className="w-full text-xs"><thead><tr><th>Référence</th><th>Motif</th></tr></thead><tbody>{bulkReport.details.map((d,i)=><tr key={i}><td className="break-all">{d.reference}</td><td>{d.error}</td></tr>)}</tbody></table></div></details>}
-      </section>}
-      <AccountingPeriodBooks mode="balance"/>
+      {!mobile&&postingDetails}
+      <AccountingPeriodBooks mode="balance" mobilePostingAction={mobilePostingAction}>
+        {mobile&&postingDetails}
+      </AccountingPeriodBooks>
     </div>
   );
 }
