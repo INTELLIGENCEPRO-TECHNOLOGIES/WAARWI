@@ -39,7 +39,7 @@ export function subscribeToDataChanges(topics: readonly string[], onChange: (cha
         const channel = supabase.channel(topic, { config: { private: true } });
         channels.set(topic, channel);
         channel.on('broadcast', { event: 'data_changed' }, ({ payload }) => {
-          if (typeof payload?.table === 'string' && /^[a-z_][a-z_0-9]*$/.test(payload.table)) {
+          if (typeof payload?.table === 'string' && (payload.table === '*' || /^[a-z_][a-z_0-9]*$/.test(payload.table))) {
             enqueue(payload.table);
           }
         }).subscribe(status => {

@@ -7,7 +7,7 @@ import { formatDateTime, formatNum } from '../lib/format';
 import { usePermissions } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
 import { BackupLwsActions } from './BackupLwsActions';
-import { BackupReset, BackupRestore, type BackupRecoveryTarget } from './BackupRecovery';
+import { BackupRecovery, type BackupRecoveryTarget } from './BackupRecovery';
 import { Modal } from './Modal';
 
 type BackupList = { backups: BackupV3Record[]; automatic: boolean; capture_enabled: boolean };
@@ -134,8 +134,8 @@ export function BackupTab({ companyId }: { companyId?: string }) {
       {!data && !loadError && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={16} className="animate-spin" /> Chargement…</p>}
       {data && canCreate && !data.capture_enabled && <p className="text-sm text-[var(--w-text-sec)]">La création de sauvegardes est momentanément indisponible.</p>}
       {progress && <p role="status" className="text-sm">{progress}</p>}
-      {data && view === 'restore' && canRestore && <BackupRestore backups={data.backups} initialTarget={recoveryTarget} />}
-      {view === 'reset' && canReset && <BackupReset />}
+      {((view === 'restore' && canRestore) || (view === 'reset' && canReset)) && data &&
+        <BackupRecovery key={view} mode={view} backups={data.backups} initialTarget={recoveryTarget} />}
       {data && view === 'schedule' && (
         <dl className="divide-y divide-[var(--w-separator)] text-sm">
           <div className="flex flex-wrap justify-between gap-2 py-3">

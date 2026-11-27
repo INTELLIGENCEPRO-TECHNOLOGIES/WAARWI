@@ -52,14 +52,74 @@ export async function requestBackupV3(requestId: string, label: string, companyI
   if (error) throw error;
 }
 
-async function invokeBackupV3<T>(body: Record<string, unknown>, fallback: string): Promise<T> {
-  const result = await supabase.functions.invoke<T>('backup-export-v3', { body });
+async function invokeBackupV3<T>(body: Record<string, unknown> | Blob, fallback: string, headers?: Record<string, string>): Promise<T> {
+  const result = await supabase.functions.invoke<T>('backup-export-v3', { body, headers });
   if (result.error || result.data === null) {
     const response = result.error?.context;
     const failure = response instanceof Response ? await response.json().catch(() => null) : null;
     throw new Error(typeof failure?.error === 'string' ? failure.error : fallback);
   }
   return result.data;
+}
+
+export type BackupRecoveryJob = {
+  id: string;
+  operation: 'restore' | 'reset';
+  status: 'preparing' | 'prepared' | 'succeeded' | 'failed' | 'abandoned';
+  source: BackupSource | 'zip';
+  archive_id: string | null;
+  archive_created_at: string | null;
+  manifest_ok: boolean;
+  total_blocks: number | null;
+  loaded_blocks: number;
+  execute_requested: boolean;
+  safety_status: string | null;
+  maintenance: boolean;
+  error_code: string | null;
+};
+
+export type BackupRecoveryState = { available: boolean; authorized: boolean; job: BackupRecoveryJob | null };
+
+export function getBackupRecovery(jobId?: string) {
+  return invokeBackupV3<BackupRecoveryState>({ action: 'restore_status', job_id: jobId }, 'État de la restauration indisponible.');
+}
+
+export async function prepareBackupRecovery(archiveId?: string, source: BackupSource | 'zip' = 'storage') {
+  const request = await invokeBackupV3<{ job_id: string; status: string }>({
+    action: 'restore_request', operation: archiveId ? 'restore_v3' : 'reset', archive_id: archiveId ?? null, source,
+  }, 'Préparation indisponible.');
+  return request.job_id;
+}
+
+export async function executeBackupRecovery(jobId: string, confirmation: string) {
+  await invokeBackupV3({ action: 'restore_execute', job_id: jobId, confirmation }, 'La demande de confirmation a échoué.');
+}
+
+export async function abandonBackupRecovery(jobId: string) {
+  await invokeBackupV3({ action: 'restore_abandon', job_id: jobId }, 'L’annulation a échoué.');
+}
+
+export async function prepareBackupZip(file: File, onProgress: BackupProgress, signal: AbortSignal) {
+  const { readBackupV3Zip } = await import('./backupV3Zip');
+  const zip = await readBackupV3Zip(file);
+  signal.throwIfAborted();
+  const jobId = await prepareBackupRecovery(zip.archiveId, 'zip');
+  const { job } = await getBackupRecovery(jobId);
+  if (job?.source !== 'zip' || job.archive_id !== zip.archiveId || job.total_blocks !== zip.blockCount) {
+    throw new Error('Ce ZIP ne contient pas tous les fichiers attendus pour cette sauvegarde.');
+  }
+  if (job.status !== 'preparing') return;
+  for (let number = 0; number <= zip.blockCount; number++) {
+    signal.throwIfAborted();
+    const part = await zip.part(number);
+    signal.throwIfAborted();
+    const accepted = await invokeBackupV3<{ accepted: boolean }>(part, 'Un fichier du ZIP n’a pas pu être transmis.', {
+      'X-Restore-Job': jobId,
+      'X-Restore-Part': String(number),
+    });
+    if (!accepted.accepted) throw new Error('Un fichier du ZIP a été refusé.');
+    onProgress(number + 1, zip.blockCount + 1);
+  }
 }
 
 async function visitBackupV3Entries(

@@ -529,6 +529,7 @@ export interface RestoreLoadDeps {
   rpc: Rpc;
   store: ObjectStore;
   keyring: KeyRing;
+  remote?: () => RemoteStore;
   checkpoint?: (point: string, info?: Record<string, unknown>) => Promise<void> | void;
 }
 
@@ -540,6 +541,29 @@ export interface RestoreLoadResult {
   error_code?: string;
 }
 
+type RestoreBlock = { plain_bytes: number; table: string; rows: number };
+
+async function stageRestoreEntry(
+  deps: Pick<RestoreLoadDeps, "rpc" | "keyring">,
+  jobId: string,
+  token: string,
+  stored: Uint8Array,
+  binding: Binding,
+  block?: RestoreBlock,
+) {
+  const { plain } = await open(stored, binding, deps.keyring, block ? Number(block.plain_bytes) : MANIFEST_PLAIN_MAX);
+  const args = { p_job: jobId, p_token: token, p_stored_sha256: await sha256hex(stored) };
+  if (!block) return deps.rpc("_br_rs_v3_manifest", { ...args, p_plain_sha256: await sha256hex(plain) });
+
+  const { header, rows } = splitBlock(plain);
+  if (header.table !== block.table || rows !== Number(block.rows)) {
+    throw new IntegrityError("BRR-045", "block header mismatch");
+  }
+  return deps.rpc("_br_rs_v3_load_block", {
+    ...args, p_block_no: binding.block_no, p_lines: rowLines(plain),
+  });
+}
+
 // Un bloc à la fois en mémoire ; les lignes restent des chaînes produites par PostgreSQL (jamais JSON.parse).
 export async function runRestoreLoadInvocation(
   deps: RestoreLoadDeps,
@@ -547,7 +571,7 @@ export async function runRestoreLoadInvocation(
   workerId: string,
   maxBlocks = 20,
 ): Promise<RestoreLoadResult> {
-  const { rpc, store, keyring } = deps;
+  const { rpc, store } = deps;
   const cp = async (p: string, i?: Record<string, unknown>) => {
     if (deps.checkpoint) await deps.checkpoint(p, i);
   };
@@ -556,8 +580,8 @@ export async function runRestoreLoadInvocation(
   const token = String(claim.token);
   let released = false;
   const fail = async (code: string, message: string) => {
-    released = true;
     await rpc("_br_rs_fail_job", { p_job: jobId, p_token: token, p_code: code, p_message: message });
+    released = true;
     res.outcome = "failed";
     res.error_code = code;
   };
@@ -568,26 +592,31 @@ export async function runRestoreLoadInvocation(
       return { ...res, outcome: "failed", error_code: plan.error_code };
     }
     const a = plan.archive;
+    if (plan.source === "zip" && (!plan.manifest_ok || Number(plan.remaining) > 0)) {
+      return { ...res, remaining: Number(plan.remaining) };
+    }
+    const remote = plan.source === "lws" ? deps.remote?.() : undefined;
+    if (plan.source === "lws" && !remote) throw new Error("LWS recovery source unavailable");
+    const remotePath = `v3/${a.tenant_id}/${a.id}/`;
+    const readEntry = (path: string, n: number) => remote
+      ? remote.get(remotePath + (n === 0 ? "manifest.wbr3m" : `blocks/${String(n).padStart(6, "0")}.wbr3`))
+      : store.get(path);
     if (!plan.manifest_ok) {
-      const stored = await store.get(String(a.manifest_path));
+      const stored = await readEntry(String(a.manifest_path), 0);
       const binding: Binding = {
         kind: "manifest", tenant_id: a.tenant_id, archive_id: a.id, generation_id: a.generation_id, block_no: 0,
         key_id: a.key_id,
       };
-      let plainSha: string;
+      let m;
       try {
-        const { plain } = await open(stored, binding, keyring, MANIFEST_PLAIN_MAX);
-        plainSha = await sha256hex(plain);
+        m = await stageRestoreEntry(deps, jobId, token, stored, binding);
       } catch (e) {
-        if (e instanceof IntegrityError) {
-          await fail("BRR-041", e.message);
+        if (e instanceof IntegrityError || errCode(e) === "BRV-044") {
+          await fail("BRR-041", "manifest could not be authenticated");
           return res;
         }
         throw e;
       }
-      const m = await rpc("_br_rs_v3_manifest", {
-        p_job: jobId, p_token: token, p_stored_sha256: await sha256hex(stored), p_plain_sha256: plainSha,
-      });
       if (m.status === "failed") {
         released = true;
         return { ...res, outcome: "failed", error_code: m.error_code };
@@ -597,41 +626,41 @@ export async function runRestoreLoadInvocation(
     while (true) {
       const blocks = plan.blocks as Array<Record<string, any>>;
       for (const b of blocks) {
-        if (res.blocks_loaded >= maxBlocks) break;
-        const stored = await store.get(String(b.object_path));
+        const number = Number(b.block_no);
+        const stored = await readEntry(String(b.object_path), number);
         const binding: Binding = {
           kind: "block", tenant_id: a.tenant_id, archive_id: a.id, generation_id: a.generation_id,
-          block_no: Number(b.block_no), key_id: String(b.key_id),
+          block_no: number, key_id: String(b.key_id),
         };
-        let lines: string[];
+        let r;
         try {
-          const { plain } = await open(stored, binding, keyring, Number(b.plain_bytes) + 1);
-          const { header, rows } = splitBlock(plain);
-          if (header.table !== b.table || rows !== Number(b.rows)) throw new IntegrityError("BRR-045", "block header mismatch");
-          lines = rowLines(plain);
+          r = await stageRestoreEntry(deps, jobId, token, stored, binding, {
+            plain_bytes: Number(b.plain_bytes), table: String(b.table), rows: Number(b.rows),
+          });
         } catch (e) {
-          if (e instanceof IntegrityError) {
-            await fail("BRR-045", `block ${b.block_no}: ${e.message}`);
+          if (e instanceof IntegrityError || errCode(e) === "BRV-044") {
+            await fail("BRR-045", `block ${number} could not be authenticated`);
             return res;
           }
           throw e;
         }
-        const r = await rpc("_br_rs_v3_load_block", {
-          p_job: jobId, p_token: token, p_block_no: Number(b.block_no), p_stored_sha256: await sha256hex(stored),
-          p_lines: lines,
-        });
         if (r.status === "failed") {
           released = true;
           return { ...res, outcome: "failed", error_code: r.error_code };
         }
         res.blocks_loaded++;
-        await cp("block_loaded", { block_no: Number(b.block_no) });
+        plan.remaining--;
+        await cp("block_loaded", { block_no: number });
+        if (res.blocks_loaded >= maxBlocks) break;
       }
-      if (res.blocks_loaded >= maxBlocks) break;
+      if (res.blocks_loaded >= maxBlocks || Number(plan.remaining) === 0) break;
       plan = await rpc("_br_rs_v3_plan", { p_job: jobId, p_token: token, p_limit: maxBlocks });
-      if (Number(plan.remaining) === 0) break;
+      if (plan.status === "failed") {
+        released = true;
+        return { ...res, outcome: "failed", error_code: plan.error_code };
+      }
     }
-    if (Number(plan.remaining) === 0) {
+    if (Number(plan.remaining) === 0 && !plan.source) {
       const v = await rpc("_br_rs_verify", { p_job: jobId, p_token: token });
       released = v.status !== "prepared";
       res.outcome = v.status === "prepared" ? "prepared" : "failed";
@@ -669,7 +698,7 @@ export interface RestoreActionResult {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const RESTORE_ACTIONS = [
-  "restore_request", "restore_load", "restore_safety", "restore_execute", "restore_status", "restore_abandon",
+  "restore_request", "restore_load", "restore_execute", "restore_status", "restore_abandon",
 ] as const;
 
 function apiCode(e: unknown): string {
@@ -678,13 +707,60 @@ function apiCode(e: unknown): string {
   return errCode(e);
 }
 
-function apiError(code: string): RestoreActionResult {
+export function restoreApiError(code: string): RestoreActionResult {
   const status = code === "BRR-403" ? 403 : code === "BRR-404" ? 404 : code === "WORKER_ERROR" ? 500 : 409;
-  const error = code === "BR-020"
-    ? "Cette opération est temporairement indisponible pendant la sécurisation du système de sauvegarde."
-    : status === 403 ? "Accès refusé" : status === 404 ? "Introuvable" : status === 500 ? "Erreur interne"
-    : "Opération refusée";
+  const messages: Record<string, string> = {
+    "BR-020": "Cette opération est temporairement indisponible.",
+    "BRR-000": "Le service de restauration est indisponible.",
+    "BRR-001": "Le texte de confirmation est incorrect.",
+    "BRR-002": "Une autre opération est déjà préparée ou en cours pour cette entreprise.",
+    "BRR-003": "Cette opération n’attend plus cette action. Actualisez son état.",
+    "BRR-040": "Importez d’abord le manifeste de la sauvegarde.",
+    "BRR-041": "Le manifeste du ZIP ne correspond pas à l’archive vérifiée.",
+    "BRR-045": "Un bloc du ZIP ne correspond pas à l’archive vérifiée.",
+    "BRR-060": "Le serveur traite cette sauvegarde. Réessayez dans quelques instants.",
+    "BRR-403": "Accès à la restauration refusé pour ce compte.",
+    "BRR-404": "Archive V3 ou opération introuvable pour cette entreprise.",
+    "BRV-044": "La clé de déchiffrement de cette archive est indisponible.",
+    "BRJ-060": "Les sauvegardes de cette entreprise sont suspendues.",
+  };
+  const error = messages[code] ?? (status === 500 ? "Le service de restauration est indisponible." : "Opération refusée.");
   return { status, body: { error, code } };
+}
+
+export async function importRestoreEntry(
+  deps: { rpc: Rpc; loadKeys: () => Promise<KeyRing> },
+  actor: string,
+  jobId: string,
+  number: number,
+  readUpload: (expectedBytes: number) => Promise<Uint8Array>,
+): Promise<RestoreActionResult> {
+  if (!UUID_RE.test(jobId) || !Number.isSafeInteger(number) || number < 0 || number > 999_999) {
+    return restoreApiError("BRR-404");
+  }
+  const { rpc } = deps;
+  let token: string | undefined;
+  try {
+    const entry = await rpc("_br_rs_api_import_entry", { p_actor: actor, p_job: jobId, p_n: number });
+    const integrityCode = number === 0 ? "BRR-041" : "BRR-045";
+    const stored = await readUpload(Number(entry.stored_bytes));
+    if (await sha256hex(stored) !== entry.stored_sha256) return restoreApiError(integrityCode);
+    if (entry.accepted) return { status: 200, body: { accepted: true } };
+    const claim = await rpc("_br_rs_claim", { p_job: jobId, p_worker: `edge-zip-${crypto.randomUUID()}` });
+    token = String(claim.token);
+    const binding: Binding = {
+      kind: number === 0 ? "manifest" : "block", tenant_id: entry.tenant_id,
+      archive_id: entry.archive_id, generation_id: entry.generation_id, block_no: number, key_id: entry.key_id,
+    };
+    const staged = await stageRestoreEntry({ rpc, keyring: await deps.loadKeys() }, jobId, token, stored, binding,
+      number === 0 ? undefined : entry);
+    if (staged.status === "failed") return restoreApiError(staged.error_code);
+    return { status: 200, body: { accepted: true } };
+  } catch (e) {
+    return restoreApiError(apiCode(e));
+  } finally {
+    if (token) await rpc("_br_rs_unlease", { p_job: jobId, p_token: token }).catch(() => {});
+  }
 }
 
 // Le tenant n'est jamais lu dans la requête : il est déduit côté base du profil de l'acteur authentifié.
@@ -698,7 +774,7 @@ export async function runRestoreAction(
 ): Promise<RestoreActionResult> {
   const { rpc } = deps;
   const jobArg = body.job_id == null ? null : String(body.job_id);
-  if (jobArg !== null && !UUID_RE.test(jobArg)) return apiError("BRR-404");
+  if (jobArg !== null && !UUID_RE.test(jobArg)) return restoreApiError("BRR-404");
   try {
     if (action === "restore_load" && caller.cron && !caller.actor) {
       const next = await rpc("_br_rs_api_next_v3_load", {});
@@ -706,25 +782,27 @@ export async function runRestoreAction(
       const r = await runRestoreLoadInvocation(deps, String(next), workerId, maxBlocks);
       return { status: 200, body: { ...r } };
     }
-    if (!caller.actor) return apiError("BRR-403");
+    if (!caller.actor) return restoreApiError("BRR-403");
     const actor = caller.actor;
 
     if (action === "restore_request") {
       const op = String(body.operation ?? "");
-      if (op !== "reset" && op !== "restore_v3") return apiError("BRR-010");
+      if (op !== "reset" && op !== "restore_v3") return restoreApiError("BRR-010");
       const archive = body.archive_id == null ? null : String(body.archive_id);
-      if (op === "restore_v3" && (!archive || !UUID_RE.test(archive))) return apiError("BRR-404");
-      const r = await rpc("_br_rs_api_request", { p_actor: actor, p_operation: op, p_archive: archive });
+      if (op === "restore_v3" && (!archive || !UUID_RE.test(archive))) return restoreApiError("BRR-404");
+      const r = await rpc("_br_rs_api_request", {
+        p_actor: actor, p_operation: op, p_archive: archive, ...(body.source == null ? {} : { p_source: body.source }),
+      });
       return { status: 200, body: { ...r, scope: "all_sites" } };
     }
     if (action === "restore_status") {
       const r = await rpc("_br_rs_api_status", { p_actor: actor, p_job: jobArg });
       return { status: 200, body: r };
     }
-    if (!jobArg) return apiError("BRR-404");
+    if (!jobArg) return restoreApiError("BRR-404");
     if (action === "restore_load") {
       const s = await rpc("_br_rs_api_status", { p_actor: actor, p_job: jobArg });
-      if (s?.job?.id !== jobArg) return apiError("BRR-404");
+      if (s?.job?.id !== jobArg) return restoreApiError("BRR-404");
       const r = await runRestoreLoadInvocation(deps, jobArg, workerId, maxBlocks);
       return { status: 200, body: { ...r } };
     }
@@ -733,7 +811,9 @@ export async function runRestoreAction(
       return { status: 200, body: { job_id: jobArg, capture: r } };
     }
     if (action === "restore_execute") {
-      const r = await rpc("_br_rs_api_execute", { p_actor: actor, p_job: jobArg });
+      const r = await rpc("_br_rs_api_execute", {
+        p_actor: actor, p_job: jobArg, ...(body.confirmation == null ? {} : { p_confirmation: body.confirmation }),
+      });
       return { status: 202, body: { ...r, scope: "all_sites", awaiting: "server_executor" } };
     }
     if (action === "restore_abandon") {
@@ -742,6 +822,6 @@ export async function runRestoreAction(
     }
     return { status: 400, body: { error: "Unknown action" } };
   } catch (e) {
-    return apiError(apiCode(e));
+    return restoreApiError(apiCode(e));
   }
 }

@@ -1,10 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
   importAesKey,
+  importRestoreEntry,
   type KeyRing,
   type ObjectStore,
   type Rpc,
   RESTORE_ACTIONS,
+  restoreApiError,
   runExportInvocation,
   runOffsiteInvocation,
   runRestoreAction,
@@ -16,7 +18,7 @@ import {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Cron-Secret",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Cron-Secret, X-Restore-Job, X-Restore-Part",
 };
 
 function json(data: unknown, status = 200) {
@@ -27,8 +29,37 @@ function json(data: unknown, status = 200) {
 }
 
 const BUCKET = "tenant-backups-v3";
-// BR020 : routage restauration/réinitialisation/import fermé côté Edge tant que le lot E n'est pas activé.
-const RESTORE_ROUTING_ENABLED = false;
+const MAX_RESTORE_FILE_BYTES = 36 * 1024 * 1024;
+
+async function readRestoreUpload(req: Request, expected: number, integrityCode: string): Promise<Uint8Array> {
+  if (!req.body || !Number.isSafeInteger(expected) || expected < 1 || expected > MAX_RESTORE_FILE_BYTES) {
+    throw new Error(integrityCode + ": invalid file size");
+  }
+  const declaredLength = req.headers.get("Content-Length");
+  if (declaredLength !== null && Number(declaredLength) !== expected) {
+    await req.body.cancel();
+    throw new Error(integrityCode + ": file length does not match");
+  }
+  const reader = req.body.getReader();
+  const bytes = new Uint8Array(expected);
+  let written = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (written + value.length > expected) {
+        await reader.cancel();
+        throw new Error(integrityCode + ": file length does not match");
+      }
+      bytes.set(value, written);
+      written += value.length;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (written !== expected) throw new Error(integrityCode + ": file length does not match");
+  return bytes;
+}
 
 function b64ToBytes(b64: string): Uint8Array {
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -132,16 +163,19 @@ Deno.serve(async (req: Request) => {
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const body = await req.json().catch(() => ({}));
-    const action = String(body.action ?? "");
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
 
+    async function getActor() {
+      if (!token) return null;
+      const { data, error } = await admin.auth.getUser(token);
+      return error ? null : data.user?.id ?? null;
+    }
+
     async function isSuperAdmin(): Promise<boolean> {
-      if (!token) return false;
-      const { data: u, error } = await admin.auth.getUser(token);
-      if (error || !u.user) return false;
-      const { data: p } = await admin.from("profiles").select("role, is_active").eq("id", u.user.id).maybeSingle();
+      const actor = await getActor();
+      if (!actor) return false;
+      const { data: p } = await admin.from("profiles").select("role, is_active").eq("id", actor).maybeSingle();
       return p?.role === "super_admin" && p.is_active === true;
     }
 
@@ -150,6 +184,24 @@ Deno.serve(async (req: Request) => {
       return !!provided && [Deno.env.get("BACKUP_V3_CRON_SECRET"), Deno.env.get("OFFSITE_CRON_SECRET")]
         .some((secret) => secret === provided);
     }
+
+    if (req.method === "POST" && req.headers.get("Content-Type")?.split(";")[0] === "application/octet-stream") {
+      const actor = await getActor();
+      if (!actor) return json({ error: "Accès refusé." }, 403);
+      const part = req.headers.get("X-Restore-Part") ?? "";
+      const job = req.headers.get("X-Restore-Job") ?? "";
+      if (!/^\d{1,6}$/.test(part)) return json({ error: "Fichier d’archive invalide." }, 400);
+      const number = Number(part);
+      const result = await importRestoreEntry(
+        { rpc: rpcOf(admin), loadKeys: loadKeyRing },
+        actor, job, number,
+        expected => readRestoreUpload(req, expected, number === 0 ? "BRR-041" : "BRR-045"),
+      );
+      return json(result.body, result.status);
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const action = String(body.action ?? "");
 
     // Autorisation propriétaire/super_admin évaluée en base avec l'identité de l'appelant.
     async function authorizeDownload(archiveId: string) {
@@ -281,22 +333,20 @@ Deno.serve(async (req: Request) => {
     }
 
     if ((RESTORE_ACTIONS as readonly string[]).includes(action)) {
-      if (!RESTORE_ROUTING_ENABLED) {
-        return json({ error: "Cette opération est temporairement indisponible", code: "BR-020" }, 423);
-      }
-      let actor: string | null = null;
-      if (token) {
-        const { data: u, error } = await admin.auth.getUser(token);
-        if (!error && u.user) actor = u.user.id;
-      }
-      const cron = isCron();
+      const cron = action === "restore_load" && isCron();
+      const actor = action === "restore_load" ? null : await getActor();
       if (!actor && !(cron && action === "restore_load")) return json({ error: "Forbidden" }, 403);
+      if (action === "restore_execute" && (typeof body.confirmation !== "string" || body.confirmation.length > 32)) {
+        const result = restoreApiError("BRR-001");
+        return json(result.body, result.status);
+      }
       const r = await runRestoreAction(
-        { rpc: rpcOf(admin), store: storeOf(admin), keyring: await loadKeyRing() },
+        { rpc: rpcOf(admin), store: storeOf(admin), keyring: await loadKeyRing(), remote: webdavOf },
         { actor, cron },
         action,
         body,
         `edge-${crypto.randomUUID()}`,
+        8,
       );
       return json(r.body, r.status);
     }
