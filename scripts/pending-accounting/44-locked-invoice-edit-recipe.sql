@@ -1,7 +1,7 @@
 -- Facture, stock, transfert de bail et version. Fixtures uniquement, rollback complet.
 BEGIN;
 DO $test$
-DECLARE t uuid:=gen_random_uuid();other uuid:=gen_random_uuid();u uuid:=gen_random_uuid();u2 uuid:=gen_random_uuid();u3 uuid:=gen_random_uuid();s1 uuid:=gen_random_uuid();s2 uuid:=gen_random_uuid();s3 uuid:=gen_random_uuid();a uuid:=gen_random_uuid();c uuid:=gen_random_uuid();f uuid:=gen_random_uuid();w uuid:=gen_random_uuid();w2 uuid:=gen_random_uuid();tok uuid;tok2 uuid;v text;v2 text;res jsonb;items jsonb;olditems jsonb;num text:='F-RECETTE-'||gen_random_uuid()::text;
+DECLARE t uuid:=gen_random_uuid();other uuid:=gen_random_uuid();u uuid:=gen_random_uuid();u2 uuid:=gen_random_uuid();u3 uuid:=gen_random_uuid();s1 uuid:=gen_random_uuid();s2 uuid:=gen_random_uuid();s3 uuid:=gen_random_uuid();a uuid:=gen_random_uuid();c uuid:=gen_random_uuid();f uuid:=gen_random_uuid();w uuid:=gen_random_uuid();w2 uuid:=gen_random_uuid();tok uuid;tok2 uuid;v text;v2 text;res jsonb;items jsonb;olditems jsonb;pos_sale uuid:=gen_random_uuid();rep uuid:=gen_random_uuid();num text:='F-RECETTE-'||gen_random_uuid()::text;
 BEGIN
  INSERT INTO public.tenants(id,name,enabled_modules) VALUES(t,'RECETTE FACTURE VERROU','["accounting"]'),(other,'RECETTE AUTRE','[]');
  INSERT INTO auth.users(id,email,aud,role) SELECT id,id::text||'@example.invalid','authenticated','authenticated' FROM unnest(ARRAY[u,u2,u3]) id;
@@ -55,5 +55,50 @@ BEGIN
  EXECUTE 'RESET ROLE';
  IF (SELECT total FROM public.sales WHERE id=f)<>3000 OR (SELECT quantity FROM public.stock_levels WHERE article_id=a AND site_id=s2)<>17 THEN RAISE EXCEPTION 'Écriture résiduelle après rejet';END IF;
  IF has_function_privilege('anon','public.save_locked_invoice_edit(uuid,uuid,uuid,uuid,text,jsonb,uuid,jsonb,uuid,jsonb,boolean)','EXECUTE') OR has_function_privilege('authenticated','public._invoice_edit_snapshot(uuid,uuid)','EXECUTE') THEN RAISE EXCEPTION 'API exposée sans contrôle';END IF;
+
+ -- Une vente de caisse est éditée au journal avec le même bail, mais ses
+ -- mouvements identifient directement la vente et le dépôt réellement utilisé.
+ INSERT INTO public.sales_representatives(id,tenant_id,code,first_name,last_name)
+ VALUES(rep,t,'REP-RECETTE','Représentant','Recette');
+ INSERT INTO public.sales(id,tenant_id,site_id,customer_id,user_id,sale_number,source,status,subtotal,total,paid,doc_header,representative_id,rep_commission)
+ VALUES(pos_sale,t,s1,c,u,'POS-'||pos_sale::text,'pos','validated',2000,2000,0,'{"terminal":"caisse initiale"}',rep,
+        '{"base":"marge","type":"pct_marge","rate":10,"base_amount":1000,"amount":100}');
+ INSERT INTO public.sale_items(tenant_id,sale_id,article_id,name,quantity,unit_price,total,purchase_cost,site_id)
+ VALUES(t,pos_sale,a,'Article recette',2,1000,2000,500,s2);
+ UPDATE public.stock_levels SET quantity=15 WHERE article_id=a AND site_id=s2;
+ INSERT INTO public.stock_movements(tenant_id,article_id,site_id,movement_type,quantity,previous_qty,new_qty,reference_type,reference_id)
+ VALUES(t,a,s2,'sale',-2,17,15,'sale',pos_sale);
+ PERFORM set_config('request.jwt.claim.sub',u::text,true);
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ res:=public.document_edit_lease(t,'sale',pos_sale::text,w,'acquire');
+ tok:=(res->>'token')::uuid;
+ res:=public.load_locked_invoice_edit(t,pos_sale,w,tok);
+ v:=res->>'version';
+ items:=jsonb_set(res->'items','{0,quantity}','1');
+ res:=public.save_locked_invoice_edit(t,pos_sale,w,tok,v,items,c,NULL,rep,NULL,true);
+ IF res->>'success' IS DISTINCT FROM 'true' OR res->>'lock_released' IS DISTINCT FROM 'true' THEN
+  RAISE EXCEPTION 'Modification de la vente POS impossible';
+ END IF;
+ EXECUTE 'RESET ROLE';
+ IF (SELECT quantity FROM public.stock_levels WHERE article_id=a AND site_id=s2)<>16
+    OR (SELECT quantity FROM public.stock_levels WHERE article_id=a AND site_id=s1)<>10
+    OR (SELECT quantity FROM public.stock_levels WHERE article_id=a AND site_id=s3)<>30
+    OR (SELECT site_id FROM public.sale_items WHERE sale_id=pos_sale) IS DISTINCT FROM s2
+    OR (SELECT doc_header->>'terminal' FROM public.sales WHERE id=pos_sale) IS DISTINCT FROM 'caisse initiale'
+    OR (SELECT representative_id FROM public.sales WHERE id=pos_sale) IS DISTINCT FROM rep
+    OR (SELECT (rep_commission->>'amount')::numeric FROM public.sales WHERE id=pos_sale) IS DISTINCT FROM 50 THEN
+  RAISE EXCEPTION 'Modification POS : le dépôt, la vente ou le stock ne correspondent pas';
+ END IF;
+ PERFORM set_config('request.jwt.claim.sub',u::text,true);
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ res:=public.cancel_sale(pos_sale,t,'Recette annulation POS après modification','none',NULL);
+ IF res->>'success' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Annulation de la vente éditée impossible : %',res; END IF;
+ EXECUTE 'RESET ROLE';
+ IF (SELECT quantity FROM public.stock_levels WHERE article_id=a AND site_id=s2)<>17
+    OR (SELECT quantity FROM public.stock_levels WHERE article_id=a AND site_id=s1)<>10
+    OR (SELECT quantity FROM public.stock_levels WHERE article_id=a AND site_id=s3)<>30
+    OR (SELECT status FROM public.sales WHERE id=pos_sale) IS DISTINCT FROM 'cancelled' THEN
+  RAISE EXCEPTION 'Annulation POS : la restitution doit porter sur la quantité corrigée et le dépôt d’origine';
+ END IF;
 END $test$;
 ROLLBACK;

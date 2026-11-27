@@ -574,27 +574,50 @@ END $p$;
 CREATE FUNCTION public._restore_historical_sale_stock(t uuid,sid uuid,p_kind text)
 RETURNS void LANGUAGE plpgsql SECURITY INVOKER SET search_path TO ''
 AS $f$
-DECLARE art record; d record; z record; plan jsonb:='[]'; prior numeric; expected numeric; lot_qty numeric; movement_qty numeric;
+DECLARE art record; d record; z record; plan jsonb:='[]'; prior numeric; expected numeric; lot_qty numeric; movement_qty numeric; movement_ids uuid[]; document_number text;
 BEGIN
  IF p_kind NOT IN ('sale_cancel','sale_delete') THEN RAISE EXCEPTION 'Type de restauration invalide.' USING ERRCODE='22023';END IF;
+ SELECT array_agg(m.id) INTO movement_ids FROM public.stock_movements m
+ WHERE m.tenant_id=t AND m.reference_id=sid AND m.reference_type IN ('sale','invoice_edit');
+ IF EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.id=ANY(movement_ids) AND m.reference_type='invoice_edit')
+ AND NOT EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.id=ANY(movement_ids) AND m.reference_type='sale') THEN
+  SELECT s.sale_number INTO document_number FROM public.sales s WHERE s.tenant_id=t AND s.id=sid AND s.source='billing';
+  IF document_number IS NULL OR (SELECT count(*) FROM public.sales s WHERE s.tenant_id=t AND s.sale_number=document_number)<>1 THEN
+   RAISE EXCEPTION 'Origine des mouvements corrigés indéterminée.' USING ERRCODE='55000';
+  END IF;
+  movement_ids:=movement_ids||ARRAY(
+   SELECT m.id FROM public.stock_movements m
+   WHERE m.tenant_id=t AND m.reference_id IS NULL AND m.movement_type='sale'
+     AND m.note IN ('Facture '||document_number,'Facture '||document_number||' (credit)','Facture '||document_number||' (devis converti)')
+  );
+ END IF;
  IF EXISTS(SELECT 1 FROM public.sale_lot_deductions sd LEFT JOIN public.sale_items si ON si.tenant_id=t AND si.sale_id=sid AND si.article_id=sd.article_id WHERE sd.tenant_id=t AND sd.sale_id=sid AND (si.id IS NULL OR sd.quantity<=0 OR sd.quantity::text IN ('NaN','Infinity','-Infinity'))) THEN RAISE EXCEPTION 'Sortie historique incohérente.' USING ERRCODE='55000';END IF;
- IF EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.tenant_id=t AND m.reference_type='sale' AND m.reference_id=sid AND NOT EXISTS(SELECT 1 FROM public.sale_items i WHERE i.tenant_id=t AND i.sale_id=sid AND i.article_id=m.article_id)) THEN RAISE EXCEPTION 'Mouvement sans article de vente.' USING ERRCODE='55000';END IF;
+ IF EXISTS (
+  SELECT 1 FROM public.stock_movements m
+  WHERE m.id=ANY(movement_ids)
+  GROUP BY m.article_id,m.site_id
+  HAVING sum(m.quantity)>0 OR (
+   sum(m.quantity)<>0 AND NOT EXISTS(
+    SELECT 1 FROM public.sale_items i WHERE i.tenant_id=t AND i.sale_id=sid AND i.article_id=m.article_id
+   )
+  )
+ ) THEN RAISE EXCEPTION 'Mouvement sans article de vente ou quantité nette incohérente.' USING ERRCODE='55000';END IF;
  FOR art IN SELECT si.article_id,sum(si.quantity) quantity,bool_or(coalesce(a.track_stock,false)) tracked
   FROM public.sale_items si LEFT JOIN public.articles a ON a.id=si.article_id AND a.tenant_id=t
   WHERE si.tenant_id=t AND si.sale_id=sid AND si.article_id IS NOT NULL GROUP BY si.article_id ORDER BY si.article_id LOOP
   expected:=art.quantity;
   SELECT coalesce(sum(sd.quantity),0) INTO lot_qty FROM public.sale_lot_deductions sd WHERE sd.tenant_id=t AND sd.sale_id=sid AND sd.article_id=art.article_id;
-  SELECT coalesce(-sum(m.quantity),0) INTO movement_qty FROM public.stock_movements m WHERE m.tenant_id=t AND m.reference_type='sale' AND m.reference_id=sid AND m.article_id=art.article_id;
+  SELECT coalesce(-sum(m.quantity),0) INTO movement_qty FROM public.stock_movements m WHERE m.id=ANY(movement_ids) AND m.article_id=art.article_id;
   IF NOT art.tracked AND lot_qty=0 AND movement_qty=0 THEN CONTINUE;END IF;
   IF expected<=0 OR expected::text IN ('NaN','Infinity','-Infinity') THEN RAISE EXCEPTION 'Quantité historique invalide.' USING ERRCODE='55000';END IF;
   IF lot_qty>0 AND lot_qty<>expected THEN RAISE EXCEPTION 'Sorties de lots partielles : rapprochement requis avant annulation ou suppression.' USING ERRCODE='55000';END IF;
-  IF EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.tenant_id=t AND m.reference_type='sale' AND m.reference_id=sid AND m.article_id=art.article_id) THEN
-   IF movement_qty<>expected OR EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.tenant_id=t AND m.reference_type='sale' AND m.reference_id=sid AND m.article_id=art.article_id AND m.quantity>=0) THEN RAISE EXCEPTION 'Mouvements historiques incomplets ou contradictoires.' USING ERRCODE='55000';END IF;
+  IF EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.id=ANY(movement_ids) AND m.article_id=art.article_id) THEN
+   IF movement_qty<>expected OR EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.id=ANY(movement_ids) AND m.article_id=art.article_id AND m.movement_type='sale' AND m.quantity>=0) THEN RAISE EXCEPTION 'Mouvements historiques incomplets ou contradictoires.' USING ERRCODE='55000';END IF;
    IF lot_qty>0 AND EXISTS(
-     SELECT 1 FROM (SELECT m.site_id,-sum(m.quantity) qty FROM public.stock_movements m WHERE m.tenant_id=t AND m.reference_type='sale' AND m.reference_id=sid AND m.article_id=art.article_id GROUP BY m.site_id) m
+     SELECT 1 FROM (SELECT m.site_id,-sum(m.quantity) qty FROM public.stock_movements m WHERE m.id=ANY(movement_ids) AND m.article_id=art.article_id GROUP BY m.site_id HAVING sum(m.quantity)<>0) m
      FULL JOIN (SELECT sd.site_id,sum(sd.quantity) qty FROM public.sale_lot_deductions sd WHERE sd.tenant_id=t AND sd.sale_id=sid AND sd.article_id=art.article_id GROUP BY sd.site_id) l USING(site_id)
      WHERE m.qty IS DISTINCT FROM l.qty) THEN RAISE EXCEPTION 'Lots et mouvements historiques incompatibles.' USING ERRCODE='55000';END IF;
-   FOR z IN SELECT m.site_id,-sum(m.quantity) qty FROM public.stock_movements m WHERE m.tenant_id=t AND m.reference_type='sale' AND m.reference_id=sid AND m.article_id=art.article_id GROUP BY m.site_id LOOP
+   FOR z IN SELECT m.site_id,-sum(m.quantity) qty FROM public.stock_movements m WHERE m.id=ANY(movement_ids) AND m.article_id=art.article_id GROUP BY m.site_id HAVING sum(m.quantity)<>0 LOOP
     plan:=plan||jsonb_build_array(jsonb_build_object('article_id',art.article_id,'site_id',z.site_id,'quantity',z.qty));
    END LOOP;
   ELSIF lot_qty>0 THEN

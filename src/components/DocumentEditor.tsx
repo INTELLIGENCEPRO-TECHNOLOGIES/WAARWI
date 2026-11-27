@@ -63,6 +63,7 @@ export type DocumentEditorProps = {
   vat?: VatAmounts;
   documentTotal?: number;
   additionalActions?: React.ReactNode;
+  editLinesOnly?: boolean;
   // Save
   saving: boolean;
   onSave?: (opts?: { silent?: boolean }) => void;
@@ -276,7 +277,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     return raw.filter(c => c.visible).sort((a, b) => a.order - b.order);
   }, [docSettings.columns_config]);
 
-  const itemsLocked = docSettings.require_header_lock && !headerValidated;
+  const itemsLocked = !props.editLinesOnly && docSettings.require_header_lock && !headerValidated;
 
   const repLabel = useCallback((id?: string | null) => {
     const r = (reps || []).find(x => x.id === id);
@@ -479,7 +480,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       )}
 
       {/* ═══ Header fields ═══ */}
-      {canEdit && (
+      {canEdit && !props.editLinesOnly && (
         headerValidated ? (
           <ValidatedHeader
             headerForm={headerForm}
@@ -508,7 +509,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
         )
       )}
 
-      {isView && headerForm.customer_id && (
+      {(isView || props.editLinesOnly) && headerForm.customer_id && (
         <div className="px-4 py-1.5 border-b border-[var(--w-separator-l)] bg-[var(--w-surface-el2)] flex-shrink-0">
           <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
             {headerForm.customer_id && <span className="font-medium text-[var(--w-text)]">{customers.find((c: any) => c.id === headerForm.customer_id)?.name || ''}</span>}

@@ -19,11 +19,18 @@ import { DocSectionTitle } from '../components/DocLayout';
 import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
 import { DocumentEditor, type DocLineItem, type DocHeaderForm, type DocPaymentLine } from '../components/DocumentEditor';
 import { DEFAULT_DOC_SETTINGS, mergeColumns, type DocSettings } from '../components/DocumentSettingsTab';
+import { DocumentEditLeaseBar } from '../components/DocumentEditLeaseBar';
+import { InvoiceEditSnapshotBar } from '../components/InvoiceEditSnapshotBar';
+import { useDocumentEditLease } from '../lib/useDocumentEditLease';
+import { useLockedInvoiceSnapshot, type LockedInvoiceSnapshot } from '../lib/useLockedInvoiceSnapshot';
 
 type Sale = VatAmounts & {
   discount?: number;
   id: string; sale_number: string; total: number; paid: number;
   status: string; created_at: string; source: string;
+  customer_id?: string | null;
+  doc_header?: Record<string, string | null> | null;
+  deleted_at?: string | null;
   user_id: string;
   cash_session_id: string | null;
   accounting_status: string;
@@ -37,6 +44,13 @@ type Sale = VatAmounts & {
 type DateRange = 'all' | 'today' | 'week' | 'month' | 'custom';
 
 const PAGE_SIZE = 50;
+const EDITABLE_SALE_SOURCES = new Set(['billing', 'pos', 'quote']);
+
+function editLines(items: DocLineItem[]) {
+  return items.map(({ article_id, name, quantity, unit_price, discount }) => ({
+    article_id, name, quantity, unit_price, discount,
+  }));
+}
 
 const DATE_OPTIONS: { value: DateRange; label: string }[] = [
   { value: 'all', label: 'Toutes les dates' },
@@ -82,7 +96,7 @@ function computeDateRange(dateRange: DateRange, customFrom: string, customTo: st
 }
 
 export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite } = useApp();
+  const { tenant, currentSite, user, profile } = useApp();
   const dataTick = useRealtimeTick(['sales', 'sale_items', 'sale_payments', 'sale_returns', 'sale_return_items', 'customers']);
   const { success: toastSuccess, error: toastError } = useToast();
   const { can } = usePermissions();
@@ -103,7 +117,12 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [selected, setSelected] = useState<Sale | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [pays, setPays] = useState<any[]>([]);
-  const [, setItemsLoading] = useState(false);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const context = JSON.stringify([tenant?.id, currentSite?.id, user?.id]);
+  const currentContext = useRef(context);
+  currentContext.current = context;
+  const detailRequest = useRef(0);
+  const editInFlight = useRef(false);
   const [accounting, setAccounting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -117,9 +136,6 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [editorHeader, setEditorHeader] = useState<DocHeaderForm>({ customer_id: '', note: '', doc_date: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '', valid_until: '' });
   const [docSettings, setDocSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
   const [articles, setArticles] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-  const [editDataLoaded, setEditDataLoaded] = useState(false);
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -282,22 +298,44 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   }, [page, debouncedSearch, statusFilter, dateRange, customFrom, customTo, tenant?.id, currentSite?.id, debouncedTick]);
 
   const openDetail = async (s: Sale) => {
+    if (editInFlight.current) return;
+    const request = ++detailRequest.current;
+    setEditContext(null);
     setSelected(s); setOpen(true); setItemsLoading(true);
+    setItems([]); setPays([]); setEditorItems([]); setEditorPayments([]);
     const [{ data: it }, { data: pp }, { data: fullSale }] = await Promise.all([
       supabase.from('sale_items').select('*, articles(internal_ref, oem_ref)').eq('sale_id', s.id),
       supabase.from('sale_payments').select('*').eq('sale_id', s.id),
       supabase.from('sales').select('*, customers(name, phone, address), sites(name), sale_payments(method_name), ipm_ventes(part_ipm, part_client, statut)').eq('id', s.id).maybeSingle(),
     ]);
+    if (request !== detailRequest.current || context !== currentContext.current) return;
     setItems(it || []); setPays(pp || []);
-    if (fullSale) setSelected(fullSale as Sale);
+    const sale = (fullSale as Sale | null) ?? s;
+    setSelected(sale);
     setEditorItems((it || []).map((i: any) => ({ article_id: i.article_id, name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0), total: Number(i.total) })));
     setEditorPayments((pp || []).map((p: any) => ({ method_id: p.method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: p.reference || '' })));
-    const dh = (s as any).doc_header;
-    setEditorHeader({ customer_id: (s as any).customer_id || '', note: '', doc_date: dh?.doc_date || s.created_at.slice(0, 10), delivery_date: dh?.delivery_date || '', reference: dh?.reference || '', warranty: dh?.warranty || '', representative: dh?.representative || '', imei: dh?.imei || '', valid_until: '' });
+    const dh = sale.doc_header;
+    setEditorHeader({ customer_id: sale.customer_id || '', note: '', doc_date: dh?.doc_date || sale.created_at.slice(0, 10), delivery_date: dh?.delivery_date || '', reference: dh?.reference || '', warranty: dh?.warranty || '', representative: dh?.representative || '', imei: dh?.imei || '', valid_until: '' });
     setItemsLoading(false);
   };
 
-  const closeDetail = () => { setOpen(false); setEditing(false); setSelected(null); };
+  const closeDetail = () => {
+    if (editInFlight.current) return;
+    detailRequest.current++;
+    setOpen(false); setEditContext(null); setSelected(null);
+  };
+
+  useEffect(() => {
+    setOpen(false); setEditContext(null); setSelected(null);
+    return () => { detailRequest.current++; };
+  }, [context]);
+
+  useEffect(() => {
+    if (!open || !isDesktop) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = overflow; };
+  }, [open, isDesktop]);
 
   const currentIdx = selected ? sales.findIndex(s => s.id === selected.id) : -1;
   const goPrev = () => { if (currentIdx > 0) openDetail(sales[currentIdx - 1]); };
@@ -404,76 +442,110 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const activeFilterCount = (statusFilter ? 1 : 0) + (dateRange !== 'all' ? 1 : 0);
   const clearFilters = () => { setSearch(''); setDebouncedSearch(''); setStatusFilter(''); setDateRange('all'); setCustomFrom(''); setCustomTo(''); setFiltersOpen(false); };
 
-  const canEditSale = can('edit_invoices') && docSettings.allow_edit;
+  const canEditSale = !!selected && !itemsLoading && can('edit_invoices') && docSettings.allow_edit
+    && EDITABLE_SALE_SOURCES.has(selected.source) && selected.accounting_status === 'not_accounted'
+    && !selected.deleted_at && selected.status !== 'cancelled' && selected.status !== 'deleted';
   const canDeleteSale = can('delete_invoices') && docSettings.allow_delete;
-  const [editing, setEditing] = useState(false);
-  const [editItems, setEditItems] = useState<any[]>([]);
+  const [editContext, setEditContext] = useState<string | null>(null);
+  const [editItems, setEditItems] = useState<DocLineItem[]>([]);
+  const [lockedSale, setLockedSale] = useState<LockedInvoiceSnapshot | null>(null);
+  const [versionConflict, setVersionConflict] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const editing = editContext === context;
+  const editingSaleId = editing ? selected?.id ?? null : null;
+  const editEnabled = editing && canEditSale;
+  const editBaseline = lockedSale ? { saleId: lockedSale.sale.id, version: lockedSale.version } : null;
+  const editDirty = !!lockedSale && JSON.stringify(editLines(editItems)) !== JSON.stringify(editLines(lockedSale.items));
+  const editLease = useDocumentEditLease({ tenantId: tenant?.id, userId: profile?.id ?? user?.id, kind: 'sale', resource: editingSaleId ?? '', enabled: editEnabled, dirty: editDirty, saving: savingEdit });
+  const editSnapshot = useLockedInvoiceSnapshot({
+    tenantId: tenant?.id, saleId: editingSaleId, lease: editLease, enabled: editEnabled,
+    baseline: editBaseline, preserveDraft: false,
+    hydrate: snapshot => {
+      setLockedSale(snapshot);
+      setEditItems(snapshot.items);
+      setVersionConflict(false);
+    },
+    onBaseline: () => {},
+  });
+  const editReady = editEnabled && editLease.held && editSnapshot.ready && !versionConflict;
 
   const startEdit = async () => {
-    if (!selected || !canEditSale || !tenant || !currentSite) return;
-    if (isDesktop) {
-      if (!editDataLoaded) {
-        const [{ data: arts }, { data: custs }, { data: pms }] = await Promise.all([
-          supabase.from('articles').select('id, name, internal_ref, oem_ref, sale_price').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
-          supabase.from('customers').select('id, name').eq('tenant_id', tenant.id),
-          supabase.from('payment_methods').select('id, name').eq('tenant_id', tenant.id),
-        ]);
-        setArticles(arts || []);
-        setCustomers(custs || []);
-        setPaymentMethods(pms || []);
-        setEditDataLoaded(true);
-      }
-      setEditing(true);
-    } else {
-      setEditItems(items.map(i => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0) })));
-      setEditing(true);
-    }
+    if (!canEditSale || !tenant || !currentSite || editInFlight.current) return;
+    const request = detailRequest.current;
+    setLockedSale(null);
+    setVersionConflict(false);
+    setEditItems([]);
+    setEditContext(context);
+    if (!isDesktop) return;
+    setArticles([]);
+    const { data } = await supabase.from('articles').select('id, name, internal_ref, oem_ref, sale_price').eq('tenant_id', tenant.id).eq('site_id', currentSite.id);
+    if (request === detailRequest.current && context === currentContext.current) setArticles(data ?? []);
+  };
+
+  const stopEdit = () => {
+    if (!editInFlight.current) setEditContext(null);
   };
 
   const saveEdit = async () => {
-    if (!selected || !tenant || savingEdit) return;
-    if (!can('edit_invoices')) { toastError('Vous n\'avez pas la permission de modifier les ventes'); return; }
+    if (!selected || !tenant || !editReady || !editLease.token || !lockedSale || lockedSale.sale.id !== selected.id
+      || context !== currentContext.current || editInFlight.current) return;
+    const payload = editLines(editItems);
+    if (payload.length === 0 || payload.some(item => !item.article_id || !item.name.trim())) {
+      toastError('Ajoutez au moins un article du catalogue.');
+      return;
+    }
+    const request = detailRequest.current;
+    const current = () => request === detailRequest.current && context === currentContext.current;
+    editInFlight.current = true;
     setSavingEdit(true);
+    let saved = false;
     try {
-      const sourceItems = isDesktop ? editorItems : editItems;
-      const payload = sourceItems.filter(i => i.name && i.name.trim()).map(i => ({
-        article_id: i.article_id,
-        name: i.name,
-        quantity: Number(i.quantity),
-        unit_price: Number(i.unit_price),
-        discount: Number(i.discount ?? 0),
-        vat_rate: Number(i.vat_rate ?? 0),
-        imei: i.imei || null,
-      }));
-      const nonCatalog = payload.filter(i => !i.article_id);
-      if (nonCatalog.length > 0) { toastError(`Chaque ligne doit correspondre à un article du catalogue : ${nonCatalog.map(i => i.name).join(', ')}`); setSavingEdit(false); return; }
-      const { data, error } = await supabase.rpc('update_sale_items_and_totals', {
-        p_sale_id: selected.id,
+      const { data, error } = await supabase.rpc('save_locked_invoice_edit', {
         p_tenant_id: tenant.id,
+        p_sale_id: selected.id,
+        p_window_id: editLease.windowId,
+        p_lock_token: editLease.token,
+        p_expected_version: lockedSale.version,
         p_items: payload,
+        p_customer_id: lockedSale.sale.customer_id,
+        p_doc_header: null,
+        p_representative_id: lockedSale.sale.representative_id,
+        p_rep_commission: null,
+        p_release: true,
       });
-      if (error) throw error;
-      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur');
-      const newTotal = Number((data as any).new_total);
-      toastSuccess('Vente modifiee');
-      setSelected({ ...selected, total: newTotal });
-      setSales(prev => prev.map(s => s.id === selected.id ? { ...s, total: newTotal } : s));
-      const updatedItems = sourceItems.map(i => ({ ...i, total: i.quantity * i.unit_price - (i.discount || 0) }));
-      setItems(updatedItems);
-      if (isDesktop) setEditorItems(updatedItems.map(i => ({ article_id: i.article_id, name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0), total: Number(i.total) })));
-      setEditing(false);
-    } catch (e: any) { toastError(e.message); }
-    finally { setSavingEdit(false); }
+      if (error) {
+        if (error.code === '40001' && current()) setVersionConflict(true);
+        throw error;
+      }
+      if (!data?.success) throw new Error('La vente n’a pas été modifiée.');
+      saved = true;
+    } catch (error) {
+      if (current()) toastError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Enregistrement impossible.');
+    } finally {
+      editInFlight.current = false;
+      setSavingEdit(false);
+    }
+    if (saved && current()) {
+      toastSuccess('Vente modifiée');
+      void openDetail(selected);
+      void fetchPage(page);
+    }
   };
 
-  const updateEditItem = (idx: number, field: string, value: any) => {
-    setEditItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  const updateEditItem = (idx: number, field: 'quantity' | 'unit_price' | 'discount', value: number) => {
+    if (editReady && !editInFlight.current) setEditItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
   };
 
   const removeEditItem = (idx: number) => {
-    setEditItems(prev => prev.filter((_, i) => i !== idx));
+    if (editReady && !editInFlight.current) setEditItems(prev => prev.filter((_, i) => i !== idx));
   };
+
+  const editBanner = editing && <>
+    <DocumentEditLeaseBar lease={editLease} dirty={editDirty} saving={savingEdit} label="cette vente" onSaveAndRelease={editReady ? saveEdit : undefined} />
+    <InvoiceEditSnapshotBar state={versionConflict && !editSnapshot.checking ? { ...editSnapshot, conflict: true, error: 'Cette vente a changé. Rechargez la version enregistrée avant de poursuivre.' } : editSnapshot} />
+  </>;
+  const displayedLines = editing && lockedSale ? editItems : editorItems;
+  const editorCustomers = selected?.customer_id && selected.customers ? [{ id: selected.customer_id, ...selected.customers }] : [];
 
   const deleteSale = useCallback(async () => {
     if (!selected || !tenant || deleting) return;
@@ -771,7 +843,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             payments={pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) }))}
             docHeader={dh ? { doc_date: dh.doc_date || null, reference: dh.reference || null, delivery_date: dh.delivery_date || null, warranty: dh.warranty || null, representative: dh.representative || null, imei: dh.imei || null } : { doc_date: selected.created_at.slice(0, 10) }}
             onClose={closeDetail}
-            onEdit={canEditSale && !isAccounted ? startEdit : undefined}
+            onEdit={canEditSale ? startEdit : undefined}
             onDelete={canDeleteSale && !isAccounted && !isCancelled ? () => setConfirmDelete(true) : undefined}
             onPay={due > 0 && !isCancelled ? () => onNavigate?.('billing') : undefined}
             onPrint={printInvoice}
@@ -786,105 +858,114 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
       {/* ── Desktop: Full-screen DocumentEditor (view + edit mode) ─── */}
       {open && isDesktop && selected && (
-        <DocumentEditor
-          docType="invoice"
-          mode={editing ? 'edit' : 'view'}
-          articles={articles}
-          customers={customers}
-          headerForm={editorHeader}
-          setHeaderForm={editing ? setEditorHeader : () => {}}
-          items={editorItems}
-          setItems={editing ? setEditorItems : () => {}}
-          subtotal={editorItems.filter(i => i.name && i.name.trim()).reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0)}
-          saving={savingEdit}
-          onSave={saveEdit}
-          onClose={editing ? () => setEditing(false) : closeDetail}
-          editingId={selected.id}
-          documentNumber={selected.sale_number}
-          documentStatus={selected.status}
-          accountingStatus={selected.accounting_status}
-          accountingBusy={accounting}
-          vat={editing ? undefined : selected}
-          documentTotal={editing ? undefined : Number(selected.total)}
-          invoiceDue={Math.max(0, Number(selected.total) - pays.reduce((s, p) => s + Number(p.amount), 0))}
-          docSettings={docSettings}
-          paymentMethods={paymentMethods}
-          payments={editorPayments}
-          setPayments={editing ? setEditorPayments : undefined}
-          totalPaid={pays.reduce((s, p) => s + Number(p.amount), 0)}
-          hasPrev={currentIdx > 0}
-          hasNext={currentIdx >= 0 && currentIdx < sales.length - 1}
-          onPrev={currentIdx > 0 ? goPrev : undefined}
-          onNext={currentIdx >= 0 && currentIdx < sales.length - 1 ? goNext : undefined}
-          onEdit={canEditSale && selected.accounting_status !== 'accounted' ? startEdit : undefined}
-          onDelete={canDeleteSale && selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' ? () => setConfirmDelete(true) : undefined}
-          onPay={Math.max(0, Number(selected.total) - pays.reduce((s, p) => s + Number(p.amount), 0)) > 0 && selected.status !== 'cancelled' ? () => onNavigate?.('billing') : undefined}
-          onPrint={printInvoice}
-          onCopyLink={() => copyInvoiceLink(selected)}
-          onWhatsApp={selected.customers ? () => sendWhatsApp(selected) : undefined}
-          onComptabiliser={selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' && can('manage_accounting') ? comptabiliserVente : undefined}
-          onCancel={selected.status !== 'cancelled' && selected.accounting_status !== 'accounted' ? () => cancelInvoice(selected) : undefined}
-          docCreatedInfo={{ createdAt: selected.created_at, createdBy: creatorName(selected.user_id) }}
-        />
+        <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
+          {editing && <div className="shrink-0 px-3 pt-2">{editBanner}</div>}
+          <div className="min-h-0 flex-1">
+            <DocumentEditor
+              key={editing ? `${selected.id}-${lockedSale?.version ?? 'pending'}` : selected.id}
+              embedded
+              docType="invoice"
+              mode={editReady ? 'edit' : 'view'}
+              editLinesOnly={editing}
+              articles={articles}
+              customers={editorCustomers}
+              headerForm={editorHeader}
+              setHeaderForm={() => {}}
+              items={displayedLines}
+              setItems={editReady && !savingEdit ? setEditItems : () => {}}
+              subtotal={displayedLines.reduce((sum, item) => sum + item.quantity * item.unit_price - item.discount, 0)}
+              saving={savingEdit}
+              onSave={editReady ? saveEdit : undefined}
+              onClose={editing ? stopEdit : closeDetail}
+              editingId={selected.id}
+              documentNumber={selected.sale_number}
+              documentStatus={selected.status}
+              accountingStatus={selected.accounting_status}
+              accountingBusy={accounting}
+              vat={editing ? undefined : selected}
+              documentTotal={editing ? undefined : Number(selected.total)}
+              invoiceDue={Math.max(0, Number(selected.total) - pays.reduce((s, p) => s + Number(p.amount), 0))}
+              docSettings={docSettings}
+              payments={editorPayments}
+              totalPaid={pays.reduce((s, p) => s + Number(p.amount), 0)}
+              hasPrev={currentIdx > 0}
+              hasNext={currentIdx >= 0 && currentIdx < sales.length - 1}
+              onPrev={!editing && currentIdx > 0 ? goPrev : undefined}
+              onNext={!editing && currentIdx >= 0 && currentIdx < sales.length - 1 ? goNext : undefined}
+              onEdit={!editing && canEditSale ? startEdit : undefined}
+              onDelete={!editing && canDeleteSale && selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' ? () => setConfirmDelete(true) : undefined}
+              onPay={!editing && Number(selected.total) > pays.reduce((sum, payment) => sum + Number(payment.amount), 0) && selected.status !== 'cancelled' ? () => onNavigate?.('billing') : undefined}
+              onPrint={editing ? undefined : printInvoice}
+              onCopyLink={editing ? undefined : () => copyInvoiceLink(selected)}
+              onWhatsApp={!editing && selected.customers ? () => sendWhatsApp(selected) : undefined}
+              onComptabiliser={!editing && selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' && can('manage_accounting') ? comptabiliserVente : undefined}
+              onCancel={!editing && selected.status !== 'cancelled' && selected.accounting_status !== 'accounted' ? () => cancelInvoice(selected) : undefined}
+              docCreatedInfo={{ createdAt: selected.created_at, createdBy: creatorName(selected.user_id) }}
+            />
+          </div>
+        </div>
       )}
 
       {/* ── Mobile Edit Panel (shown when editing on mobile) ────────── */}
-      <DocPanel open={open && editing && !isDesktop} onClose={closeDetail} title={selected ? `Vente ${selected.sale_number}` : ''}
+      <DocPanel open={open && editing && !isDesktop} onClose={stopEdit} title={selected ? `Vente ${selected.sale_number}` : ''}
         footer={<>
-          <button onClick={() => setEditing(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveEdit} disabled={savingEdit} className="btn-icon-primary" title="Enregistrer">
+          <button onClick={stopEdit} disabled={savingEdit} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={saveEdit} disabled={!editReady || savingEdit} className="btn-icon-primary" title="Enregistrer">
             {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           </button>
         </>}
       >
         {selected && (() => {
           return (
-            <div className="space-y-3">
-              <DocSectionTitle title="Modifier les articles" count={editItems.length} />
-              <div className="space-y-2">
-                {editItems.map((item, idx) => (
-                  <div key={idx} className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-neutral-800 truncate flex-1">{item.name}</span>
-                      <button onClick={() => removeEditItem(idx)} className="p-1 rounded-lg hover:bg-red-50 text-red-500" title="Retirer">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase">Qte</label>
-                        <input type="number" min="1" value={item.quantity}
-                          onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
-                          className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-center focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-                        />
+            <div className="space-y-3" onPointerDownCapture={editLease.markActivity} onKeyDownCapture={editLease.markActivity} onInputCapture={editLease.markActivity}>
+              {editBanner}
+              <fieldset disabled={!editReady || savingEdit} className="space-y-3">
+                <DocSectionTitle title="Modifier les articles" count={editItems.length} />
+                <div className="space-y-2">
+                  {editItems.map((item, idx) => (
+                    <div key={idx} className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-neutral-800 truncate flex-1">{item.name}</span>
+                        <button onClick={() => removeEditItem(idx)} className="p-1 rounded-lg hover:bg-red-50 text-red-500" title="Retirer">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase">Prix unit.</label>
-                        <input type="number" min="0" value={item.unit_price}
-                          onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
-                          className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-                        />
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[9px] font-bold text-neutral-400 uppercase">Quantité</label>
+                          <input type="number" min="0" step="any" value={item.quantity}
+                            onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
+                            className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-center focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-neutral-400 uppercase">Prix unit.</label>
+                          <input type="number" min="0" value={item.unit_price}
+                            onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
+                            className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-neutral-400 uppercase">Remise</label>
+                          <input type="number" min="0" value={item.discount}
+                            onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
+                            className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase">Remise</label>
-                        <input type="number" min="0" value={item.discount}
-                          onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
-                          className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-                        />
+                      <div className="text-right text-[11px] font-bold text-neutral-700">
+                        Sous-total : {formatFCFA(item.quantity * item.unit_price - (item.discount || 0))}
                       </div>
                     </div>
-                    <div className="text-right text-[11px] font-bold text-neutral-700">
-                      Sous-total : {formatFCFA(item.quantity * item.unit_price - (item.discount || 0))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-neutral-50 rounded-xl p-3 text-right">
-                <span className="text-xs text-neutral-500">Nouveau total : </span>
-                <span className="text-sm font-bold text-neutral-900">
-                  {formatFCFA(editItems.reduce((s, i) => s + (i.quantity * i.unit_price - (i.discount || 0)), 0))}
-                </span>
-              </div>
+                  ))}
+                </div>
+                <div className="bg-neutral-50 rounded-xl p-3 text-right">
+                  <span className="text-xs text-neutral-500">Nouveau total : </span>
+                  <span className="text-sm font-bold text-neutral-900">
+                    {formatFCFA(editItems.reduce((s, i) => s + (i.quantity * i.unit_price - (i.discount || 0)), 0))}
+                  </span>
+                </div>
+              </fieldset>
             </div>
           );
         })()}

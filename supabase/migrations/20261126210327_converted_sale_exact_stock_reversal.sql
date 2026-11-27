@@ -429,11 +429,13 @@ CREATE OR REPLACE FUNCTION public.save_locked_invoice_edit(p_tenant_id uuid, p_s
  SET search_path TO ''
 AS $function$
 DECLARE s public.sales%ROWTYPE;snap jsonb; old_lines jsonb;new_lines jsonb;lines_changed boolean; quantities_changed boolean; total_new numeric; stock_site uuid; site_count integer; rec record; old_costs jsonb; prior_qty numeric; next_qty numeric; cid uuid; lease_result jsonb;
+ movement_ids uuid[]; historical_sites jsonb; commission_new jsonb:=p_rep_commission;
+ commission_margin numeric; commission_base numeric; commission_amount numeric;
 BEGIN
  PERFORM public._assert_document_edit_lease(p_tenant_id,'sale',p_sale_id::text,p_window_id,p_lock_token);
  PERFORM public._cs_assert_sale_usable(p_sale_id);
  SELECT * INTO s FROM public.sales WHERE tenant_id=p_tenant_id AND id=p_sale_id FOR UPDATE;
- IF NOT FOUND OR s.source IS DISTINCT FROM 'billing' OR s.accounting_status IS DISTINCT FROM 'not_accounted' OR s.status IN ('cancelled','deleted') OR s.deleted_at IS NOT NULL THEN RAISE EXCEPTION 'Cette facture ne peut plus être modifiée.' USING ERRCODE='55000';END IF;
+ IF NOT FOUND OR (s.source IS NULL OR s.source NOT IN ('billing','pos','quote')) OR s.accounting_status IS DISTINCT FROM 'not_accounted' OR s.status IN ('cancelled','deleted') OR s.deleted_at IS NOT NULL THEN RAISE EXCEPTION 'Cette facture ne peut plus être modifiée.' USING ERRCODE='55000';END IF;
  PERFORM public._document_edit_access(p_tenant_id,'sale',p_sale_id::text);
  PERFORM 1 FROM public.sale_items WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id ORDER BY id FOR UPDATE;
  snap:=public._invoice_edit_snapshot(p_tenant_id,p_sale_id);
@@ -463,15 +465,29 @@ BEGIN
    SELECT 1 FROM o FULL JOIN n USING(article_id) WHERE coalesce(o.qty,0)<>coalesce(n.qty,0)
   ) INTO quantities_changed;
   IF quantities_changed THEN
-   IF (SELECT count(*) FROM public.sales WHERE tenant_id=p_tenant_id AND sale_number=s.sale_number)<>1 THEN RAISE EXCEPTION 'Numéro de facture ambigu : origine du stock indéterminée.' USING ERRCODE='55000';END IF;
-   -- Resolve the ORIGINAL stock source, not the currently selected depot.
-   SELECT count(DISTINCT m.site_id),(array_agg(DISTINCT m.site_id))[1] INTO site_count,stock_site FROM public.stock_movements m
-   WHERE m.tenant_id=p_tenant_id AND ((m.reference_type IN ('sale','invoice_edit') AND m.reference_id=p_sale_id) OR (m.reference_id IS NULL AND m.movement_type='sale' AND m.note IN ('Facture '||s.sale_number,'Facture '||s.sale_number||' (credit)','Facture '||s.sale_number||' (devis converti)')));
+   -- POS and converted quotes have a direct reference to the sale. Older invoices
+   -- in Facturation may only have the document number on the original movement.
+   SELECT array_agg(m.id) INTO movement_ids FROM public.stock_movements m
+   WHERE m.tenant_id=p_tenant_id AND m.reference_id=p_sale_id AND m.reference_type IN ('sale','invoice_edit');
+   IF s.source='billing' AND NOT EXISTS (
+     SELECT 1 FROM public.stock_movements m WHERE m.id=ANY(movement_ids) AND m.reference_type='sale'
+   ) THEN
+    IF (SELECT count(*) FROM public.sales WHERE tenant_id=p_tenant_id AND sale_number=s.sale_number)<>1 THEN
+     RAISE EXCEPTION 'Numéro de facture ambigu : origine du stock indéterminée.' USING ERRCODE='55000';
+    END IF;
+    movement_ids:=coalesce(movement_ids,ARRAY[]::uuid[])||ARRAY(
+     SELECT m.id FROM public.stock_movements m
+     WHERE m.tenant_id=p_tenant_id AND m.reference_id IS NULL AND m.movement_type='sale'
+       AND m.note IN ('Facture '||s.sale_number,'Facture '||s.sale_number||' (credit)','Facture '||s.sale_number||' (devis converti)')
+    );
+   END IF;
+   SELECT count(DISTINCT m.site_id),(array_agg(DISTINCT m.site_id))[1] INTO site_count,stock_site
+   FROM public.stock_movements m WHERE m.id=ANY(movement_ids);
    IF site_count<>1 OR public.current_user_can_access_site(stock_site) IS DISTINCT FROM true OR NOT EXISTS(SELECT 1 FROM public.sites WHERE id=stock_site AND tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'Magasin de sortie du stock indéterminé ou inaccessible. Utilisez un avoir.' USING ERRCODE='55000';END IF;
    -- Do not infer historical stock if the original movement is missing or inconsistent.
-   IF EXISTS(WITH o AS (SELECT article_id,sum(quantity) qty FROM public.sale_items WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id GROUP BY article_id),m AS (SELECT article_id,-sum(quantity) qty FROM public.stock_movements WHERE tenant_id=p_tenant_id AND site_id=stock_site AND ((reference_type IN ('sale','invoice_edit') AND reference_id=p_sale_id) OR (reference_id IS NULL AND movement_type='sale' AND note IN ('Facture '||s.sale_number,'Facture '||s.sale_number||' (credit)','Facture '||s.sale_number||' (devis converti)'))) GROUP BY article_id) SELECT 1 FROM o FULL JOIN m USING(article_id) LEFT JOIN public.articles a ON a.id=coalesce(o.article_id,m.article_id) AND a.tenant_id=p_tenant_id WHERE coalesce(o.qty,0)<>coalesce(m.qty,0) AND (coalesce(a.track_stock,true) OR m.article_id IS NOT NULL)) THEN RAISE EXCEPTION 'Historique de stock incohérent. Aucune modification n’a été enregistrée.' USING ERRCODE='55000';END IF;
+   IF EXISTS(WITH o AS (SELECT article_id,sum(quantity) qty FROM public.sale_items WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id GROUP BY article_id),m AS (SELECT article_id,-sum(quantity) qty FROM public.stock_movements WHERE tenant_id=p_tenant_id AND site_id=stock_site AND id=ANY(movement_ids) GROUP BY article_id) SELECT 1 FROM o FULL JOIN m USING(article_id) LEFT JOIN public.articles a ON a.id=coalesce(o.article_id,m.article_id) AND a.tenant_id=p_tenant_id WHERE coalesce(o.qty,0)<>coalesce(m.qty,0) AND (coalesce(a.track_stock,true) OR m.article_id IS NOT NULL)) THEN RAISE EXCEPTION 'Historique de stock incohérent. Aucune modification n’a été enregistrée.' USING ERRCODE='55000';END IF;
    FOR rec IN WITH o AS (SELECT article_id,sum(quantity) qty FROM public.sale_items WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id GROUP BY article_id),n AS (SELECT article_id,sum(quantity) qty FROM jsonb_to_recordset(p_items) x(article_id uuid,quantity numeric) GROUP BY article_id)
-   SELECT coalesce(o.article_id,n.article_id) article_id,coalesce(o.qty,0)-coalesce(n.qty,0) delta FROM o FULL JOIN n USING(article_id) JOIN public.articles a ON a.id=coalesce(o.article_id,n.article_id) AND a.tenant_id=p_tenant_id WHERE coalesce(o.qty,0)<>coalesce(n.qty,0) AND (a.track_stock OR EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.tenant_id=p_tenant_id AND m.article_id=a.id AND m.site_id=stock_site AND ((m.reference_type IN ('sale','invoice_edit') AND m.reference_id=p_sale_id) OR (m.reference_id IS NULL AND m.movement_type='sale' AND m.note IN ('Facture '||s.sale_number,'Facture '||s.sale_number||' (credit)','Facture '||s.sale_number||' (devis converti)'))))) ORDER BY 1 LOOP
+   SELECT coalesce(o.article_id,n.article_id) article_id,coalesce(o.qty,0)-coalesce(n.qty,0) delta FROM o FULL JOIN n USING(article_id) JOIN public.articles a ON a.id=coalesce(o.article_id,n.article_id) AND a.tenant_id=p_tenant_id WHERE coalesce(o.qty,0)<>coalesce(n.qty,0) AND (a.track_stock OR EXISTS(SELECT 1 FROM public.stock_movements m WHERE m.tenant_id=p_tenant_id AND m.article_id=a.id AND m.site_id=stock_site AND m.id=ANY(movement_ids))) ORDER BY 1 LOOP
     INSERT INTO public.stock_levels(tenant_id,article_id,site_id,quantity) VALUES(p_tenant_id,rec.article_id,stock_site,0) ON CONFLICT(article_id,site_id) DO NOTHING;
     SELECT coalesce(quantity,0) INTO STRICT prior_qty FROM public.stock_levels WHERE tenant_id=p_tenant_id AND article_id=rec.article_id AND site_id=stock_site FOR UPDATE;
     next_qty:=prior_qty+rec.delta;
@@ -481,13 +497,41 @@ BEGIN
    END LOOP;
   END IF;
   SELECT coalesce(jsonb_object_agg(article_id::text,purchase_cost),'{}') INTO old_costs FROM (SELECT DISTINCT ON(article_id) article_id,purchase_cost FROM public.sale_items WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id ORDER BY article_id,created_at,id) q;
+  IF EXISTS(
+   SELECT 1 FROM public.sale_items WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id
+   GROUP BY article_id HAVING count(DISTINCT site_id)>1
+  ) THEN RAISE EXCEPTION 'Cet article est sorti de plusieurs dépôts. Utilisez le parcours de correction adapté.' USING ERRCODE='55000';END IF;
+  SELECT coalesce(jsonb_object_agg(article_id::text,site_id),'{}') INTO historical_sites FROM (
+   SELECT DISTINCT ON(article_id) article_id,site_id FROM public.sale_items
+   WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id ORDER BY article_id,created_at,id
+  ) q;
   DELETE FROM public.sale_items WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id;
   INSERT INTO public.sale_items(tenant_id,sale_id,site_id,article_id,name,quantity,unit_price,discount,vat_rate,total,purchase_cost)
-  SELECT p_tenant_id,p_sale_id,s.site_id,x.article_id,x.name,x.quantity,x.unit_price,coalesce(x.discount,0),0,round(x.quantity*x.unit_price-coalesce(x.discount,0),2),coalesce((old_costs->>x.article_id::text)::numeric,a.purchase_price,0)
+  SELECT p_tenant_id,p_sale_id,coalesce(stock_site,(historical_sites->>x.article_id::text)::uuid,s.site_id),x.article_id,x.name,x.quantity,x.unit_price,coalesce(x.discount,0),0,round(x.quantity*x.unit_price-coalesce(x.discount,0),2),coalesce((old_costs->>x.article_id::text)::numeric,a.purchase_price,0)
   FROM jsonb_to_recordset(p_items) x(article_id uuid,name text,quantity numeric,unit_price numeric,discount numeric) JOIN public.articles a ON a.id=x.article_id AND a.tenant_id=p_tenant_id;
+  -- Le journal des ventes modifie les lignes sans changer le représentant
+  -- ni la règle de commission qui était en vigueur lors de l'émission.
+  IF p_doc_header IS NULL AND p_rep_commission IS NULL
+     AND s.representative_id IS NOT DISTINCT FROM p_representative_id
+     AND jsonb_typeof(s.rep_commission)='object' THEN
+   SELECT total_new-coalesce(sum(quantity*purchase_cost),0) INTO commission_margin
+   FROM public.sale_items WHERE tenant_id=p_tenant_id AND sale_id=p_sale_id;
+   commission_base:=CASE WHEN s.rep_commission->>'base'='marge' THEN commission_margin ELSE total_new END;
+   commission_amount:=CASE s.rep_commission->>'type'
+    WHEN 'fixe' THEN (s.rep_commission->>'fixed_amount')::numeric
+    WHEN 'pct_marge' THEN commission_margin*(s.rep_commission->>'rate')::numeric/100
+    WHEN 'pct_ca' THEN commission_base*(s.rep_commission->>'rate')::numeric/100
+   END;
+   IF commission_amount IS NULL THEN
+    RAISE EXCEPTION 'Règle de commission historique indisponible.' USING ERRCODE='55000';
+   END IF;
+   commission_new:=s.rep_commission||jsonb_build_object(
+    'base_amount',round(commission_base,2),'amount',round(greatest(commission_amount,0),2),'computed_at',clock_timestamp()
+   );
+  END IF;
  ELSE total_new:=s.total;END IF;
  IF total_new>coalesce(s.paid,0) AND p_customer_id IS NULL THEN RAISE EXCEPTION 'Un client est requis pour une facture à crédit.' USING ERRCODE='22023';END IF;
- UPDATE public.sales SET total=total_new,subtotal=CASE WHEN lines_changed THEN total_new ELSE subtotal END,customer_id=p_customer_id,doc_header=CASE WHEN p_doc_header IS NULL THEN doc_header ELSE coalesce(doc_header,'{}'::jsonb)||p_doc_header END,representative_id=p_representative_id,rep_commission=CASE WHEN NOT lines_changed AND s.representative_id IS NOT DISTINCT FROM p_representative_id THEN s.rep_commission ELSE p_rep_commission END,status=CASE WHEN NOT lines_changed THEN status WHEN coalesce(paid,0)>=total_new THEN 'paid' WHEN coalesce(paid,0)>0 THEN 'partial' ELSE 'validated' END WHERE id=p_sale_id AND tenant_id=p_tenant_id;
+ UPDATE public.sales SET total=total_new,subtotal=CASE WHEN lines_changed THEN total_new ELSE subtotal END,customer_id=p_customer_id,doc_header=CASE WHEN p_doc_header IS NULL THEN doc_header ELSE coalesce(doc_header,'{}'::jsonb)||p_doc_header END,representative_id=p_representative_id,rep_commission=CASE WHEN NOT lines_changed AND s.representative_id IS NOT DISTINCT FROM p_representative_id THEN s.rep_commission ELSE commission_new END,status=CASE WHEN NOT lines_changed THEN status WHEN coalesce(paid,0)>=total_new THEN 'paid' WHEN coalesce(paid,0)>0 THEN 'partial' ELSE 'validated' END WHERE id=p_sale_id AND tenant_id=p_tenant_id;
  IF lines_changed OR s.customer_id IS DISTINCT FROM p_customer_id THEN
   FOR cid IN SELECT DISTINCT x FROM unnest(ARRAY[s.customer_id,p_customer_id]) x WHERE x IS NOT NULL ORDER BY x LOOP
    PERFORM 1 FROM public.customers WHERE id=cid AND tenant_id=p_tenant_id FOR UPDATE;
