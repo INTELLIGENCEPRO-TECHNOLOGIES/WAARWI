@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Copy, FileText, Settings2 } from 'lucide-react';
-import { useAccountingWork } from '../context/AccountingWindowContext';
+import { useAccountingMobile, useAccountingWork } from '../context/AccountingWindowContext';
 import {
   normalizeTemplateLine, resolveEntryTemplate,
   type EntryTemplate, type EntryTemplateSource, type TemplateInputs, type TemplateLine,
@@ -8,6 +8,8 @@ import {
 import { formatDate } from '../lib/format';
 import { useAccountingTemplateRows } from '../lib/useAccountingTemplateRows';
 import { Modal } from './Modal';
+import { AccountingMobileActions } from './AccountingMobileControls';
+import { SearchableSelect } from './SearchableSelect';
 
 export type { EntryTemplate, TemplateLine } from '../lib/accountingEntryTemplates';
 
@@ -32,6 +34,7 @@ const amountFormat = new Intl.NumberFormat('fr-SN', { maximumFractionDigits: 2 }
 export function AccountingEntryTemplates({
   tenantId, canSave, journal, description, lines, onApply, onCreate, onManage, openRequest, accounts, readyToApply = true,
 }: Props) {
+  const mobile = useAccountingMobile();
   const work = useAccountingWork();
   const accountListId = useId();
   const templateList = useAccountingTemplateRows(tenantId, work?.revision ?? 0);
@@ -81,18 +84,26 @@ export function AccountingEntryTemplates({
     if (result !== false) close();
   }
 
+  const callTemplate = () => { setChosen(''); setOpen(true); };
   return (
     <div className="acc-template-strip">
-      <div className="acc-toolbar">
-        <button type="button" className="btn-secondary" disabled={!journal} onClick={() => { setChosen(''); setOpen(true); }}>
+      {mobile?<div className="acc-mobile-template-tools">
+        <button type="button" className="btn-secondary" disabled={!journal} onClick={callTemplate}><FileText size={16} />Appeler un modèle</button>
+        <AccountingMobileActions title="Actions des modèles" actions={[
+          ...(onCreate?[{label:'Créer un modèle depuis la saisie',icon:<Copy size={16}/>,disabled:!canSave,run:()=>onCreate({journal,description,lines})}]:[]),
+          ...(onManage?[{label:'Gérer les modèles',icon:<Settings2 size={16}/>,run:onManage}]:[]),
+        ]}/>
+      </div>:<div className="acc-toolbar">
+        <button type="button" className="btn-secondary" disabled={!journal} onClick={callTemplate}>
           <FileText size={16} />Appeler un modèle
         </button>
         {onCreate && <button type="button" className="btn-secondary" disabled={!canSave}
           onClick={() => onCreate({ journal, description, lines })}><Copy size={16} />Créer un modèle depuis la saisie</button>}
         {onManage && <button type="button" className="btn-secondary" onClick={onManage}><Settings2 size={16} />Modèles de saisie</button>}
-      </div>
+      </div>}
       <Modal open={open} onClose={close} title={preparing ? 'Préparer le modèle' : 'Appeler un modèle'} size={preparing ? 'lg' : 'md'}
         focusOnOpen layer="top"
+        panelClassName={mobile?'accounting-workspace acc-mobile-sheet':''}
         footer={preparing ? <>
           <button type="button" className="btn-secondary" onClick={() => setPreparing(null)}>Retour</button>
           <button type="button" className="btn-primary" disabled={!!issue || !readyToApply} onClick={apply}>Reprendre en saisie</button>
@@ -106,7 +117,11 @@ export function AccountingEntryTemplates({
         {!preparing ? (
           <div className="space-y-3">
             <p className="text-sm text-[var(--w-text-sec)]">Journal {journal}. La liste inclut les modèles disponibles dans tous les journaux.</p>
-            <label className="label">Modèle de saisie
+            {mobile?<SearchableSelect label="Modèle de saisie" value={chosen} onChange={setChosen} wrapLabels
+              disabled={templateList.loading||!scoped.length} clearable={false} searchable={scoped.length>8}
+              placeholder={templateList.loading?'Chargement…':'Choisir un modèle'}
+              options={scoped.map(template=>({value:template.id,label:template.name,sublabel:template.journal_code?'Journal '+template.journal_code:'Tous les journaux'}))}/>
+              :<label className="label">Modèle de saisie
               <select className="input mt-1 w-full" value={chosen} disabled={templateList.loading || !scoped.length}
                 onChange={event => setChosen(event.target.value)}>
                 <option value="">{templateList.loading ? 'Chargement…' : 'Choisir un modèle'}</option>
@@ -114,7 +129,7 @@ export function AccountingEntryTemplates({
                   {template.name}{!template.journal_code ? ' │ Tous les journaux' : ''}
                 </option>)}
               </select>
-            </label>
+            </label>}
             {selected && <div className="text-sm">
               <p>{selected.description}</p>
               {selected.next_due_on && <p className="mt-1 text-[var(--w-text-sec)]">Prochaine échéance le {formatDate(selected.next_due_on)}.</p>}

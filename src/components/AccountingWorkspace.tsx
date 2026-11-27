@@ -2,6 +2,7 @@ import {useState,useEffect,useRef,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import {ChevronLeft,ChevronRight,MoreHorizontal,Eye,Copy,ArrowRightLeft,FileText} from './Icons';
 import { SearchableSelect } from './SearchableSelect';
+import { useAccountingMobile } from '../context/AccountingWindowContext';
 
 export function useAccountingPagination<T>(rows:T[],resetKey:string){
  const [size,setSize]=useState(20);
@@ -11,8 +12,11 @@ export function useAccountingPagination<T>(rows:T[],resetKey:string){
  useEffect(()=>setPage(0),[resetKey,size]);
  return {rows:rows.slice(current*size,(current+1)*size),page:current,size,total:rows.length,setPage,setSize};
 }
-const pageSizes = [5,10,20,50].map(size=>({value:String(size),label:String(size)}));
+const pageSizeChoices = [5,10,20,50];
+const pageSizes = pageSizeChoices.map(size=>({value:String(size),label:String(size)}));
 export function AccountingPagination({page,size,total,setPage,setSize,disabled=false}:{page:number;size:number;total:number;setPage:(n:number)=>void;setSize:(n:number)=>void;disabled?:boolean}){
+ const mobile=useAccountingMobile();
+ if(mobile&&total<=pageSizeChoices[0])return null;
  const pages=Math.max(1,Math.ceil(total/size));
  return <nav className="acc-pagination" aria-label="Pagination comptable">
   <span>{total?Math.min(page*size+1,total):0}–{Math.min((page+1)*size,total)} sur {total}</span>

@@ -1,12 +1,14 @@
 import {useEffect,useState} from 'react';
-import {useAccountingWork} from '../context/AccountingWindowContext';
+import {useAccountingMobile,useAccountingWork} from '../context/AccountingWindowContext';
 import {supabase} from '../lib/supabase';
 import {formatDate} from '../lib/format';
 import {ArrowRight,ArrowRightLeft,Plus,BookOpen,Scale,Search,FileText,Lock,RefreshCw} from './Icons';
+import { AccountingMobileActions } from './AccountingMobileControls';
 type Entry={id:string;entry_number:string;entry_date:string;journal_type:string;description:string;total_debit:number;status:string};
 type Data={total:number;posted:number;draft:number;recent:Entry[]};
 export function AccountingOverview({tenantId,canManage,onNavigate}:{tenantId:string;canManage:boolean;onNavigate:(route:string)=>void}){
  const work=useAccountingWork();
+ const mobile=useAccountingMobile();
  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[revision,setRevision]=useState(0);
  useEffect(()=>{let active=true;setData(null);setError('');void(async()=>{try{
  const base=()=>supabase.from('journal_entries').select('id',{count:'exact',head:true}).eq('tenant_id',tenantId);
@@ -16,7 +18,14 @@ export function AccountingOverview({tenantId,canManage,onNavigate}:{tenantId:str
  }catch(e){if(active)setError(e&&typeof e==='object'&&'message' in e?String(e.message):'Impossible de charger la situation.');}})();return()=>{active=false;};},[tenantId,revision,work?.revision]);
  const shortcuts=[{route:'acc_journals',label:'Journaux',icon:BookOpen},{route:'acc_templates',label:'Modèles de saisie',icon:FileText},{route:'acc_bank',label:'Rapprochement bancaire',icon:ArrowRightLeft},{route:'acc_balance',label:'Balance générale',icon:Scale},{route:'acc_statement',label:'Interrogation des comptes',icon:Search},{route:'acc_financial',label:'États financiers',icon:FileText},{route:'acc_cloture',label:'Clôtures',icon:Lock}];
  return <section className="space-y-3">
- <div className="acc-toolbar"><span className="text-xs text-neutral-500">Situation comptable │ tous exercices</span><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>setRevision(n=>n+1)}><RefreshCw size={16}/>Actualiser</button><button type="button" className="btn-secondary" onClick={()=>onNavigate('acc_guide')}><BookOpen size={16}/>Guide de la comptabilité</button>{canManage&&<button type="button" className="btn-primary" onClick={()=>onNavigate('acc_entry')}><Plus size={16}/>Nouvelle écriture</button>}</div>
+ {mobile?<div className="acc-mobile-command-bar acc-mobile-journal-commands">
+   <span className="acc-mobile-command-caption">Tous exercices</span>
+   {canManage&&<button type="button" className="btn-primary" onClick={()=>onNavigate('acc_entry')}><Plus size={16}/>Nouvelle écriture</button>}
+   <AccountingMobileActions title="Actions de l’accueil comptable" actions={[
+    {label:'Actualiser',icon:<RefreshCw size={16}/>,run:()=>setRevision(n=>n+1)},
+    {label:'Guide de la comptabilité',icon:<BookOpen size={16}/>,run:()=>onNavigate('acc_guide')},
+   ]}/>
+ </div>:<div className="acc-toolbar"><span className="text-xs text-neutral-500">Situation comptable │ tous exercices</span><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>setRevision(n=>n+1)}><RefreshCw size={16}/>Actualiser</button><button type="button" className="btn-secondary" onClick={()=>onNavigate('acc_guide')}><BookOpen size={16}/>Guide de la comptabilité</button>{canManage&&<button type="button" className="btn-primary" onClick={()=>onNavigate('acc_entry')}><Plus size={16}/>Nouvelle écriture</button>}</div>}
  {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
  <div className="acc-summary">{[['Écritures',data?.total],['Validées',data?.posted],['Brouillons',data?.draft]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value===undefined?'—':Number(value).toLocaleString('fr-FR')}</strong></div>)}</div>
  <div className="acc-overview-links"><h2 className="text-sm font-semibold">Accès directs</h2>{shortcuts.map(({route,label,icon:Icon})=><button key={route} type="button" onClick={()=>onNavigate(route)}><Icon size={17}/><span>{label}</span><ArrowRight size={15}/></button>)}</div>

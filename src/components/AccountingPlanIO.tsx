@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
-import {useAccountingWork,useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
+import {useAccountingMobile,useAccountingWork,useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
+import {AccountingMobileActions} from './AccountingMobileControls';
 
 interface AccountRow {
   code: string;
@@ -57,7 +58,7 @@ function isRowEmpty(row: Record<string, any>): boolean {
 
 export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onClose }: { accounts: AccountRow[]; onImportDone: () => void;importOnly?:boolean;onClose?:()=>void }) {
   const { tenant } = useApp();
-  const work=useAccountingWork();const windowId=useAccountingWindowId();
+  const work=useAccountingWork();const windowId=useAccountingWindowId();const mobile=useAccountingMobile();
   const { success, error: showError } = useToast();
   const { can } = usePermissions();
   const canView = can('view_accounting');
@@ -276,7 +277,13 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
 
   return (
     <>
-      {!importOnly&&<div className="flex items-center gap-1.5">
+      {!importOnly&&(mobile?<AccountingMobileActions title="Importer ou exporter le plan comptable" actions={[
+        ...(canManage?[{label:'Importer un plan comptable',icon:<Upload size={16}/>,run:()=>work?work.openPlanImport():openImport()}]:[]),
+        ...(canView?[
+          {label:'Exporter en Excel',icon:<FileSpreadsheet size={16}/>,disabled:exporting||!accounts.length,run:()=>void doExport('xlsx')},
+          {label:'Exporter en CSV',icon:<FileDown size={16}/>,disabled:exporting||!accounts.length,run:()=>void doExport('csv')},
+        ]:[]),
+      ]}/>:<div className="flex items-center gap-1.5">
         {canView && (
           <div className="relative" ref={exportMenuRef}>
             <button
@@ -307,7 +314,7 @@ export function AccountingPlanIO({ accounts, onImportDone, importOnly=false,onCl
             <Upload className="w-4 h-4" />
           </button>
         )}
-      </div>}
+      </div>)}
 
       {canManage&&importOpen&&<section className="space-y-3 w-full min-w-0"><div className="acc-toolbar acc-fixed"><strong className="text-sm">Import du plan comptable</strong><span className="acc-spacer"/>{importStep==='preview'&&<button type="button" className="btn-secondary" disabled={importing} onClick={()=>{setImportStep('upload');setPreview(null);setFileName('');}}>Retour</button>}{importStep==='preview'&&preview&&!hasErrors&&(preview.created>0||preview.renamed>0)&&<button type="button" className="btn-primary" disabled={importing} onClick={confirmImport}>{importing?<Loader2 size={15} className="animate-spin"/>:<CheckCircle2 size={15}/>}Valider l’import</button>}<button type="button" className="btn-secondary" disabled={importing} onClick={()=>{if(onClose)onClose();else setImportOpen(false);}}>Fermer</button></div>
         {importStep === 'upload' && (

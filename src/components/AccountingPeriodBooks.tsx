@@ -5,6 +5,7 @@ import {supabase} from '../lib/supabase';
 import {useRealtimeTick} from '../lib/useRealtimeData';
 import {AccountingTable,AccountingPagination} from './AccountingWorkspace';
 import {Search,Download,RefreshCw} from './Icons';
+import {AccountingMobileActions,AccountingMobileFilters} from './AccountingMobileControls';
 type Balance={account_code:string;account_name:string;account_class:number;opening:number;debit:number;credit:number;closing:number;movement_count:number};
 type Ledger={account_code:string;account_name:string;entry_date:string;entry_number:string|null;entry_id:string|null;line_id:string|null;journal_type:string|null;label:string;reference:string|null;debit:number;credit:number;running_balance:number;account_opening:number;account_debit:number;account_credit:number;account_closing:number};
 type Totals={accounts:number;movements:number;opening_debit:number;opening_credit:number;debit:number;credit:number;closing_debit:number;closing_credit:number;unknown_accounts:number};
@@ -21,11 +22,14 @@ export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
  const {tenant}=useApp();const work=useAccountingWork();const tick=useRealtimeTick(['journal_entries','journal_lines','accounts','accounting_fiscal_years']);
  const initial={from:today().slice(0,4)+'-01-01',to:today(),search:''};
  const [form,setForm]=useState(initial),[criteria,setCriteria]=useState(initial),[page,setPage]=useState(0),[size,setSize]=useState(20),[rev,setRev]=useState(0);
+ const [periodDraft,setPeriodDraft]=useState<{from:string;to:string}|null>(null);
+ const [periodError,setPeriodError]=useState('');
  const [data,setData]=useState<Report|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[exporting,setExporting]=useState(false);
  const changed=JSON.stringify(form)!==JSON.stringify(criteria);
  const query=async(p:number,n:number)=>{if(!tenant)throw Error('Entreprise indisponible.');const {data:d,error:e}=await supabase.rpc('accounting_period_books',{p_tenant_id:tenant.id,p_from:criteria.from,p_to:criteria.to,p_mode:mode,p_search:criteria.search.trim()||null,p_offset:p,p_size:n});if(e)throw e;return d as Report;};
  useEffect(()=>{let live=true;setLoading(true);setData(null);setError('');void(async()=>{try{const r=await query(page*size,size);if(live){setData(r);const last=Math.max(0,Math.ceil(r.count/size)-1);if(page>last)setPage(last);}}catch(e){if(live)setError(msg(e));}finally{if(live)setLoading(false);}})();return()=>{live=false;};},[tenant?.id,mode,criteria,page,size,rev,tick,work?.revision]);
- const submit=()=>{if(!form.from||!form.to||form.from>form.to||form.to>today()||form.from.slice(0,4)!==form.to.slice(0,4)){setError('Choisissez des dates non futures dans un seul exercice.');return;}setPage(0);setCriteria({...form});setRev(v=>v+1);};
+ const checkPeriod=(from:string,to:string)=>!from||!to||from>to||to>today()||from.slice(0,4)!==to.slice(0,4)?'Choisissez des dates non futures dans un seul exercice.':'';
+ const submit=(values=form)=>{const invalid=checkPeriod(values.from,values.to);if(invalid){setError(invalid);return;}setPage(0);setCriteria({...values});setRev(v=>v+1);};
  const exportExcel=async()=>{if(!data||exporting)return;setExporting(true);setError('');try{const count=data.count;if(count>5000)throw Error('Plus de 5 000 lignes : réduisez la période ou filtrez les comptes.');const p=await query(0,5000);if(p.count!==count||JSON.stringify(p.totals)!==JSON.stringify(data.totals)||p.opening_mode!==data.opening_mode)throw Error('Les données ont changé. Actualisez avant export.');const rows=p.rows;if(rows.length!==count||new Set(rows.map(r=>'line_id'in r?r.line_id??'opening:'+r.account_code:r.account_code)).size!==count)throw Error('Export incohérent. Actualisez.');
  const X=await import('xlsx');const wb=X.utils.book_new();const head=mode==='balance'?['Compte','Intitulé','Ouverture D','Ouverture C','Débit période','Crédit période','Clôture D','Clôture C']:['Compte','Intitulé','Date','Pièce','Journal','Libellé','Ouverture signée','Débit','Crédit','Solde cumulé','Total D compte','Total C compte','Clôture signée'];
  const matrix=rows.map(r=>'line_id'in r?[r.account_code,r.account_name,r.entry_date,r.entry_number??'',r.journal_type??'',r.label,Number(r.account_opening),Number(r.debit),Number(r.credit),Number(r.running_balance),Number(r.account_debit),Number(r.account_credit),Number(r.account_closing)]:[r.account_code,r.account_name,Math.max(0,Number(r.opening)),Math.max(0,-Number(r.opening)),Number(r.debit),Number(r.credit),Math.max(0,Number(r.closing)),Math.max(0,-Number(r.closing))]);
@@ -35,10 +39,31 @@ export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
  const balanceRows = (data?.rows ?? []).filter((row): row is Balance => !('line_id' in row));
  const ledgerRows = (data?.rows ?? []).filter((row): row is Ledger => 'line_id' in row);
  return <section className="acc-fill acc-period-books space-y-2">
- <form className="acc-toolbar acc-fixed" onSubmit={e=>{e.preventDefault();submit();}}>
-  {(()=>{const dates=<><label className="text-xs">Du <input className="input" type="date" value={form.from} onChange={e=>setForm(p=>({...p,from:e.target.value}))}/></label><label className="text-xs">Au <input className="input" type="date" max={today()} value={form.to} onChange={e=>setForm(p=>({...p,to:e.target.value}))}/></label></>;
-  return mobile?<details className="acc-mobile-filters"><summary>Période</summary><div className="acc-fields">{dates}</div></details>:dates;})()}
-  <input className="input flex-1 min-w-0" aria-label="Compte ou intitulé" placeholder="Compte ou intitulé" value={form.search} onChange={e=>setForm(p=>({...p,search:e.target.value}))}/><button className="btn-primary" disabled={loading||exporting}><Search size={15}/>Afficher</button><button type="button" className="btn-secondary" disabled={loading||exporting} onClick={()=>setRev(v=>v+1)}><RefreshCw size={15}/>Actualiser</button><button type="button" className="btn-secondary" disabled={!data||loading||exporting||changed} onClick={()=>void exportExcel()}><Download size={15}/>{exporting?'Export…':'Excel complet'}</button></form>
+ <form className={mobile?'acc-mobile-command-bar':'acc-toolbar acc-fixed'} onSubmit={e=>{e.preventDefault();submit();}}>
+  {!mobile&&<><label className="text-xs">Du <input className="input" type="date" value={form.from} onChange={e=>setForm(p=>({...p,from:e.target.value}))}/></label><label className="text-xs">Au <input className="input" type="date" max={today()} value={form.to} onChange={e=>setForm(p=>({...p,to:e.target.value}))}/></label></>}
+  <input type="search" className={mobile?'input acc-mobile-command-wide acc-mobile-search-input':'input flex-1 min-w-0'} aria-label="Compte ou intitulé" placeholder="Compte ou intitulé" value={form.search} onChange={e=>setForm(p=>({...p,search:e.target.value}))}/>
+  {mobile&&<button type="button" className="btn-secondary" aria-haspopup="dialog" onClick={()=>{setPeriodDraft({from:form.from,to:form.to});setPeriodError('');}}>Période</button>}
+  <button className="btn-primary" disabled={loading||exporting}><Search size={15}/>Afficher</button>
+  {mobile?<AccountingMobileActions title="Actions de l’état comptable" actions={[
+    {label:'Actualiser',icon:<RefreshCw size={15}/>,disabled:loading||exporting,run:()=>setRev(v=>v+1)},
+    {label:'Exporter en Excel',icon:<Download size={15}/>,disabled:!data||loading||exporting||changed,run:()=>void exportExcel()},
+  ]}/>:<><button type="button" className="btn-secondary" disabled={loading||exporting} onClick={()=>setRev(v=>v+1)}><RefreshCw size={15}/>Actualiser</button><button type="button" className="btn-secondary" disabled={!data||loading||exporting||changed} onClick={()=>void exportExcel()}><Download size={15}/>{exporting?'Export…':'Excel complet'}</button></>}
+  {mobile&&<p className="acc-mobile-command-wide acc-mobile-command-caption">Du {date(criteria.from)} au {date(criteria.to)}</p>}
+  {periodDraft&&<AccountingMobileFilters open title="Période" onClose={()=>setPeriodDraft(null)} onReset={()=>{setPeriodDraft({from:initial.from,to:initial.to});setPeriodError('');}}
+    onApply={()=>{
+      const invalid=checkPeriod(periodDraft.from,periodDraft.to);
+      if(invalid){setPeriodError(invalid);return;}
+      const values={...form,...periodDraft};setForm(values);submit(values);setPeriodDraft(null);
+    }}>
+    <div className="acc-mobile-date-fields">
+      <label className="acc-mobile-field">Du<input className="input" type="date" value={periodDraft.from}
+        onChange={e=>{const value=e.target.value;setPeriodDraft(previous=>previous&&({...previous,from:value}));setPeriodError('');}}/></label>
+      <label className="acc-mobile-field">Au<input className="input" type="date" max={today()} value={periodDraft.to}
+        onChange={e=>{const value=e.target.value;setPeriodDraft(previous=>previous&&({...previous,to:value}));setPeriodError('');}}/></label>
+    </div>
+    {periodError&&<p role="alert" className="text-xs text-red-700">{periodError}</p>}
+  </AccountingMobileFilters>}
+ </form>
  {changed&&<p className="text-xs">Appliquez les critères pour actualiser l’état.</p>}
  {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
  {data&&<p className="text-xs text-neutral-600">{data.opening_mode==='fiscal'?'Report à nouveau arrêté de '+data.prior_year+' puis mouvements antérieurs à la période.':data.opening_mode==='provisional'?'Ouverture provisoire : exercice précédent non clôturé ; reprise continue des écritures depuis le dernier arrêté disponible. Les comptes de gestion peuvent conserver des soldes antérieurs.':'Premier exercice : solde issu des mouvements antérieurs à la période.'} Les reports ne sont pas des pièces supplémentaires.</p>}
@@ -82,7 +107,7 @@ export function AccountingPeriodBooks({mode}:{mode:'balance'|'ledger'}){
    {!data?.rows.length&&<tr><td colSpan={3}>{loading?'Chargement…':'Aucun compte pour la sélection.'}</td></tr>}
    {mode==='ledger'?ledgerRows.map(row=><tr key={row.line_id??row.account_code}>
     <td><details className="acc-mobile-line"><summary>{row.entry_date?date(row.entry_date):'Ouverture'}<span>{row.entry_number??row.account_code}</span></summary>
-     <span>{row.account_code} · {row.account_name}</span><span>{row.label||row.reference}</span>
+     <span>{row.account_code} │ {row.account_name}</span><span>{row.label||row.reference}</span>
      <span>Solde cumulé {dc(row.running_balance)}</span>
      {row.entry_number&&<button type="button" onClick={()=>work?.openPiece({entryId:row.entry_id??undefined,entryNumber:row.entry_number!})}>Ouvrir la pièce</button>}
      <button type="button" onClick={()=>work?.openAccount(row.account_code)}>Interroger le compte</button>

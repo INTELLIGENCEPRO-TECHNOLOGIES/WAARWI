@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { verifyArticleNavigation } from './article-navigation.mjs';
 import { verifyCalendarActions } from './calendar-layout.mjs';
 import { verifyAccountingTemplates } from './accounting-templates.mjs';
+import { verifyAccountingMobile } from './accounting-mobile.mjs';
 
 const api = new URL(process.env.VITE_SUPABASE_URL);
 const app = new URL('http://127.0.0.1:4173');
@@ -37,8 +38,8 @@ async function visible(locator, label) {
   }
 }
 
-async function browserPage(browser, viewport) {
-  const context = await browser.newContext({ viewport, locale: 'fr-FR', serviceWorkers: 'block' });
+async function browserPage(browser, viewport, touch = false) {
+  const context = await browser.newContext({ viewport, locale: 'fr-FR', serviceWorkers: 'block', isMobile: touch, hasTouch: touch });
   await context.route('**/*', route => {
     const origin = new URL(route.request().url()).origin;
     return origin === app.origin || origin === api.origin ? route.continue() : route.abort();
@@ -196,6 +197,9 @@ try {
 
   await verifyArticleNavigation(mobile);
   await verifyAccountingTemplates(desktop);
+  const accountingMobile = await browserPage(browser, { width: 320, height: 670 }, true);
+  await signIn(accountingMobile);
+  await verifyAccountingMobile(accountingMobile);
 } finally {
   await browser.close();
 }

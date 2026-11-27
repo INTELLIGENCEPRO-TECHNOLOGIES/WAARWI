@@ -17,6 +17,8 @@ import {AccountingAging} from '../components/AccountingAging';
 import {AccountingJournalSettings} from '../components/AccountingJournalSettings';
 import {AccountingOverview} from '../components/AccountingOverview';
 import { AccountingPagination, AccountingTable, AccountingRowActions, useAccountingPagination } from '../components/AccountingWorkspace';
+import { AccountingMobileActions, AccountingMobileFilters } from '../components/AccountingMobileControls';
+import { Modal } from '../components/Modal';
 import './accounting-graphite.css';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { AccountingCashReview } from '../components/AccountingCashReview';
@@ -158,13 +160,14 @@ function PlanTab() {
 
   return (
     <div className="acc-fill space-y-3">
-      {(!mobile||!open)&&<div className="acc-toolbar acc-fixed">
-        <input aria-label="Rechercher un compte" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Code ou intitulé…" className="input flex-1 min-w-0 sm:max-w-xs"/>
-        <SearchableSelect ariaLabel="Classe" className="acc-toolbar-select w-40" searchable={false} clearable={false}
+      {(!mobile||!open)&&<div className={mobile?'acc-mobile-command-bar':'acc-toolbar acc-fixed'}>
+        <input aria-label="Rechercher un compte" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Code ou intitulé…" className={mobile?'input acc-mobile-command-wide acc-mobile-search-input':'input flex-1 min-w-0 sm:max-w-xs'}/>
+        <SearchableSelect ariaLabel="Classe" className={mobile?'acc-mobile-selection':'acc-toolbar-select w-40'} searchable={false} clearable={false} wrapLabels={mobile}
           value={classFilter} onChange={setClassFilter}
           options={[{value:'',label:'Toutes les classes'}, ...Array.from({length:8},(_,i)=>({value:String(i+1),label:'Classe '+(i+1)}))]}/>
-        <span className="acc-spacer"/><AccountingPlanIO accounts={planLoading||planError?[]:list} onImportDone={()=>{work?.refresh();void load();}}/>
+        {!mobile&&<><span className="acc-spacer"/><AccountingPlanIO accounts={planLoading||planError?[]:list} onImportDone={()=>{work?.refresh();void load();}}/></>}
         {canManage&&<button type="button" onClick={()=>{setEditing(null);setForm({});setOpen(true);}} className="btn-primary"><Plus size={16}/>Nouveau compte</button>}
+        {mobile&&<AccountingPlanIO accounts={planLoading||planError?[]:list} onImportDone={()=>{work?.refresh();void load();}}/>}
       </div>}
       {planError&&<p role="alert" className="text-xs text-red-700">{planError}</p>}{planLoading&&<p role="status" className="text-xs">Chargement du plan comptable…</p>}
       {(!mobile||!open)&&<AccountingTable fill footer={<AccountingPagination {...paging} disabled={planLoading}/>}>
@@ -174,14 +177,17 @@ function PlanTab() {
         </table>
       </AccountingTable>}
 
-      {open&&<section className="acc-section-head space-y-2"><div className="acc-toolbar"><strong className="text-sm">{editing?'Modifier le compte':'Nouveau compte'}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={saving} onClick={()=>setOpen(false)}>Annuler</button><button type="button" className="btn-primary" disabled={saving} onClick={save}>{saving?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Enregistrer</button></div><div className="acc-fields acc-fields-account">
+      {open&&<section className="acc-section-head acc-catalog-editor space-y-2"><div className="acc-toolbar acc-catalog-toolbar"><strong className="text-sm">{editing?'Modifier le compte':'Nouveau compte'}</strong>{!mobile&&<><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={saving} onClick={()=>setOpen(false)}>Annuler</button><button type="button" className="btn-primary" disabled={saving} onClick={save}>{saving?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Enregistrer</button></>}</div><div className="acc-fields acc-fields-account">
           <div>
             <label className="label">Code (7 chiffres) *</label>
-            <input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="5710000" maxLength={7} disabled={!!editing} />
+            <input aria-label="Code du compte" inputMode="numeric" value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="5710000" maxLength={7} disabled={!!editing} />
             {form.code?.length === 7 && <p className="text-xs text-slate-500 mt-1">Classe {form.code.charAt(0)}</p>}
           </div>
-          <div><label className="label">Intitulé *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
-        </div></section>}
+          <div><label className="label">Intitulé *<input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></label></div>
+        </div>{mobile&&<div className="acc-editor-actions">
+          <button type="button" className="btn-secondary" disabled={saving} onClick={()=>setOpen(false)}>Annuler</button>
+          <button type="button" className="btn-primary" disabled={saving} onClick={save}>{saving?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Enregistrer</button>
+        </div>}</section>}
     </div>
   );
 }
@@ -218,6 +224,8 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
   const [journalError,setJournalError]=useState('');
   const [fromDate,setFromDate]=useState('');
   const [toDate,setToDate]=useState('');
+  const [journalDraft,setJournalDraft]=useState<{journal:string;from:string;to:string}|null>(null);
+  const [journalDraftError,setJournalDraftError]=useState('');
   const [contextRow,setContextRow]=useState<{id:string;x:number;y:number}|null>(null);
   const loadSequence=useRef(0);
   const [loading, setLoading] = useState(true);
@@ -484,9 +492,12 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
                   <div className="acc-entry-header">
             <div>
               <label className="label">Journal *</label>
-              <select aria-label="Journal de saisie" value={form.journal_type} onChange={e => setForm(f => ({ ...f, journal_type: e.target.value }))} className="input" disabled={saving||!!occurrence||!!initialJournal||journalCatalog.loading||!!journalCatalog.error}>
+              {mobile?<SearchableSelect ariaLabel="Journal de saisie" value={form.journal_type} clearable={false} wrapLabels
+                searchable={journalOptions.length>10} disabled={saving||!!occurrence||!!initialJournal||journalCatalog.loading||!!journalCatalog.error}
+                options={journalOptions.filter(j=>j.active||j.code===form.journal_type).map(j=>({value:j.code,label:j.code+' — '+j.name,disabled:!j.active}))}
+                onChange={value=>setForm(f=>({...f,journal_type:value}))}/>:<select aria-label="Journal de saisie" value={form.journal_type} onChange={e => setForm(f => ({ ...f, journal_type: e.target.value }))} className="input" disabled={saving||!!occurrence||!!initialJournal||journalCatalog.loading||!!journalCatalog.error}>
                 {journalOptions.filter(j=>j.active||j.code===form.journal_type).map(j => <option key={j.code} value={j.code} disabled={!j.active}>{j.code} — {j.name}{!j.active?' (désactivé)':''}</option>)}
-              </select>
+              </select>}
             </div>
             <div>
               <label className="label">Date *</label>
@@ -510,15 +521,13 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
         <fieldset disabled={saving||!editLease.held} className="space-y-2" onKeyDown={e=>{if((e.target as HTMLElement).closest('.acc-template-strip'))return;if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();void save();}else if(e.key==='F2'){e.preventDefault();addLine();}}}>
           {(journalCatalog.error||accountError)&&<p role="alert" className="text-xs text-red-700">{journalCatalog.error||accountError}</p>}
           {occurrence&&<div className="acc-toolbar"><strong className="text-xs">Échéance mensuelle : {occurrence.name} │ {formatDate(occurrence.due)}</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Détacher cette échéance ? La saisie actuelle sera effacée et l’échéance restera à traiter.')){setOccurrence(null);setEntryLines([newLine(),newLine()]);setForm(p=>({...p,description:'',reference:'',entry_date:new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'})}));}}}>Annuler l’échéance</button></div>}
-          <div className="acc-entry-header">
-            <div>
-              <label className="label">Référence</label>
+          <div className="acc-entry-descriptions">
+            <label className="label">Référence
               <input value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} className="input" placeholder="N° facture, chèque…" />
-            </div>
-          </div>
-          <div>
-            <label className="label">Description *</label>
+            </label>
+            <label className="label">Description *
             <input aria-label="Description de l’écriture" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="input" />
+            </label>
           </div>
 
           <div className="acc-entry-grid" ref={gridRef}>
@@ -531,17 +540,20 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
               if(e.key==='F4'){e.preventDefault();balanceLine(idx);return;}
               if(e.key==='Enter'&&!e.ctrlKey&&!e.altKey){e.preventDefault();const cols=['account','label','debit','credit'];const i=cols.indexOf(col);if(i>=0&&i<3)focusCell(l.key,cols[i+1]);else if(idx+1<entryLines.length)focusCell(entryLines[idx+1].key,'account');else addLine();}
             }}>
-              <span className="acc-line-number">{idx+1}</span>
+              <span className="acc-line-number">{mobile?'Ligne ':''}{idx+1}</span>
               <div className="acc-entry-account"><input list={'acc-entry-accounts-'+windowId} aria-label={'Compte ligne '+(idx+1)} className="input" data-entry-key={l.key} data-entry-col="account" value={l.account_code} onChange={e=>updateLine(idx,'account_code',e.target.value)} placeholder="N° compte" autoComplete="off"/><span className="text-[10px] text-neutral-500">{l.account_name||(!l.account_code?'':accountLoading?'Chargement…':'Compte à vérifier')}</span></div>
               <input aria-label={'Libellé ligne '+(idx+1)} className="input" data-entry-key={l.key} data-entry-col="label" value={l.label} onChange={e=>updateLine(idx,'label',e.target.value)} placeholder="Libellé"/>
-              <input type="number" inputMode="decimal" aria-label={'Débit ligne '+(idx+1)} className="input acc-entry-amount" min="0" step="0.01" data-entry-key={l.key} data-entry-col="debit" value={l.debit||''} onChange={e=>updateLine(idx,'debit',Number(e.target.value))} placeholder="Débit"/>
-              <input type="number" inputMode="decimal" aria-label={'Crédit ligne '+(idx+1)} className="input acc-entry-amount" min="0" step="0.01" data-entry-key={l.key} data-entry-col="credit" value={l.credit||''} onChange={e=>updateLine(idx,'credit',Number(e.target.value))} placeholder="Crédit"/>
-              <div className="acc-entry-line-actions"><button type="button" className="acc-icon" title="Calculer la contrepartie (F4)" aria-label={'Contrepartie ligne '+(idx+1)} disabled={!l.account_code} onClick={()=>balanceLine(idx)}><Check size={14}/></button><button type="button" className="acc-icon" aria-label={'Retirer ligne '+(idx+1)} disabled={entryLines.length<=2} onClick={()=>setEntryLines(p=>p.filter(row=>row.key!==l.key))}><Trash2 size={14}/></button></div>
+              {(['debit','credit'] as const).map(side=>{
+                const label=side==='debit'?'Débit':'Crédit';
+                const input=<input key={side} type="number" inputMode="decimal" aria-label={label+' ligne '+(idx+1)} className="input acc-entry-amount" min="0" step="0.01" data-entry-key={l.key} data-entry-col={side} value={l[side]||''} onChange={e=>updateLine(idx,side,Number(e.target.value))} placeholder={mobile?'0':label}/>;
+                return mobile?<label className="acc-mobile-field acc-entry-amount-field" data-side={side} key={side}>{label}{input}</label>:input;
+              })}
+              <div className="acc-entry-line-actions"><button type="button" className={mobile?'btn-secondary':'acc-icon'} title="Calculer la contrepartie (F4)" aria-label={'Contrepartie ligne '+(idx+1)} disabled={!l.account_code} onClick={()=>balanceLine(idx)}><Check size={14}/>{mobile&&'Contrepartie'}</button><button type="button" className="acc-icon" aria-label={'Retirer ligne '+(idx+1)} disabled={entryLines.length<=2} onClick={()=>setEntryLines(p=>p.filter(row=>row.key!==l.key))}><Trash2 size={14}/></button></div>
             </div>)}
           </div>
 
         </fieldset></div> );
-  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={()=>void save()} className="btn-primary" disabled={saving||!editLease.held||!isBalanced||!readyLines||accountLoading||!!accountError||journalCatalog.loading||!!journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
+  const entryFooter=<div className="acc-entry-footer"><div className="acc-entry-totals"><span>Débit <strong>{totalDebit.toLocaleString('fr-FR')}</strong></span><span>Crédit <strong>{totalCredit.toLocaleString('fr-FR')}</strong></span><span className={isBalanced?'text-neutral-900':'text-red-600'}>{isBalanced?'Équilibrée':'Écart : '+(totalDebit-totalCredit).toLocaleString('fr-FR')}</span></div><div className="acc-editor-actions flex flex-wrap justify-end gap-2"><button type="button" onClick={closeEntry} className="btn-secondary" disabled={saving}>Annuler</button><button type="button" onClick={()=>void save()} className="btn-primary" disabled={saving||!editLease.held||!isBalanced||!readyLines||accountLoading||!!accountError||journalCatalog.loading||!!journalCatalog.error||!journalOptions.some(j=>j.code===form.journal_type&&j.active)}>{saving?<Loader2 size={16} className="animate-spin"/>:<Save size={16}/>}Enregistrer</button></div></div>;
   if(entryOnly)return <section className="acc-entry-page">{entryForm}{entryFooter}</section>;
 
     const journalFilters=<>
@@ -550,15 +562,99 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
         <label>Du <input aria-label="Date de début" type="date" className="input w-auto" value={fromDate} onChange={e=>{setJournalPage(0);setFromDate(e.target.value);}}/></label>
         <label>Au <input aria-label="Date de fin" type="date" className="input w-auto" value={toDate} onChange={e=>{setJournalPage(0);setToDate(e.target.value);}}/></label>
     </>;
+    const newEntry=()=>work&&journalOptions.some(j=>j.code===journalType&&j.active)?work.openEntry(journalType):onNew?onNew():setOpen(true);
+    const applyJournalFilters=()=>{
+      if(!journalDraft)return;
+      if(journalDraft.from&&journalDraft.to&&journalDraft.from>journalDraft.to){setJournalDraftError('La date de fin doit suivre la date de début.');return;}
+      setJournalPage(0);
+      setJournalType(journalDraft.journal);
+      setFromDate(journalDraft.from);
+      setToDate(journalDraft.to);
+      setJournalDraft(null);
+    };
+    const activeFilterCount=Number(!!journalType)+Number(!!fromDate||!!toDate);
+    const closeExport=()=>{if(!exportLoading)setExportOpen(false);};
+    const exportActions=<>
+      <button type="button" className="btn-secondary" disabled={exportLoading} onClick={closeExport}>Fermer</button>
+      {exportData?<button type="button" className="btn-primary" onClick={downloadExport}><Download size={15}/>Télécharger</button>:
+        <button type="button" className="btn-primary" disabled={exportLoading||!exportDateFrom||!exportDateTo} onClick={prepareExport}>
+          {exportLoading?<Loader2 size={15} className="animate-spin"/>:<Search size={15}/>}Préparer
+        </button>}
+    </>;
+    const exportFields=exportOpen&&<div className="space-y-3">
+      <div className={mobile?'acc-mobile-date-fields':'acc-fields acc-fields-2'}>
+        <label className={mobile?'acc-mobile-field':'label'}>Date de début *
+          <input type="date" value={exportDateFrom} onChange={e=>{setExportDateFrom(e.target.value);setExportData(null);}} className="input" disabled={exportLoading}/>
+        </label>
+        <label className={mobile?'acc-mobile-field':'label'}>Date de fin *
+          <input type="date" value={exportDateTo} onChange={e=>{setExportDateTo(e.target.value);setExportData(null);}} className="input" disabled={exportLoading}/>
+        </label>
+      </div>
+      <div className={mobile?'acc-mobile-filter-fields':'acc-fields acc-fields-2'}>
+        <SearchableSelect label="Journal" className={mobile?'':'acc-filter-select'} searchable={false} clearable={false} wrapLabels
+          value={exportJournal} options={journalFilterOptions} disabled={exportLoading}
+          onChange={value=>{setExportJournal(value);setExportData(null);}}/>
+        <SearchableSelect label="Format" className={mobile?'':'acc-filter-select'} searchable={false} clearable={false} wrapLabels
+          value={exportFormat} options={[{value:'xlsx',label:'Excel (.xlsx)'},{value:'csv',label:'CSV (séparateur ;)'}]}
+          disabled={exportLoading} onChange={value=>setExportFormat(value as 'xlsx' | 'csv')}/>
+      </div>
+      {exportError&&<div role="alert" className="flex items-start gap-2 text-xs text-red-700"><X className="w-4 h-4 mt-0.5 shrink-0"/>{exportError}</div>}
+      {exportProgress&&!exportData&&<div className="space-y-1">
+        <div className="flex justify-between text-xs text-neutral-500"><span>Chargement des lignes…</span>
+          <span>{exportProgress.loaded.toLocaleString('fr-FR')} / {exportProgress.total.toLocaleString('fr-FR')}</span>
+        </div>
+        <progress className="acc-progress" aria-label="Progression de l’export comptable" max={exportProgress.total||1} value={exportProgress.loaded}/>
+      </div>}
+      {exportData&&<div className="acc-section-head space-y-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-neutral-900"><CheckCircle className="w-4 h-4 shrink-0"/>
+          <span>Export prêt — choisissez le format puis téléchargez</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-neutral-700">
+          <div><span className="font-medium">Période :</span> {exportDateFrom} au {exportDateTo}</div>
+          <div><span className="font-medium">Journal :</span> {exportJournal?(journalLabels[exportJournal]||exportJournal):'Tous'}</div>
+          <div><span className="font-medium">Écritures :</span> {exportData.entryCount.toLocaleString('fr-FR')}</div>
+          <div><span className="font-medium">Lignes :</span> {exportData.totalCount.toLocaleString('fr-FR')}</div>
+          <div><span className="font-medium">Total débit :</span> {exportData.totalDebitSum.toLocaleString('fr-FR')}</div>
+          <div><span className="font-medium">Total crédit :</span> {exportData.totalCreditSum.toLocaleString('fr-FR')}</div>
+        </div>
+        <div className={`text-xs font-semibold ${Math.abs(exportData.totalDebitSum-exportData.totalCreditSum)<0.01?'text-emerald-700':'text-red-700'}`}>
+          {Math.abs(exportData.totalDebitSum-exportData.totalCreditSum)<0.01?'Équilibré':`Non équilibré — écart : ${(exportData.totalDebitSum-exportData.totalCreditSum).toLocaleString('fr-FR')}`}
+        </div>
+      </div>}
+      {!exportData&&<p className="text-xs text-neutral-500">L’export contient les écritures validées sur une période de 366 jours au maximum. Waarwi vérifie leur équilibre avant le téléchargement.</p>}
+    </div>;
     return (
     <div className="acc-fill space-y-3">
-      <div className="acc-toolbar acc-fixed">
-        {mobile?<details className="acc-mobile-filters"><summary>Filtres</summary><div className="acc-fields">{journalFilters}</div></details>:journalFilters}
+      {mobile?<div className="acc-mobile-command-bar acc-mobile-journal-commands">
+        <button type="button" className="btn-secondary" aria-haspopup="dialog" onClick={()=>{
+          setJournalDraft({journal:journalType,from:fromDate,to:toDate});setJournalDraftError('');
+        }}>Filtres{activeFilterCount?' ('+activeFilterCount+')':''}</button>
+        {canManage&&<button type="button" onClick={newEntry} className="btn-primary"><Plus size={16}/>Nouvelle écriture</button>}
+        <AccountingMobileActions title="Actions du journal" actions={[
+          ...(canView?[{label:'Exporter',icon:<Download size={16}/>,run:openExportModal}]:[]),
+          ...(canManage&&work?[{label:'Appeler un modèle',icon:<FileText size={16}/>,run:()=>work.openEntry(journalOptions.some(j=>j.code===journalType&&j.active)?journalType:'',true)}]:[]),
+        ]}/>
+        {activeFilterCount>0&&<p className="acc-mobile-command-wide acc-mobile-command-caption">{journalLabels[journalType]||'Tous les journaux'}{fromDate?' │ Du '+formatDate(fromDate):''}{toDate?' │ Au '+formatDate(toDate):''}</p>}
+        {journalDraft&&<AccountingMobileFilters open title="Filtres des journaux" onClose={()=>setJournalDraft(null)} onReset={()=>{
+          setJournalDraft({journal:'',from:'',to:''});setJournalDraftError('');
+        }} onApply={applyJournalFilters}>
+          <SearchableSelect label="Journal" searchable={false} clearable={false} wrapLabels value={journalDraft.journal} options={journalFilterOptions}
+            onChange={value=>setJournalDraft(previous=>previous&&({...previous,journal:value}))}/>
+          <div className="acc-mobile-date-fields">
+            <label className="acc-mobile-field">Du<input type="date" aria-label="Date de début" className="input" value={journalDraft.from}
+              onChange={event=>{const value=event.target.value;setJournalDraft(previous=>previous&&({...previous,from:value}));setJournalDraftError('');}}/></label>
+            <label className="acc-mobile-field">Au<input type="date" aria-label="Date de fin" className="input" value={journalDraft.to}
+              onChange={event=>{const value=event.target.value;setJournalDraft(previous=>previous&&({...previous,to:value}));setJournalDraftError('');}}/></label>
+          </div>
+          {journalDraftError&&<p role="alert" className="text-xs text-red-700">{journalDraftError}</p>}
+        </AccountingMobileFilters>}
+      </div>:<div className="acc-toolbar acc-fixed">
+        {journalFilters}
         <span className="acc-spacer"/>
         {canView&&<button onClick={openExportModal} className="btn-secondary"><Download size={16}/>Exporter</button>}
         {canManage&&work&&<button type="button" onClick={()=>work.openEntry(journalOptions.some(j=>j.code===journalType&&j.active)?journalType:'',true)} className="btn-secondary"><FileText size={16}/>Appeler un modèle</button>}
-        {canManage&&<button type="button" onClick={()=>work&&journalOptions.some(j=>j.code===journalType&&j.active)?work.openEntry(journalType):onNew?onNew():setOpen(true)} className="btn-primary"><Plus size={16}/>Nouvelle écriture</button>}
-      </div>
+        {canManage&&<button type="button" onClick={newEntry} className="btn-primary"><Plus size={16}/>Nouvelle écriture</button>}
+      </div>}
       {journalError&&<p role="alert" className="text-sm text-red-700">{journalError}</p>}
       <AccountingTable fill label="Écritures du journal" footer={<AccountingPagination page={journalPage} size={journalSize} total={journalTotal} setPage={n=>{setContextRow(null);setJournalPage(n);}} setSize={n=>{setJournalPage(0);setJournalSize(n);}} disabled={loading}/>}>
         <table><thead><tr><th className="text-left">{mobile?'Pièce / date':'Pièce'}</th><th className="text-left hidden md:table-cell acc-desktop-only">Date</th><th className="text-left hidden md:table-cell acc-desktop-only">Journal</th><th className="text-left acc-desktop-only">Libellé</th><th className="text-left hidden lg:table-cell">Statut</th><th className="text-right">Débit</th><th className={mobile?'text-right':'text-right hidden sm:table-cell'}>Crédit</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
@@ -581,73 +677,12 @@ function JournalsTab({entryOnly=false,onExit,onNew,onManageTemplates,initialJour
       {/* Create modal — retained fallback for embedded use */}
       {open&&<section className="acc-section-head">{entryForm}{entryFooter}</section>}
 
-      {/* Export modal */}
-      {exportOpen&&<section className="acc-section-head space-y-3"><div className="acc-toolbar"><strong className="text-sm">Export comptable</strong><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={exportLoading} onClick={()=>setExportOpen(false)}>Fermer</button>{!exportData?<button type="button" className="btn-primary" disabled={exportLoading||!exportDateFrom||!exportDateTo} onClick={prepareExport}>{exportLoading?<Loader2 size={15} className="animate-spin"/>:<Search size={15}/>}Préparer</button>:<button type="button" className="btn-primary" onClick={downloadExport}><Download size={15}/>Télécharger</button>}</div><div className="space-y-3">
-          <div className="acc-fields acc-fields-2">
-            <div>
-              <label className="label">Date de début *</label>
-              <input type="date" value={exportDateFrom} onChange={e => { setExportDateFrom(e.target.value); setExportData(null); }} className="input" disabled={exportLoading} />
-            </div>
-            <div>
-              <label className="label">Date de fin *</label>
-              <input type="date" value={exportDateTo} onChange={e => { setExportDateTo(e.target.value); setExportData(null); }} className="input" disabled={exportLoading} />
-            </div>
-          </div>
-          <div className="acc-fields acc-fields-2">
-            <SearchableSelect label="Journal" className="acc-filter-select" searchable={false} clearable={false} wrapLabels
-              value={exportJournal} options={journalFilterOptions} disabled={exportLoading}
-              onChange={value=>{setExportJournal(value);setExportData(null);}}/>
-            <SearchableSelect label="Format" className="acc-filter-select" searchable={false} clearable={false} wrapLabels
-              value={exportFormat} options={[{value:'xlsx',label:'Excel (.xlsx)'},{value:'csv',label:'CSV (séparateur ;)'}]}
-              disabled={exportLoading} onChange={value=>setExportFormat(value as 'xlsx' | 'csv')}/>
-          </div>
-
-          {exportError && (
-            <div className="flex items-start gap-2 text-xs text-red-700">
-              <X className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>{exportError}</span>
-            </div>
-          )}
-
-          {exportProgress && !exportData && (
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs text-neutral-500">
-                <span>Chargement des lignes…</span>
-                <span>{exportProgress.loaded.toLocaleString('fr-FR')} / {exportProgress.total.toLocaleString('fr-FR')}</span>
-              </div>
-              <progress className="acc-progress" aria-label="Progression de l’export comptable" max={exportProgress.total || 1} value={exportProgress.loaded} />
-            </div>
-          )}
-
-          {exportData && (
-            <div className="acc-section-head space-y-2">
-              <div className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                <span>Export prêt — choisissez le format puis téléchargez</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-neutral-700">
-                <div><span className="font-medium">Période :</span> {exportDateFrom} au {exportDateTo}</div>
-                <div><span className="font-medium">Journal :</span> {exportJournal ? (journalLabels[exportJournal] || exportJournal) : 'Tous'}</div>
-                <div><span className="font-medium">Écritures :</span> {exportData.entryCount.toLocaleString('fr-FR')}</div>
-                <div><span className="font-medium">Lignes :</span> {exportData.totalCount.toLocaleString('fr-FR')}</div>
-                <div><span className="font-medium">Total débit :</span> {exportData.totalDebitSum.toLocaleString('fr-FR')}</div>
-                <div><span className="font-medium">Total crédit :</span> {exportData.totalCreditSum.toLocaleString('fr-FR')}</div>
-              </div>
-              <div className={`text-xs font-semibold ${Math.abs(exportData.totalDebitSum - exportData.totalCreditSum) < 0.01 ? 'text-emerald-700' : 'text-red-700'}`}>
-                {Math.abs(exportData.totalDebitSum - exportData.totalCreditSum) < 0.01 ? 'Équilibré' : `Non équilibré — écart : ${(exportData.totalDebitSum - exportData.totalCreditSum).toLocaleString('fr-FR')}`}
-              </div>
-            </div>
-          )}
-
-          {!exportData && (
-            <div className="text-xs text-neutral-500 space-y-1">
-              <p>Seules les écritures <strong>validées</strong> (statut « Validé ») sont exportées.</p>
-              <p>Un contrôle d'intégrité (équilibre débit/crédit) est effectué avant chaque export.</p>
-              <p>Période maximale : 366 jours.</p>
-            </div>
-          )}
-        </div></section>}
-
+      {exportOpen&&(mobile?<Modal open title="Export comptable" onClose={closeExport} size="sm" layer="top" variant="flat" focusOnOpen
+        panelClassName="accounting-workspace acc-mobile-sheet acc-mobile-export-sheet" footer={exportActions}>{exportFields}</Modal>:
+        <section className="acc-section-head space-y-3">
+          <div className="acc-toolbar"><strong className="text-sm">Export comptable</strong><span className="acc-spacer"/>{exportActions}</div>
+          {exportFields}
+        </section>)}
 
     </div>
   );

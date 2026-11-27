@@ -50,6 +50,7 @@ type Work =
  | {id:string;title:string;kind:'import'}
  | {id:string;title:string;kind:'entry';journal:string;showTemplates?:number}
  | {id:string;title:string;kind:'template';source:EntryTemplateSource};
+const isEntryWork=(work:Work)=>work.kind==='entry'||(work.kind==='section'&&work.route==='acc_entry');
 function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLDivElement>}){
  const wm=useWindowManager();const {tenant}=useApp();const {can}=usePermissions();
  const [open,setOpen]=useState<Work[]>([]);
@@ -142,6 +143,7 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
   const works=open.filter(w=>mobileHistory.includes(w.id)&&allowed(w));
   const current=works.find(w=>w.id===mobilePage);
   const page=current?mobilePage:mobilePage==='more'?'more':'acc_overview';
+  const showDock=!current||(!isEntryWork(current)&&current.kind!=='piece'&&current.kind!=='import'&&current.kind!=='template');
   const canLeave=()=>window.dispatchEvent(new CustomEvent('waarwi:accounting-before-navigate',{cancelable:true,detail:{windowId:page}}));
   const back=()=>{
    if(!canLeave())return;
@@ -162,16 +164,16 @@ function Workspace({route,onNavigate,canAccess,area}:Props&{area:RefObject<HTMLD
    {page==='more'&&<div className="acc-mobile-page acc-mobile-menu">
     {mobileGroups.map(([name,routes])=>routes.some(canAccess)&&<section key={name}><h2>{name}</h2>{routes.filter(canAccess).map(r=><button type="button" key={r} onClick={()=>navigate(r)}>{sections[r][1]}</button>)}</section>)}
    </div>}
-   {works.map(w=><div key={w.id} hidden={page!==w.id} className="acc-mobile-page">
+   {works.map(w=><div key={w.id} hidden={page!==w.id} className={isEntryWork(w)?'acc-mobile-page acc-mobile-entry-view':'acc-mobile-page'}>
     <WindowId.Provider value={w.id}><WindowScope actions={actions} visible={page===w.id}>{renderWork(w,back)}</WindowScope></WindowId.Provider>
    </div>)}
-   <nav className="acc-mobile-dock" aria-label="Navigation comptable">
+   {showDock&&<nav className="acc-mobile-dock" aria-label="Navigation comptable">
     {links.filter(([id])=>id==='more'||canAccess(id)).map(([id,label,Icon])=><button type="button" key={id} aria-current={page===id?'page':undefined} onClick={()=>{
      if(id==='more'){menu();return;}
      if(page===id||!canLeave())return;
      navigate(id);
     }}><Icon size={19}/><span>{label}</span></button>)}
-   </nav>
+   </nav>}
   </section></AccountingWorkContext.Provider></AccountingMobile.Provider>;
  }
  return <AccountingWorkContext.Provider value={actions}><section className="acc-desktop" aria-label="Bureau comptable">

@@ -7,6 +7,7 @@ import {supabase} from '../lib/supabase';
 import {formatDate} from '../lib/format';
 import {Search,RefreshCw,Download,Loader2} from './Icons';
 import {AccountingTable,AccountingPagination,AccountingRowActions} from './AccountingWorkspace';
+import {AccountingMobileActions,AccountingMobileFilters} from './AccountingMobileControls';
 import {sanitizeCsvValue} from '../lib/csvSanitize';
 import { SearchableSelect } from './SearchableSelect';
 type Filters={piece:string;description:string;reference:string;account:string;journal:string;from:string;to:string;min:string;max:string;status:string};
@@ -18,9 +19,12 @@ export function AccountingSearch(){
  const mobile=useAccountingMobile();
  const {tenant}=useApp();const {can}=usePermissions();const work=useAccountingWork();const journalCatalog=useAccountingJournals(tenant?.id,work?.revision??0);
  const [filters,setFilters]=useState<Filters>({...empty}),[applied,setApplied]=useState<Filters|null>(null),[page,setPage]=useState(0),[size,setSize]=useState(20),[total,setTotal]=useState(0),[rows,setRows]=useState<Row[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[revision,setRevision]=useState(0),[context,setContext]=useState<{id:string;x:number;y:number}|null>(null);
+ const [filterDraft,setFilterDraft]=useState<Filters|null>(null);
+ const [filterError,setFilterError]=useState('');
  const seq=useRef(0);const change=(k:keyof Filters,v:string)=>setFilters(f=>({...f,[k]:v}));
- const validate=()=>{if(filters.from&&filters.to&&filters.from>filters.to)return 'La date de fin doit suivre la date de début.';if([filters.min,filters.max].some(v=>v!==''&&(!Number.isFinite(Number(v))||Number(v)<0)))return 'Montants positifs ou nuls requis.';if(filters.min!==''&&filters.max!==''&&Number(filters.min)>Number(filters.max))return 'Le minimum doit être inférieur ou égal au maximum.';return '';};
- const submit=()=>{const err=validate();if(err){setError(err);return;}setPage(0);setApplied({...filters});setRevision(v=>v+1);setContext(null);};
+ const changeDraft=(field:keyof Filters,value:string)=>{setFilterDraft(previous=>previous&&({...previous,[field]:value}));setFilterError('');};
+ const validate=(values:Filters)=>{if(values.from&&values.to&&values.from>values.to)return 'La date de fin doit suivre la date de début.';if([values.min,values.max].some(v=>v!==''&&(!Number.isFinite(Number(v))||Number(v)<0)))return 'Montants positifs ou nuls requis.';if(values.min!==''&&values.max!==''&&Number(values.min)>Number(values.max))return 'Le minimum doit être inférieur ou égal au maximum.';return '';};
+ const submit=(values=filters)=>{const err=validate(values);if(err){setError(err);return;}setPage(0);setApplied({...values});setRevision(v=>v+1);setContext(null);};
  useEffect(()=>{if(!tenant||!applied)return;const n=++seq.current;const controller=new AbortController();setBusy(true);setError('');setRows([]);setContext(null);const f=applied;
  void(async()=>{try{
   const columns='id,entry_number,entry_date,journal_type,description,reference,total_debit,total_credit,source_type,status';
@@ -41,37 +45,77 @@ export function AccountingSearch(){
  const reset=()=>{seq.current++;setFilters({...empty});setApplied(null);setRows([]);setPage(0);setTotal(0);setBusy(false);setError('');setContext(null);};
  const view=(r:Row,reverse=false)=>work?.openPiece({entryId:r.id,entryNumber:r.entry_number,reverse});
  const exportPage=()=>{const csv=[['Date','Pièce','Journal','Libellé','Référence','Débit','Crédit','Statut'],...rows.map(r=>[r.entry_date,r.entry_number,r.journal_type,r.description??'',r.reference??'',String(r.total_debit),String(r.total_credit),statusLabel(r.status)])].map(row=>row.map(v=>'"'+sanitizeCsvValue(v).replace(/"/g,'""')+'"').join(';')).join('\r\n');const url=URL.createObjectURL(new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='recherche-ecritures-page-'+(page+1)+'.csv';a.click();URL.revokeObjectURL(url);};
- const field=(k:keyof Filters,label:string,props:{type?:string;placeholder?:string}={})=><label className={'acc-search-field acc-search-'+k}><span>{label}</span><input className="input" value={filters[k]} onChange={e=>change(k,e.target.value)} type={props.type??'text'} placeholder={props.placeholder} {...(props.type==='number'?{min:0,step:'0.01'}:{})}/></label>;
+ const field=(k:keyof Filters,label:string,props:{type?:string;placeholder?:string}={},draft=false)=><label className={(draft||mobile?'acc-mobile-field ':'')+'acc-search-field acc-search-'+k}><span>{label}</span><input className="input" value={(draft?filterDraft??filters:filters)[k]} onChange={e=>(draft?changeDraft:change)(k,e.target.value)} type={props.type??'text'} placeholder={props.placeholder} {...(props.type==='number'?{min:0,step:'0.01'}:{})}/></label>;
+ const journals=[{value:'',label:'Tous les journaux'},...journalCatalog.rows.map(journal=>({value:journal.code,label:journal.code+' — '+journal.name+(journal.is_active?'':' (désactivé)')}))];
+ const statuses=[{value:'',label:'Tous'},{value:'posted',label:'Validées'},{value:'draft',label:'Brouillons'},{value:'cancelled',label:'Annulées'}];
  const additionalFields=<>
   {field('description','Libellé')}{field('account','N° de compte',{placeholder:'Compte exact'})}
   <SearchableSelect label="Journal" className="acc-search-field acc-search-journal acc-filter-select" searchable={false} clearable={false} wrapLabels
     value={filters.journal} onChange={value=>change('journal',value)}
-    options={[{value:'',label:'Tous'},...journalCatalog.rows.map(journal=>({value:journal.code,label:journal.code+' — '+journal.name+(journal.is_active?'':' (désactivé)')}))]}/>
+      options={journals}/>
   {field('from','Du',{type:'date'})}{field('to','Au',{type:'date'})}
  </>;
+ const actions=(r:Row)=><AccountingRowActions piece={r.entry_number} onView={()=>view(r)} onReverse={can('manage_accounting')&&r.source_type==='manual'&&r.status==='posted'?()=>view(r,true):undefined} reverseDisabledReason={!can('manage_accounting')?'Droit de gestion requis':r.source_type==='reversal'?'Pièce d’extourne':r.source_type!=='manual'?'Corriger la pièce d’origine':r.status!=='posted'?'Écriture non validée':undefined} anchor={context?.id===r.id?context:undefined} onDismiss={()=>setContext(null)}/>;
  return <div className="acc-fill acc-search-workspace">
   <form className="acc-search-form" onSubmit={e=>{e.preventDefault();submit();}}>
-   <div className="acc-search-fields">
-    {field('piece','N° de pièce',{placeholder:'OD260…'})}{!mobile&&additionalFields}
-   </div>
+   {mobile?<div className="acc-mobile-command-bar">
+     <div className="acc-mobile-command-wide">{field('piece','N° de pièce',{placeholder:'Ex. OD260…'})}</div>
+     <button type="submit" className="btn-primary" disabled={busy&&!unapplied}>{busy?<Loader2 size={15} className="animate-spin"/>:<Search size={15}/>}Rechercher</button>
+     <button type="button" className="btn-secondary" aria-haspopup="dialog" onClick={()=>{setFilterDraft({...filters});setFilterError('');}}>Filtres
+       {Object.entries(filters).some(([key,value])=>key!=='piece'&&!!value)?' actifs':''}</button>
+     {(applied||Object.values(filters).some(Boolean))&&<AccountingMobileActions title="Actions de recherche" actions={[
+       ...(rows.length?[{label:'Exporter la page',icon:<Download size={15}/>,disabled:busy||unapplied,run:exportPage}]:[]),
+       {label:'Réinitialiser la recherche',icon:<RefreshCw size={15}/>,run:reset},
+     ]}/>}
+     {filterDraft&&<AccountingMobileFilters open title="Filtres de recherche" onClose={()=>setFilterDraft(null)}
+       onReset={()=>{setFilterDraft({...empty});setFilterError('');}}
+       onApply={()=>{
+         const invalid=validate(filterDraft);
+         if(invalid){setFilterError(invalid);return;}
+         setFilters(filterDraft);submit(filterDraft);setFilterDraft(null);
+       }}>
+       <SearchableSelect label="Journal" value={filterDraft.journal} options={journals} onChange={v=>changeDraft('journal',v)}
+         searchable={journals.length>11} clearable={false} wrapLabels/>
+       <SearchableSelect label="Statut" value={filterDraft.status} options={statuses} onChange={v=>changeDraft('status',v)}
+         searchable={false} clearable={false}/>
+       <div className="acc-mobile-date-fields">{field('from','Du',{type:'date'},true)}{field('to','Au',{type:'date'},true)}</div>
+       {field('description','Libellé',{},true)}{field('account','N° de compte',{placeholder:'Compte exact'},true)}
+       {field('reference','Référence',{},true)}
+       <div className="acc-mobile-date-fields">{field('min','Débit min. (FCFA)',{type:'number'},true)}{field('max','Débit max. (FCFA)',{type:'number'},true)}</div>
+       {filterError&&<p role="alert" className="text-xs text-red-700">{filterError}</p>}
+     </AccountingMobileFilters>}
+   </div>:<>
+   <div className="acc-search-fields">{field('piece','N° de pièce',{placeholder:'OD260…'})}{additionalFields}</div>
    <details className="acc-search-extra">
-    <summary>{mobile?'Filtres':'Filtres avancés'}{[filters.reference,filters.status,filters.min,filters.max,...(mobile?[filters.description,filters.account,filters.journal,filters.from,filters.to]:[])].some(Boolean)&&' │ filtres renseignés'}</summary>
+    <summary>Filtres avancés{[filters.reference,filters.status,filters.min,filters.max].some(Boolean)&&' │ filtres renseignés'}</summary>
     <div className="acc-search-fields">
-     {mobile&&additionalFields}
      {field('reference','Référence')}
      <SearchableSelect label="Statut" className="acc-search-field acc-search-status acc-filter-select" searchable={false} clearable={false}
        value={filters.status} onChange={value=>change('status',value)}
-       options={[{value:'',label:'Tous'},{value:'posted',label:'Validées'},{value:'draft',label:'Brouillons'},{value:'cancelled',label:'Annulées'}]}/>
+       options={statuses}/>
      {field('min','Débit min. (FCFA)',{type:'number'})}{field('max','Débit max. (FCFA)',{type:'number'})}
     </div>
    </details>
    <div className="acc-search-actions"><button type="submit" className="btn-primary" disabled={busy&&!unapplied}>{busy?<Loader2 size={15} className="animate-spin"/>:<Search size={15}/>}Rechercher</button><button type="button" className="btn-secondary" onClick={reset}><RefreshCw size={15}/>Réinitialiser</button><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={busy||unapplied||!rows.length} onClick={exportPage}><Download size={15}/>Exporter la page</button></div>
+   </>}
   </form>
   {(error||journalCatalog.error)&&<p role="alert" className="text-xs text-red-700">{error||journalCatalog.error}</p>}
   {unapplied&&<p className="acc-search-pending" role="status">Critères modifiés : relancez la recherche. Les résultats ci-dessous correspondent aux critères précédents.</p>}
   <div className="acc-search-result-label" role="status">{busy?'Recherche en cours…':applied?total.toLocaleString('fr-FR')+' écriture(s) trouvée(s)':'Renseignez les critères ou recherchez toutes les écritures.'}</div>
-  <AccountingTable fill label="Résultats de la recherche d’écritures" footer={<AccountingPagination page={page} size={size} total={total} setPage={setPage} setSize={n=>{setPage(0);setSize(n);}} disabled={busy||!applied||unapplied}/>}>
-   <table><thead><tr><th className="text-left">Date / pièce</th><th className="text-left acc-search-journal-col">Journal</th><th className="text-left">Libellé / référence</th><th className="text-right acc-search-amount-col">Débit</th><th className="text-right acc-search-amount-col">Crédit</th><th className="text-left acc-search-status-col">Statut</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map(r=><tr key={r.id} onDoubleClick={()=>view(r)} onContextMenu={e=>{e.preventDefault();setContext({id:r.id,x:e.clientX,y:e.clientY});}}><td><span className="block text-[11px] text-neutral-500">{formatDate(r.entry_date)}</span><button type="button" className="font-medium hover:underline text-left" onClick={()=>view(r)}>{r.entry_number}</button><span className="acc-search-compact-meta">{r.journal_type} │ {statusLabel(r.status)}</span></td><td className="acc-search-journal-col">{r.journal_type}</td><td>{r.description||'—'}{r.reference&&<span className="acc-table-meta">{r.reference}</span>}<span className="acc-table-meta acc-search-compact-amounts">D {money(r.total_debit)} │ C {money(r.total_credit)}</span></td><td className="text-right acc-search-amount-col">{money(r.total_debit)}</td><td className="text-right acc-search-amount-col">{money(r.total_credit)}</td><td className="acc-search-status-col"><span className="acc-status">{statusLabel(r.status)}</span></td><td className="text-right"><AccountingRowActions piece={r.entry_number} onView={()=>view(r)} onReverse={can('manage_accounting')&&r.source_type==='manual'&&r.status==='posted'?()=>view(r,true):undefined} reverseDisabledReason={!can('manage_accounting')?'Droit de gestion requis':r.source_type==='reversal'?'Pièce d’extourne':r.source_type!=='manual'?'Corriger la pièce d’origine':r.status!=='posted'?'Écriture non validée':undefined} anchor={context?.id===r.id?context:undefined} onDismiss={()=>setContext(null)}/></td></tr>)}{!rows.length&&<tr><td colSpan={7} className="text-center text-neutral-500">{busy?'Chargement…':applied?'Aucun résultat.':'Aucune recherche lancée.'}</td></tr>}</tbody></table>
-  </AccountingTable>
+  {(!mobile||applied)&&  <AccountingTable fill label="Résultats de la recherche d’écritures" footer={<AccountingPagination page={page} size={size} total={total} setPage={setPage} setSize={n=>{setPage(0);setSize(n);}} disabled={busy||!applied||unapplied}/>}>
+   {mobile?<table className="acc-mobile-ledger">
+    <thead><tr><th className="text-left">Date / pièce</th><th className="text-right">Débit</th><th className="text-right">Crédit</th><th><span className="sr-only">Actions</span></th></tr></thead>
+    <tbody>{rows.map(r=><tr key={r.id}>
+     <td><details className="acc-mobile-line">
+      <summary>{r.entry_number}<span>{formatDate(r.entry_date)}</span></summary>
+      <span>{r.description||'—'}</span>{r.reference&&<span>Référence {r.reference}</span>}
+      <span>{r.journal_type} │ {statusLabel(r.status)}</span>
+      <button type="button" onClick={()=>view(r)}>Ouvrir la pièce</button>
+     </details></td>
+     <td className="text-right">{money(r.total_debit)}</td><td className="text-right">{money(r.total_credit)}</td>
+     <td className="text-right acc-mobile-row-menu">{actions(r)}</td>
+    </tr>)}{!rows.length&&<tr><td colSpan={4} className="text-center text-neutral-500">{busy?'Chargement…':'Aucun résultat.'}</td></tr>}</tbody>
+   </table>:<table><thead><tr><th className="text-left">Date / pièce</th><th className="text-left acc-search-journal-col">Journal</th><th className="text-left">Libellé / référence</th><th className="text-right acc-search-amount-col">Débit</th><th className="text-right acc-search-amount-col">Crédit</th><th className="text-left acc-search-status-col">Statut</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map(r=><tr key={r.id} onDoubleClick={()=>view(r)} onContextMenu={e=>{e.preventDefault();setContext({id:r.id,x:e.clientX,y:e.clientY});}}><td><span className="block text-[11px] text-neutral-500">{formatDate(r.entry_date)}</span><button type="button" className="font-medium hover:underline text-left" onClick={()=>view(r)}>{r.entry_number}</button><span className="acc-search-compact-meta">{r.journal_type} │ {statusLabel(r.status)}</span></td><td className="acc-search-journal-col">{r.journal_type}</td><td>{r.description||'—'}{r.reference&&<span className="acc-table-meta">{r.reference}</span>}<span className="acc-table-meta acc-search-compact-amounts">D {money(r.total_debit)} │ C {money(r.total_credit)}</span></td><td className="text-right acc-search-amount-col">{money(r.total_debit)}</td><td className="text-right acc-search-amount-col">{money(r.total_credit)}</td><td className="acc-search-status-col"><span className="acc-status">{statusLabel(r.status)}</span></td><td className="text-right">{actions(r)}</td></tr>)}{!rows.length&&<tr><td colSpan={7} className="text-center text-neutral-500">{busy?'Chargement…':applied?'Aucun résultat.':'Aucune recherche lancée.'}</td></tr>}</tbody></table>}
+  </AccountingTable>}
  </div>;
 }

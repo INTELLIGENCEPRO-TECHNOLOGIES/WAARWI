@@ -1,14 +1,22 @@
 /* Bureau comptable, confinement local au-dessous du menu en cascade. */
 .acc-mobile{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;color:var(--w-text);background:var(--w-bg)}
-.acc-mobile-header{display:flex;align-items:center;gap:8px;min-height:46px;padding:0 12px;border-bottom:1px solid var(--w-separator)}
+.acc-mobile-header{display:flex;flex:none;align-items:center;gap:8px;min-height:46px;padding:0 12px;border-bottom:1px solid var(--w-separator)}
 .acc-mobile-header h1{font-size:16px;font-weight:700;line-height:1.2}
 .acc-mobile-header button{width:44px;height:44px;display:grid;place-items:center;flex:none}
-.acc-mobile-page{container:acc-window / inline-size;flex:1;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:8px 12px}
+.acc-mobile-page{container:acc-window / inline-size;flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;padding:10px 12px 16px}
 .acc-mobile-page[hidden]{display:none}
-.acc-mobile .accounting-workspace .acc-table-scroll,.acc-mobile .accounting-workspace .acc-form-scroll{max-height:none;min-height:0}
+.acc-mobile .accounting-workspace :is(.acc-table-scroll,.acc-form-scroll),
+.acc-mobile .accounting-workspace .acc-bank-workspace :is(.acc-bank-form-body,.acc-bank-review){
+  flex:auto;max-height:none;min-height:0;overflow:visible;overscroll-behavior:auto
+}
+.acc-mobile .accounting-workspace :is(.acc-fixed,.acc-search-form,.acc-entry-grid-head,.acc-flow-head),
+.acc-mobile .accounting-workspace .acc-table-scroll :is(thead,thead th,tfoot td){
+  position:static;z-index:auto
+}
+.acc-mobile .accounting-workspace .acc-table-scroll table{max-width:100%}
 .acc-mobile .accounting-workspace .acc-body{padding-top:0}
 .acc-mobile .accounting-workspace .acc-table-scroll tbody td{border-bottom:1px solid var(--w-separator)}
-.acc-mobile .accounting-workspace .acc-toolbar :is(.btn-primary,.btn-secondary){min-height:44px}
+.acc-mobile .accounting-workspace :is(.btn-primary,.btn-secondary){min-height:44px}
 .acc-mobile .accounting-workspace .acc-table-scroll :is(th,td).text-right{white-space:nowrap;font-variant-numeric:tabular-nums}
 .acc-mobile-menu h2{padding:12px 0 5px;font-size:13px;font-weight:700}
 .acc-mobile-menu button{display:block;width:100%;min-height:45px;text-align:left;border-bottom:1px solid var(--w-separator);font-size:14px}
@@ -19,12 +27,59 @@
 .acc-mobile-only{display:none}
 .acc-mobile .acc-mobile-only{display:block}
 .acc-mobile .acc-desktop-only{display:none!important}
-.acc-mobile .acc-mobile-filters{display:block;flex:1 1 145px;min-width:0}
-.acc-mobile .acc-mobile-filters summary{display:list-item;min-height:44px;cursor:pointer;padding:11px 6px;font-weight:650}
-.acc-mobile .acc-mobile-filters .acc-fields{padding:0 0 6px}
-.acc-mobile .acc-mobile-filters label{display:block;min-width:0}
-.acc-mobile .acc-mobile-filters input{width:100%;min-width:0}
-.acc-mobile-line summary{min-height:40px;align-content:center;cursor:pointer;font-weight:650}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;gap:6px;align-items:center;padding:0 0 10px}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar:not(:has(.acc-mobile-more)){grid-template-columns:repeat(2,minmax(0,1fr))}
+.acc-mobile .accounting-workspace .acc-mobile-journal-commands:has(>.btn-primary){grid-template-columns:minmax(0,1fr) minmax(0,1.65fr) 44px}
+.acc-mobile .accounting-workspace .acc-mobile-journal-commands:not(:has(>.btn-primary)){grid-template-columns:minmax(0,1fr) 44px}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar.acc-mobile-right-action>.btn-primary{grid-column:2}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar.acc-mobile-right-action .acc-mobile-more{grid-column:3}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar>*{min-width:0}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar>.acc-mobile-command-wide{grid-column:1 / -1}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar .btn-primary,
+.acc-mobile .accounting-workspace .acc-mobile-command-bar .btn-secondary{white-space:normal;line-height:1.2}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar .acc-mobile-more{width:44px;padding:0}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar .acc-mobile-selection{width:100%;max-width:none}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar .acc-mobile-selection button{min-height:44px}
+.acc-mobile .accounting-workspace .acc-mobile-command-caption{font-size:12px;color:var(--w-text-sec);margin:0 0 8px;overflow-wrap:anywhere}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar .acc-mobile-command-caption{margin:0}
+.acc-mobile .accounting-workspace .acc-mobile-field,
+.acc-mobile-sheet .acc-mobile-field{display:grid;gap:5px;font-size:13px;font-weight:600;min-width:0}
+.acc-mobile .accounting-workspace .acc-mobile-field .input,
+.acc-mobile-sheet .acc-mobile-field .input,
+.acc-mobile .accounting-workspace .acc-mobile-search-input,
+.acc-mobile .accounting-workspace .acc-catalog-editor .input{
+  min-height:44px;width:100%;font-size:16px
+}
+.acc-mobile .accounting-workspace .acc-catalog-editor :is(.acc-template-identity,.acc-fields-account,.acc-fields-with-action){
+  grid-template-columns:minmax(0,1fr)
+}
+.acc-mobile .acc-catalog-editor [aria-haspopup=listbox]{min-height:44px}
+.acc-mobile .accounting-workspace .acc-mobile-command-bar.acc-revision-commands{align-items:end}
+.acc-mobile .accounting-workspace .acc-revision-commands .input[type=month]{font-size:14px}
+.acc-mobile-sheet .acc-mobile-filter-fields{display:grid;gap:12px}
+.acc-mobile-sheet .acc-mobile-date-fields{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.acc-mobile-sheet .acc-mobile-filter-fields [aria-haspopup="listbox"]{min-height:44px;font-size:14px}
+.acc-mobile-sheet.acc-mobile-filter-sheet .waarwi-window-footer{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px
+}
+.acc-mobile-sheet.acc-mobile-filter-sheet .waarwi-window-footer button{min-height:44px;padding:5px 1px;min-width:0}
+.acc-mobile-sheet.acc-mobile-export-sheet .waarwi-window-footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.acc-mobile-sheet.acc-mobile-export-sheet .waarwi-window-footer button{min-height:44px}
+.acc-mobile-action-list button{
+  display:flex;align-items:center;gap:10px;width:100%;min-height:46px;text-align:left;
+  border-bottom:1px solid var(--w-separator);font-size:14px
+}
+.acc-mobile-action-list button:last-child{border-bottom:0}
+.acc-mobile-action-list button svg{flex:none}
+.acc-mobile :is(.acc-mobile-line,.acc-mobile-template-line)>summary{
+  position:relative;display:block;min-height:40px;align-content:center;cursor:pointer;font-weight:650;padding-inline-start:13px
+}
+.acc-mobile :is(.acc-mobile-line,.acc-mobile-template-line)>summary::-webkit-details-marker{display:none}
+.acc-mobile :is(.acc-mobile-line,.acc-mobile-template-line)>summary::before{
+  content:"";width:6px;height:6px;border:solid currentColor;border-width:0 1.5px 1.5px 0;
+  position:absolute;left:1px;top:calc(50% - 4px);transform:rotate(-45deg)
+}
+.acc-mobile :is(.acc-mobile-line,.acc-mobile-template-line)[open]>summary::before{transform:rotate(45deg)}
 .acc-mobile-line span{display:block;color:var(--w-text-sec);font-size:12px}
 .acc-mobile-line button{display:block;min-height:42px;text-align:left;text-decoration:underline}
 .acc-mobile .acc-period-wide{display:none!important}
@@ -33,6 +88,49 @@
 .acc-mobile-template-line summary{min-height:44px;padding:12px 0;cursor:pointer;font-weight:650}
 .acc-mobile-template-line>fieldset{border:0;padding-top:0}
 .acc-mobile-template-line>fieldset>legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.acc-entry-descriptions{display:grid;gap:8px}
+.acc-entry-descriptions label{min-width:0}
+.acc-entry-descriptions .input{width:100%}
+.acc-mobile .acc-mobile-entry-view:not([hidden]){
+  display:flex;flex-direction:column;overflow:hidden;padding:0
+}
+.acc-mobile-entry-view>.accounting-workspace,
+.acc-mobile-entry-view>.accounting-workspace>.acc-body,
+.acc-mobile .acc-mobile-entry-view .acc-entry-page{
+  display:flex;flex:1;flex-direction:column;min-height:0
+}
+.acc-mobile .acc-mobile-entry-view .acc-entry-body{
+  overflow-y:auto;overscroll-behavior-y:contain;min-height:0;padding:10px 12px 14px
+}
+.acc-mobile .accounting-workspace .acc-entry-footer{
+  position:static;flex:none;gap:8px;padding:8px 12px max(8px,env(safe-area-inset-bottom))
+}
+.acc-mobile .accounting-workspace .acc-editor-actions{
+  display:grid;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px
+}
+.acc-mobile .acc-entry-totals{width:100%;justify-content:space-between;gap:4px 8px}
+.acc-mobile .accounting-workspace .acc-entry-header{
+  grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:6px 10px
+}
+.acc-mobile .accounting-workspace .acc-entry-header .input,
+.acc-mobile .accounting-workspace .acc-entry-descriptions .input,
+.acc-mobile .accounting-workspace .acc-entry-grid-row .input{min-height:44px;font-size:16px}
+.acc-mobile .accounting-workspace .acc-entry-header [aria-haspopup=listbox]{min-height:44px;font-size:13px}
+.acc-mobile .acc-entry-body .waarwi-edit-bar{padding-inline:0}
+.acc-mobile .acc-entry-body .waarwi-edit-actions button{font-size:12px;min-height:40px}
+.acc-mobile .accounting-workspace .acc-template-strip{padding:0 0 8px}
+.acc-mobile .acc-mobile-template-tools{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:6px}
+.acc-mobile .accounting-workspace .acc-entry-grid-row{
+  grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px;padding:8px 0 12px
+}
+.acc-mobile .accounting-workspace .acc-entry-grid-row:focus-within{background:transparent}
+.acc-mobile .acc-entry-grid-row .acc-line-number{grid-row:1;grid-column:1;align-self:center;padding:0;font-weight:650}
+.acc-mobile .accounting-workspace .acc-entry-grid-row :is(.acc-entry-account,[data-entry-col=label]){grid-column:1 / -1}
+.acc-mobile .acc-entry-grid-row .acc-entry-line-actions{grid-row:1;grid-column:2;gap:4px}
+.acc-mobile .accounting-workspace .acc-entry-line-actions .btn-secondary{padding-inline:7px;font-size:11px}
+.acc-mobile .accounting-workspace .acc-entry-amount-field[data-side=debit]{grid-column:1}
+.acc-mobile .accounting-workspace .acc-entry-amount-field[data-side=credit]{grid-column:2}
+.acc-mobile .accounting-workspace .acc-entry-amount-field .input{font-size:16px}
 .acc-desktop{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;width:100%;overflow:hidden;background:var(--w-bg)}
 .acc-desktop-area{position:relative;isolation:isolate;flex:1;min-height:0;min-width:0;overflow:hidden;background:var(--w-bg)}
 .acc-desktop-home{position:absolute;inset:0;overflow:auto;padding:10px 18px 16px}

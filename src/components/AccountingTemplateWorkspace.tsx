@@ -277,23 +277,25 @@ export function AccountingTemplateWorkspace({ tenantId, canManage, source }: {
     }
   }
 
+  const editorActions = <>
+    <button type="button" className="btn-secondary" disabled={busy} onClick={cancelEdit}>Annuler</button>
+    <button type="submit" className="btn-primary" disabled={!canSave}><Save size={16} />{busy ? 'Enregistrement…' : mobile ? 'Enregistrer' : 'Enregistrer le modèle'}</button>
+  </>;
   return draft ? (
-    <form className="space-y-3 min-w-0" onSubmit={save}>
+    <form className="acc-catalog-editor space-y-3 min-w-0" onSubmit={save}>
       <div className="acc-toolbar acc-fixed">
         <strong>{draft.id ? 'Modifier le modèle' : 'Nouveau modèle'}</strong>
-        <span className="acc-spacer" />
-        <button type="button" className="btn-secondary" disabled={busy} onClick={cancelEdit}>Annuler</button>
-        <button type="submit" className="btn-primary" disabled={!canSave}><Save size={16} />{busy ? 'Enregistrement…' : 'Enregistrer le modèle'}</button>
+        {!mobile&&<><span className="acc-spacer" />{editorActions}</>}
       </div>
       {source && !draft.id && <p className="text-sm text-[var(--w-text-sec)]">Champs préremplis depuis l’écriture. Vérifiez les comptes et indiquez quelles valeurs seront saisies à chaque utilisation.</p>}
       <fieldset className="space-y-3 min-w-0" disabled={busy}>
-        <div className="acc-fields acc-fields-2">
+        <div className="acc-fields acc-fields-2 acc-template-identity">
           <label className="label">Intitulé du modèle
             <input className="input mt-1 w-full" required maxLength={100} value={draft.name}
               onChange={event => setDraft({ ...draft, name: event.target.value })} />
           </label>
           {mobile ? <SearchableSelect label="Journal" ariaLabel="Journal" value={draft.journal} clearable={false}
-            disabled={busy||draft.scheduled||journals.loading} wrapLabels
+            disabled={busy||draft.scheduled||journals.loading} wrapLabels searchable={journals.rows.length>10}
             options={[{value:'',label:'Tous les journaux'},...journals.rows.filter(journal=>journal.is_active||journal.code===draft.journal).map(journal=>({value:journal.code,label:journal.code+' — '+journal.name+(!journal.is_active?' (désactivé)':''),disabled:!journal.is_active})),
               ...(draft.journal&&!journals.rows.some(journal=>journal.code===draft.journal)?[{value:draft.journal,label:draft.journal}]:[])]}
             onChange={value=>setDraft({...draft,journal:value})}/> : <label className="label">Journal
@@ -325,18 +327,19 @@ export function AccountingTemplateWorkspace({ tenantId, canManage, source }: {
       {(error || accountError || journals.error) && <p className="text-sm text-red-700" role="alert">{error || accountError || journals.error}</p>}
       {!accountLoading && !accountError && validation && <p className="text-sm text-[var(--w-text-sec)]">{validation}</p>}
       {!journals.loading && selectedJournalUnavailable && <p className="text-sm text-red-700" role="alert">Choisissez un journal actif.</p>}
+      {mobile&&<div className="acc-editor-actions">{editorActions}</div>}
     </form>
   ) : (
     <section className="acc-fill space-y-3 min-w-0">
-      <div className="acc-toolbar acc-fixed">
-        <input className="input min-w-0 flex-1 sm:max-w-xs" aria-label="Rechercher un modèle" placeholder="Intitulé ou libellé…" value={query}
+      <div className={mobile?'acc-mobile-command-bar':'acc-toolbar acc-fixed'}>
+        <input className={mobile?'input acc-mobile-command-wide acc-mobile-search-input':'input min-w-0 flex-1 sm:max-w-xs'} aria-label="Rechercher un modèle" placeholder="Intitulé ou libellé…" value={query}
           onChange={event => setQuery(event.target.value)} />
-        <SearchableSelect ariaLabel="Filtrer par journal" className="acc-toolbar-select w-52" searchable={false} clearable={false} wrapLabels
+        <SearchableSelect ariaLabel="Filtrer par journal" className={mobile?'acc-mobile-selection':'acc-toolbar-select w-52'} searchable={false} clearable={false} wrapLabels
           value={journalFilter} onChange={setJournalFilter} options={[
             {value:'',label:'Tous les modèles'}, {value:'global',label:'Sans journal attitré'},
             ...journals.rows.map(journal=>({value:journal.code,label:journal.code+' — '+journal.name})),
           ]}/>
-        <span className="acc-spacer" />
+        {!mobile&&<span className="acc-spacer" />}
         {canManage && <button type="button" className="btn-primary" onClick={() => startEdit()}><Plus size={16} />Nouveau modèle</button>}
       </div>
       {(templateList.error || (!action && error)) && <p role="alert" className="text-sm text-red-700">{templateList.error || error}</p>}

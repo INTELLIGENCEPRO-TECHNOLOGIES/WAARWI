@@ -1,10 +1,11 @@
 import {useEffect,useRef,useState} from 'react';
 import {useApp} from '../context/AppContext';
 import {usePermissions} from '../lib/permissions';
-import {useAccountingWork,useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
+import {useAccountingMobile,useAccountingWork,useAccountingWindowId,mayCloseAccountingWindow} from '../context/AccountingWindowContext';
 import {supabase} from '../lib/supabase';
 import {AccountingTable,AccountingPagination} from './AccountingWorkspace';
 import {RefreshCw,Save,Download} from './Icons';
+import {AccountingMobileActions} from './AccountingMobileControls';
 const CYCLES=[
  ['integrity','Intégrité comptable',[['journal','Équilibre et cohérence des pièces'],['balance','Concordance balance / grand livre'],['sources','Doublons et rattachements']]],
  ['financing','Capitaux et financements',[['capital','Capital et capitaux propres'],['loans','Emprunts et échéanciers'],['opening','Soldes d’ouverture']]],
@@ -29,6 +30,7 @@ const money=(v:number)=>Number(v).toLocaleString('fr-FR',{maximumFractionDigits:
 const today=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Dakar'});
 const errorMessage=(e:unknown)=>e&&typeof e==='object'&&'message'in e?String(e.message):'Opération impossible.';
 export function AccountingRevision(){
+ const mobile=useAccountingMobile();
  const {tenant}=useApp();const {can}=usePermissions();const work=useAccountingWork();const windowId=useAccountingWindowId();
  const [month,setMonth]=useState(today().slice(0,7)),[applied,setApplied]=useState(month),[refresh,setRefresh]=useState(0);
  const [report,setReport]=useState<Report|null>(null),[busy,setBusy]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
@@ -54,7 +56,13 @@ export function AccountingRevision(){
  const exportDossier=()=>{if(!report)return;const lines=[['Dossier de révision',applied,'Document de travail — non certifié'],['Arrêté au',report.through,'Contrôles bloquants',String(report.blocking)],['Cycle','État','Contrôles','Conclusion','Références','Dernière modification'],...CYCLES.map(c=>{const r=report.reviews.find(x=>x.cycle===c[0]);return [c[1],r?(r.stale?'À reprendre':label[r.status]):'À faire',c[2].map(([k,l])=>l+': '+(r?.checklist[k]??'todo')).join(' | '),r?.note??'',r?.evidence??'',r?.updated_at??''];})];const csv=lines.map(row=>row.map(v=>'"'+String(v).replace(/^[\s\u0000-\u001f]*[=+@-]/,m=>"'"+m).replace(/"/g,'""')+'"').join(';')).join('\r\n');const url=URL.createObjectURL(new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='revision-comptable-'+applied+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
  const checkLabel=(s:Check)=>s==='done'?'Contrôlé':s==='na'?'Non applicable':'À faire';
  return <section className="space-y-3 acc-revision">
- <form className="acc-toolbar acc-fixed" onSubmit={e=>{e.preventDefault();if(!month||month>today().slice(0,7)||!discard())return;setDraft(null);setNotice('');setApplied(month);setRefresh(v=>v+1);}}><label className="text-xs">Période <input type="month" className="input" value={month} max={today().slice(0,7)} onChange={e=>setMonth(e.target.value)} disabled={saving}/></label><button className="btn-primary" disabled={saving||busy}><RefreshCw size={15}/>Contrôler</button><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={!report||busy||saving} onClick={exportDossier}><Download size={15}/>Exporter le dossier</button></form>
+ <form className={mobile?'acc-mobile-command-bar acc-revision-commands':'acc-toolbar acc-fixed'} onSubmit={e=>{e.preventDefault();if(!month||month>today().slice(0,7)||!discard())return;setDraft(null);setNotice('');setApplied(month);setRefresh(v=>v+1);}}>
+  <label className={mobile?'acc-mobile-field':'text-xs'}>Période<input type="month" className="input" value={month} max={today().slice(0,7)} onChange={e=>setMonth(e.target.value)} disabled={saving}/></label>
+  <button className="btn-primary" disabled={saving||busy}><RefreshCw size={15}/>Contrôler</button>
+  {mobile?<AccountingMobileActions title="Actions du dossier de révision" actions={[
+    {label:'Exporter le dossier',icon:<Download size={15}/>,disabled:!report||busy||saving,run:exportDossier},
+  ]}/>:<><span className="acc-spacer"/><button type="button" className="btn-secondary" disabled={!report||busy||saving} onClick={exportDossier}><Download size={15}/>Exporter le dossier</button></>}
+ </form>
  <p className="text-xs text-neutral-500">Dossier de travail mensuel, distinct de la clôture. Contrôles des mouvements et justificatifs ; les soldes d’ouverture, inventaires et documents externes restent à vérifier. Une modification des données contrôlées peut rendre les révisions périmées.</p>
  {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}{notice&&<p role="status" className="text-xs">{notice}</p>}{busy&&<p role="status" className="text-xs">Analyse de la période…</p>}
  {report&&<>
@@ -74,7 +82,21 @@ export function AccountingRevision(){
  </form>
  <div className="acc-section-head"><strong className="text-xs">Anomalies de lignes — {issues.count}</strong><p className="text-xs text-neutral-500">Liste complète du cycle, sur les écritures validées de la période.</p></div>
  {issueError&&<p role="alert" className="text-xs text-red-700">{issueError}</p>}
- <AccountingTable footer={<AccountingPagination page={issuePage} size={issueSize} total={issues.count} setPage={setIssuePage} setSize={n=>{setIssueSize(n);setIssuePage(0);}} disabled={issueBusy}/>}><table><thead><tr><th>Pièce</th><th>Compte</th><th>Observation</th><th className="text-right">Débit</th><th className="text-right">Crédit</th></tr></thead><tbody>{!issueBusy&&issues.rows.map(r=><tr key={r.id}><td><button type="button" className="hover:underline" onClick={()=>work?.openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}>{r.entry_number}</button></td><td><button type="button" className="hover:underline" onClick={()=>work?.openAccount(r.account_code)}>{r.account_code}</button></td><td>{r.reason}</td><td className="text-right">{money(r.debit)}</td><td className="text-right">{money(r.credit)}</td></tr>)}{(issueBusy||!issues.rows.length)&&<tr><td colSpan={5}>{issueBusy?'Chargement…':'Aucune anomalie de ligne détectée. Consulter les autres contrôles du cycle.'}</td></tr>}</tbody></table></AccountingTable>
+ <AccountingTable footer={<AccountingPagination page={issuePage} size={issueSize} total={issues.count} setPage={setIssuePage} setSize={n=>{setIssueSize(n);setIssuePage(0);}} disabled={issueBusy}/>}>
+  <table className={mobile?'acc-mobile-ledger':undefined}><thead><tr><th className="text-left">Pièce</th>{!mobile&&<><th>Compte</th><th>Observation</th></>}<th className="text-right">Débit</th><th className="text-right">Crédit</th></tr></thead>
+   <tbody>{!issueBusy&&issues.rows.map(r=><tr key={r.id}>
+    {mobile?<td><details className="acc-mobile-line">
+     <summary>{r.entry_number}<span>{r.reason}</span></summary>
+     <button type="button" onClick={()=>work?.openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}>Ouvrir la pièce</button>
+     <button type="button" onClick={()=>work?.openAccount(r.account_code)}>Compte {r.account_code}</button>
+    </details></td>:<>
+     <td><button type="button" className="hover:underline" onClick={()=>work?.openPiece({entryId:r.entry_id,entryNumber:r.entry_number})}>{r.entry_number}</button></td>
+     <td><button type="button" className="hover:underline" onClick={()=>work?.openAccount(r.account_code)}>{r.account_code}</button></td><td>{r.reason}</td>
+    </>}
+    <td className="text-right">{money(r.debit)}</td><td className="text-right">{money(r.credit)}</td>
+   </tr>)}{(issueBusy||!issues.rows.length)&&<tr><td colSpan={mobile?3:5}>{issueBusy?'Chargement…':'Aucune anomalie de ligne détectée. Consulter les autres contrôles du cycle.'}</td></tr>}</tbody>
+  </table>
+ </AccountingTable>
  </div></div></>}
  </section>;
 }

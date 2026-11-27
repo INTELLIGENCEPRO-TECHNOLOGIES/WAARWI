@@ -269,6 +269,9 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
   const visibleMobileTabs = (route === 'pos' ? POS_MOBILE_TABS : DEFAULT_MOBILE_TABS).filter(t => routeVisible(t.key));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
+  useEffect(() => {
+    if (isAccounting && window.matchMedia('(max-width: 1023px)').matches) setFabOpen(false);
+  }, [isAccounting]);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarManualOverride, setSidebarManualOverride] = useState(false);
@@ -725,7 +728,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
   );
   return (
     <QuickActionProvider onNavigate={(r) => { onRoute(r as Route); setMobileOpen(false); }}>
-    <div className={`flex flex-col overflow-hidden ${isPlatformAdmin ? 'h-[100dvh] bg-[var(--w-bg)]' : 'min-h-screen h-screen bg-white'}`}>
+    <div className={`flex flex-col overflow-hidden ${isPlatformAdmin ? 'h-[100dvh] bg-[var(--w-bg)]' : isAccounting ? 'h-[100dvh] min-h-0 bg-white lg:h-screen lg:min-h-screen' : 'min-h-screen h-screen bg-white'}`}>
       {/* Desktop header */}
       <header
         className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b ${isPOS ? 'pos-header-sep' : 'border-neutral-200'} bg-white sticky top-0 z-30 flex-shrink-0`}
@@ -1289,7 +1292,7 @@ export function Shell({ route, onRoute, children, onOpenSubscription }: {
         {fabOpen && <QuickActionsPanel onClose={() => setFabOpen(false)} />}
 
         {/* FAB button */}
-        {!isPlatformAdmin && !(isPOS && posCartOpen) && (route === 'pos' ? (
+        {!isAccounting && !isPlatformAdmin && !(isPOS && posCartOpen) && (route === 'pos' ? (
           <button
             onClick={() => setPosCart(posCartCount, !posCartOpen)}
             className={`lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-200 active:scale-90${posCartCount > 0 && !posCartOpen ? ' cart-fab-blink' : ''}`}
