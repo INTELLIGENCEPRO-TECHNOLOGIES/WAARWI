@@ -303,6 +303,9 @@ Deno.serve(async (req: Request) => {
       const { tenant_id } = body;
       if (!tenant_id) return json({ error: "tenant_id required" }, 400);
 
+      const { error: recoveryError } = await admin.rpc("_br_recover_expired_schedule_runs");
+      if (recoveryError) return json({ error: recoveryError.message }, 500);
+
       const { data: existing, error: exErr } = await admin
         .from("_br_schedule_run_items")
         .select("id")
@@ -446,6 +449,9 @@ Deno.serve(async (req: Request) => {
         return json({ skipped: true, reason: "Scheduler is disabled" });
       }
 
+      const { error: recoveryError } = await admin.rpc("_br_recover_expired_schedule_runs");
+      if (recoveryError) return json({ error: recoveryError.message }, 500);
+
       const { data: tenants, error: tErr } = await admin
         .from("tenants")
         .select("id, name")
@@ -475,10 +481,10 @@ Deno.serve(async (req: Request) => {
           .map((o: { tenant_id: string }) => o.tenant_id),
       );
 
-      const eligible = tenants.filter(
+      let eligible = tenants.filter(
         (t: { id: string }) => !suspendedSet.has(t.id),
       );
-      const skipped = tenants.length - eligible.length;
+      let skipped = tenants.length - eligible.length;
 
       const { data: run, error: runErr } = await admin
         .from("_br_schedule_runs")
@@ -543,26 +549,25 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const items = eligible.map((t: { id: string }) => ({
-        run_id: run.id,
-        tenant_id: t.id,
-        status: "pending",
-      }));
+      const { data: reserved, error: reserveError } = await admin.rpc(
+        "_br_reserve_schedule_items",
+        { p_run_id: run.id, p_tenant_ids: eligible.map((t: { id: string }) => t.id) },
+      );
+      if (reserveError) return await abortRun(`items: ${reserveError.message}`, 0);
+      const reservedIds = new Set((reserved || []).map((item: { tenant_id: string }) => item.tenant_id));
+      eligible = eligible.filter((t: { id: string }) => reservedIds.has(t.id));
+      skipped = tenants.length - eligible.length;
+
       const skippedItems = tenants
-        .filter((t: { id: string }) => suspendedSet.has(t.id))
+        .filter((t: { id: string }) => !reservedIds.has(t.id))
         .map((t: { id: string }) => ({
           run_id: run.id,
           tenant_id: t.id,
           status: "skipped",
           finished_at: new Date().toISOString(),
+          error_message: suspendedSet.has(t.id) ? null : "Une sauvegarde est déjà en cours pour cette entreprise.",
         }));
 
-      if (items.length > 0) {
-        const { error: iErr } = await admin
-          .from("_br_schedule_run_items")
-          .insert(items);
-        if (iErr) return await abortRun(`items: ${iErr.message}`, 0);
-      }
       if (skippedItems.length > 0) {
         const { error: sErr } = await admin
           .from("_br_schedule_run_items")
@@ -574,7 +579,6 @@ Deno.serve(async (req: Request) => {
       let succeeded = 0;
       let failed = 0;
       const succeededTenantIds: string[] = [];
-      const offsiteQueue: { tenant_id: string; backup_id: string }[] = [];
       const errors: {
         tenant_id: string;
         tenant_name: string;
@@ -622,7 +626,6 @@ Deno.serve(async (req: Request) => {
               );
             }
 
-            return { tenant_id: t.id, backup_id: result.backup_id };
           }),
         );
 
@@ -633,10 +636,6 @@ Deno.serve(async (req: Request) => {
             succeededTenantIds.push(
               (batch[j] as { id: string }).id,
             );
-            // Auto-queue offsite transfer for successful auto backups
-            if (r.value.backup_id) {
-              offsiteQueue.push({ tenant_id: r.value.tenant_id, backup_id: r.value.backup_id })
-            }
           } else {
             failed++;
             const t = batch[j] as { id: string; name: string };
@@ -685,7 +684,7 @@ Deno.serve(async (req: Request) => {
       // ONLY process tenants whose backup succeeded this run.
       // ONLY delete kind='auto' with is_auto=true. Never touch platform_manual/manual/safety/import.
       const retentionErrors: { tenant_id: string; error: string }[] = [];
-      if (succeededTenantIds.length > 0) {
+      if (body.keep_existing_backups !== true && succeededTenantIds.length > 0) {
         const retentionDaily = policy.retention_daily || 7;
         const retentionWeekly = policy.retention_weekly || 4;
         const retentionMonthly = policy.retention_monthly || 6;
@@ -789,44 +788,6 @@ Deno.serve(async (req: Request) => {
             });
           }
         }
-      }
-
-      // ---------- Auto-queue offsite transfers ----------
-      if (offsiteQueue.length > 0) {
-        try {
-          const { data: offCfg } = await admin
-            .from("_br_offsite_config")
-            .select("enabled, auto_transfer, root_folder")
-            .eq("id", 1)
-            .maybeSingle();
-
-          if (offCfg?.enabled && offCfg?.auto_transfer) {
-            const rootFolder = offCfg.root_folder || "/Waarwi";
-            for (const item of offsiteQueue) {
-              const { data: bk } = await admin
-                .from("tenant_backups")
-                .select("created_at")
-                .eq("id", item.backup_id)
-                .maybeSingle();
-              if (!bk) continue;
-              const d = new Date(bk.created_at);
-              const yr = d.getUTCFullYear().toString();
-              const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
-              const dy = String(d.getUTCDate()).padStart(2, "0");
-              const filePath = `${rootFolder}/${item.tenant_id}/${yr}/${mo}/${dy}_${item.backup_id}.waarwi.enc`;
-              const { error: ofsErr } = await admin.from("_br_offsite_transfers").insert({
-                source_backup_id: item.backup_id,
-                backup_id: item.backup_id,
-                tenant_id: item.tenant_id,
-                remote_path: filePath,
-                status: "queued",
-              });
-              if (ofsErr && !ofsErr.message.includes("duplicate")) {
-                // log but don't block
-              }
-            }
-          }
-        } catch { /* offsite queue is best-effort, never block the run */ }
       }
 
       for (const re of retentionErrors) {
